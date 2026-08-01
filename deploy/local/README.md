@@ -243,6 +243,7 @@ without inventing names. Compose passes them into `mcp` / `mcp-http` when set
 | `JENKINS_MCP_GATEWAY_MULTI_USER` | Per-request multi-user Obtain foundation | **Not** production multi-user GO / multi-replica HA |
 | `JENKINS_MCP_GATEWAY_CREDENTIAL_MODE` / `_ENABLED_MODES` | HOST-011 mode matrix ids | Mode ids only — never tokens |
 | `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` / `_PROCESS_MAX_CONCURRENT` | Concurrency slots | Process-local |
+| `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` | SubjectLimiter map hygiene max | Process-local; idle LRU; fail closed if all hold slots |
 | `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` / `_RATE_BURST` | Token-bucket rate | Process-local default; multi-pod residual |
 | `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` | Same-host `FileSubjectRateLimiter` | flock lite; **not** multi-pod shared rate |
 | `JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS` | Subject-map LRU max | Process-local / file-local only |

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
@@ -289,5 +290,275 @@ func TestSubjectLimiter_AbsoluteCeilingsClamped(t *testing.T) {
 	}
 	if d.ProcessMax() != gateway.DefaultProcessConcurrentSlots {
 		t.Fatalf("default process=%d", d.ProcessMax())
+	}
+}
+
+// HOST-006 residual lite: MaxSubjects=0 (default) never bounds the subject map
+// and Release drops zeroed entries (no idle retention).
+func TestSubjectLimiter_MaxSubjectsUnlimitedDefault(t *testing.T) {
+	t.Parallel()
+	l := gateway.NewSubjectLimiter(4, 64)
+	if l.MaxSubjects() != 0 {
+		t.Fatalf("default MaxSubjects=%d want 0", l.MaxSubjects())
+	}
+	for i := 0; i < 40; i++ {
+		key := gateway.SubjectKeyParts("t", fmt.Sprintf("u%02d", i), "p")
+		if err := l.Acquire(key); err != nil {
+			t.Fatalf("acquire %d: %v", i, err)
+		}
+		l.Release(key)
+	}
+	// Unlimited path deletes on full release → map empty.
+	if l.SubjectsTracked() != 0 {
+		t.Fatalf("unlimited after release tracked=%d want 0", l.SubjectsTracked())
+	}
+	st := l.StatusMap()
+	if _, ok := st["subject_limiter_max_subjects"]; ok {
+		t.Fatalf("unlimited must omit subject_limiter_max_subjects: %+v", st)
+	}
+}
+
+// HOST-006 residual lite: MaxSubjects evicts idle (0 in-use) oldest lastAccess.
+// Subjects still holding slots are never stolen.
+func TestSubjectLimiter_MaxSubjectsEvictOldestIdle(t *testing.T) {
+	t.Parallel()
+	l := gateway.NewSubjectLimiter(2, 16)
+	l.SetMaxSubjects(2)
+	if l.MaxSubjects() != 2 {
+		t.Fatalf("MaxSubjects=%d", l.MaxSubjects())
+	}
+	base := time.Unix(1_700_000_000, 0).UTC()
+	var clock atomic.Value
+	clock.Store(base)
+	l.SetNow(func() time.Time { return clock.Load().(time.Time) })
+
+	k1 := gateway.SubjectKeyParts("t", "u1", "p")
+	k2 := gateway.SubjectKeyParts("t", "u2", "p")
+	k3 := gateway.SubjectKeyParts("t", "u3", "p")
+
+	if err := l.Acquire(k1); err != nil {
+		t.Fatal(err)
+	}
+	l.Release(k1) // idle retained under MaxSubjects
+	clock.Store(base.Add(time.Second))
+	if err := l.Acquire(k2); err != nil {
+		t.Fatal(err)
+	}
+	l.Release(k2)
+	if l.SubjectsTracked() != 2 {
+		t.Fatalf("tracked idle=%d want 2", l.SubjectsTracked())
+	}
+	clock.Store(base.Add(2 * time.Second))
+	if err := l.Acquire(k3); err != nil {
+		t.Fatal(err)
+	}
+	// k1 oldest idle evicted; k2 idle + k3 active remain (or k2 dropped if only room for k3).
+	if n := l.SubjectsTracked(); n > 2 {
+		t.Fatalf("after eviction tracked=%d want <=2", n)
+	}
+	// k3 must hold one slot.
+	sn, _ := l.InUse(k3)
+	if sn != 1 {
+		t.Fatalf("k3 inUse=%d", sn)
+	}
+	l.Release(k3)
+
+	st := l.StatusMap()
+	if st["subject_limiter_max_subjects"] != 2 {
+		t.Fatalf("status max: %+v", st)
+	}
+	if strings.Contains(fmt.Sprint(st), "u1") || strings.Contains(fmt.Sprint(st), "u2") {
+		t.Fatalf("StatusMap leaked subject keys: %+v", st)
+	}
+}
+
+// When every tracked subject still holds slots, MaxSubjects fails closed —
+// never steals live holders (safer than wrong-subject elevation).
+func TestSubjectLimiter_MaxSubjectsFailClosedAllHolders(t *testing.T) {
+	t.Parallel()
+	l := gateway.NewSubjectLimiter(2, 16)
+	l.SetMaxSubjects(2)
+	k1 := gateway.SubjectKeyParts("t", "hold1", "p")
+	k2 := gateway.SubjectKeyParts("t", "hold2", "p")
+	k3 := gateway.SubjectKeyParts("t", "new", "p")
+	if err := l.Acquire(k1); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Acquire(k2); err != nil {
+		t.Fatal(err)
+	}
+	err := l.Acquire(k3)
+	if err == nil {
+		t.Fatal("must fail closed when map full of live holders")
+	}
+	if apperr.CodeOf(err) != apperr.CodeQuota {
+		t.Fatalf("code=%s want quota", apperr.CodeOf(err))
+	}
+	if !strings.Contains(err.Error(), "subject map") {
+		t.Fatalf("want subject map budget message: %v", err)
+	}
+	// Live holders unchanged.
+	sn1, pn := l.InUse(k1)
+	sn2, _ := l.InUse(k2)
+	if sn1 != 1 || sn2 != 1 || pn != 2 {
+		t.Fatalf("holders corrupted: k1=%d k2=%d process=%d", sn1, sn2, pn)
+	}
+	// Release one → idle can be evicted for new subject.
+	l.Release(k1)
+	if err := l.Acquire(k3); err != nil {
+		t.Fatalf("after idle free: %v", err)
+	}
+	l.Release(k2)
+	l.Release(k3)
+}
+
+// Re-Acquire of an existing subject under MaxSubjects does not grow the map.
+func TestSubjectLimiter_MaxSubjectsExistingDoesNotGrow(t *testing.T) {
+	t.Parallel()
+	l := gateway.NewSubjectLimiter(4, 16)
+	l.SetMaxSubjects(2)
+	base := time.Unix(1_700_100_000, 0).UTC()
+	var clock atomic.Value
+	clock.Store(base)
+	l.SetNow(func() time.Time { return clock.Load().(time.Time) })
+
+	k1 := gateway.SubjectKeyParts("t", "a", "p")
+	k2 := gateway.SubjectKeyParts("t", "b", "p")
+	if err := l.Acquire(k1); err != nil {
+		t.Fatal(err)
+	}
+	clock.Store(base.Add(time.Second))
+	if err := l.Acquire(k2); err != nil {
+		t.Fatal(err)
+	}
+	// Touch k1 many times with acquire/release — still 2 subjects tracked.
+	for i := 0; i < 5; i++ {
+		clock.Store(base.Add(time.Duration(2+i) * time.Second))
+		if err := l.Acquire(k1); err != nil {
+			t.Fatalf("re-acquire k1: %v", err)
+		}
+		l.Release(k1)
+	}
+	if l.SubjectsTracked() != 2 {
+		t.Fatalf("tracked=%d want 2", l.SubjectsTracked())
+	}
+	// Release remaining holds (initial k1 + k2); idle retained under MaxSubjects.
+	l.Release(k1)
+	l.Release(k2)
+	if l.SubjectsTracked() != 2 {
+		t.Fatalf("idle retained tracked=%d want 2", l.SubjectsTracked())
+	}
+	sn1, pn := l.InUse(k1)
+	sn2, _ := l.InUse(k2)
+	if sn1 != 0 || sn2 != 0 || pn != 0 {
+		t.Fatalf("want all idle: k1=%d k2=%d process=%d", sn1, sn2, pn)
+	}
+}
+
+// Alice/Bob concurrent isolation still holds when MaxSubjects is configured.
+func TestSubjectLimiter_MaxSubjectsAliceBobIsolation(t *testing.T) {
+	t.Parallel()
+	l := gateway.NewSubjectLimiter(2, 10)
+	l.SetMaxSubjects(8)
+	alice := gateway.SubjectKeyParts("t1", "alice", "corp")
+	bob := gateway.SubjectKeyParts("t1", "bob", "corp")
+	if err := l.Acquire(alice); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Acquire(alice); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Acquire(alice); err == nil {
+		t.Fatal("alice third must fail at per-subject cap")
+	}
+	if err := l.Acquire(bob); err != nil {
+		t.Fatalf("bob isolated under MaxSubjects: %v", err)
+	}
+	l.Release(alice)
+	l.Release(alice)
+	l.Release(bob)
+}
+
+// Concurrent Acquire/Release under MaxSubjects must not race (go test -race).
+func TestSubjectLimiter_MaxSubjectsConcurrent(t *testing.T) {
+	t.Parallel()
+	l := gateway.NewSubjectLimiter(4, 32)
+	l.SetMaxSubjects(4)
+	const subjects = 16
+	const tries = 20
+	var okCount atomic.Int64
+	var wg sync.WaitGroup
+	for s := 0; s < subjects; s++ {
+		key := gateway.SubjectKeyParts("t", fmt.Sprintf("u%02d", s), "corp")
+		for i := 0; i < tries; i++ {
+			wg.Add(1)
+			go func(k string) {
+				defer wg.Done()
+				if err := l.WithSubjectSlot(k, func() error {
+					okCount.Add(1)
+					return nil
+				}); err == nil {
+					return
+				}
+			}(key)
+		}
+	}
+	wg.Wait()
+	if okCount.Load() == 0 {
+		t.Fatal("expected some successful slots")
+	}
+	if n := l.SubjectsTracked(); n > 4 {
+		t.Fatalf("tracked=%d exceeds MaxSubjects=4", n)
+	}
+	_, pn := l.InUse("")
+	if pn != 0 {
+		t.Fatalf("leaked process slots: %d", pn)
+	}
+}
+
+func TestResolveSubjectLimiterMaxSubjects(t *testing.T) {
+	t.Parallel()
+	n, err := gateway.ResolveSubjectLimiterMaxSubjects("")
+	if err != nil || n != 0 {
+		t.Fatalf("empty: n=%d err=%v", n, err)
+	}
+	n, err = gateway.ResolveSubjectLimiterMaxSubjects("  ")
+	if err != nil || n != 0 {
+		t.Fatalf("blank: n=%d err=%v", n, err)
+	}
+	n, err = gateway.ResolveSubjectLimiterMaxSubjects("4096")
+	if err != nil || n != 4096 {
+		t.Fatalf("4096: n=%d err=%v", n, err)
+	}
+	n, err = gateway.ResolveSubjectLimiterMaxSubjects("0")
+	if err != nil || n != 0 {
+		t.Fatalf("explicit 0 unlimited: n=%d err=%v", n, err)
+	}
+	if _, err := gateway.ResolveSubjectLimiterMaxSubjects("-1"); err == nil {
+		t.Fatal("negative must fail closed")
+	}
+	if _, err := gateway.ResolveSubjectLimiterMaxSubjects("x"); err == nil {
+		t.Fatal("non-int must fail closed")
+	}
+	if gateway.EnvGatewaySubjectLimiterMaxSubjects != "JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS" {
+		t.Fatalf("env name: %q", gateway.EnvGatewaySubjectLimiterMaxSubjects)
+	}
+	n, err = gateway.SubjectLimiterMaxSubjectsFromEnviron(func(k string) string {
+		if k == gateway.EnvGatewaySubjectLimiterMaxSubjects {
+			return "64"
+		}
+		return ""
+	})
+	if err != nil || n != 64 {
+		t.Fatalf("from environ: n=%d err=%v", n, err)
+	}
+	_, err = gateway.SubjectLimiterMaxSubjectsFromEnviron(func(k string) string {
+		if k == gateway.EnvGatewaySubjectLimiterMaxSubjects {
+			return "nope"
+		}
+		return ""
+	})
+	if err == nil {
+		t.Fatal("invalid from environ must fail closed")
 	}
 }

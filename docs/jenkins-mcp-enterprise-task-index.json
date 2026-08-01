@@ -4763,7 +4763,7 @@
       "dependency_text": "HOST-001",
       "parallel_safe": null,
       "objective": "Per-subject budgets so one user cannot exhaust process for others.",
-      "implementation": "SubjectLimiter + SubjectRateLimiter (token-bucket); serve Allow then Hold; overlay LowerRate; optional same-host FileSubjectRateLimiter via JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH (HOST-008 lite); optional MaxSubjects map hygiene via JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS (HOST-008 residual lite).",
+      "implementation": "SubjectLimiter + SubjectRateLimiter (token-bucket); serve Allow then Hold; overlay LowerRate; optional same-host FileSubjectRateLimiter via JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH (HOST-008 lite); optional MaxSubjects rate map hygiene via JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS (HOST-008 residual lite); optional MaxSubjects concurrent map hygiene via JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS (HOST-006 residual lite; idle LRU; fail closed if all hold slots).",
       "acceptance_criteria": [
         "Per-subject concurrent tool/preview caps.",
         "Process absolute ceilings remain.",
@@ -4773,12 +4773,14 @@
       "acceptance_criteria_count": 4,
       "evidence_tests": [
         "internal/gateway/subject_limits_test.go",
+        "internal/gateway/subject_limits_test.go:TestSubjectLimiter_MaxSubjectsEvictOldestIdle",
+        "internal/gateway/subject_limits_test.go:TestSubjectLimiter_MaxSubjectsFailClosedAllHolders",
         "internal/gateway/subject_rate_test.go",
         "internal/gateway/subject_rate_test.go:TestSubjectRateLimiter_MaxSubjectsEvictOldest",
         "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_CrossInstanceSharedBudget",
         "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_MaxSubjectsEvictOldest"
       ],
-      "status_note": "Done* process-local rate + concurrent; Done* lite same-host FileSubjectRateLimiter; Done* lite MaxSubjects hygiene; multi-pod shared rate residual (HOST-008)",
+      "status_note": "Done* process-local rate + concurrent; Done* lite same-host FileSubjectRateLimiter; Done* lite rate MaxSubjects hygiene; Done* lite SubjectLimiter MaxSubjects hygiene; multi-pod shared rate/concurrency residual (HOST-008)",
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": []

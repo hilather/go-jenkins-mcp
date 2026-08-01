@@ -2830,8 +2830,15 @@ on Allow when map full for a new subject: purge idle full buckets else evict
 oldest lastAccess; never current subject mid-allow when other victims exist;
 `subject_rate_max_subjects` on StatusMap / residual-status when set). Memory +
 file limiters. Process-local / file-local only.
+**Done\* lite SubjectLimiter map hygiene (HOST-006 residual lite):** optional
+`MaxSubjects` / `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` (empty = unlimited;
+on Acquire when map full for a new subject: evict idle 0 in-use oldest lastAccess;
+if all subjects still hold slots → fail closed `CodeQuota` — never steals live
+holders; `subject_limiter_max_subjects` on StatusMap / residual-status when set).
+Process-local only.
 **Residual:** multi-pod external shared rate (HOST-008); concurrency slots still
-process-local; raise env bootstrap needs serve restart.
+process-local (no multi-pod shared SubjectLimiter); raise env bootstrap needs
+serve restart.
 
 ---
 
@@ -2873,6 +2880,7 @@ process-local; raise env bootstrap needs serve restart.
 - [x] Obtain token cache residual interface + same-host file lite (**Done* lite**). — `TokenCache` + `MemoryTokenCache` (`StatusMap` `shared_token_cache: false`); optional `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` (Mode C wire, flock + 0600, `shared_token_cache_file: true`). **Honesty:** same-host multi-process only — **not** multi-pod external Redis/HA
 - [x] Shared subject rate same-host file lite (**Done* lite**). — process-local `SubjectRateLimiter` default; optional `FileSubjectRateLimiter` via `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` (flock + secret-free subjectKey→tokens/last JSON 0600; `shared_subject_rate_file: true`; serve wire under `--gateway`). **Honesty:** same-host multi-process only — **not** multi-pod external shared rate; concurrency slots still process-local
 - [x] Subject rate map hygiene residual lite (**Done* lite**). — optional `MaxSubjects` / `JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS` (empty = unlimited; LRU/oldest lastAccess eviction on Allow when full; purge idle full buckets first; StatusMap / residual-status `subject_rate_max_subjects` when set). Memory + file. **Honesty:** process-local / file-local only — **not** multi-pod
+- [x] SubjectLimiter map hygiene residual lite (**Done* lite**, HOST-006). — optional `MaxSubjects` / `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` (empty = unlimited; idle 0 in-use LRU on Acquire when full; fail closed if all hold slots; StatusMap / residual-status `subject_limiter_max_subjects` when set). **Honesty:** process-local only — **not** multi-pod
 - [x] Shared principal map same-host file lite (**Done* lite**). — process-local `PrincipalCache` default; optional `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` (flock + secret-free SubjectKey→Jenkins principal JSON 0600; never tokens; `shared_principal_cache_file: true` on residual-status; serve install + CLI subject-invalidate). **Honesty:** same-host multi-process only — **not** multi-pod external shared principal map
 - [x] Explicit non-goal until multi-pod durable vault + affinity exist. — do not claim multi-replica Done from affinity alone
 - [x] Secret-free residual surfaces: doctor + admin health/vault (`multiUserEnabled`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst`, `sharedSubjectRateFile` / `sharedPrincipalCacheFile` / `sharedJwksFile` — HOST-007 health/vault camelCase parity with residual-status snake_case; paths never returned; not multi-pod HA)

@@ -79,6 +79,7 @@ make build
 | `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_MAX` / `_TTL` | Optional PrincipalCache LRU max + TTL hygiene | Empty = unlimited / no expiry; multi-pod residual |
 | `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` | Optional same-host principal map file | `FilePrincipalCache` flock lite; `shared_principal_cache_file`; never tokens; not multi-pod HA |
 | `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` / `_PROCESS_MAX_CONCURRENT` | Concurrency slots | HOST-006 Done*; process-local |
+| `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` | Optional SubjectLimiter map hygiene max (HOST-006 residual lite) | Empty = unlimited; idle LRU eviction; fail closed if all hold slots; process-local only; multi-pod residual |
 | `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` / `_RATE_BURST` | Token-bucket rate (0 = rate off) | Overlay `max_tools_*` lower-only; admin `rateEnabled`/`ratePerMinute`/`rateBurst`; multi-pod residual |
 | `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` | Optional same-host file rate state | `FileSubjectRateLimiter` flock lite; `sharedSubjectRateFile`; not multi-pod HA |
 | `JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS` | Optional subject-map LRU max (HOST-008 residual lite) | Empty = unlimited; process-local / file-local eviction only; multi-pod residual |
