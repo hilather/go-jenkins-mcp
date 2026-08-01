@@ -2740,12 +2740,12 @@ Multi-user gateway with **personal API tokens only** (no OAuth/JWT required on J
 
 **Acceptance criteria**
 
-- [ ] Provision/rotate/revoke per-user API token in vault (CLI and/or residual control plane).
-- [ ] Obtain returns credentials only for bound subject; cross-subject fails closed.
-- [ ] No process-wide or default API token fallthrough.
-- [ ] Secret canaries on logs, admin JSON, MCP, support bundles.
-- [ ] RO + deny-only RBAC unchanged.
-- [ ] Documented as first-class Tier A mode.
+- [x] Provision/rotate/revoke per-user API token in vault (CLI: `jenkins-mcp gateway vault put|set|delete|revoke|list|status|exists`; legacy `vault-put`/`vault-delete`). **Residual:** admin SPA/BFF vault **write** (secret-free status only); live multi-host shared vault (HOST-008).
+- [x] Obtain returns credentials only for bound subject; cross-subject fails closed (`APITokenVaultProvider` + unit tests).
+- [x] No process-wide or default API token fallthrough (missing key → not_found; no ambient keyring).
+- [x] Secret canaries on logs, admin JSON, MCP, support bundles (CLI list/status canaries; admin vault status hashes only).
+- [x] RO + deny-only RBAC unchanged.
+- [x] Documented as first-class Tier A mode (`docs/gateway/README.md` Mode A operator section).
 
 ---
 

@@ -77,9 +77,9 @@ func TestGatewayVault_ViewerRead_NoTokenLeak(t *testing.T) {
 	if len(subjects) != 1 || subjects[0] != wantHash {
 		t.Fatalf("subjects %v want hash %s", subjects, wantHash)
 	}
-	// Residual should mention CLI vault-put (no SPA write).
+	// Residual should mention CLI vault write (no SPA write).
 	residual, _ := body["residual"].(string)
-	if !strings.Contains(residual, "vault-put") && !strings.Contains(residual, "CLI") {
+	if !strings.Contains(residual, "CLI") && !strings.Contains(residual, "vault put") {
 		t.Fatalf("want CLI residual: %q", residual)
 	}
 }
