@@ -1259,16 +1259,20 @@ func runServe(args []string) error {
 		if gatewayObtainReady(gatewayProv) {
 			caller := gateway.CallerFromBoundSubject(subject)
 			if gatewayMultiUser {
-				// Per-request Obtain: Caller from HTTP context when present; else process default.
-				attachGatewayObtainAuthProviderDynamic(client, gatewayProv, caller)
+				// Per-request Obtain requires Caller in context (no default fallthrough).
+				attachGatewayObtainAuthProviderDynamic(client, gatewayProv, caller, true)
 			} else {
 				// Single-subject foundation: capture caller at attach; tool args cannot rebind.
 				attachGatewayObtainAuthProvider(client, gatewayProv, caller)
 			}
 			// Refuse residual local session path once Ready path is selected.
 			clearGatewayLocalSessionCredentials(client)
-			// Session-start whoAmI with Obtain credentials for the bound (default) caller.
-			obtainWho, werr := verifyGatewayObtainWhoAmI(context.Background(), client, subject.JenkinsUserID)
+			// Session-start whoAmI: multi-user AuthProviderCtx needs Caller on ctx.
+			whoCtx := context.Background()
+			if gatewayMultiUser {
+				whoCtx = gateway.ContextWithCaller(whoCtx, caller)
+			}
+			obtainWho, werr := verifyGatewayObtainWhoAmI(whoCtx, client, subject.JenkinsUserID)
 			if werr != nil {
 				return werr
 			}
@@ -1899,11 +1903,11 @@ func runServe(args []string) error {
 		}
 	}
 	// HOST-004 / HOST-006: process-level subject key + concurrent limiter when
-	// gateway mode is on. Empty key leaves page tokens unbound and skips
-	// SubjectLimiter (stdio pilot residual). Residual: per-HTTP-request
-	// SubjectKey swap when multi-user ctx lands.
+	// gateway mode is on. Multi-user: SubjectKeyFromContext derives key from
+	// gateway.Caller on tool ctx (same as Obtain). Empty key skips limiter.
 	var serveSubjectKey string
 	var serveSubjectLimiter tools.SubjectSlotLimiter
+	var serveSubjectKeyFromCtx func(ctx context.Context) string
 	if useGateway {
 		serveSubjectKey = gateway.SubjectKey(gateway.CallerFromBoundSubject(subject))
 		if serveSubjectKey != "" {
@@ -1915,8 +1919,16 @@ func runServe(args []string) error {
 				return lerr
 			}
 			serveSubjectLimiter = gateway.NewSubjectLimiter(perSubj, procMax)
-			log.Printf("HOST-006 subject limiter: max_per_subject=%d process_max=%d (subject_key_set=%v)",
-				perSubj, procMax, serveSubjectKey != "")
+			log.Printf("HOST-006 subject limiter: max_per_subject=%d process_max=%d multi_user=%v",
+				perSubj, procMax, gatewayMultiUser)
+		}
+		if gatewayMultiUser {
+			serveSubjectKeyFromCtx = func(ctx context.Context) string {
+				if c, ok := gateway.CallerFromContext(ctx); ok && c.Valid() {
+					return gateway.SubjectKey(c)
+				}
+				return ""
+			}
 		}
 	}
 	tools.Register(server, client, &tools.RegisterOptions{
@@ -1941,6 +1953,7 @@ func runServe(args []string) error {
 		WorkItemLookup:          workItemLookup,
 		Doctor:                  doctorFn,
 		SubjectKey:              serveSubjectKey,
+		SubjectKeyFromContext:   serveSubjectKeyFromCtx,
 		SubjectLimiter:          serveSubjectLimiter,
 	})
 	if *httpAddr != "" {

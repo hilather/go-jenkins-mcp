@@ -138,6 +138,10 @@ type RegisterOptions struct {
 	// page tokens unbound (jenkins.BindSubjectToPageFilter is a no-op on empty).
 	// Never derived from tool args.
 	SubjectKey string
+	// SubjectKeyFromContext optionally derives SubjectKey per tool request
+	// (multi-user: gateway.SubjectKey(CallerFromContext)). When nil or returns
+	// empty, SubjectKey process default is used. Never tool args.
+	SubjectKeyFromContext func(ctx context.Context) string
 	// SubjectLimiter is optional HOST-006 concurrent slot budget. When set and
 	// SubjectKey is non-empty, addTool Holds a slot around handler dispatch
 	// (fail closed CodeQuota). Empty SubjectKey skips the limiter (stdio pilot).
@@ -181,8 +185,20 @@ type regState struct {
 	meta *store.Meta
 
 	// HOST-004 / HOST-006: process-bound subject key + optional concurrent limiter.
-	subjectKey     string
-	subjectLimiter SubjectSlotLimiter
+	subjectKey            string
+	subjectKeyFromContext func(ctx context.Context) string
+	subjectLimiter        SubjectSlotLimiter
+}
+
+// effectiveSubjectKey returns per-request SubjectKey when SubjectKeyFromContext
+// is set and returns a non-empty value; else process SubjectKey.
+func effectiveSubjectKey(st regState, ctx context.Context) string {
+	if st.subjectKeyFromContext != nil && ctx != nil {
+		if k := strings.TrimSpace(st.subjectKeyFromContext(ctx)); k != "" {
+			return k
+		}
+	}
+	return strings.TrimSpace(st.subjectKey)
 }
 
 func resolveRegisterOptions(opts *RegisterOptions) regState {
@@ -227,6 +243,7 @@ func resolveRegisterOptions(opts *RegisterOptions) regState {
 	st.diagBudget = opts.DiagOpBudgets
 	st.meta = opts.Meta
 	st.subjectKey = strings.TrimSpace(opts.SubjectKey)
+	st.subjectKeyFromContext = opts.SubjectKeyFromContext
 	st.subjectLimiter = opts.SubjectLimiter
 	// MUT-001: process-scoped manager so preview tokens survive until confirm.
 	// Create once when mutations may register and caller did not inject one.
@@ -628,8 +645,9 @@ func addTool[In, Out any](
 		// Empty SubjectKey skips limiter (stdio pilot residual). When limiter is
 		// set and key is non-empty, Hold fails closed as CodeQuota (error path,
 		// same family as MCP budget quota — not a policy deny).
-		if st.subjectLimiter != nil && st.subjectKey != "" {
-			release, err := st.subjectLimiter.Hold(st.subjectKey)
+		// Multi-user: prefer SubjectKeyFromContext (Caller on ctx) over process key.
+		if sk := effectiveSubjectKey(st, ctx); st.subjectLimiter != nil && sk != "" {
+			release, err := st.subjectLimiter.Hold(sk)
 			if err != nil {
 				if st.metrics != nil {
 					st.metrics.Inc(telemetry.MetricMCPToolError, 1)

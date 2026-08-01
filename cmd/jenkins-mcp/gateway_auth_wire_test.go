@@ -529,7 +529,7 @@ func TestAttachGatewayObtainAuthProviderDynamic_AliceBobNoCrossLeak(t *testing.T
 		Token:  host003WireCanary,
 		Client: srv.Client(),
 	}
-	attachGatewayObtainAuthProviderDynamic(c, p, alice)
+	attachGatewayObtainAuthProviderDynamic(c, p, alice, false)
 	clearGatewayLocalSessionCredentials(c)
 	if c.AuthProvider != nil {
 		t.Fatal("multi-user must clear fixed AuthProvider")
@@ -567,6 +567,17 @@ func TestAttachGatewayObtainAuthProviderDynamic_AliceBobNoCrossLeak(t *testing.T
 		t.Fatal("cross leak: alice token used for bob")
 	}
 
+	// requireContextCaller=true: no Caller in ctx → fail closed (no default fallthrough).
+	cStrict := &jenkins.Client{URL: srv.URL, Client: srv.Client()}
+	attachGatewayObtainAuthProviderDynamic(cStrict, p, alice, true)
+	_, _, _, errStrict := cStrict.AuthProviderCtx(context.Background())
+	if errStrict == nil {
+		t.Fatal("requireContextCaller must fail closed without Caller in context")
+	}
+	if strings.Contains(errStrict.Error(), aliceTok) || strings.Contains(errStrict.Error(), bobTok) {
+		t.Fatalf("canary in error: %v", errStrict)
+	}
+
 	// Background (no Caller) → defaultCaller alice.
 	gotUser, gotPass, gotOK = "", "", false
 	if _, err := c.WhoAmI(context.Background()); err != nil {
@@ -594,7 +605,7 @@ func TestAttachGatewayObtainAuthProviderDynamic_MissingNoOtherSubject(t *testing
 		t.Fatal(err)
 	}
 	c := &jenkins.Client{User: "bob-j", Token: host003WireCanary + "-b"}
-	attachGatewayObtainAuthProviderDynamic(c, p, alice)
+	attachGatewayObtainAuthProviderDynamic(c, p, alice, false)
 	clearGatewayLocalSessionCredentials(c)
 
 	missing := host003Caller("missing-sub")
@@ -616,9 +627,9 @@ func TestAttachGatewayObtainAuthProviderDynamic_MissingNoOtherSubject(t *testing
 
 func TestAttachGatewayObtainAuthProviderDynamic_NilSafe(t *testing.T) {
 	t.Parallel()
-	attachGatewayObtainAuthProviderDynamic(nil, nil, gateway.Caller{})
+	attachGatewayObtainAuthProviderDynamic(nil, nil, gateway.Caller{}, false)
 	c := &jenkins.Client{}
-	attachGatewayObtainAuthProviderDynamic(c, nil, gateway.Caller{})
+	attachGatewayObtainAuthProviderDynamic(c, nil, gateway.Caller{}, false)
 	if c.AuthProviderCtx != nil || c.AuthProvider != nil {
 		t.Fatal("nil provider must not install")
 	}

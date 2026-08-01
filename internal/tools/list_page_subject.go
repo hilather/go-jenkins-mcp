@@ -20,10 +20,11 @@ import (
 
 // getJobsWithSubject is jenkins_get_jobs with HOST-004 subject isolation.
 func getJobsWithSubject(ctx context.Context, client *jenkins.Client, st regState, args jenkins.GetJobsToolArgs) (*jenkins.GetJobsToolResponse, error) {
+	sk := effectiveSubjectKey(st, ctx)
 	filterFP := jenkins.FilterFingerprint("get_jobs")
 	off, lim, err := jenkins.ResolveListPaginationWithSubject(
 		args.PageToken, args.Offset, args.Limit,
-		jenkins.DefaultGetJobsLimit, jenkins.MaxGetJobsLimit, filterFP, st.subjectKey,
+		jenkins.DefaultGetJobsLimit, jenkins.MaxGetJobsLimit, filterFP, sk,
 	)
 	if err != nil {
 		return nil, err
@@ -40,16 +41,17 @@ func getJobsWithSubject(ctx context.Context, client *jenkins.Client, st regState
 		return nil, nil
 	}
 	res.NextPageToken = jenkins.NextPageTokenIfMoreWithSubject(
-		res.Offset, res.Limit, len(res.JobList), res.Total, filterFP, st.subjectKey)
+		res.Offset, res.Limit, len(res.JobList), res.Total, filterFP, sk)
 	return res, nil
 }
 
 // listBuildsWithSubject is jenkins_list_builds with HOST-004 subject isolation.
 func listBuildsWithSubject(ctx context.Context, client *jenkins.Client, st regState, args jenkins.ListBuildsToolArgs) (*jenkins.ListBuildsToolResponse, error) {
+	sk := effectiveSubjectKey(st, ctx)
 	filterFP := listBuildsFilterFingerprint(args)
 	off, lim, err := jenkins.ResolveListPaginationWithSubject(
 		args.PageToken, args.Offset, args.Limit,
-		jenkins.DefaultListBuildsLimit, jenkins.MaxListBuildsLimit, filterFP, st.subjectKey,
+		jenkins.DefaultListBuildsLimit, jenkins.MaxListBuildsLimit, filterFP, sk,
 	)
 	if err != nil {
 		return nil, err
@@ -67,7 +69,7 @@ func listBuildsWithSubject(ctx context.Context, client *jenkins.Client, st regSt
 	}
 	// ListBuilds pagination uses Matched (filtered count), not a Total field.
 	res.NextPageToken = jenkins.NextPageTokenIfMoreWithSubject(
-		res.Offset, res.Limit, len(res.Builds), res.Matched, filterFP, st.subjectKey)
+		res.Offset, res.Limit, len(res.Builds), res.Matched, filterFP, sk)
 	return res, nil
 }
 

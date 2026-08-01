@@ -62,35 +62,44 @@ func attachGatewayObtainAuthProvider(client *jenkins.Client, prov gateway.Creden
 //
 // Wire with JENKINS_MCP_GATEWAY_MULTI_USER=1 and HTTP AfterIdentity injecting
 // gateway.Caller from trusted RequestIdentity (never tool args).
-func attachGatewayObtainAuthProviderDynamic(client *jenkins.Client, prov gateway.CredentialProvider, defaultCaller gateway.Caller) {
+//
+// requireContextCaller=true (multi-user Ready): fail closed when context has no
+// Caller — never silent fallthrough to defaultCaller (credential mix-up risk).
+// Session-start whoAmI must pass ContextWithCaller(defaultCaller).
+// requireContextCaller=false: allow defaultCaller when ctx has no Caller (tests).
+func attachGatewayObtainAuthProviderDynamic(client *jenkins.Client, prov gateway.CredentialProvider, defaultCaller gateway.Caller, requireContextCaller bool) {
 	if client == nil || prov == nil {
 		return
 	}
 	p := prov
 	def := defaultCaller
+	require := requireContextCaller
 	// Multi-user path: clear fixed AuthProvider so only context-scoped Obtain runs.
 	client.WithAuthProvider(nil)
 	client.WithAuthProviderCtx(func(ctx context.Context) (user, secret string, sch jenkins.AuthScheme, err error) {
 		if err := ctx.Err(); err != nil {
 			return "", "", "", apperr.Wrap(apperr.CodeCancelled, "gateway multi-user Obtain cancelled", err)
 		}
-		caller := def
-		if c, ok := gateway.CallerFromContext(ctx); ok {
-			// Only rebind when the context caller is Valid; otherwise fail closed
-			// rather than silently falling through to default for a partial spoof.
-			if c.Valid() {
-				caller = gateway.MergeCallerDefaults(c, def)
-			} else if strings.TrimSpace(c.Subject) != "" {
-				// Subject present but incomplete (e.g. missing profile) — try merge.
-				merged := gateway.MergeCallerDefaults(c, def)
-				if !merged.Valid() {
-					return "", "", "", apperr.New(apperr.CodeAuthentication,
-						"gateway multi-user caller subject and profile are required")
-				}
-				caller = merged
+		c, ok := gateway.CallerFromContext(ctx)
+		if !ok || strings.TrimSpace(c.Subject) == "" {
+			if require {
+				return "", "", "", apperr.New(apperr.CodeAuthentication,
+					"gateway multi-user Obtain requires caller in context (no defaultCaller fallthrough)")
 			}
-			// else: no useful context caller → defaultCaller (session-start / no identity)
+			// Test / residual path: use process default when context has no Caller.
+			if !def.Valid() {
+				return "", "", "", apperr.New(apperr.CodeAuthentication,
+					"gateway multi-user caller subject and profile are required")
+			}
+			ha, err := gateway.ObtainHTTPAuth(ctx, p, def)
+			if err != nil {
+				return "", "", "", err
+			}
+			return httpAuthToJenkins(ha)
 		}
+		// Only rebind when the context caller is Valid after merge; fail closed
+		// rather than silently falling through to default for a partial spoof.
+		caller := gateway.MergeCallerDefaults(c, def)
 		if !caller.Valid() {
 			return "", "", "", apperr.New(apperr.CodeAuthentication,
 				"gateway multi-user caller subject and profile are required")
