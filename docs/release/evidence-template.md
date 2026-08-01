@@ -96,8 +96,9 @@ See [pilot checklist §0](../pilot/checklist.md) and [gates.md](gates.md).
 | Local OIDC profile (IdP ≠ Jenkins) | | | live RS residual if unclaimed |
 | Gateway Mode **A** `api_token_vault` | | | multi-user Obtain residual |
 | Gateway Mode **B** `jwt_rs_bearer` | | | live Entra / jwt-auth-filter |
-| Gateway Mode **C** AgentCore Live | | | live AgentCore / Entra Obtain |
+| Gateway Mode **C** AgentCore Live | | | live AgentCore / Entra Obtain (`oauth010_offline` / `progressive_consent_offline`) |
 | Offline only: `gateway qualify --offline` | | `gateway-qualify.json` / release-evidence | **not** live multi-user GO |
+| Residual honesty smoke (opt-in) | | `make residual-smoke` → `dist/residual-smoke/<ts>/` | offline residual ids only; not live GO |
 | Admin console (loopback) | | | localStorage pilot-only residual |
 
 Modes **not** in release scope: _____________

@@ -128,7 +128,8 @@ require (
 	}
 	for _, id := range []string{
 		"full_suite", "production_signoff", "live_entra", "gateway_modes_live",
-		"multi_user_offline", "oauth009_offline", "host008_single_replica",
+		"multi_user_offline", "oauth009_offline", "oauth010_offline", "progressive_consent_offline",
+		"host008_single_replica",
 		"stdio_binary_smoke", "cursor_host_ci", "install_operator",
 	} {
 		if !resIDs[id] {
@@ -136,8 +137,9 @@ require (
 		}
 	}
 	// Honesty: stdio_binary_smoke is Done* (optional CI), cursor_host_ci remains open residual.
-	// multi_user_offline / oauth009_offline mark Done* foundations; host008 stays single-replica residual.
-	var stdioMsg, cursorMsg, multiUserMsg, oauth009Msg, host008Msg string
+	// multi_user_offline / oauth009_offline / oauth010_offline / progressive_consent_offline mark Done* foundations;
+	// host008 stays single-replica residual. Offline only — not live Entra / multi-user GO.
+	var stdioMsg, cursorMsg, multiUserMsg, oauth009Msg, oauth010Msg, progressiveMsg, host008Msg string
 	for _, r := range ev.Residual {
 		switch r.ID {
 		case "stdio_binary_smoke":
@@ -148,6 +150,10 @@ require (
 			multiUserMsg = r.Message
 		case "oauth009_offline":
 			oauth009Msg = r.Message
+		case "oauth010_offline":
+			oauth010Msg = r.Message
+		case "progressive_consent_offline":
+			progressiveMsg = r.Message
 		case "host008_single_replica":
 			host008Msg = r.Message
 		}
@@ -166,6 +172,15 @@ require (
 	}
 	if !strings.Contains(strings.ToLower(oauth009Msg), "done*") || !strings.Contains(oauth009Msg, "OAUTH-009") {
 		t.Fatalf("oauth009_offline honesty: %q", oauth009Msg)
+	}
+	if !strings.Contains(strings.ToLower(oauth010Msg), "done*") || !strings.Contains(oauth010Msg, "OAUTH-010") {
+		t.Fatalf("oauth010_offline honesty: %q", oauth010Msg)
+	}
+	if !strings.Contains(strings.ToLower(oauth010Msg), "offline") {
+		t.Fatalf("oauth010_offline should stress offline-only: %q", oauth010Msg)
+	}
+	if !strings.Contains(strings.ToLower(progressiveMsg), "done*") || !strings.Contains(strings.ToLower(progressiveMsg), "browser") {
+		t.Fatalf("progressive_consent_offline honesty: %q", progressiveMsg)
 	}
 	if !strings.Contains(strings.ToLower(host008Msg), "single-replica") && !strings.Contains(strings.ToLower(host008Msg), "single replica") {
 		t.Fatalf("host008_single_replica honesty: %q", host008Msg)
@@ -186,6 +201,7 @@ require (
 // TestKnownReleaseResidualIDsStable is the pure unit contract for
 // scripts/gateway-residual-smoke.sh (opt-in make residual-smoke).
 // Asserts REL lite residual honesty ids stay present in knownReleaseResiduals().
+// Offline only: these ids document Done* foundations + open live pins — not production GO.
 func TestKnownReleaseResidualIDsStable(t *testing.T) {
 	t.Parallel()
 	// Keep in sync with scripts/gateway-residual-smoke.sh REQUIRED_RESIDUAL_IDS
@@ -193,6 +209,8 @@ func TestKnownReleaseResidualIDsStable(t *testing.T) {
 	required := []string{
 		"multi_user_offline",
 		"oauth009_offline",
+		"oauth010_offline",
+		"progressive_consent_offline",
 		"host008_single_replica",
 		"gateway_modes_live",
 	}
@@ -204,6 +222,9 @@ func TestKnownReleaseResidualIDsStable(t *testing.T) {
 		if strings.TrimSpace(r.Message) == "" {
 			t.Fatalf("empty residual message for %s", r.ID)
 		}
+		if byID[r.ID].ID != "" {
+			t.Fatalf("duplicate residual id %s", r.ID)
+		}
 		byID[r.ID] = r
 	}
 	for _, id := range required {
@@ -214,6 +235,30 @@ func TestKnownReleaseResidualIDsStable(t *testing.T) {
 		if len(r.GateIDs) == 0 {
 			t.Fatalf("residual %s missing gate_ids", id)
 		}
+	}
+	// Message honesty: Done* foundations must not claim live GO; Mode C residuals offline-only.
+	assertDoneStarOffline := func(id, mustContain string) {
+		t.Helper()
+		msg := byID[id].Message
+		low := strings.ToLower(msg)
+		if !strings.Contains(low, "done*") {
+			t.Fatalf("%s should mark Done* offline foundation: %q", id, msg)
+		}
+		if mustContain != "" && !strings.Contains(msg, mustContain) && !strings.Contains(low, strings.ToLower(mustContain)) {
+			t.Fatalf("%s should reference %q: %q", id, mustContain, msg)
+		}
+	}
+	assertDoneStarOffline("multi_user_offline", "multi-user")
+	assertDoneStarOffline("oauth009_offline", "OAUTH-009")
+	assertDoneStarOffline("oauth010_offline", "OAUTH-010")
+	assertDoneStarOffline("progressive_consent_offline", "browser")
+	hostMsg := strings.ToLower(byID["host008_single_replica"].Message)
+	if !strings.Contains(hostMsg, "single-replica") && !strings.Contains(hostMsg, "single replica") {
+		t.Fatalf("host008_single_replica should state single-replica honesty: %q", byID["host008_single_replica"].Message)
+	}
+	modesMsg := strings.ToLower(byID["gateway_modes_live"].Message)
+	if !strings.Contains(modesMsg, "residual") && !strings.Contains(modesMsg, "live") {
+		t.Fatalf("gateway_modes_live should mark live modes residual: %q", byID["gateway_modes_live"].Message)
 	}
 }
 
@@ -230,6 +275,8 @@ func TestParseReleaseEvidenceResidualJSON(t *testing.T) {
   "residual": [
     {"id": "multi_user_offline", "gate_ids": ["REL-002.compat.modes"], "message": "Done* foundation; not production multi-user GO"},
     {"id": "oauth009_offline", "gate_ids": ["REL-002.sec.oauth"], "message": "Done* OAUTH-009 offline matrix; live pin residual"},
+    {"id": "oauth010_offline", "gate_ids": ["REL-002.sec.oauth"], "message": "Done* OAUTH-010 offline Mode C matrix; live Entra residual"},
+    {"id": "progressive_consent_offline", "gate_ids": ["REL-002.compat.modes"], "message": "Done* progressive consent metadata; browser 3LO not automated"},
     {"id": "host008_single_replica", "gate_ids": ["REL-002.compat.gateway"], "message": "HOST-008 single-replica default; multi-replica residual"},
     {"id": "gateway_modes_live", "gate_ids": ["REL-002.compat.modes"], "message": "Live modes A/B/C residual unless pilot matrix records cohorts"}
   ]
@@ -249,7 +296,8 @@ func TestParseReleaseEvidenceResidualJSON(t *testing.T) {
 		got[r.ID] = r.Message
 	}
 	for _, id := range []string{
-		"multi_user_offline", "oauth009_offline", "host008_single_replica", "gateway_modes_live",
+		"multi_user_offline", "oauth009_offline", "oauth010_offline", "progressive_consent_offline",
+		"host008_single_replica", "gateway_modes_live",
 	} {
 		msg, ok := got[id]
 		if !ok || strings.TrimSpace(msg) == "" {
@@ -274,7 +322,8 @@ func TestParseReleaseEvidenceResidualJSON(t *testing.T) {
 		ids[r.ID] = true
 	}
 	for _, id := range []string{
-		"multi_user_offline", "oauth009_offline", "host008_single_replica", "gateway_modes_live",
+		"multi_user_offline", "oauth009_offline", "oauth010_offline", "progressive_consent_offline",
+		"host008_single_replica", "gateway_modes_live",
 	} {
 		if !ids[id] {
 			t.Fatalf("round-trip missing residual %s", id)
