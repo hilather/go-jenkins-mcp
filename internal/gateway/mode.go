@@ -33,6 +33,10 @@ const EnvAgentCoreTokenEndpoint = "JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT"
 // (HOST-009 lab): $XDG_DATA_HOME/jenkins-mcp/gateway/apitoken_vault.json
 const DefaultAPITokenVaultRelPath = "jenkins-mcp/gateway/apitoken_vault.json"
 
+// DefaultJWTVaultRelPath is the conventional Mode B JWT vault file under XDG
+// data (HOST-010 lab): $XDG_DATA_HOME/jenkins-mcp/gateway/jwt_vault.json
+const DefaultJWTVaultRelPath = "jenkins-mcp/gateway/jwt_vault.json"
+
 // ModeEnabled reports whether gateway mode is requested via flag or env.
 func ModeEnabled(flagGateway bool, profileGateway bool) bool {
 	if flagGateway || profileGateway {
@@ -158,7 +162,8 @@ func ModeMatrixFromEnviron(getenv func(string) string) (ModeMatrix, error) {
 	}
 	mx := ModeMatrix{Primary: primary, Enabled: enabled}
 	if ModeEnabledIn(CredentialModeJWTRSBearer, enabled, primary) {
-		mx.Residual = "jwt_rs_bearer residual (HOST-010); live IdP JWT RS not wired"
+		// Offline vault Obtain is HOST-010 foundation; live RS pin is residual.
+		mx.Residual = "jwt_rs_bearer offline vault (HOST-010); live IdP/jwt-auth-filter pin residual (OAUTH-009)"
 	}
 	return mx, nil
 }
@@ -172,6 +177,22 @@ func VaultPathFromEnviron(getenv func(string) string) string {
 	if p := strings.TrimSpace(getenv(EnvGatewayVaultPath)); p != "" {
 		return p
 	}
+	return filepath.Join(xdgDataHome(getenv), filepath.FromSlash(DefaultAPITokenVaultRelPath))
+}
+
+// JWTVaultPathFromEnviron returns the Mode B JWT vault file path from env or
+// default under XDG data + DefaultJWTVaultRelPath.
+func JWTVaultPathFromEnviron(getenv func(string) string) string {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	if p := strings.TrimSpace(getenv(EnvGatewayJWTVaultPath)); p != "" {
+		return p
+	}
+	return filepath.Join(xdgDataHome(getenv), filepath.FromSlash(DefaultJWTVaultRelPath))
+}
+
+func xdgDataHome(getenv func(string) string) string {
 	dataHome := strings.TrimSpace(getenv("XDG_DATA_HOME"))
 	if dataHome == "" {
 		home := strings.TrimSpace(getenv("HOME"))
@@ -180,18 +201,17 @@ func VaultPathFromEnviron(getenv func(string) string) string {
 		}
 		dataHome = filepath.Join(home, ".local", "share")
 	}
-	return filepath.Join(dataHome, filepath.FromSlash(DefaultAPITokenVaultRelPath))
+	return dataHome
 }
 
 // CredentialProviderFromEnviron selects the HOST-011 primary CredentialProvider
-// from env (Mode A vault, Mode B residual, Mode C AgentCore). No silent
-// cross-mode fallthrough: unknown mode fails start; Mode B is an explicit
-// residual not_configured provider (never AgentCore silent); disabled modes
-// are not constructed.
+// from env (Mode A API token vault, Mode B JWT vault, Mode C AgentCore). No
+// silent cross-mode fallthrough: unknown mode fails start; only the primary
+// mode is constructed (disabled modes never fall through).
 //
-// Mode A Live provider is returned when vault path is constructible; empty vault
-// file is OK (per-subject Obtain still not_found). Mode C uses RequireGatewaySetup
-// (Live=false until TokenFetcher wire).
+// Mode A/B Live providers are returned when vault paths are constructible;
+// empty vault files are OK (per-subject Obtain still not_found). Mode C uses
+// RequireGatewaySetup (Live=false until TokenFetcher wire).
 //
 // getenv nil → os.Getenv. jenkinsBaseURL is required for Mode C only.
 func CredentialProviderFromEnviron(jenkinsBaseURL string, getenv func(string) string) (CredentialProvider, error) {
@@ -212,9 +232,14 @@ func CredentialProviderFromEnviron(jenkinsBaseURL string, getenv func(string) st
 		}
 		return RequireAPITokenVaultSetup(vault)
 	case CredentialModeJWTRSBearer:
-		// Explicit residual provider — not AgentCore, not nil error-only path
-		// that could be mistaken for "use default AgentCore".
-		return NewResidualJWTRSProvider(), nil
+		// Mode B offline vault foundation (HOST-010) — not AgentCore silent.
+		// Live jwt-auth-filter production pin remains OAUTH-009 residual.
+		path := JWTVaultPathFromEnviron(getenv)
+		vault, err := NewFileJWTVault(path)
+		if err != nil {
+			return nil, err
+		}
+		return RequireJWTRSBearerSetup(vault)
 	case CredentialModeAgentCore:
 		// Mode C: AgentCore path (Live=false until TokenFetcher wire).
 		// Use injected getenv so tests do not depend on process env pollution.

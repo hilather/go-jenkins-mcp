@@ -16,6 +16,12 @@ approved reverse-proxy JWT RS, or a hardened fork).
 > probes are shippable now (`Done*` for the offline classifier). Production
 > **go** still requires live lab evidence (plugin/Jenkins LTS pins, JCasC,
 > security review) — see §8. Offline `Done*` never closes live pin.
+>
+> **HOST-010 note:** Gateway Mode B offline path (`JWTRSBearerProvider` +
+> `JWTVault` under `internal/gateway`) can Obtain → Bearer for lab tokens
+> keyed by subject. That is **not** a live jwt-auth-filter production pin.
+> Access tokens only (never ID tokens as Jenkins API credentials). See
+> [../gateway/README.md](../gateway/README.md) Mode B.
 
 ### Offline-automated vs live-lab residual (matrix)
 

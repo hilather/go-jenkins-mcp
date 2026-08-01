@@ -91,12 +91,17 @@ env labels + whoAmI principal.
 | Inbound claim / source | `policy.Subject` field | Notes |
 |------------------------|------------------------|--------|
 | Entra/OIDC `sub` | `ExternalSubject` | Required |
-| Tenant | `Tenant` | Required (`DefaultBindOptions.RequireTenant`) |
-| Workload id | `WorkloadID` | Required (`RequireWorkload`) |
+| Tenant (`tid`) | `Tenant` | Required (`DefaultBindOptions.RequireTenant`) |
+| Workload id | `WorkloadID` | Required (`RequireWorkload`); process/gateway label when not in JWT |
 | Groups (bounded) | `Groups` | Optional; see overage table |
-| Exchanged / whoAmI Jenkins principal | `JenkinsUserID` | Required for RBAC `Valid()` |
-| Profile id | `ProfileID` | Required |
+| Exchanged / whoAmI / `preferred_username` Jenkins principal | `JenkinsUserID` | Required for RBAC `Valid()` |
+| Profile id | `ProfileID` | Required (process profile, not client-supplied) |
 | Gateway trust path | `Verified` | True only when claims verified **and** Jenkins principal present |
+
+**Helpers:** `InboundClaimsFromJWTClaims` (verified access-token claims →
+`InboundClaims` with `Verified=true`; rejects `token_use=id_token`);
+`InboundClaimsFromRequestIdentity` (fail-closed HTTP inbound);
+`InboundClaimsFromHTTP` / `BindSubjectFromHTTP` for lab/JWT HTTP paths.
 
 ### Binding rules matrix
 
@@ -272,6 +277,49 @@ jenkins-mcp gateway vault-delete --subject 'tenant|entra-sub|corp'
 
 **Admin console residual:** Mode A vault provision/list is **CLI-only** in this
 foundation (HOST-007 / admin SPA residual). Never put vault tokens in admin JSON.
+
+## Mode B — Jenkins-audience JWT bearer (HOST-010 offline)
+
+```text
+Obtain (JWTRSBearerProvider):
+  Live=false              → capability_missing / not_configured
+  Live=true, Vault=nil    → not_configured
+  Live=true, missing key  → not_found (never ambient keyring / Mode A / other subject)
+  Live=true, hit          → Credential{Mode: jwt_rs_bearer, AccessToken: token}
+  HTTPAuthFromCredential  → scheme=bearer (never Basic; never username)
+```
+
+| Type | Role |
+|------|------|
+| `JWTVault` | `Get` / `Put` / `Delete` by `subjectKey` (never logs values) |
+| `MemoryJWTVault` | Process memory for tests |
+| `FileJWTVault` | Lab file under configurable path, mode **0600** |
+| `JWTRSBearerProvider` | Mode B `CredentialProvider` |
+| `SubjectKey(caller)` | Same `tenant\|subject\|profile` key as Mode A — **never** tool args |
+| `HTTPAuthFromCredential` | Bearer for Mode B (and Mode C) |
+
+**Access tokens only:** vault entries and Obtain material must be **Jenkins-audience
+access tokens**. **ID tokens must never** be used as Jenkins API credentials
+(`rejectIDTokenAsAPICredential` on Put; claim bind rejects `token_use=id_token`).
+
+| Env | Meaning |
+|-----|---------|
+| `JENKINS_MCP_GATEWAY_CREDENTIAL_MODE=jwt_rs_bearer` | Select Mode B for serve provider setup |
+| `JENKINS_MCP_GATEWAY_JWT_VAULT_PATH` | File vault path (default: `$XDG_DATA_HOME/jenkins-mcp/gateway/jwt_vault.json`) |
+
+**Residual (explicit):** Live **jwt-auth-filter** / real Entra issuance pin is
+**OAUTH-009** — offline vault does **not** close production RS qualification.
+See [../auth/jwt-auth-filter-qualification.md](../auth/jwt-auth-filter-qualification.md).
+`ModeMatrix.Residual` notes this when Mode B is enabled. Doctor/self-check must
+remain honest when RS is not live-qualified.
+
+**GWY-002 claim helpers:**
+
+| Helper | Role |
+|--------|------|
+| `InboundClaimsFromJWTClaims(auth.AccessTokenClaims, profileID, workloadID)` | Verified JWT claims → `InboundClaims` (`Verified=true`); requires `sub` + profile |
+| `InboundClaimsFromRequestIdentity(HTTPInbound, profileID)` | Fail-closed HTTP inbound → claims (subject + verified + profile) |
+| `RejectIdentityToolArgs` | Tool args still cannot set identity |
 
 ### AgentCore modes (Mode C / GWY-001)
 

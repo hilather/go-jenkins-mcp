@@ -134,6 +134,77 @@ func InboundClaimsFromHTTP(in HTTPInbound, profileID contracts.ProfileID) Inboun
 	}
 }
 
+// InboundClaimsFromRequestIdentity maps trusted HTTPInbound to InboundClaims
+// with fail-closed checks (GWY-002). Requires subject and profileID; sets
+// Verified from inbound (must be true for production DefaultBindOptions).
+// Tool arguments never enter this path (see RejectIdentityToolArgs).
+func InboundClaimsFromRequestIdentity(in HTTPInbound, profileID contracts.ProfileID) (InboundClaims, error) {
+	sub := strings.TrimSpace(in.ExternalSubject)
+	if sub == "" {
+		return InboundClaims{}, apperr.New(apperr.CodeAuthentication,
+			"gateway request identity subject is required")
+	}
+	pid := contracts.ProfileID(strings.TrimSpace(string(profileID)))
+	if pid == "" {
+		return InboundClaims{}, apperr.New(apperr.CodeAuthentication,
+			"gateway profile id is required for request identity")
+	}
+	if !in.Verified {
+		return InboundClaims{}, apperr.New(apperr.CodeAuthentication,
+			"gateway request identity is not verified")
+	}
+	return InboundClaims{
+		Subject:          sub,
+		Tenant:           strings.TrimSpace(in.Tenant),
+		WorkloadID:       strings.TrimSpace(in.WorkloadID),
+		JenkinsPrincipal: strings.TrimSpace(in.JenkinsPrincipal),
+		ProfileID:        pid,
+		Verified:         true,
+	}, nil
+}
+
+// InboundClaimsFromJWTClaims maps verified JWT access-token claims to
+// InboundClaims (GWY-002 / HOST-010). Sets Verified=true.
+//
+// Required: claims.Subject and profileID. Tenant maps from tid; groups from
+// claim groups; preferred_username → JenkinsPrincipal when present.
+// workloadID is process/gateway workload (not a standard JWT claim) and may
+// be empty when BindOptions.RequireWorkload is relaxed.
+//
+// Input must be from ValidateAccessToken (or equivalent) — never raw tool args
+// and never an ID token used as Jenkins API credential.
+func InboundClaimsFromJWTClaims(c auth.AccessTokenClaims, profileID contracts.ProfileID, workloadID string) (InboundClaims, error) {
+	sub := strings.TrimSpace(c.Subject)
+	if sub == "" {
+		return InboundClaims{}, apperr.New(apperr.CodeAuthentication,
+			"jwt access token subject is required")
+	}
+	pid := contracts.ProfileID(strings.TrimSpace(string(profileID)))
+	if pid == "" {
+		return InboundClaims{}, apperr.New(apperr.CodeAuthentication,
+			"gateway profile id is required for jwt claim binding")
+	}
+	// token_use=id_token must never bind as API identity path elevation.
+	use := strings.ToLower(strings.TrimSpace(c.TokenUse))
+	if use == "id_token" {
+		return InboundClaims{}, apperr.New(apperr.CodeAuthentication,
+			"id_token claims cannot be used as gateway api identity")
+	}
+	var groups []string
+	if len(c.Groups) > 0 {
+		groups = append([]string(nil), c.Groups...)
+	}
+	return InboundClaims{
+		Subject:          sub,
+		Tenant:           strings.TrimSpace(c.TenantID),
+		Groups:           groups,
+		WorkloadID:       strings.TrimSpace(workloadID),
+		JenkinsPrincipal: strings.TrimSpace(c.PreferredUsername),
+		ProfileID:        pid,
+		Verified:         true,
+	}, nil
+}
+
 // BindSubjectFromHTTP maps trusted HTTPInbound to policy.Subject (GWY-002 / HOST-001).
 // Tool arguments never enter this path. opts nil uses DefaultBindOptions with
 // relaxed RequireTenant/RequireWorkload for lab partial claims (still require

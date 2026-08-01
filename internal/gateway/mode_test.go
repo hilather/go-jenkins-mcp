@@ -110,45 +110,68 @@ func TestCredentialProviderFromEnviron_ModeA(t *testing.T) {
 	}
 }
 
-// HOST-011: jwt_rs_bearer → explicit residual/not_configured provider (not AgentCore silent).
-func TestCredentialProviderFromEnviron_ModeBResidual(t *testing.T) {
-	t.Parallel()
+// HOST-011 / HOST-010: jwt_rs_bearer → offline JWT vault provider (not AgentCore silent).
+// Live jwt-auth-filter pin remains OAUTH-009 residual (see ModeMatrix.Residual).
+func TestCredentialProviderFromEnviron_ModeBJWTVault(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/jwt_vault.json"
 	env := map[string]string{
 		gateway.EnvGatewayCredentialMode: string(gateway.CredentialModeJWTRSBearer),
+		gateway.EnvGatewayJWTVaultPath:   path,
 	}
 	getenv := func(k string) string { return env[k] }
 	p, err := gateway.CredentialProviderFromEnviron("https://jenkins.example.com", getenv)
 	if err != nil {
-		t.Fatalf("Mode B must return residual provider, not start error: %v", err)
+		t.Fatalf("Mode B must return jwt vault provider, not start error: %v", err)
 	}
 	if p.Mode() != gateway.ModeJWTRSBearer {
 		t.Fatalf("want jwt_rs_bearer mode got %s (must not be AgentCore)", p.Mode())
 	}
-	// Not AgentCore authorization_code / token_exchange.
 	if p.Mode() == gateway.ModeAuthorizationCode || p.Mode() == gateway.ModeTokenExchange {
 		t.Fatal("Mode B must not silently use AgentCore mode labels")
 	}
 	st := p.Status(context.Background())
-	if st.Ready || st.Configured {
-		t.Fatalf("residual must not be ready: %+v", st)
+	if !st.Ready || !st.Configured {
+		t.Fatalf("Mode B vault provider should be Ready: %+v", st)
 	}
-	if !strings.Contains(st.ErrorMessageSafe, "HOST-010") &&
-		!strings.Contains(st.ErrorMessageSafe, "residual") {
-		t.Fatalf("want residual wording in status: %+v", st)
-	}
+	// Empty vault → not_found, not ambient SA / AgentCore.
 	_, err = p.Obtain(context.Background(), gateway.Caller{
 		Subject:   "s1",
 		ProfileID: "corp",
 	})
 	if err == nil {
-		t.Fatal("expected residual Obtain fail")
+		t.Fatal("expected not_found")
 	}
-	if apperr.CodeOf(err) != apperr.CodeCapabilityMissing {
-		t.Fatalf("code %v", apperr.CodeOf(err))
+	if apperr.CodeOf(err) != apperr.CodeNotFound {
+		t.Fatalf("code %v err %v", apperr.CodeOf(err), err)
 	}
-	if !strings.Contains(err.Error(), "jwt_rs_bearer") ||
-		!strings.Contains(err.Error(), "residual") {
-		t.Fatalf("want clear residual message: %v", err)
+	// Matrix residual still notes live RS pin.
+	mx, err := gateway.ModeMatrixFromEnviron(getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mx.Residual == "" || !strings.Contains(mx.Residual, "OAUTH-009") {
+		t.Fatalf("want OAUTH-009 residual note: %q", mx.Residual)
+	}
+}
+
+// Explicit residual helper still fails closed (disabled / no-vault surface).
+func TestNewResidualJWTRSProvider_NoFallthrough(t *testing.T) {
+	t.Parallel()
+	p := gateway.NewResidualJWTRSProvider()
+	if p.Mode() != gateway.ModeJWTRSBearer {
+		t.Fatalf("mode %s", p.Mode())
+	}
+	st := p.Status(context.Background())
+	if st.Ready || st.Configured {
+		t.Fatalf("residual must not be ready: %+v", st)
+	}
+	_, err := p.Obtain(context.Background(), gateway.Caller{Subject: "s1", ProfileID: "corp"})
+	if err == nil || apperr.CodeOf(err) != apperr.CodeCapabilityMissing {
+		t.Fatalf("got %v", err)
+	}
+	if !strings.Contains(err.Error(), "residual") {
+		t.Fatalf("want residual wording: %v", err)
 	}
 }
 
@@ -335,6 +358,148 @@ func TestHOST011_AuthHeaderShapeMatrix(t *testing.T) {
 			t.Fatalf("code %v", apperr.CodeOf(err))
 		}
 	})
+}
+
+// HOST-011 offline Obtain matrix: A=Basic, B=Bearer vault, C=Bearer mock Fetcher.
+// Disabled mode does not fall through to another mode's credential.
+func TestHOST011_ObtainAuthMatrixOffline(t *testing.T) {
+	t.Parallel()
+	const canaryA = "host011-modeA-canary-never-log"
+	const canaryB = "host011-modeB-canary-never-log"
+	const canaryC = "host011-modeC-canary-never-log"
+	caller := gateway.Caller{
+		Subject:   "matrix-user",
+		Tenant:    "t1",
+		ProfileID: "corp",
+	}
+
+	t.Run("obtain_A_basic", func(t *testing.T) {
+		t.Parallel()
+		v := gateway.NewMemoryAPITokenVault()
+		_ = v.Put(context.Background(), gateway.SubjectKey(caller), "alice", canaryA)
+		p, err := gateway.RequireAPITokenVaultSetup(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		auth, err := gateway.ObtainHTTPAuth(context.Background(), p, caller)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if auth.Scheme != gateway.HTTPAuthSchemeBasic || auth.Username != "alice" || auth.Token != canaryA {
+			t.Fatalf("%+v", auth)
+		}
+		if strings.Contains(auth.String(), canaryA) {
+			t.Fatal("canary A in String")
+		}
+	})
+
+	t.Run("obtain_B_bearer", func(t *testing.T) {
+		t.Parallel()
+		v := gateway.NewMemoryJWTVault()
+		_ = v.Put(context.Background(), gateway.SubjectKey(caller), canaryB)
+		p, err := gateway.RequireJWTRSBearerSetup(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		auth, err := gateway.ObtainHTTPAuth(context.Background(), p, caller)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if auth.Scheme != gateway.HTTPAuthSchemeBearer || auth.Username != "" || auth.Token != canaryB {
+			t.Fatalf("%+v", auth)
+		}
+		if strings.Contains(auth.String(), canaryB) {
+			t.Fatal("canary B in String")
+		}
+	})
+
+	t.Run("obtain_C_bearer_mock", func(t *testing.T) {
+		t.Parallel()
+		cfg := gateway.AgentCoreConfig{
+			AuthorizationServerBaseURL: "https://login.microsoftonline.com/t/v2.0",
+			Audience:                   "api://jenkins-api",
+			Mode:                       gateway.ModeTokenExchange,
+			JenkinsBaseURL:             "https://jenkins.example.com",
+		}
+		p, err := gateway.NewAgentCoreProvider(cfg, gateway.NewMemoryTokenCache(0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		p.Live = true
+		p.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, c gateway.Caller, _ gateway.AgentCoreConfig) (gateway.Credential, error) {
+			_ = ctx
+			return gateway.Credential{
+				AccessToken: canaryC,
+				Mode:        gateway.ModeTokenExchange,
+				JenkinsPrincipal: c.Subject,
+			}, nil
+		})
+		auth, err := gateway.ObtainHTTPAuth(context.Background(), p, caller)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if auth.Scheme != gateway.HTTPAuthSchemeBearer || auth.Token != canaryC {
+			t.Fatalf("%+v", auth)
+		}
+		if strings.Contains(auth.String(), canaryC) {
+			t.Fatal("canary C in String")
+		}
+	})
+
+	// Mode B provider must not return Mode A token material even if co-resident vaults exist.
+	t.Run("disabled_mode_no_fallthrough", func(t *testing.T) {
+		t.Parallel()
+		// Provision Mode A vault for the same subject key.
+		apiVault := gateway.NewMemoryAPITokenVault()
+		_ = apiVault.Put(context.Background(), gateway.SubjectKey(caller), "alice", canaryA)
+		// Mode B primary with empty JWT vault — must not fall through to Mode A.
+		jwtVault := gateway.NewMemoryJWTVault()
+		pB, err := gateway.RequireJWTRSBearerSetup(jwtVault)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cred, err := pB.Obtain(context.Background(), caller)
+		if err == nil {
+			t.Fatal("empty Mode B vault must fail closed")
+		}
+		if cred.AccessToken != "" {
+			t.Fatal("must not return Mode A or any token")
+		}
+		if apperr.CodeOf(err) != apperr.CodeNotFound {
+			t.Fatalf("code %v", apperr.CodeOf(err))
+		}
+		if strings.Contains(err.Error(), canaryA) {
+			t.Fatal("Mode A canary in Mode B error")
+		}
+		// Residual Mode B also no fallthrough.
+		res := gateway.NewResidualJWTRSProvider()
+		cred, err = res.Obtain(context.Background(), caller)
+		if err == nil || cred.AccessToken != "" {
+			t.Fatal("residual must not return credentials")
+		}
+		// Mode A primary never returns Bearer JWT scheme.
+		pA, _ := gateway.RequireAPITokenVaultSetup(apiVault)
+		auth, err := gateway.ObtainHTTPAuth(context.Background(), pA, caller)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if auth.Scheme != gateway.HTTPAuthSchemeBasic {
+			t.Fatalf("Mode A must stay Basic: %+v", auth)
+		}
+	})
+}
+
+func TestJWTVaultPathFromEnviron(t *testing.T) {
+	env := map[string]string{"XDG_DATA_HOME": "/tmp/xdg-data"}
+	getenv := func(k string) string { return env[k] }
+	p := gateway.JWTVaultPathFromEnviron(getenv)
+	if p == "" || !strings.Contains(p, "jwt_vault.json") {
+		t.Fatalf("path %q", p)
+	}
+	env[gateway.EnvGatewayJWTVaultPath] = "/custom/jwt_vault.json"
+	if gateway.JWTVaultPathFromEnviron(getenv) != "/custom/jwt_vault.json" {
+		t.Fatal("override")
+	}
 }
 
 func TestVaultPathFromEnviron(t *testing.T) {
