@@ -15,7 +15,7 @@ import (
 // doctor Report.gateway_residual_status (offline/online embed), support-bundle
 // top-level gateway-residual-status.json (always present even when doctor fails),
 // and release-evidence --offline JSON field gateway_residual_status (REL residual lite).
-const ResidualStatusHonestyNote = "unified gateway residual snapshot (env/static honesty only): offline Mode A/B/C foundations Done*; optional same-host FileSubjectRateLimiter / FileTokenCache / FilePrincipalCache / FileJWKS / vault flock lite when paths set; live Entra / jwt-auth-filter / AgentCore / multi-pod shared rate+vault+principal+JWKS HA residual — never production GO from this surface; see docs/gateway/live-pin-blockers.md"
+const ResidualStatusHonestyNote = "unified gateway residual snapshot (env/static honesty only): offline Mode A/B/C foundations Done*; optional same-host FileSubjectRateLimiter / FileTokenCache / FilePrincipalCache / FileJWKS / Mode A+B vault path residual lite when paths set; live Entra / jwt-auth-filter / AgentCore / multi-pod shared rate+vault+principal+JWKS HA residual — never production GO from this surface; see docs/gateway/live-pin-blockers.md"
 
 // ResidualStatusDoc is the primary operator pointer for residual honesty.
 const ResidualStatusDoc = "docs/gateway/live-pin-blockers.md"
@@ -162,8 +162,18 @@ func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 		// (HOST-008 same-host FileTokenCache lite). Path never returned. Residual never
 		// opens the cache file (tokens on disk). Multi-pod external Obtain cache residual.
 		"shared_token_cache_file": gateway.TokenCachePathConfiguredFromEnviron(getenv),
-		"residual_note":           ResidualStatusHonestyNote,
-		"doc":                     ResidualStatusDoc,
+		// shared_api_token_vault_file=true only when JENKINS_MCP_GATEWAY_VAULT_PATH is
+		// explicitly set (HOST-008 Mode A same-host FileAPITokenVault path residual lite).
+		// Default XDG vault path does not count. Path never returned. Residual never
+		// opens the vault file (tokens on disk). Multi-pod shared vault residual.
+		"shared_api_token_vault_file": gateway.VaultPathConfiguredFromEnviron(getenv),
+		// shared_jwt_vault_file=true only when JENKINS_MCP_GATEWAY_JWT_VAULT_PATH is
+		// explicitly set (HOST-008 Mode B same-host FileJWTVault path residual lite).
+		// Default XDG JWT vault path does not count. Path never returned. Residual never
+		// opens the vault file (tokens on disk). Multi-pod shared vault residual.
+		"shared_jwt_vault_file": gateway.JWTVaultPathConfiguredFromEnviron(getenv),
+		"residual_note":         ResidualStatusHonestyNote,
+		"doc":                   ResidualStatusDoc,
 	}
 	// Optional PrincipalCache hygiene residual lite (env/static; empty = unlimited / no TTL).
 	if pcMax, pcTTL, err := gateway.PrincipalCacheConfigFromEnviron(getenv); err == nil {

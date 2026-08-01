@@ -13,7 +13,9 @@ import {
   pickResidualRateCacheFields,
   PRINCIPAL_CACHE_HYGIENE_HONESTY,
   PRINCIPAL_CACHE_PROCESS_HONESTY,
+  SHARED_API_TOKEN_VAULT_FILE_HONESTY,
   SHARED_JWKS_FILE_HONESTY,
+  SHARED_JWT_VAULT_FILE_HONESTY,
   SHARED_SUBJECT_RATE_FILE_HONESTY,
   SHARED_TOKEN_CACHE_FILE_HONESTY,
   SUBJECT_LIMITER_MAX_SUBJECTS_HONESTY,
@@ -124,6 +126,16 @@ function DoctorGatewayResidualCard({
         <dd>
           {rateCache.shared_token_cache_file ? "yes" : "no"}{" "}
           <span className="muted">({SHARED_TOKEN_CACHE_FILE_HONESTY})</span>
+        </dd>
+        <dt>shared_api_token_vault_file</dt>
+        <dd>
+          {rateCache.shared_api_token_vault_file ? "yes" : "no"}{" "}
+          <span className="muted">({SHARED_API_TOKEN_VAULT_FILE_HONESTY})</span>
+        </dd>
+        <dt>shared_jwt_vault_file</dt>
+        <dd>
+          {rateCache.shared_jwt_vault_file ? "yes" : "no"}{" "}
+          <span className="muted">({SHARED_JWT_VAULT_FILE_HONESTY})</span>
         </dd>
         <dt>principal_cache_entries</dt>
         <dd>

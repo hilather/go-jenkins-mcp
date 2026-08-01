@@ -20,6 +20,8 @@
 #      - shared_principal_cache_file false by default; true when PRINCIPAL_CACHE_PATH set (path never dumped)
 #      - shared_jwks_file false by default; true when JENKINS_MCP_HTTP_JWKS_CACHE_PATH set (path never dumped)
 #      - shared_token_cache_file false by default; true when JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH set (path never dumped)
+#      - shared_api_token_vault_file false by default; true when JENKINS_MCP_GATEWAY_VAULT_PATH set (path never dumped; never opens vault)
+#      - shared_jwt_vault_file false by default; true when JENKINS_MCP_GATEWAY_JWT_VAULT_PATH set (path never dumped; never opens vault)
 #      - optional: principal_cache_entries Len when file has entries (secret-free count only)
 #      - principal_cache_process_note: principal_cache_entries is this-process / file Len only
 #      - subject_limiter_max_subjects omit/absent by default; ==N when
@@ -656,6 +658,20 @@ if stcf is True:
 elif stcf is not False and stcf is not None:
     errors.append(f"shared_token_cache_file={stcf!r} want false|absent")
 
+# HOST-008 lite: shared_api_token_vault_file default false (env-explicit VAULT_PATH only).
+satvf = data.get("shared_api_token_vault_file")
+if satvf is True:
+    errors.append("shared_api_token_vault_file=true without VAULT_PATH (default must be false)")
+elif satvf is not False and satvf is not None:
+    errors.append(f"shared_api_token_vault_file={satvf!r} want false|absent")
+
+# HOST-008 lite: shared_jwt_vault_file default false (env-explicit JWT_VAULT_PATH only).
+sjvf = data.get("shared_jwt_vault_file")
+if sjvf is True:
+    errors.append("shared_jwt_vault_file=true without JWT_VAULT_PATH (default must be false)")
+elif sjvf is not False and sjvf is not None:
+    errors.append(f"shared_jwt_vault_file={sjvf!r} want false|absent")
+
 # HOST-006 residual lite: subject_limiter_max_subjects omit when env unset (unlimited).
 # Path never involved — integer hygiene residual only.
 slms = data.get("subject_limiter_max_subjects")
@@ -700,6 +716,7 @@ print(
     "progressive_consent + shared_subject_rate_file=false default + "
     "shared_principal_cache_file=false default + shared_jwks_file=false default + "
     "shared_token_cache_file=false default + "
+    "shared_api_token_vault_file=false default + shared_jwt_vault_file=false default + "
     "subject_limiter_max_subjects omit default + principal_cache process note)"
 )
 sys.exit(0)
@@ -995,6 +1012,135 @@ PY
         fi
       fi
 
+      # Optional subtest: VAULT_PATH set → shared_api_token_vault_file=true (path never dumped).
+      # residual never opens the Mode A vault file (tokens on disk) — bool residual only.
+      # Default XDG vault path does not count (env-explicit only).
+      echo "== gateway residual-status (VAULT_PATH canary) =="
+      VAULT_PATH_MARKER="api-token-vault-path-CANARY-never-in-json-$$"
+      VAULT_TMP_MARKED="$OUT_DIR/${VAULT_PATH_MARKER}.json"
+      VAULT_SEED="seed-api-token-CANARY-never-in-residual-json"
+      cat >"$VAULT_TMP_MARKED" <<EOF
+{"version":1,"entries":{"k":"${VAULT_SEED}"}}
+EOF
+      RESIDUAL_STATUS_VAULT_JSON="$OUT_DIR/gateway-residual-status-vault-path.json"
+      set +e
+      env JENKINS_MCP_GATEWAY_VAULT_PATH="$VAULT_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_VAULT_JSON" 2>"$OUT_DIR/gateway-residual-status-vault-path.stderr"
+      vrc=$?
+      set -e
+      if [[ $vrc -ne 0 ]]; then
+        fail_msg "gateway residual-status with VAULT_PATH exit $vrc"
+        if [[ -s "$OUT_DIR/gateway-residual-status-vault-path.stderr" ]]; then
+          head -n 20 "$OUT_DIR/gateway-residual-status-vault-path.stderr" >&2 || true
+        fi
+      else
+        assert_secret_free "$RESIDUAL_STATUS_VAULT_JSON" "gateway-residual-status-vault-path.json" || true
+        export GRS_VAULT_JSON="$RESIDUAL_STATUS_VAULT_JSON"
+        export GRS_VAULT_MARKER="$VAULT_PATH_MARKER"
+        export GRS_VAULT_SEED="$VAULT_SEED"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["GRS_VAULT_JSON"]
+marker = os.environ["GRS_VAULT_MARKER"]
+seed = os.environ.get("GRS_VAULT_SEED", "")
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_api_token_vault_file") is not True:
+    errors.append(
+        f"shared_api_token_vault_file={data.get('shared_api_token_vault_file')!r} want true when VAULT_PATH set"
+    )
+if data.get("shared_jwt_vault_file") is True:
+    errors.append("shared_jwt_vault_file must stay false without JWT_VAULT_PATH")
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("VAULT_PATH / marker leaked into residual-status JSON (path must never dump)")
+if seed and seed in blob:
+    errors.append("vault file contents leaked into residual-status JSON")
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status VAULT_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print("PASS: residual-status shared_api_token_vault_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          fail=1
+        fi
+      fi
+
+      # Optional subtest: JWT_VAULT_PATH set → shared_jwt_vault_file=true (path never dumped).
+      # residual never opens the Mode B JWT vault file — bool residual only.
+      echo "== gateway residual-status (JWT_VAULT_PATH canary) =="
+      JWT_VAULT_PATH_MARKER="jwt-vault-path-CANARY-never-in-json-$$"
+      JWT_VAULT_TMP_MARKED="$OUT_DIR/${JWT_VAULT_PATH_MARKER}.json"
+      JWT_VAULT_SEED="seed-jwt-CANARY-never-in-residual-json.eyJhbGciOiJub25lIn0."
+      cat >"$JWT_VAULT_TMP_MARKED" <<EOF
+{"version":1,"entries":{"k":"${JWT_VAULT_SEED}"}}
+EOF
+      RESIDUAL_STATUS_JWT_VAULT_JSON="$OUT_DIR/gateway-residual-status-jwt-vault-path.json"
+      set +e
+      env JENKINS_MCP_GATEWAY_JWT_VAULT_PATH="$JWT_VAULT_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_JWT_VAULT_JSON" 2>"$OUT_DIR/gateway-residual-status-jwt-vault-path.stderr"
+      jvrc=$?
+      set -e
+      if [[ $jvrc -ne 0 ]]; then
+        fail_msg "gateway residual-status with JWT_VAULT_PATH exit $jvrc"
+        if [[ -s "$OUT_DIR/gateway-residual-status-jwt-vault-path.stderr" ]]; then
+          head -n 20 "$OUT_DIR/gateway-residual-status-jwt-vault-path.stderr" >&2 || true
+        fi
+      else
+        assert_secret_free "$RESIDUAL_STATUS_JWT_VAULT_JSON" "gateway-residual-status-jwt-vault-path.json" || true
+        export GRS_JWT_VAULT_JSON="$RESIDUAL_STATUS_JWT_VAULT_JSON"
+        export GRS_JWT_VAULT_MARKER="$JWT_VAULT_PATH_MARKER"
+        export GRS_JWT_VAULT_SEED="$JWT_VAULT_SEED"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["GRS_JWT_VAULT_JSON"]
+marker = os.environ["GRS_JWT_VAULT_MARKER"]
+seed = os.environ.get("GRS_JWT_VAULT_SEED", "")
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_jwt_vault_file") is not True:
+    errors.append(
+        f"shared_jwt_vault_file={data.get('shared_jwt_vault_file')!r} want true when JWT_VAULT_PATH set"
+    )
+if data.get("shared_api_token_vault_file") is True:
+    errors.append("shared_api_token_vault_file must stay false without VAULT_PATH")
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("JWT_VAULT_PATH / marker leaked into residual-status JSON (path must never dump)")
+if seed and seed in blob:
+    errors.append("JWT vault file contents leaked into residual-status JSON")
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status JWT_VAULT_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print("PASS: residual-status shared_jwt_vault_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          fail=1
+        fi
+      fi
+
 
       # Optional subtest: SUBJECT_LIMITER_MAX_SUBJECTS set → subject_limiter_max_subjects==N
       # (HOST-006 residual lite). Path never involved; omit when unset (default unlimited).
@@ -1043,6 +1189,10 @@ if data.get("shared_jwks_file") is True:
     errors.append("shared_jwks_file must stay false without JWKS_CACHE_PATH")
 if data.get("shared_token_cache_file") is True:
     errors.append("shared_token_cache_file must stay false without TOKEN_CACHE_PATH")
+if data.get("shared_api_token_vault_file") is True:
+    errors.append("shared_api_token_vault_file must stay false without VAULT_PATH")
+if data.get("shared_jwt_vault_file") is True:
+    errors.append("shared_jwt_vault_file must stay false without JWT_VAULT_PATH")
 blob = json.dumps(data)
 low = blob.lower()
 for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):

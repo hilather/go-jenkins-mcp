@@ -215,6 +215,8 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 		"shared_principal_cache_file",
 		"shared_jwks_file",
 		"shared_token_cache_file",
+		"shared_api_token_vault_file",
+		"shared_jwt_vault_file",
 	} {
 		if !strings.Contains(bodyStr, key) {
 			t.Fatalf("scripts/pilot-evidence.sh must assert %s honesty canary", key)
@@ -234,6 +236,12 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 	}
 	if !strings.Contains(bodyStr, "JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH") {
 		t.Fatal("scripts/pilot-evidence.sh must canary TOKEN_CACHE_PATH → shared_token_cache_file=true")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_GATEWAY_VAULT_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary VAULT_PATH → shared_api_token_vault_file=true")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_GATEWAY_JWT_VAULT_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary JWT_VAULT_PATH → shared_jwt_vault_file=true")
 	}
 	if !strings.Contains(bodyStr, "gateway consent-residual") {
 		t.Fatal("scripts/pilot-evidence.sh must optionally capture gateway consent-residual")
@@ -359,6 +367,8 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 			"shared_principal_cache_file",
 			"shared_jwks_file",
 			"shared_token_cache_file",
+			"shared_api_token_vault_file",
+			"shared_jwt_vault_file",
 		} {
 			v, ok := rs[key]
 			if !ok || v == nil {
@@ -374,6 +384,9 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 			"JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH",
 			"JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH",
 			"JENKINS_MCP_HTTP_JWKS_CACHE_PATH",
+			"JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH",
+			"JENKINS_MCP_GATEWAY_VAULT_PATH",
+			"JENKINS_MCP_GATEWAY_JWT_VAULT_PATH",
 		} {
 			if strings.Contains(string(rsRaw), envKey) {
 				t.Fatalf("path env name %q must not appear in gateway-residual-status.json", envKey)
@@ -391,6 +404,9 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 			"gateway-residual-status-rate-path.json",
 			"gateway-residual-status-principal-path.json",
 			"gateway-residual-status-jwks-path.json",
+			"gateway-residual-status-token-path.json",
+			"gateway-residual-status-vault-path.json",
+			"gateway-residual-status-jwt-vault-path.json",
 		} {
 			p := filepath.Join(evidDir, name)
 			rawPath, err := os.ReadFile(p)

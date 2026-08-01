@@ -86,6 +86,14 @@ func TestBuildGatewayResidualStatus_SecretFreeAndModeBId(t *testing.T) {
 	if out["shared_token_cache_file"] != false {
 		t.Fatalf("shared_token_cache_file default false: %+v", out["shared_token_cache_file"])
 	}
+	// shared_api_token_vault_file / shared_jwt_vault_file default false when vault path env unset
+	// (HOST-008 Mode A/B path residual lite; default XDG path does not count).
+	if out["shared_api_token_vault_file"] != false {
+		t.Fatalf("shared_api_token_vault_file default false: %+v", out["shared_api_token_vault_file"])
+	}
+	if out["shared_jwt_vault_file"] != false {
+		t.Fatalf("shared_jwt_vault_file default false: %+v", out["shared_jwt_vault_file"])
+	}
 	// HOST-007 / HOST-008: concurrency slots always process-local (never multi-pod claim).
 	if out["subject_slots_process_local"] != true {
 		t.Fatalf("subject_slots_process_local must always be true: %+v", out["subject_slots_process_local"])
@@ -309,8 +317,8 @@ func TestBuildGatewayResidualStatus_SubjectLimiterMaxSubjects(t *testing.T) {
 }
 
 // Regression: LooksSecretKey must not treat residual honesty bool shared_token_cache_file
-// as a secret key (doctor/support-bundle sanitize + release-evidence scrub).
-// Still drops real secret keys like access_token / client_secret.
+// or shared_api_token_vault_file as a secret key (doctor/support-bundle sanitize +
+// release-evidence scrub). Still drops real secret keys like access_token / client_secret.
 func TestLooksSecretKey_SharedTokenCacheFileAllowlist(t *testing.T) {
 	t.Parallel()
 	if diagnostics.LooksSecretKey("shared_token_cache_file") {
@@ -319,9 +327,20 @@ func TestLooksSecretKey_SharedTokenCacheFileAllowlist(t *testing.T) {
 	if diagnostics.LooksSecretKey("SHARED_TOKEN_CACHE_FILE") {
 		t.Fatal("case-insensitive allowlist for shared_token_cache_file")
 	}
+	if diagnostics.LooksSecretKey("shared_api_token_vault_file") {
+		t.Fatal("Regression: shared_api_token_vault_file residual honesty bool must not look secret")
+	}
+	if diagnostics.LooksSecretKey("SHARED_API_TOKEN_VAULT_FILE") {
+		t.Fatal("case-insensitive allowlist for shared_api_token_vault_file")
+	}
+	// shared_jwt_vault_file has no secret-shaped substring; still must not look secret.
+	if diagnostics.LooksSecretKey("shared_jwt_vault_file") {
+		t.Fatal("shared_jwt_vault_file residual honesty bool must not look secret")
+	}
 	for _, secret := range []string{
 		"access_token", "refresh_token", "client_secret", "authorization",
 		"password", "cookie", "private_key", "token_cache_path", "bearer_token",
+		"api_token",
 	} {
 		if !diagnostics.LooksSecretKey(secret) {
 			t.Fatalf("LooksSecretKey(%q) want true (still drop real secret keys)", secret)
@@ -356,6 +375,12 @@ func TestBuildGatewayResidualStatus_SharedTokenCacheFile(t *testing.T) {
 	if out["shared_jwks_file"] != false {
 		t.Fatalf("shared_jwks_file must stay false: %+v", out["shared_jwks_file"])
 	}
+	if out["shared_api_token_vault_file"] != false {
+		t.Fatalf("shared_api_token_vault_file must stay false: %+v", out["shared_api_token_vault_file"])
+	}
+	if out["shared_jwt_vault_file"] != false {
+		t.Fatalf("shared_jwt_vault_file must stay false: %+v", out["shared_jwt_vault_file"])
+	}
 	clear := diagnostics.BuildGatewayResidualStatus(func(string) string { return "" })
 	if clear["shared_token_cache_file"] != false {
 		t.Fatalf("shared_token_cache_file default false: %+v", clear["shared_token_cache_file"])
@@ -375,6 +400,94 @@ func TestBuildGatewayResidualStatus_SharedTokenCacheFile(t *testing.T) {
 	for _, bad := range []string{residualCanary, "access_token=", "refresh_token=", "client_secret=", "Bearer " + residualCanary} {
 		if strings.Contains(s, bad) {
 			t.Fatalf("forbidden %q in residual-status with token cache path", bad)
+		}
+	}
+}
+
+// shared_api_token_vault_file=true when VAULT_PATH env set; path never dumped (HOST-008 lite).
+// Residual must not open the vault file (tokens on disk). Default XDG path does not count.
+func TestBuildGatewayResidualStatus_SharedAPITokenVaultFile(t *testing.T) {
+	marker := "api-token-vault-path-canary-NEVER-IN-JSON"
+	path := t.TempDir() + "/" + marker + ".json"
+	seedToken := "seed-api-token-CANARY-never-in-residual-json"
+	if err := os.WriteFile(path, []byte(`{"version":1,"entries":{"k":"`+seedToken+`"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(gateway.EnvGatewayVaultPath, path)
+	t.Setenv("HOST_RESIDUAL_CANARY", residualCanary)
+
+	out := diagnostics.BuildGatewayResidualStatus(nil)
+	if out["shared_api_token_vault_file"] != true {
+		t.Fatalf("shared_api_token_vault_file want true when VAULT_PATH set: %+v", out["shared_api_token_vault_file"])
+	}
+	if out["shared_jwt_vault_file"] != false {
+		t.Fatalf("shared_jwt_vault_file must stay false: %+v", out["shared_jwt_vault_file"])
+	}
+	if out["shared_token_cache_file"] != false {
+		t.Fatalf("shared_token_cache_file must stay false: %+v", out["shared_token_cache_file"])
+	}
+	// Empty getenv → false (default XDG path from VaultPathFromEnviron must not flip residual).
+	clear := diagnostics.BuildGatewayResidualStatus(func(string) string { return "" })
+	if clear["shared_api_token_vault_file"] != false {
+		t.Fatalf("shared_api_token_vault_file default false: %+v", clear["shared_api_token_vault_file"])
+	}
+
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: VAULT_PATH leaked into residual-status JSON")
+	}
+	if strings.Contains(s, seedToken) {
+		t.Fatal("Regression: vault file contents leaked into residual-status JSON")
+	}
+	for _, bad := range []string{residualCanary, "access_token=", "refresh_token=", "client_secret=", "Bearer " + residualCanary} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q in residual-status with vault path", bad)
+		}
+	}
+}
+
+// shared_jwt_vault_file=true when JWT_VAULT_PATH env set; path never dumped (HOST-008 lite).
+// Residual must not open the vault file. Default XDG JWT path does not count.
+func TestBuildGatewayResidualStatus_SharedJWTVaultFile(t *testing.T) {
+	marker := "jwt-vault-path-canary-NEVER-IN-JSON"
+	path := t.TempDir() + "/" + marker + ".json"
+	seedToken := "seed-jwt-CANARY-never-in-residual-json.eyJhbGciOiJub25lIn0."
+	if err := os.WriteFile(path, []byte(`{"version":1,"entries":{"k":"`+seedToken+`"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(gateway.EnvGatewayJWTVaultPath, path)
+	t.Setenv("HOST_RESIDUAL_CANARY", residualCanary)
+
+	out := diagnostics.BuildGatewayResidualStatus(nil)
+	if out["shared_jwt_vault_file"] != true {
+		t.Fatalf("shared_jwt_vault_file want true when JWT_VAULT_PATH set: %+v", out["shared_jwt_vault_file"])
+	}
+	if out["shared_api_token_vault_file"] != false {
+		t.Fatalf("shared_api_token_vault_file must stay false: %+v", out["shared_api_token_vault_file"])
+	}
+	clear := diagnostics.BuildGatewayResidualStatus(func(string) string { return "" })
+	if clear["shared_jwt_vault_file"] != false {
+		t.Fatalf("shared_jwt_vault_file default false: %+v", clear["shared_jwt_vault_file"])
+	}
+
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: JWT_VAULT_PATH leaked into residual-status JSON")
+	}
+	if strings.Contains(s, seedToken) {
+		t.Fatal("Regression: JWT vault file contents leaked into residual-status JSON")
+	}
+	for _, bad := range []string{residualCanary, "access_token=", "refresh_token=", "client_secret=", "Bearer " + residualCanary} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q in residual-status with jwt vault path", bad)
 		}
 	}
 }

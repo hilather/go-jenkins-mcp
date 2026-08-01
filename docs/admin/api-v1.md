@@ -264,6 +264,8 @@ rate knobs keep admin health names `rateEnabled` / `ratePerMinute` / `rateBurst`
   "shared_principal_cache_file": false,
   "shared_jwks_file": false,
   "shared_token_cache_file": false,
+  "shared_api_token_vault_file": false,
+  "shared_jwt_vault_file": false,
   "residual_note": "unified gateway residual snapshot … see docs/gateway/live-pin-blockers.md",
   "doc": "docs/gateway/live-pin-blockers.md"
 }
@@ -307,6 +309,8 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 | `shared_principal_cache_file` | `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` set (HOST-008 same-host `FilePrincipalCache` lite; path never returned; never tokens) |
 | `shared_jwks_file` | **HOST-001 / HOST-008 Done\* lite:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path value **never** returned. Public keys only — never tokens. |
 | `shared_token_cache_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` set (same-host `FileTokenCache`). **Not** multi-pod Redis/HA. Path value **never** returned. Residual never opens the cache file — never tokens. |
+| `shared_api_token_vault_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_VAULT_PATH` is **explicitly set** (Mode A same-host `FileAPITokenVault` path residual). Default XDG vault path does **not** count. Path value **never** returned. Residual never opens the vault — never tokens. **Not** multi-pod shared vault HA. |
+| `shared_jwt_vault_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_JWT_VAULT_PATH` is **explicitly set** (Mode B same-host `FileJWTVault` path residual). Default XDG JWT vault path does **not** count. Path value **never** returned. Residual never opens the vault — never tokens. **Not** multi-pod shared vault HA. |
 | `progressive_consent_residual` / `progressive_consent_surfaces` | Mode C only; secret-free residual note + surface ids |
 | `rateEnabled` / `ratePerMinute` / `rateBurst` | HOST-006 process-local rate knobs (admin health field names) |
 | `shared_subject_rate_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is non-empty (same-host `FileSubjectRateLimiter`). **Not** multi-pod HA. Path value **never** returned. Never tokens. |
@@ -324,14 +328,13 @@ card** on older BFF builds. SPA shows `shared_subject_rate_file`,
 `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set; same-host FileJWKS lite only — path never
 shown; not multi-pod external JWKS HA), `shared_token_cache_file` (bool when
 `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` set; same-host FileTokenCache lite only —
-path never shown; secrets never shown; not multi-pod Redis/HA), principal_cache
-count, and optional max/ttl with honesty (same-host rate/principal/JWKS/token
-lite; admin BFF process for cache count). Operators may also run CLI
-`gateway residual-status`.
-shown; not multi-pod external JWKS HA), principal_cache count, optional
-max/ttl, optional `subject_limiter_max_subjects` when env set, and always
-`subject_slots_process_local` with honesty (same-host rate/principal/JWKS lite;
-admin BFF process for cache count; concurrency process-local — not multi-pod).
+path never shown; secrets never shown; not multi-pod Redis/HA),
+`shared_api_token_vault_file` / `shared_jwt_vault_file` (bool when Mode A/B vault
+path env explicitly set; default XDG path does not count; path never shown; vault
+never opened for residual; not multi-pod vault HA), principal_cache count,
+optional max/ttl, optional `subject_limiter_max_subjects` when env set, and always
+`subject_slots_process_local` with honesty (same-host rate/principal/JWKS/token/vault
+path lite; admin BFF process for cache count; concurrency process-local — not multi-pod).
 Operators may also run CLI `gateway residual-status`.
 
 ## POST /admin/v1/gateway/subject-invalidate

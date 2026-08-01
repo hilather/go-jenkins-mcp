@@ -512,6 +512,20 @@ export interface GatewayResidualStatusResponse {
    */
   shared_token_cache_file?: boolean;
   /**
+   * HOST-008 Done* lite: true when JENKINS_MCP_GATEWAY_VAULT_PATH is explicitly set
+   * (Mode A same-host FileAPITokenVault path residual). Default XDG path does not
+   * count. Path never returned. Residual never opens vault — never tokens.
+   * Not multi-pod shared vault HA.
+   */
+  shared_api_token_vault_file?: boolean;
+  /**
+   * HOST-008 Done* lite: true when JENKINS_MCP_GATEWAY_JWT_VAULT_PATH is explicitly set
+   * (Mode B same-host FileJWTVault path residual). Default XDG path does not count.
+   * Path never returned. Residual never opens vault — never tokens.
+   * Not multi-pod shared vault HA.
+   */
+  shared_jwt_vault_file?: boolean;
+  /**
    * Optional MaxSubjects for rate map hygiene when env > 0 (omit = unlimited).
    */
   subject_rate_max_subjects?: number;

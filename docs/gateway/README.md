@@ -213,8 +213,14 @@ remote serve) and optional `principal_cache_max_entries` /
 `shared_jwks_file` (true when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set),
 `shared_token_cache_file` (true when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` set —
 same-host FileTokenCache lite; path never returned; residual never opens the
-token file), and `principal_cache_entries` (count only) plus optional
-`principal_cache_max_entries` / `principal_cache_ttl_seconds` when hygiene env is set.
+token file), `shared_api_token_vault_file` (true when
+`JENKINS_MCP_GATEWAY_VAULT_PATH` **explicitly set** — Mode A path residual lite;
+default XDG does not count; path never returned; residual never opens vault),
+`shared_jwt_vault_file` (true when `JENKINS_MCP_GATEWAY_JWT_VAULT_PATH`
+**explicitly set** — Mode B path residual lite; default XDG does not count; path
+never returned; residual never opens vault), and `principal_cache_entries`
+(count only) plus optional `principal_cache_max_entries` /
+`principal_cache_ttl_seconds` when hygiene env is set.
 Always advertises Mode B residual id `oauth009_offline` and points at
 [live-pin-blockers.md](live-pin-blockers.md). Shared assembly:
 `diagnostics.BuildGatewayResidualStatus`. Never tokens or subjects (no principal
@@ -724,7 +730,7 @@ jenkins-mcp gateway vault revoke --subject 'tenant|entra-sub|corp'
 | Env | Meaning |
 |-----|---------|
 | `JENKINS_MCP_GATEWAY_CREDENTIAL_MODE=api_token_vault` | Select Mode A for serve provider setup |
-| `JENKINS_MCP_GATEWAY_VAULT_PATH` | File vault path (default: `$XDG_DATA_HOME/jenkins-mcp/gateway/apitoken_vault.json`) |
+| `JENKINS_MCP_GATEWAY_VAULT_PATH` | File vault path (default: `$XDG_DATA_HOME/jenkins-mcp/gateway/apitoken_vault.json`). residual-status `shared_api_token_vault_file: true` only when this env is **explicitly set** (default XDG does not count; path never returned; residual never opens vault) |
 | `JENKINS_MCP_GATEWAY_VAULT_TOKEN` | Personal API token for `vault put` when `--token-env` is omitted |
 
 | Subcommand | Effect |
@@ -767,7 +773,7 @@ access tokens**. **ID tokens must never** be used as Jenkins API credentials
 | Env | Meaning |
 |-----|---------|
 | `JENKINS_MCP_GATEWAY_CREDENTIAL_MODE=jwt_rs_bearer` | Select Mode B for serve provider setup |
-| `JENKINS_MCP_GATEWAY_JWT_VAULT_PATH` | File vault path (default: `$XDG_DATA_HOME/jenkins-mcp/gateway/jwt_vault.json`) |
+| `JENKINS_MCP_GATEWAY_JWT_VAULT_PATH` | File vault path (default: `$XDG_DATA_HOME/jenkins-mcp/gateway/jwt_vault.json`). residual-status `shared_jwt_vault_file: true` only when this env is **explicitly set** (default XDG does not count; path never returned; residual never opens vault) |
 
 **Residual (explicit):** Live **jwt-auth-filter** / real Entra issuance pin is
 **OAUTH-009** — offline vault does **not** close production RS qualification.

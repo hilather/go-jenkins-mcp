@@ -364,6 +364,20 @@ if stcf is True:
 elif stcf is not False and stcf is not None:
     errors.append(f"shared_token_cache_file={stcf!r} want false|absent")
 
+# HOST-008 lite: shared_api_token_vault_file default false (env-explicit VAULT_PATH only).
+satvf = data.get("shared_api_token_vault_file")
+if satvf is True:
+    errors.append("shared_api_token_vault_file=true without VAULT_PATH (default must be false)")
+elif satvf is not False and satvf is not None:
+    errors.append(f"shared_api_token_vault_file={satvf!r} want false|absent")
+
+# HOST-008 lite: shared_jwt_vault_file default false (env-explicit JWT_VAULT_PATH only).
+sjvf = data.get("shared_jwt_vault_file")
+if sjvf is True:
+    errors.append("shared_jwt_vault_file=true without JWT_VAULT_PATH (default must be false)")
+elif sjvf is not False and sjvf is not None:
+    errors.append(f"shared_jwt_vault_file={sjvf!r} want false|absent")
+
 blob = json.dumps(data).lower()
 if "production go complete" in blob:
     errors.append("residual-status overclaims production GO complete")
@@ -383,7 +397,8 @@ print(
     "PASS: gateway residual-status honesty "
     f"(oauth009_offline + ha_multi_replica=false + residual_ids={len(required)} + "
     "shared_subject_rate_file=false default + shared_principal_cache_file=false default + "
-    "shared_jwks_file=false default + shared_token_cache_file=false default)"
+    "shared_jwks_file=false default + shared_token_cache_file=false default + "
+    "shared_api_token_vault_file=false default + shared_jwt_vault_file=false default)"
 )
 sys.exit(0)
 PY
@@ -401,7 +416,9 @@ PY
         && grep -qE '"shared_subject_rate_file":\s*false' "$RESIDUAL_STATUS_JSON" \
         && grep -qE '"shared_principal_cache_file":\s*false' "$RESIDUAL_STATUS_JSON" \
         && grep -qE '"shared_jwks_file":\s*false' "$RESIDUAL_STATUS_JSON" \
-        && grep -qE '"shared_token_cache_file":\s*false' "$RESIDUAL_STATUS_JSON"; then
+        && grep -qE '"shared_token_cache_file":\s*false' "$RESIDUAL_STATUS_JSON" \
+        && grep -qE '"shared_api_token_vault_file":\s*false' "$RESIDUAL_STATUS_JSON" \
+        && grep -qE '"shared_jwt_vault_file":\s*false' "$RESIDUAL_STATUS_JSON"; then
         echo "  [pass] gateway residual-status greppable honesty markers (no python3)"
       else
         residual_status_ok=0
@@ -625,6 +642,116 @@ if errors:
         print(f"  - {e}", file=sys.stderr)
     sys.exit(1)
 print("PASS: residual-status shared_token_cache_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          residual_status_ok=0
+          HARD_FAIL=1
+        fi
+      fi
+
+      VAULT_PATH_MARKER="api-token-vault-path-CANARY-never-in-json-$$"
+      VAULT_TMP_MARKED="$OUT_DIR/${VAULT_PATH_MARKER}.json"
+      : >"$VAULT_TMP_MARKED"
+      RESIDUAL_STATUS_VAULT_JSON="$OUT_DIR/gateway-residual-status-vault-path.json"
+      set +e
+      env JENKINS_MCP_GATEWAY_VAULT_PATH="$VAULT_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_VAULT_JSON" 2>"$OUT_DIR/gateway-residual-status-vault-path.stderr"
+      vrc=$?
+      set -e
+      if [[ $vrc -ne 0 ]]; then
+        residual_status_ok=0
+        HARD_FAIL=1
+        echo "  [fail] gateway residual-status with VAULT_PATH exit $vrc" >&2
+      else
+        assert_secret_free_file "$RESIDUAL_STATUS_VAULT_JSON" "gateway-residual-status-vault-path.json" || {
+          residual_status_ok=0
+          HARD_FAIL=1
+        }
+        export PE_VAULT_JSON="$RESIDUAL_STATUS_VAULT_JSON"
+        export PE_VAULT_MARKER="$VAULT_PATH_MARKER"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["PE_VAULT_JSON"]
+marker = os.environ["PE_VAULT_MARKER"]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_api_token_vault_file") is not True:
+    errors.append(
+        f"shared_api_token_vault_file={data.get('shared_api_token_vault_file')!r} want true when VAULT_PATH set"
+    )
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("VAULT_PATH / marker leaked into residual-status JSON (path must never dump)")
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status VAULT_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print("PASS: residual-status shared_api_token_vault_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          residual_status_ok=0
+          HARD_FAIL=1
+        fi
+      fi
+
+      JWT_VAULT_PATH_MARKER="jwt-vault-path-CANARY-never-in-json-$$"
+      JWT_VAULT_TMP_MARKED="$OUT_DIR/${JWT_VAULT_PATH_MARKER}.json"
+      : >"$JWT_VAULT_TMP_MARKED"
+      RESIDUAL_STATUS_JWT_VAULT_JSON="$OUT_DIR/gateway-residual-status-jwt-vault-path.json"
+      set +e
+      env JENKINS_MCP_GATEWAY_JWT_VAULT_PATH="$JWT_VAULT_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_JWT_VAULT_JSON" 2>"$OUT_DIR/gateway-residual-status-jwt-vault-path.stderr"
+      jvrc=$?
+      set -e
+      if [[ $jvrc -ne 0 ]]; then
+        residual_status_ok=0
+        HARD_FAIL=1
+        echo "  [fail] gateway residual-status with JWT_VAULT_PATH exit $jvrc" >&2
+      else
+        assert_secret_free_file "$RESIDUAL_STATUS_JWT_VAULT_JSON" "gateway-residual-status-jwt-vault-path.json" || {
+          residual_status_ok=0
+          HARD_FAIL=1
+        }
+        export PE_JWT_VAULT_JSON="$RESIDUAL_STATUS_JWT_VAULT_JSON"
+        export PE_JWT_VAULT_MARKER="$JWT_VAULT_PATH_MARKER"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["PE_JWT_VAULT_JSON"]
+marker = os.environ["PE_JWT_VAULT_MARKER"]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_jwt_vault_file") is not True:
+    errors.append(
+        f"shared_jwt_vault_file={data.get('shared_jwt_vault_file')!r} want true when JWT_VAULT_PATH set"
+    )
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("JWT_VAULT_PATH / marker leaked into residual-status JSON (path must never dump)")
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status JWT_VAULT_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print("PASS: residual-status shared_jwt_vault_file=true when path set (path not dumped)")
 sys.exit(0)
 PY
         then
