@@ -16,6 +16,7 @@ import type {
   DoctorReport,
   EffectivePolicy,
   EvictionPlanResponse,
+  GatewayResidualStatusResponse,
   GatewayVaultResponse,
   HealthResponse,
   MeResponse,
@@ -206,6 +207,16 @@ export function fetchVersion(): Promise<VersionResponse> {
 
 export function fetchGatewayVault(): Promise<GatewayVaultResponse> {
   return adminFetch<GatewayVaultResponse>("/gateway/vault");
+}
+
+/**
+ * GET /admin/v1/gateway/residual-status — unified gateway residual snapshot
+ * (same secret-free fields as `jenkins-mcp gateway residual-status`).
+ * Hide card on 404 (older BFF residual). Never tokens/subjects.
+ */
+
+export function fetchGatewayResidualStatus(): Promise<GatewayResidualStatusResponse> {
+  return adminFetch<GatewayResidualStatusResponse>("/gateway/residual-status");
 }
 
 /** Process role + permissions (UI-003). Never returns the token value. */

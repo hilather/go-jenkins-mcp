@@ -194,6 +194,87 @@ When the env is set, `residual` includes an honesty note (no tokens) and
 Operators rely on gateway/REL evidence for live multi-user claims. Multi-replica
 remains HOST-008 Tier B (`haMultiReplica: false`).
 
+## GET /admin/v1/gateway/residual-status
+
+**HOST-007.** Unified secret-free gateway residual snapshot — **same field assembly**
+as CLI `jenkins-mcp gateway residual-status`
+(`diagnostics.BuildGatewayResidualStatus`). Requires console `read` (viewer ok).
+Env/static honesty only: no Obtain, vault open, or browser. **Never** tokens,
+vault bytes, Authorization headers, raw subjects, or production GO claims.
+
+Field names match the CLI JSON contract (snake_case residual honesty fields;
+rate knobs keep admin health names `rateEnabled` / `ratePerMinute` / `rateBurst`).
+
+```json
+{
+  "mode_matrix": {
+    "primary": "jwt_rs_bearer",
+    "enabled": ["jwt_rs_bearer"],
+    "residual": "…"
+  },
+  "mode_matrix_residual": "…",
+  "mode_a_enabled": false,
+  "mode_b_enabled": true,
+  "mode_c_enabled": false,
+  "mode_a_live_obtain_qualified": false,
+  "mode_b_live_rs_qualified": false,
+  "mode_c_live_agentcore_qualified": false,
+  "residual_id": "oauth009_offline",
+  "oauth009_offline": true,
+  "oauth009_offline_only": true,
+  "residual_ids": [
+    "multi_user_offline",
+    "oauth009_offline",
+    "oauth010_offline",
+    "progressive_consent_offline",
+    "host008_single_replica",
+    "gateway_modes_live"
+  ],
+  "multi_user_enabled": false,
+  "gateway_ready": false,
+  "ha_multi_replica": false,
+  "session_affinity_recommended": false,
+  "multi_pod_vault_residual": true,
+  "kubernetes_env_detected": false,
+  "vault_path_emptydir_heuristic": false,
+  "replicas_env_residual": false,
+  "progressive_consent": {
+    "metadata_path_done_star": true,
+    "browser_3lo_automated": false
+  },
+  "rateEnabled": true,
+  "ratePerMinute": 30,
+  "rateBurst": 10,
+  "principal_cache_entries": 0,
+  "residual_note": "unified gateway residual snapshot … see docs/gateway/live-pin-blockers.md",
+  "doc": "docs/gateway/live-pin-blockers.md"
+}
+```
+
+When Mode C is enabled, also includes `progressive_consent_residual` and
+`progressive_consent_surfaces`. When multi-pod signals are present, includes
+`multi_pod_residual_checklist` (secret-free; never embeds k8s host values).
+
+| Field | Meaning |
+|-------|---------|
+| `mode_*_enabled` | HOST-011 mode ids enabled in config (not live pin GO) |
+| `mode_*_live_*_qualified` | Always `false` until live pins land |
+| `residual_id` / `oauth009_offline` | Mode B residual pointer (always advertised) |
+| `residual_ids` | Structured residual ids for operator grepping |
+| `multi_user_enabled` | `JENKINS_MCP_GATEWAY_MULTI_USER` truthy parse (foundation residual) |
+| `gateway_ready` | Always `false` on admin BFF (Ready is serve `/readyz`) |
+| `ha_multi_replica` | Always `false` (HOST-008 Tier A) |
+| `session_affinity_recommended` | `true` when multi-user env set (scaffold honesty) |
+| `multi_pod_vault_residual` | Always `true` (HOST-008 multi-pod vault residual) |
+| `kubernetes_env_detected` | `true` when `KUBERNETES_SERVICE_HOST` set (value never embedded) |
+| `progressive_consent` | OAUTH-010 / GWY-001 StatusMap (static; never tokens) |
+| `rateEnabled` / `ratePerMinute` / `rateBurst` | HOST-006 process-local rate knobs |
+| `principal_cache_entries` | Process-local principal cache **count** only |
+| `residual_note` / `doc` | Honesty sentence + pointer to [live-pin-blockers.md](../gateway/live-pin-blockers.md) |
+
+**SPA:** Overview card “Gateway residual status” loads this route; **404 hides the
+card** on older BFF builds. Operators may also run CLI `gateway residual-status`.
+
 ## GET /admin/v1/version
 
 Subset of `jenkins-mcp version --json` (version, commit, buildTime, goVersion, os, arch). No secrets.

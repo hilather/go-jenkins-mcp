@@ -375,3 +375,60 @@ export interface GatewayVaultResponse {
   subjects: string[];
   residual?: string;
 }
+
+/**
+ * GET /admin/v1/gateway/residual-status (HOST-007).
+ * Same secret-free map as `jenkins-mcp gateway residual-status` (CLI field names).
+ * Never tokens, subjects, or vault bytes. Hide card on 404 (older BFF residual).
+ */
+
+export interface GatewayResidualModeMatrix {
+  primary?: string;
+  enabled?: string[];
+  residual?: string;
+  valid?: boolean;
+}
+
+export interface GatewayProgressiveConsent {
+  metadata_path_done_star?: boolean;
+  browser_3lo_automated?: boolean;
+  residual_note?: string;
+  [key: string]: unknown;
+}
+
+export interface GatewayResidualStatusResponse {
+  mode_matrix?: GatewayResidualModeMatrix;
+  mode_matrix_residual?: string;
+  mode_a_enabled?: boolean;
+  mode_b_enabled?: boolean;
+  mode_c_enabled?: boolean;
+  mode_a_live_obtain_qualified?: boolean;
+  mode_b_live_rs_qualified?: boolean;
+  mode_c_live_agentcore_qualified?: boolean;
+  /** Always oauth009_offline (Mode B residual id pointer). */
+  residual_id?: string;
+  oauth009_offline?: boolean;
+  oauth009_offline_only?: boolean;
+  residual_ids?: string[];
+  multi_user_enabled?: boolean;
+  gateway_ready?: boolean;
+  ha_multi_replica?: boolean;
+  session_affinity_recommended?: boolean;
+  multi_pod_vault_residual?: boolean;
+  kubernetes_env_detected?: boolean;
+  vault_path_emptydir_heuristic?: boolean;
+  replicas_env_residual?: boolean;
+  multi_pod_residual_checklist?: string;
+  progressive_consent?: GatewayProgressiveConsent;
+  progressive_consent_residual?: string;
+  progressive_consent_surfaces?: string[];
+  /** HOST-006 rate knobs (admin health field names; process-local). */
+  rateEnabled?: boolean;
+  ratePerMinute?: number;
+  rateBurst?: number;
+  /** Process-local principal cache entry count only (never subjects). */
+  principal_cache_entries?: number;
+  residual_note?: string;
+  /** Pointer e.g. docs/gateway/live-pin-blockers.md */
+  doc?: string;
+}

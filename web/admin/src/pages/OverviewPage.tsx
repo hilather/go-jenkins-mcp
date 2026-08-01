@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   AdminApiError,
+  fetchGatewayResidualStatus,
   fetchGatewayVault,
   fetchHealth,
   fetchVersion,
@@ -31,12 +32,23 @@ export function OverviewPage() {
     enabled: health.isSuccess,
   });
 
+  const residual = useQuery({
+    queryKey: ["gateway-residual-status"],
+    queryFn: fetchGatewayResidualStatus,
+    retry: false,
+    enabled: health.isSuccess,
+  });
+
   const apiDown = health.isError;
   // Hide card when older BFF lacks the route (404) or BFF is down.
   const vaultMissing =
     vault.isError &&
     vault.error instanceof AdminApiError &&
     vault.error.status === 404;
+  const residualMissing =
+    residual.isError &&
+    residual.error instanceof AdminApiError &&
+    residual.error.status === 404;
 
   // Mode C progressive consent residual (OAUTH-010): show when residual note
   // is present or Mode C is in health mode fields (never secrets).
@@ -268,6 +280,161 @@ export function OverviewPage() {
         )}
       </div>
 
+      {!residualMissing && (
+        <div className="card">
+          <h2>Gateway residual status</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            HOST-007 unified residual snapshot (
+            <code>GET /admin/v1/gateway/residual-status</code>) — same secret-free
+            fields as <code>jenkins-mcp gateway residual-status</code>. Env/static
+            honesty only; never tokens or subjects. Live pin residual honesty:{" "}
+            <code>docs/gateway/live-pin-blockers.md</code>.
+          </p>
+          {residual.isLoading && health.isSuccess && <Loading />}
+          {residual.isError &&
+            !(residual.error instanceof AdminApiError && residual.error.status === 404) && (
+              <ErrorBanner error={residual.error} />
+            )}
+          {residual.isSuccess ? (
+            <dl className="dl">
+              <dt>mode_a / mode_b / mode_c enabled</dt>
+              <dd>
+                {residual.data.mode_a_enabled ? "A" : "—"}
+                {" / "}
+                {residual.data.mode_b_enabled ? "B" : "—"}
+                {" / "}
+                {residual.data.mode_c_enabled ? "C" : "—"}{" "}
+                <span className="muted">(config enablement only; not live GO)</span>
+              </dd>
+              <dt>mode_matrix</dt>
+              <dd>
+                primary{" "}
+                <code>{residual.data.mode_matrix?.primary || "—"}</code>
+                {residual.data.mode_matrix?.enabled?.length ? (
+                  <>
+                    {" "}
+                    · enabled{" "}
+                    {residual.data.mode_matrix.enabled.map((m) => (
+                      <code key={m} style={{ marginRight: "0.35rem" }}>
+                        {m}
+                      </code>
+                    ))}
+                  </>
+                ) : null}
+              </dd>
+              <dt>multi_user_enabled</dt>
+              <dd>
+                {residual.data.multi_user_enabled ? "yes (foundation residual)" : "no"}
+              </dd>
+              <dt>ha_multi_replica</dt>
+              <dd>
+                {residual.data.ha_multi_replica ? "yes" : "no"}{" "}
+                <span className="muted">(HOST-008 Tier A single-replica default)</span>
+              </dd>
+              <dt>session_affinity_recommended</dt>
+              <dd>
+                {residual.data.session_affinity_recommended ? "yes" : "no"}{" "}
+                <span className="muted">(sticky scaffold honesty; not multi-replica Done)</span>
+              </dd>
+              <dt>multi_pod_vault_residual</dt>
+              <dd>
+                {residual.data.multi_pod_vault_residual !== false ? "yes" : "no"}{" "}
+                <span className="muted">(always residual until multi-pod HA)</span>
+              </dd>
+              <dt>kubernetes_env_detected</dt>
+              <dd>
+                {residual.data.kubernetes_env_detected ? "yes" : "no"}{" "}
+                <span className="muted">(in-cluster residual only)</span>
+              </dd>
+              {residual.data.multi_pod_residual_checklist ? (
+                <>
+                  <dt>multi_pod_residual_checklist</dt>
+                  <dd className="muted">{residual.data.multi_pod_residual_checklist}</dd>
+                </>
+              ) : null}
+              <dt>rateEnabled / ratePerMinute / rateBurst</dt>
+              <dd>
+                {residual.data.rateEnabled ? "on" : "off"}
+                {" · "}
+                {typeof residual.data.ratePerMinute === "number"
+                  ? residual.data.ratePerMinute
+                  : "—"}
+                {" / "}
+                {typeof residual.data.rateBurst === "number"
+                  ? residual.data.rateBurst
+                  : "—"}{" "}
+                <span className="muted">(HOST-006 process-local; not multi-replica shared)</span>
+              </dd>
+              <dt>principal_cache_entries</dt>
+              <dd>
+                {typeof residual.data.principal_cache_entries === "number"
+                  ? residual.data.principal_cache_entries
+                  : "—"}{" "}
+                <span className="muted">(count only; never subjects)</span>
+              </dd>
+              <dt>residual_id (Mode B)</dt>
+              <dd>
+                <code>{residual.data.residual_id || "oauth009_offline"}</code>{" "}
+                <span className="muted">
+                  (oauth009_offline=
+                  {residual.data.oauth009_offline !== false ? "true" : "false"}; live RS residual)
+                </span>
+              </dd>
+              <dt>residual_ids</dt>
+              <dd>
+                {residual.data.residual_ids?.length ? (
+                  residual.data.residual_ids.map((id) => (
+                    <code key={id} style={{ marginRight: "0.35rem" }}>
+                      {id}
+                    </code>
+                  ))
+                ) : (
+                  <span className="muted">—</span>
+                )}
+              </dd>
+              {residual.data.progressive_consent ? (
+                <>
+                  <dt>progressive_consent (Mode C residual)</dt>
+                  <dd>
+                    metadata_done*
+                    {residual.data.progressive_consent.metadata_path_done_star
+                      ? "=yes"
+                      : "=no"}
+                    {" · browser_3lo_automated="}
+                    {residual.data.progressive_consent.browser_3lo_automated
+                      ? "yes"
+                      : "no"}
+                  </dd>
+                </>
+              ) : null}
+              {residual.data.progressive_consent_residual ? (
+                <>
+                  <dt>progressive_consent_residual</dt>
+                  <dd className="muted">{residual.data.progressive_consent_residual}</dd>
+                </>
+              ) : null}
+              {residual.data.residual_note ? (
+                <>
+                  <dt>residual_note</dt>
+                  <dd className="muted">{residual.data.residual_note}</dd>
+                </>
+              ) : null}
+              <dt>doc</dt>
+              <dd>
+                <code>
+                  {residual.data.doc || "docs/gateway/live-pin-blockers.md"}
+                </code>
+              </dd>
+            </dl>
+          ) : (
+            !residual.isLoading &&
+            !residual.isError && (
+              <p className="muted">Residual status not loaded.</p>
+            )
+          )}
+        </div>
+      )}
+
       {!vaultMissing && (
         <div className="card">
           <h2>Gateway vault</h2>
@@ -407,6 +574,14 @@ export function OverviewPage() {
             When <code>kubernetesEnvDetected</code>, Overview shows the multi-pod
             residual checklist (sticky, shared vault, rate, Obtain cache). Never
             multi-replica Done from k8s env alone.
+          </li>
+          <li>
+            Gateway residual status (HOST-007):{" "}
+            <code>GET /admin/v1/gateway/residual-status</code> matches CLI{" "}
+            <code>gateway residual-status</code> (modes, multi_user, HA, consent,
+            rate, principal_cache count, oauth009_offline). See{" "}
+            <code>docs/gateway/live-pin-blockers.md</code>. Never live production
+            GO from admin JSON.
           </li>
           <li>
             BFF is loopback-only by default (ADR 0014). No Jenkins tokens in
