@@ -467,6 +467,31 @@ func NewHTTPHandler(server *mcp.Server, cfg HTTPConfig) (http.Handler, error) {
 	if server == nil {
 		return nil, apperr.New(apperr.CodeInternal, "mcp server is nil")
 	}
+	inner := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
+		return server
+	}, nil)
+	return NewHTTPProtectHandler(inner, cfg)
+}
+
+// NewHTTPProtectHandler applies the Streamable HTTP protect layer (shared-secret
+// transport gate, RequireSubject / LabIdentity / IdentityResolver, mid-session
+// fingerprint bind, AfterIdentity context enrichment, Host/Origin/body caps)
+// around an arbitrary inner handler.
+//
+// Production: NewHTTPHandler uses the MCP SDK Streamable HTTP handler as inner.
+// Multi-user contract tests may pass a mock that asserts IdentityFromContext /
+// gateway.CallerFromContext on r.Context() after AfterIdentity (HOST-001).
+//
+// Does not start a listener. Enforces the same validateHTTPHandlerPolicy rules
+// as NewHTTPHandler (no listen address required).
+//
+// Residual: full tools/call JSON-RPC multi-user e2e requires the MCP SDK to
+// propagate r.Context() into tool handlers; this API proves protect→next-hop
+// context flow without a heavy SDK harness.
+func NewHTTPProtectHandler(inner http.Handler, cfg HTTPConfig) (http.Handler, error) {
+	if inner == nil {
+		return nil, apperr.New(apperr.CodeInternal, "http protect inner handler is nil")
+	}
 	if err := validateHTTPHandlerPolicy(cfg); err != nil {
 		return nil, err
 	}
@@ -479,9 +504,6 @@ func NewHTTPHandler(server *mcp.Server, cfg HTTPConfig) (http.Handler, error) {
 	if maxBody == 0 {
 		maxBody = DefaultMaxBodyBytes
 	}
-	inner := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
-		return server
-	}, nil)
 	requireSubject := HTTPSubjectRequired(cfg)
 	h := &protectHandler{
 		inner:                   inner,

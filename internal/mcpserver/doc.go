@@ -21,7 +21,12 @@
 // before the SDK); /healthz and /readyz remain at root and under the prefix.
 // X-Forwarded-Host / X-Forwarded-Prefix are not trusted by default
 // (HTTPConfig.TrustedProxy residual, default false — fail closed).
+// AfterIdentity (optional) enriches request context after trusted identity for
+// multi-user gateway (Caller + policy.Subject injection by serve). Contract
+// tests: multi_user_http_test.go + NewHTTPProtectHandler mock-inner path.
 // Residual: loopback without require-token/subject still open to local processes;
 // continuous JWKS rotation under load incomplete; live Entra residual; live
-// edge reverse-proxy origin pin residual; prefer stdio for pilot (ADR 0002).
+// edge reverse-proxy origin pin residual; full tools/call JSON-RPC multi-user
+// e2e depends on MCP SDK r.Context() propagation into tool handlers; prefer
+// stdio for pilot (ADR 0002).
 package mcpserver
