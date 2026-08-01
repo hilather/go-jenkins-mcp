@@ -26,6 +26,9 @@
 #        JENKINS_MCP_GATEWAY_JWT_VAULT_PATH set (path never dumped; never opens vault)
 #      - XDG-only canary: XDG_DATA_HOME set + vault files planted at default paths, vault path env
 #        unset → shared_*_vault_file stay false and planted seeds never leak
+#      - progressive_consent.file_backed / same_host_reload_before_persist false by default;
+#        true when JENKINS_MCP_CONSENT_STORE_PATH set (path never dumped; residual never opens
+#        consent file; stores_tokens=false; multi_replica_shared=false — not multi-pod HA)
 #      - optional: principal_cache_entries Len when file has entries (secret-free count only)
 #      - principal_cache_process_note: principal_cache_entries is this-process / file Len only
 #      - subject_limiter_max_subjects omit/absent by default; ==N when
@@ -638,6 +641,28 @@ if isinstance(pc, dict):
         errors.append("progressive_consent.stores_tokens=true (must never store tokens)")
     if pc.get("stores_tokens") is not False and pc.get("stores_tokens") is not None:
         errors.append(f"progressive_consent.stores_tokens={pc.get('stores_tokens')!r} want false|absent")
+    # Default without CONSENT_STORE_PATH: process-local nest (not file-backed / not multi-pod HA).
+    if pc.get("file_backed") is True:
+        errors.append(
+            "progressive_consent.file_backed=true without CONSENT_STORE_PATH (default must be false)"
+        )
+    elif pc.get("file_backed") is not False and pc.get("file_backed") is not None:
+        errors.append(f"progressive_consent.file_backed={pc.get('file_backed')!r} want false|absent")
+    if pc.get("same_host_reload_before_persist") is True:
+        errors.append(
+            "progressive_consent.same_host_reload_before_persist=true without CONSENT_STORE_PATH "
+            "(default must be false)"
+        )
+    elif (
+        pc.get("same_host_reload_before_persist") is not False
+        and pc.get("same_host_reload_before_persist") is not None
+    ):
+        errors.append(
+            f"progressive_consent.same_host_reload_before_persist="
+            f"{pc.get('same_host_reload_before_persist')!r} want false|absent"
+        )
+    if pc.get("multi_replica_shared") is True:
+        errors.append("progressive_consent.multi_replica_shared=true (must be false offline residual)")
 else:
     errors.append("progressive_consent object missing")
 
@@ -1263,6 +1288,88 @@ PY
         fi
       fi
 
+
+      # Optional subtest: SUBJECT_LIMITER_MAX_SUBJECTS set → subject_limiter_max_subjects==N
+      # (HOST-006 residual lite). Path never involved; omit when unset (default unlimited).
+      echo "== gateway residual-status (CONSENT_STORE_PATH canary) =="
+      CONSENT_PATH_MARKER="consent-store-path-CANARY-never-in-json-$$"
+      CONSENT_TMP_MARKED="$OUT_DIR/${CONSENT_PATH_MARKER}.json"
+      # Do not require an existing consent file — residual-status must not open it.
+      # Leave path empty/new (no seed file). Residual is env-bool only.
+      RESIDUAL_STATUS_CONSENT_JSON="$OUT_DIR/gateway-residual-status-consent-path.json"
+      set +e
+      env JENKINS_MCP_CONSENT_STORE_PATH="$CONSENT_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_CONSENT_JSON" 2>"$OUT_DIR/gateway-residual-status-consent-path.stderr"
+      crc_path=$?
+      set -e
+      if [[ $crc_path -ne 0 ]]; then
+        fail_msg "gateway residual-status with CONSENT_STORE_PATH exit $crc_path"
+        if [[ -s "$OUT_DIR/gateway-residual-status-consent-path.stderr" ]]; then
+          head -n 20 "$OUT_DIR/gateway-residual-status-consent-path.stderr" >&2 || true
+        fi
+      else
+        # Residual must not have created/required the consent file for status alone.
+        if [[ -e "$CONSENT_TMP_MARKED" ]]; then
+          fail_msg "gateway residual-status opened/created CONSENT_STORE_PATH (must be env-bool only)"
+        fi
+        assert_secret_free "$RESIDUAL_STATUS_CONSENT_JSON" "gateway-residual-status-consent-path.json" || true
+        export GRS_CONSENT_JSON="$RESIDUAL_STATUS_CONSENT_JSON"
+        export GRS_CONSENT_MARKER="$CONSENT_PATH_MARKER"
+        export GRS_CONSENT_PATH="$CONSENT_TMP_MARKED"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["GRS_CONSENT_JSON"]
+marker = os.environ["GRS_CONSENT_MARKER"]
+consent_path = os.environ.get("GRS_CONSENT_PATH", "")
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+pc = data.get("progressive_consent") or {}
+if not isinstance(pc, dict):
+    errors.append("progressive_consent object missing when CONSENT_STORE_PATH set")
+else:
+    if pc.get("file_backed") is not True:
+        errors.append(
+            f"progressive_consent.file_backed={pc.get('file_backed')!r} want true when CONSENT_STORE_PATH set"
+        )
+    if pc.get("same_host_reload_before_persist") is not True:
+        errors.append(
+            f"progressive_consent.same_host_reload_before_persist="
+            f"{pc.get('same_host_reload_before_persist')!r} want true when CONSENT_STORE_PATH set"
+        )
+    if pc.get("stores_tokens") is not False:
+        errors.append(f"progressive_consent.stores_tokens={pc.get('stores_tokens')!r} want false")
+    if pc.get("multi_replica_shared") is not False:
+        errors.append(
+            f"progressive_consent.multi_replica_shared={pc.get('multi_replica_shared')!r} want false"
+        )
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("CONSENT_STORE_PATH / marker leaked into residual-status JSON (path must never dump)")
+if consent_path and consent_path in blob:
+    errors.append("CONSENT_STORE_PATH full path leaked into residual-status JSON")
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status CONSENT_STORE_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print(
+    "PASS: residual-status progressive_consent file_backed=true when CONSENT_STORE_PATH set "
+    "(path not dumped; never opens consent file; stores_tokens=false; multi_replica_shared=false)"
+)
+sys.exit(0)
+PY
+        then
+          :
+        else
+          fail=1
+        fi
+      fi
 
       # Optional subtest: SUBJECT_LIMITER_MAX_SUBJECTS set → subject_limiter_max_subjects==N
       # (HOST-006 residual lite). Path never involved; omit when unset (default unlimited).
