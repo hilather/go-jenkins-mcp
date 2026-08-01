@@ -225,21 +225,30 @@ durable L1/L2 archive namespace (STO / HOST-008); Obtain/`AuthProviderCtx` does
 not re-inject whoAmI principal onto ctx mid-call (HTTP claim remains the
 multi-user PrincipalID source).
 
-### HOST-006 — per-subject concurrent budgets
+### HOST-006 — per-subject concurrent + rate budgets
 
 | Type | Role |
 |------|------|
 | `SubjectLimiter` | Per-`subjectKey` concurrent slots under a process ceiling |
 | `Hold` / `WithSubjectSlot` | Acquire → work → Release (prefer over bare Acquire) |
+| `SubjectRateLimiter` | Per-`subjectKey` token-bucket rate under process rate ceiling |
+| `Allow` | Consume one dispatch token (fail closed `CodeQuota`) |
 | `StatusMap` | Non-secret doctor summary (`ha_multi_replica: false` — HOST-008 residual) |
 | Mutation confirm Binding | Profile + Principal + ExternalSubject + Tenant; cooldown keys include full binding |
 
-Defaults: **8** concurrent per subject, **64** process-wide (abs ceilings **64** / **256**).
-Excess → `CodeQuota`.
+**Concurrency defaults:** **8** concurrent per subject, **64** process-wide
+(abs ceilings **64** / **256**). Excess → `CodeQuota`.
 
-**Serve wire (Done*):** `tools.RegisterOptions.SubjectLimiter` is a
-`tools.SubjectSlotLimiter` interface (implemented by `*gateway.SubjectLimiter`;
-tools does not import gateway). `addTool` Holds a slot when both limiter and
+**Rate defaults (foundation Done*):** **30** tools/min per subject sustained,
+burst **10**; process default **300**/min sustained, burst **60** (abs
+**600** / **120** subject; **6000** / **600** process). Excess → `CodeQuota`.
+Alice at subject cap does not starve Bob (per-subject buckets; process token
+refunded on subject deny).
+
+**Serve wire (Done*):** `tools.RegisterOptions.SubjectLimiter` /
+`SubjectRateLimiter` are tools interfaces (implemented by
+`*gateway.SubjectLimiter` / `*gateway.SubjectRateLimiter`; tools does not
+import gateway). `addTool` calls `Allow` then `Hold` when limiter(s) and
 non-empty `SubjectKey` are set. Mutation Manager uses
 `MutationBindingFromContext` (multi-user) so confirm tokens and cooldowns cannot
 cross subjects; audit ProfileID/PrincipalID prefer the effective binding.
@@ -251,10 +260,16 @@ process principal + Caller ExternalSubject isolation. Optional env:
 |-----|------|
 | `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` | Per-subject slots (empty → 8) |
 | `JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT` | Process-wide slots (empty → 64) |
+| `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` | Per-subject sustained tools/min (empty → 30; **0 = disabled** residual) |
+| `JENKINS_MCP_SUBJECT_RATE_BURST` | Per-subject token-bucket capacity (empty → 10) |
 
-**Residual:** token-bucket rate (not only concurrency); multi-replica (HOST-008);
-Obtain principal not re-injected onto request ctx after whoAmI mid-call
-(Binding PrincipalID uses HTTP claim / lab JenkinsPrincipal, not Obtain return).
+Rate limiter is wired under `--gateway` when `rate_per_minute > 0` after resolve
+(default enabled). Explicit `0` leaves `SubjectRateLimiter` nil (unlimited rate;
+concurrency still applies).
+
+**Residual:** multi-replica shared rate/slots (HOST-008); policy-driven rate
+reduction beyond env; Obtain principal not re-injected onto request ctx mid-call
+(Binding PrincipalID uses HTTP claim / lab JenkinsPrincipal when Valid).
 
 ---
 
@@ -429,7 +444,7 @@ errors/Status/String; cancelled context; HTTPS-only HTTPTokenFetcher + mock AS;
 offline qualify vault hit/miss, IdP outage chaos, JWKS kid-lite (see
 [qualification.md](qualification.md)); HOST-001 `RequireSubject` + shared-secret
 not identity; mid-session `Mcp-Session-Id` subject swap 401; HOST-004 two-user
-token-cache + page_token subject isolation; HOST-006 SubjectLimiter fair-share.
+token-cache + page_token subject isolation; HOST-006 SubjectLimiter + SubjectRateLimiter fair-share.
 
 ---
 

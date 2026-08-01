@@ -1905,13 +1905,14 @@ func runServe(args []string) error {
 			})
 		}
 	}
-	// HOST-004 / HOST-006: process-level subject key + concurrent limiter when
+	// HOST-004 / HOST-006: process-level subject key + concurrent/rate limiters when
 	// gateway mode is on. Multi-user: SubjectKeyFromContext derives key from
-	// gateway.Caller on tool ctx (same as Obtain). Empty key skips limiter.
+	// gateway.Caller on tool ctx (same as Obtain). Empty key skips limiters.
 	// Multi-user policy.Subject rebind: SubjectFromContext from AfterIdentity.
 	// MutationBindingFromContext binds confirm tokens to ExternalSubject+tenant.
 	var serveSubjectKey string
 	var serveSubjectLimiter tools.SubjectSlotLimiter
+	var serveSubjectRateLimiter tools.SubjectRateLimiter
 	var serveSubjectKeyFromCtx func(ctx context.Context) string
 	var serveSubjectFromCtx func(ctx context.Context) (policy.Subject, bool)
 	var serveMutationBindingFromCtx func(ctx context.Context) (mutation.Binding, bool)
@@ -1928,6 +1929,24 @@ func runServe(args []string) error {
 			serveSubjectLimiter = gateway.NewSubjectLimiter(perSubj, procMax)
 			log.Printf("HOST-006 subject limiter: max_per_subject=%d process_max=%d multi_user=%v",
 				perSubj, procMax, gatewayMultiUser)
+			// Token-bucket rate: empty env → defaults (30/min, burst 10); explicit
+			// 0 disables (residual opt-out). Process ceilings use package defaults.
+			rateRPM, rateBurst, rerr := gateway.ResolveSubjectRateCaps(
+				os.Getenv(gateway.EnvSubjectRatePerMinute),
+				os.Getenv(gateway.EnvSubjectRateBurst),
+			)
+			if rerr != nil {
+				return rerr
+			}
+			if rateRPM > 0 {
+				serveSubjectRateLimiter = gateway.NewSubjectRateLimiter(
+					rateRPM, rateBurst, 0, 0, // process caps → package defaults
+				)
+				log.Printf("HOST-006 subject rate limiter: rate_per_minute=%d burst=%d multi_user=%v",
+					rateRPM, rateBurst, gatewayMultiUser)
+			} else {
+				log.Printf("HOST-006 subject rate limiter: disabled (rate_per_minute=0 residual)")
+			}
 		}
 		if gatewayMultiUser {
 			serveSubjectKeyFromCtx = func(ctx context.Context) string {
@@ -1972,6 +1991,7 @@ func runServe(args []string) error {
 		SubjectKey:                 serveSubjectKey,
 		SubjectKeyFromContext:      serveSubjectKeyFromCtx,
 		SubjectLimiter:             serveSubjectLimiter,
+		SubjectRateLimiter:         serveSubjectRateLimiter,
 		MutationBindingFromContext: serveMutationBindingFromCtx,
 	})
 	if *httpAddr != "" {

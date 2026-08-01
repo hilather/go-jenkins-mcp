@@ -35,6 +35,16 @@ type SubjectSlotLimiter interface {
 	Hold(subjectKey string) (release func(), err error)
 }
 
+// SubjectRateLimiter is HOST-006 per-subject token-bucket tool dispatch rate
+// under an optional process ceiling. Implemented by *gateway.SubjectRateLimiter;
+// the interface lives here so tools does not import gateway (FND-004).
+//
+// Allow consumes one token for subjectKey. Deny → CodeQuota (or
+// CodeInvalidArgument for empty/invalid key). Nil limiter ⇒ no rate budget.
+type SubjectRateLimiter interface {
+	Allow(subjectKey string) error
+}
+
 // RegisterOptions configures POL-001 read-only gating, MCP-001 budgets, and
 // optional deny-only MCP RBAC (POL-002/003).
 // Nil options (or Register with nil opts) use pilot defaults: read-only true,
@@ -161,6 +171,11 @@ type RegisterOptions struct {
 	// (fail closed CodeQuota). Empty SubjectKey skips the limiter (stdio pilot).
 	// Wire *gateway.SubjectLimiter from cmd; tools only sees this interface.
 	SubjectLimiter SubjectSlotLimiter
+	// SubjectRateLimiter is optional HOST-006 token-bucket rate budget. When set
+	// and SubjectKey is non-empty, addTool calls Allow before Hold (fail closed
+	// CodeQuota). Empty SubjectKey skips. Wire *gateway.SubjectRateLimiter from
+	// cmd when ratePerMinute > 0 (0 = disabled residual).
+	SubjectRateLimiter SubjectRateLimiter
 }
 
 // regState is the effective configuration for one Register call.
@@ -198,10 +213,11 @@ type regState struct {
 	// Profile Meta for durable survey compact cache (schema v7); optional.
 	meta *store.Meta
 
-	// HOST-004 / HOST-006: process-bound subject key + optional concurrent limiter.
+	// HOST-004 / HOST-006: process-bound subject key + optional concurrent/rate limiters.
 	subjectKey            string
 	subjectKeyFromContext func(ctx context.Context) string
 	subjectLimiter        SubjectSlotLimiter
+	subjectRateLimiter    SubjectRateLimiter
 
 	// Multi-user: per-request policy.Subject from trusted context (gateway wire).
 	subjectFromContext func(ctx context.Context) (policy.Subject, bool)
@@ -278,6 +294,7 @@ func resolveRegisterOptions(opts *RegisterOptions) regState {
 	st.subjectKey = strings.TrimSpace(opts.SubjectKey)
 	st.subjectKeyFromContext = opts.SubjectKeyFromContext
 	st.subjectLimiter = opts.SubjectLimiter
+	st.subjectRateLimiter = opts.SubjectRateLimiter
 	st.subjectFromContext = opts.SubjectFromContext
 	st.mutationBindingFromContext = opts.MutationBindingFromContext
 	// MUT-001: process-scoped manager so preview tokens survive until confirm.
@@ -694,25 +711,40 @@ func addTool[In, Out any](
 				return nil, nil, mapped
 			}
 		}
-		// HOST-006: per-subject concurrent tool slots (gateway multi-tenant).
-		// Empty SubjectKey skips limiter (stdio pilot residual). When limiter is
-		// set and key is non-empty, Hold fails closed as CodeQuota (error path,
-		// same family as MCP budget quota — not a policy deny).
+		// HOST-006: per-subject rate + concurrent tool budgets (gateway multi-tenant).
+		// Empty SubjectKey skips both (stdio pilot residual). Rate Allow runs before
+		// concurrent Hold so a rate deny does not occupy a slot. Fail closed as
+		// CodeQuota (error path, same family as MCP budget quota — not policy deny).
 		// Multi-user: prefer SubjectKeyFromContext (Caller on ctx) over process key.
-		if sk := effectiveSubjectKey(st, ctx); st.subjectLimiter != nil && sk != "" {
-			release, err := st.subjectLimiter.Hold(sk)
-			if err != nil {
-				if st.metrics != nil {
-					st.metrics.Inc(telemetry.MetricMCPToolError, 1)
+		if sk := effectiveSubjectKey(st, ctx); sk != "" {
+			if st.subjectRateLimiter != nil {
+				if err := st.subjectRateLimiter.Allow(sk); err != nil {
+					if st.metrics != nil {
+						st.metrics.Inc(telemetry.MetricMCPToolError, 1)
+					}
+					mapped := mapToolErr(err)
+					logToolError(st, "tool_dispatch_error", mapped,
+						"tool", t.Name, "effect", string(effect), "phase", "subject_rate_limiter",
+						"duration_ms", durationMS(start),
+					)
+					return nil, nil, mapped
 				}
-				mapped := mapToolErr(err)
-				logToolError(st, "tool_dispatch_error", mapped,
-					"tool", t.Name, "effect", string(effect), "phase", "subject_limiter",
-					"duration_ms", durationMS(start),
-				)
-				return nil, nil, mapped
 			}
-			defer release()
+			if st.subjectLimiter != nil {
+				release, err := st.subjectLimiter.Hold(sk)
+				if err != nil {
+					if st.metrics != nil {
+						st.metrics.Inc(telemetry.MetricMCPToolError, 1)
+					}
+					mapped := mapToolErr(err)
+					logToolError(st, "tool_dispatch_error", mapped,
+						"tool", t.Name, "effect", string(effect), "phase", "subject_limiter",
+						"duration_ms", durationMS(start),
+					)
+					return nil, nil, mapped
+				}
+				defer release()
+			}
 		}
 		// POL-001: mutation re-check at dispatch.
 		if effect == policy.EffectMutate {

@@ -450,14 +450,12 @@ Prevent one user from exhausting process-wide budgets for others.
 
 **Foundation (done):** `gateway.SubjectLimiter` + fair-share tests; mutation
 `Binding` = profile + principal + ExternalSubject + tenant with multi-user
-`BindingFromContext` (Alice/Bob tests). **Serve wire Done*:**
-`tools.SubjectSlotLimiter` + `addTool` Hold under `--gateway`; optional subject
-max env caps; `MutationBindingFromContext` prefers `PolicySubjectFromContext`
-(PrincipalID = Jenkins principal from HTTP claim/lab) when Valid, else
-Caller + process principal. **Done\*** per-request Jenkins principal on Binding
-via HTTP claim. **Residual:** token-bucket rate (beyond concurrency); HOST-008
-multi-replica; Obtain/`AuthProviderCtx` does not re-inject whoAmI principal onto
-ctx mid-call.
+`BindingFromContext` (Alice/Bob tests). **Token-bucket rate Done* foundation:**
+`gateway.SubjectRateLimiter` (30/min + burst 10 default; process ceiling).
+**Serve wire Done*:** `SubjectSlotLimiter` + `SubjectRateLimiter`; Allow then Hold;
+`MutationBindingFromContext` prefers Valid PolicySubject PrincipalID (HTTP claim)
+else Caller + process principal. **Residual:** HOST-008 multi-replica; policy
+overlay rate reduction; Obtain whoAmI principal not re-injected onto ctx mid-call.
 
 ---
 

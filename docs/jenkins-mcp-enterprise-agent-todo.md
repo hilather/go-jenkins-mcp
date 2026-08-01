@@ -2766,21 +2766,21 @@ from `gateway.SubjectKey` when `--gateway`; list tools (`list_jobs` / `get_jobs`
 
 **Foundation done:** `gateway.SubjectLimiter` (`subject_limits.go`) with
 per-subject + process ceilings, `Hold`/`WithSubjectSlot`, fair-share tests,
-`StatusMap` secret-free. Mutation confirms bound to
+`StatusMap` secret-free. **Token-bucket rate Done* foundation:**
+`gateway.SubjectRateLimiter` (`subject_rate.go`) — default **30**/min + burst
+**10** per subject, process **300**/min + burst **60**; Alice/Bob isolation +
+process fair-share + secret-free `StatusMap` tests. Mutation confirms bound to
 `mutation.Binding` = profile + principal + ExternalSubject + tenant; multi-user
 `BindingFromContext` / serve `MutationBindingFromContext` via
 `mutationBindingFromGatewayCtx` (prefer Valid `PolicySubject` PrincipalID =
 JenkinsUserID from HTTP JenkinsPrincipal/lab header; else Caller + process
 principal) so Alice preview cannot confirm as Bob on ExternalSubject **or**
-PrincipalID; cooldown keys and audit ProfileID/PrincipalID use effective
-binding; Alice/Bob + PrincipalID-only + secret-canary tests in
-`internal/mutation` + `internal/tools` + `cmd/jenkins-mcp`. **Serve wire Done*:**
-`tools.SubjectSlotLimiter` interface + `addTool` Hold when `SubjectKey`
-non-empty; cmd wires `NewSubjectLimiter` under `--gateway`; optional
-`JENKINS_MCP_SUBJECT_MAX_CONCURRENT` / `JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT`.
-**Done\*** per-request Jenkins principal on Binding (HTTP claim/lab).
-**Residual:** token-bucket rate (not only concurrency); multi-replica (HOST-008);
-Obtain principal not re-injected onto ctx after whoAmI mid-call.
+PrincipalID; cooldown keys and audit use effective binding. **Serve wire Done*:**
+`tools.SubjectSlotLimiter` + `tools.SubjectRateLimiter`; `addTool` Allow then Hold
+under `--gateway`; env concurrent + rate/burst
+(`JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` 0 = rate disabled).
+**Residual:** multi-replica (HOST-008); policy overlay rate reduction; Obtain
+principal not re-injected onto ctx mid-call.
 
 ---
 
