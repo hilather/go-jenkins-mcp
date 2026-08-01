@@ -78,9 +78,10 @@ func TokenTTL() time.Duration {
 //
 // Residual honesty: library Config.TTL ≤0 still maps to process live TokenTTL()
 // when positive else DefaultTokenTTL (no infinite/disabled TTL path). Operator
-// resolve path cannot set 0/disable. Serve does not cross-check ConfirmCooldown
-// vs TokenTTL (independent caps; package defaults remain DefaultConfirmCooldown
-// 5s < DefaultTokenTTL 2m).
+// resolve path cannot set 0/disable. After ResolveConfirmCooldown + ResolveTokenTTL,
+// serve must call EnsureConfirmCooldownLessThanTokenTTL so cooldown cannot
+// exhaust (or equal) token TTL. Package defaults remain DefaultConfirmCooldown
+// 5s < DefaultTokenTTL 2m.
 func ResolveTokenTTL(flagVal, envVal string) (time.Duration, error) {
 	d := DefaultTokenTTL
 	if raw := strings.TrimSpace(envVal); raw != "" {
@@ -109,6 +110,21 @@ func ResolveTokenTTL(flagVal, envVal string) (time.Duration, error) {
 				AbsoluteMaxTokenTTL.String()+")")
 	}
 	return d, nil
+}
+
+// EnsureConfirmCooldownLessThanTokenTTL fails closed when confirmCooldown ≥
+// tokenTTL after both have been resolved independently (MUT-001 residual fix).
+// Confirm cooldown must be strictly shorter than the confirmation token TTL so
+// cooldown cannot exhaust (or equal) the token window. Non-secret message only;
+// never logs credentials or tokens. Library Config negative cooldown remains a
+// test escape hatch; the operator serve path uses this instead of silent ignore.
+func EnsureConfirmCooldownLessThanTokenTTL(confirmCooldown, tokenTTL time.Duration) error {
+	if confirmCooldown >= tokenTTL {
+		return apperr.New(apperr.CodeInvalidArgument,
+			"mutation confirm cooldown ("+confirmCooldown.String()+
+				") must be < mutation token TTL ("+tokenTTL.String()+")")
+	}
+	return nil
 }
 
 func parseTokenTTLValue(raw, source string) (time.Duration, error) {

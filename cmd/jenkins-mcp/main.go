@@ -1207,11 +1207,11 @@ func runServe(args []string) error {
 	}
 	// Wave 52 Track A / MUT-001: mutation confirm cooldown (after other caps).
 	// empty/0/"0s" → default 5s; min 1s; absolute max 5m fail closed; cannot disable via 0.
+	// SetConfirmCooldown is deferred until after TokenTTL resolve + ordering ensure.
 	mutationConfirmCooldown, err := mutation.ResolveConfirmCooldown(*mutationConfirmCooldownFlag, os.Getenv(mutation.EnvConfirmCooldown))
 	if err != nil {
 		return err
 	}
-	mutation.SetConfirmCooldown(mutationConfirmCooldown)
 	// Wave 52 Track C / MUT-001: Preview rate (default 30; absolute 300; 0 → default).
 	// Set process live before tool registration so NewManager(Config{…0…}) picks it up.
 	mutationMaxPreviews, err := mutation.ResolveMaxPreviewsPerMinute(*mutationMaxPreviewsPerMinuteFlag, os.Getenv(mutation.EnvMaxPreviewsPerMinute))
@@ -1224,6 +1224,13 @@ func runServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	// MUT-001 residual fix: confirm cooldown must be strictly < token TTL so
+	// cooldown cannot exhaust (or equal) the confirmation window. Fail closed
+	// after both resolve, before Set* (same shape as EnsureMaxBackoffAtLeastInitial).
+	if err := mutation.EnsureConfirmCooldownLessThanTokenTTL(mutationConfirmCooldown, mutationTokenTTL); err != nil {
+		return err
+	}
+	mutation.SetConfirmCooldown(mutationConfirmCooldown)
 	mutation.SetTokenTTL(mutationTokenTTL)
 	rcfg := jenkins.DefaultResilienceConfig()
 	rcfg.MaxJSONBodyBytes = maxJSONBodyBytes

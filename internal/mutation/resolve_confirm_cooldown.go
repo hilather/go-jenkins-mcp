@@ -77,6 +77,8 @@ func ConfirmCooldown() time.Duration {
 //
 // Residual honesty: library Config.ConfirmCooldown may still be negative to turn
 // cooldown off for tests; the operator resolve path cannot set 0/disable.
+// After ResolveConfirmCooldown + ResolveTokenTTL, serve calls
+// EnsureConfirmCooldownLessThanTokenTTL (cooldown must be strictly < token TTL).
 func ResolveConfirmCooldown(flagVal, envVal string) (time.Duration, error) {
 	d := DefaultConfirmCooldown
 	if raw := strings.TrimSpace(envVal); raw != "" {
