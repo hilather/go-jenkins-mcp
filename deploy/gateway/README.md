@@ -83,7 +83,8 @@ make build
 | `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` | Optional same-host file rate state | `FileSubjectRateLimiter` flock lite; `sharedSubjectRateFile`; not multi-pod HA |
 | `JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS` | Optional subject-map LRU max (HOST-008 residual lite) | Empty = unlimited; process-local / file-local eviction only; multi-pod residual |
 | `JENKINS_MCP_HTTP_PATH_PREFIX` | MCP mount under reverse proxy | Live path-prefix matrix residual |
-| `JENKINS_MCP_HTTP_JWKS_MAX_STALE` | Process-local JWKS stale-if-error cap | Multi-instance shared JWKS residual |
+| `JENKINS_MCP_HTTP_JWKS_MAX_STALE` | JWKS stale-if-error cap (snapshot age) | Multi-pod external JWKS residual |
+| `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` | Same-host public JWKS snapshot file lite | Multi-pod external JWKS residual |
 | `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` | Fail closed without trusted signed policy | Needs keys on volume; HSM residual |
 
 ## Residuals (honest)

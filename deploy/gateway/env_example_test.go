@@ -58,6 +58,7 @@ func TestEnvExample_ListsGatewayLabFlags(t *testing.T) {
 		"JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_MAX",
 		"JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_TTL",
 		"JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH",
+		"JENKINS_MCP_HTTP_JWKS_CACHE_PATH",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing env name %s in .env.example", want)

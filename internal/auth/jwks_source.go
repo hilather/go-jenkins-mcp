@@ -16,7 +16,8 @@ import (
 // JWKS refresh TTL and max-stale bounds for HOST-001 continuous rotation foundation.
 // Default refresh 5m; env JENKINS_MCP_HTTP_JWKS_REFRESH_TTL feeds ParseJWKSRefreshTTL.
 // Max-stale default 0 (unlimited stale-if-error); env JENKINS_MCP_HTTP_JWKS_MAX_STALE
-// feeds ParseJWKSMaxStaleAge (process-local; multi-instance shared JWKS residual).
+// feeds ParseJWKSMaxStaleAge (process-local age; optional same-host file share via
+// JENKINS_MCP_HTTP_JWKS_CACHE_PATH — multi-pod external JWKS residual).
 const (
 	// DefaultJWKSRefreshTTL is used when refresh TTL is empty/zero.
 	DefaultJWKSRefreshTTL = 5 * time.Minute
@@ -38,16 +39,18 @@ const EnvHTTPJWKSRefreshTTL = "JENKINS_MCP_HTTP_JWKS_REFRESH_TTL"
 // EnvHTTPJWKSMaxStale is the serve env for HTTP JWKS max stale age after a
 // failed refresh (secret-free Go duration). Empty/zero → unlimited stale-if-error
 // (default residual). When set (min 1m, max 24h), Get fails closed once the last
-// good snapshot age exceeds the bound. Process-local only.
+// good snapshot age exceeds the bound. Age is from the in-memory or file snapshot
+// used; multi-pod external JWKS still residual.
 const EnvHTTPJWKSMaxStale = "JENKINS_MCP_HTTP_JWKS_MAX_STALE"
 
 // JWKSSource supplies a JWKS snapshot for each JWT validation.
 // Implementations may refresh; callers must call Get on every validation so
 // rotated kids are visible after refresh (HOST-001 foundation).
 //
-// Residual: multi-region / multi-instance shared JWKS cache and live Entra JWKS
-// under load are not claimed. MaxStaleAge is process-local (operator-wired via
-// JENKINS_MCP_HTTP_JWKS_MAX_STALE); it does not coordinate across replicas.
+// Residual: multi-pod / multi-region external JWKS HA and live Entra JWKS under
+// load are not claimed. Optional same-host file snapshot
+// (JENKINS_MCP_HTTP_JWKS_CACHE_PATH) is HOST-001/HOST-008 Done* lite only.
+// MaxStaleAge applies to snapshot age (memory or file); it is not multi-pod HA.
 type JWKSSource interface {
 	Get(ctx context.Context) (*JWKS, error)
 }
@@ -84,19 +87,25 @@ type jwksSnapshot struct {
 }
 
 // RefreshingJWKS fetches JWKS with TTL-based refresh and stale-if-error.
-// Initial fetch is fail-closed via NewRefreshingJWKS. Subsequent refresh
-// failures keep the last good set and log a non-secret error.
+// Initial fetch is fail-closed via NewRefreshingJWKS unless an optional
+// same-host file snapshot (CachePath) supplies a fresh enough public-key set.
+// Subsequent refresh failures keep the last good set (memory and/or file) and
+// log a non-secret error.
 //
-// Optional MaxStaleAge: when >0 and last successful fetch is older than that
-// age after a failed refresh, Get fails closed. Zero (default) means unlimited
-// stale-if-error. Age is process-local (last good snapshot in this process);
-// multi-instance shared JWKS remains residual.
+// Optional MaxStaleAge: when >0 and the snapshot in use is older than that age
+// after a failed refresh, Get fails closed. Zero (default) means unlimited
+// stale-if-error.
+//
+// Optional CachePath (JENKINS_MCP_HTTP_JWKS_CACHE_PATH): same-host multi-process
+// public JWKS snapshot (flock + 0600). Not multi-pod external JWKS HA.
 type RefreshingJWKS struct {
 	client *http.Client
 	uri    string
 	ttl    time.Duration
 	// maxStale optional fail-closed after prolonged outage (0 = unlimited stale).
 	maxStale time.Duration
+	// file optional same-host public JWKS snapshot cache (nil = memory-only).
+	file *jwksFileCache
 
 	nowFn func() time.Time
 	logf  func(format string, args ...any)
@@ -119,8 +128,12 @@ type RefreshingJWKSConfig struct {
 	TTL time.Duration
 	// MaxStaleAge optional; 0 keeps last good forever on refresh failure.
 	// Non-zero must be in [MinJWKSMaxStaleAge, MaxJWKSMaxStaleAge] (ParseJWKSMaxStaleAge).
-	// Process-local only — does not share age across replicas.
+	// Applies to memory and optional file snapshot age.
 	MaxStaleAge time.Duration
+	// CachePath optional same-host multi-process JWKS snapshot file (public keys
+	// only). Empty → memory-only. Invalid path fails construction. Env:
+	// JENKINS_MCP_HTTP_JWKS_CACHE_PATH. Not multi-pod external JWKS HA.
+	CachePath string
 	// Now overrides time.Now (tests).
 	Now func() time.Time
 	// Logf logs non-secret refresh failures. Nil → log.Printf.
@@ -205,7 +218,9 @@ func ParseJWKSMaxStaleAge(raw string) (time.Duration, error) {
 }
 
 // NewRefreshingJWKS performs the initial JWKS fetch (fail closed) and returns
-// a source that refreshes on TTL with stale-if-error.
+// a source that refreshes on TTL with stale-if-error. When CachePath is set and
+// the network fetch fails, a fresh enough file snapshot may satisfy init
+// (same-host lite); corrupt/missing/stale file → fail closed.
 func NewRefreshingJWKS(ctx context.Context, cfg RefreshingJWKSConfig) (*RefreshingJWKS, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, apperr.Wrap(apperr.CodeCancelled, "jwks source init cancelled", err)
@@ -240,11 +255,21 @@ func NewRefreshingJWKS(ctx context.Context, cfg RefreshingJWKSConfig) (*Refreshi
 				" max "+MaxJWKSMaxStaleAge.String()+"; 0 = unlimited)")
 	}
 
+	var file *jwksFileCache
+	if strings.TrimSpace(cfg.CachePath) != "" {
+		fc, ferr := newJWKSFileCache(cfg.CachePath)
+		if ferr != nil {
+			return nil, ferr
+		}
+		file = fc
+	}
+
 	r := &RefreshingJWKS{
 		client:   client,
 		uri:      uri,
 		ttl:      ttl,
 		maxStale: maxStale,
+		file:     file,
 		nowFn:    cfg.Now,
 		logf:     cfg.Logf,
 	}
@@ -254,10 +279,18 @@ func NewRefreshingJWKS(ctx context.Context, cfg RefreshingJWKSConfig) (*Refreshi
 
 	set, err := FetchJWKS(ctx, client, uri)
 	if err != nil {
+		// Optional same-host file fallback (HOST-001/HOST-008 lite).
+		if fileSet, fileAt, ok := r.loadFileSnapshot(); ok {
+			r.snap.Store(&jwksSnapshot{set: fileSet, fetchedAt: fileAt})
+			r.logf("jwks initial fetch failed; using file snapshot (stale-if-error same-host lite; no secrets): %v", err)
+			return r, nil
+		}
 		return nil, apperr.Wrap(apperr.CodeUpstreamProtocol,
 			"HTTP JWT JWKS initial fetch failed (fail closed)", err)
 	}
-	r.snap.Store(&jwksSnapshot{set: set, fetchedAt: r.now()})
+	fetchedAt := r.now()
+	r.snap.Store(&jwksSnapshot{set: set, fetchedAt: fetchedAt})
+	r.persistSnapshot(set, fetchedAt)
 	return r, nil
 }
 
@@ -282,6 +315,12 @@ func (r *RefreshingJWKS) MaxStaleAge() time.Duration {
 		return 0
 	}
 	return r.maxStale
+}
+
+// CachePathConfigured reports whether a same-host JWKS file cache path is set
+// (secret-free residual bool; never returns the path value).
+func (r *RefreshingJWKS) CachePathConfigured() bool {
+	return r != nil && r.file != nil && r.file.path != ""
 }
 
 // URI returns the configured JWKS URL (secret-free).
@@ -318,8 +357,9 @@ func (r *RefreshingJWKS) Snapshot() *JWKS {
 }
 
 // Get returns a JWKS snapshot. When the TTL has elapsed, attempts a refresh
-// (singleflight). Refresh failure keeps last good (stale-if-error) unless
-// MaxStaleAge is exceeded. Cancelled context fails closed without clearing cache.
+// (singleflight). Refresh failure prefers a fresh enough same-host file snapshot
+// when configured, else last good in memory (stale-if-error) unless MaxStaleAge
+// is exceeded. Cancelled context fails closed without clearing cache.
 //
 // Safe on a nil *RefreshingJWKS receiver (typed-nil interface edge): returns error.
 func (r *RefreshingJWKS) Get(ctx context.Context) (*JWKS, error) {
@@ -356,7 +396,9 @@ func (r *RefreshingJWKS) Get(ctx context.Context) (*JWKS, error) {
 		if ferr != nil {
 			return nil, ferr
 		}
-		r.snap.Store(&jwksSnapshot{set: set, fetchedAt: r.now()})
+		fetchedAt := r.now()
+		r.snap.Store(&jwksSnapshot{set: set, fetchedAt: fetchedAt})
+		r.persistSnapshot(set, fetchedAt)
 		return set, nil
 	})
 	if err != nil {
@@ -364,8 +406,17 @@ func (r *RefreshingJWKS) Get(ctx context.Context) (*JWKS, error) {
 		if cerr := ctx.Err(); cerr != nil {
 			return nil, apperr.Wrap(apperr.CodeCancelled, "jwks get cancelled", cerr)
 		}
+		// Prefer fresh enough same-host file snapshot (multi-process share lite).
+		if fileSet, fileAt, ok := r.loadFileSnapshot(); ok {
+			// Adopt file into memory when newer than (or equal for share) last good.
+			if s == nil || !fileAt.Before(s.fetchedAt) {
+				r.snap.Store(&jwksSnapshot{set: fileSet, fetchedAt: fileAt})
+			}
+			r.logf("jwks refresh failed; using file snapshot (stale-if-error same-host lite; no secrets): %v", err)
+			return fileSet, nil
+		}
 		// Stale-if-error: keep last good unless max stale exceeded.
-		// Logs are secret-free: no tokens, no JWKS n/e material, no URI query secrets.
+		// Logs are secret-free: no tokens, no JWKS n/e material, no URI query secrets, no path.
 		if r.maxStale > 0 && age > r.maxStale {
 			r.logf("jwks refresh failed and max stale age exceeded (fail closed; no secrets): age=%s max=%s err=%v",
 				age.Round(time.Second), r.maxStale, err)
@@ -397,13 +448,50 @@ func (r *RefreshingJWKS) ForceRefresh(ctx context.Context) error {
 		if ferr != nil {
 			return nil, ferr
 		}
-		r.snap.Store(&jwksSnapshot{set: set, fetchedAt: r.now()})
+		fetchedAt := r.now()
+		r.snap.Store(&jwksSnapshot{set: set, fetchedAt: fetchedAt})
+		r.persistSnapshot(set, fetchedAt)
 		return set, nil
 	})
 	if err != nil {
 		r.logf("jwks force refresh failed (stale-if-error; no secrets): %v", err)
 	}
 	return err
+}
+
+// persistSnapshot best-effort writes the public JWKS snapshot to the optional
+// same-host file cache. Never fails the caller; never logs key material or path.
+func (r *RefreshingJWKS) persistSnapshot(set *JWKS, fetchedAt time.Time) {
+	if r == nil || r.file == nil || set == nil || len(set.Keys) == 0 {
+		return
+	}
+	if err := r.file.save(set, fetchedAt); err != nil {
+		// Secret-free: error string only (no path, no key material).
+		r.logf("jwks file cache write failed (best-effort; no secrets): %v", err)
+	}
+}
+
+// loadFileSnapshot returns a usable file snapshot when configured and fresh
+// enough under MaxStaleAge. Corrupt/missing/stale → miss (ok=false).
+// Never logs key material or path.
+func (r *RefreshingJWKS) loadFileSnapshot() (set *JWKS, fetchedAt time.Time, ok bool) {
+	if r == nil || r.file == nil {
+		return nil, time.Time{}, false
+	}
+	set, at, found, err := r.file.load()
+	if err != nil {
+		// Fail closed on corrupt: miss (do not use). Secret-free log only.
+		r.logf("jwks file cache read failed (miss; no secrets): %v", err)
+		return nil, time.Time{}, false
+	}
+	if !found || set == nil || len(set.Keys) == 0 {
+		return nil, time.Time{}, false
+	}
+	if !jwksSnapshotFreshEnough(at, r.now(), r.maxStale) {
+		r.logf("jwks file cache snapshot exceeds max stale age (miss; no secrets)")
+		return nil, time.Time{}, false
+	}
+	return set, at, true
 }
 
 // StartBackground starts a ticker that refreshes JWKS every TTL until ctx is

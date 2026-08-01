@@ -5,13 +5,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 )
 
 // ResidualStatusHonestyNote is the unified operator residual honesty sentence
 // (never tokens/subjects). Points operators at the live pin runbook.
 // Shared by CLI `gateway residual-status` and admin GET /admin/v1/gateway/residual-status.
-const ResidualStatusHonestyNote = "unified gateway residual snapshot (env/static honesty only): offline Mode A/B/C foundations Done*; optional same-host FileSubjectRateLimiter / FileTokenCache / FilePrincipalCache / vault flock lite when paths set; live Entra / jwt-auth-filter / AgentCore / multi-pod shared rate+vault+principal HA residual — never production GO from this surface; see docs/gateway/live-pin-blockers.md"
+const ResidualStatusHonestyNote = "unified gateway residual snapshot (env/static honesty only): offline Mode A/B/C foundations Done*; optional same-host FileSubjectRateLimiter / FileTokenCache / FilePrincipalCache / FileJWKS / vault flock lite when paths set; live Entra / jwt-auth-filter / AgentCore / multi-pod shared rate+vault+principal+JWKS HA residual — never production GO from this surface; see docs/gateway/live-pin-blockers.md"
 
 // ResidualStatusDoc is the primary operator pointer for residual honesty.
 const ResidualStatusDoc = "docs/gateway/live-pin-blockers.md"
@@ -144,8 +145,12 @@ func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 		"principal_cache_entries":      principalCacheEntriesForResidual(getenv),
 		"principal_cache_process_note": PrincipalCacheProcessNote,
 		"shared_principal_cache_file":  gateway.PrincipalCachePathConfiguredFromEnviron(getenv),
-		"residual_note":                ResidualStatusHonestyNote,
-		"doc":                          ResidualStatusDoc,
+		// shared_jwks_file=true only when JENKINS_MCP_HTTP_JWKS_CACHE_PATH set
+		// (HOST-001/HOST-008 same-host public JWKS snapshot lite). Path never returned.
+		// Multi-pod external JWKS still residual. Public keys only — never tokens.
+		"shared_jwks_file": auth.JWKSCachePathConfiguredFromEnviron(getenv),
+		"residual_note":    ResidualStatusHonestyNote,
+		"doc":              ResidualStatusDoc,
 	}
 	// Optional PrincipalCache hygiene residual lite (env/static; empty = unlimited / no TTL).
 	if pcMax, pcTTL, err := gateway.PrincipalCacheConfigFromEnviron(getenv); err == nil {
