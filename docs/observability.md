@@ -73,6 +73,7 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **Done\*** lite — multi-user correlation more complete on one host after rotation |
 | Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod / per-host JSONL only; no fleet merge |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
+| Subject quota metrics (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`) | **Done\* lite** process-local (HOST-006 CodeQuota); multi-pod metric aggregation residual |
 
 ### Rotation / retention
 
@@ -284,6 +285,8 @@ secrets. Constants live in `internal/telemetry` (`Metric*`).
 | `mcp_tool_ok` | Handler completed (budget enforced) without error | `tools.addTool` |
 | `mcp_tool_error` | Handler or budget returned an error (non-deny) | `tools.addTool` |
 | `mcp_tool_deny` | RO / MCP RBAC / session-gate denial (registration or dispatch) | `tools.emitToolDeny` |
+| `mcp_subject_rate_quota` | HOST-006 subject **rate** CodeQuota (token-bucket `Allow` deny) | `tools.addTool` (subject rate path) |
+| `mcp_subject_slot_quota` | HOST-006 subject **concurrent slot** CodeQuota (`Hold` deny) | `tools.addTool` (subject limiter path) |
 | `jenkins_http_requests_total` | Upstream HTTP attempts that reached `Do` (incl. retries) | `jenkins.Client` via `MetricsHook` |
 | `jenkins_http_errors_total` | Transport failure or HTTP status ≥ 400 | `jenkins.Client` via `MetricsHook` |
 | `jenkins_http_wire_bytes_total` | Encoded response bytes read from the wire | `MetricsHook` + `ByteCounters` |
@@ -302,6 +305,13 @@ secrets. Constants live in `internal/telemetry` (`Metric*`).
 **Aliases (same string value):** `MetricPolicyDenials` → `mcp_tool_deny`;
 `MetricJenkinsRequests` → `jenkins_http_requests_total`;
 `MetricBytesWire` → `jenkins_http_wire_bytes_total`.
+
+**Subject quota (HOST-006 / OBS residual lite):** `mcp_subject_rate_quota` and
+`mcp_subject_slot_quota` increment on CodeQuota from subject rate `Allow` or
+slot `Hold` (also counted in `mcp_tool_error`). Process-local totals only —
+**never** subject keys, principal ids, or tokens as labels. Multi-pod
+aggregation residual (HOST-008); optional same-host file rate does not change
+the metric surface.
 
 **Circuit breaker state (Wave 27):** current state is **not** a labeled time
 series. Doctor check `circuit_breaker` reports `Client.CircuitState()` when a
@@ -507,6 +517,7 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **Done\*** lite — multi-user correlation more complete on one host after rotation |
 | Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod / per-host JSONL only; no fleet merge |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
+| Subject quota metrics (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`) | **Done\* lite** process-local (HOST-006 CodeQuota); multi-pod metric aggregation residual |
 
 ### Rotation / retention
 
@@ -695,6 +706,8 @@ secrets. Constants live in `internal/telemetry` (`Metric*`).
 | `mcp_tool_ok` | Handler completed (budget enforced) without error | `tools.addTool` |
 | `mcp_tool_error` | Handler or budget returned an error (non-deny) | `tools.addTool` |
 | `mcp_tool_deny` | RO / MCP RBAC / session-gate denial (registration or dispatch) | `tools.emitToolDeny` |
+| `mcp_subject_rate_quota` | HOST-006 subject **rate** CodeQuota (token-bucket `Allow` deny) | `tools.addTool` (subject rate path) |
+| `mcp_subject_slot_quota` | HOST-006 subject **concurrent slot** CodeQuota (`Hold` deny) | `tools.addTool` (subject limiter path) |
 | `jenkins_http_requests_total` | Upstream HTTP attempts that reached `Do` (incl. retries) | `jenkins.Client` via `MetricsHook` |
 | `jenkins_http_errors_total` | Transport failure or HTTP status ≥ 400 | `jenkins.Client` via `MetricsHook` |
 | `jenkins_http_wire_bytes_total` | Encoded response bytes read from the wire | `MetricsHook` + `ByteCounters` |
@@ -759,20 +772,23 @@ Env enable path (`JENKINS_MCP_TELEMETRY`) remains separate from force-off.
 
 ## Residual
 
-- OTLP export / remote collector query (approved backend adapter) → INT-002 residual
-- Per-request latency histograms / compression-ratio gauges / decoder CPU (OBS follow-on)
-- Circuit gauges / half-open+closed transition counters (optional; Wave 27 ships open-events + doctor `State()` only)
-- Wire `DoctorOptions.Circuit` / metrics from serve into MCP `jenkins_doctor` when that tool is registered
-- Per-tool allowlisted counters (only if a closed seed name set is required; default is total ok/error/deny only)
-- Optional tool-success audit summaries (`JENKINS_MCP_AUDIT_TOOL_OK`, default off; metrics always on)
-- Multi-pod / multi-replica audit aggregation (central sink) — residual; per-pod JSONL only. **Done\* lite:** same-host admin merge of rotated siblings (`audit.jsonl.N`) for a single profile path — not fleet timeline
-- Policy-controlled retention/export beyond size rotation
-- Support bundle: optional live capability attach from a running `serve` process; signed/encrypted export
-- Post-pack L1 release metrics: `cache_l1_released`, `cache_l1_release_bytes_reclaimed`
-- Authenticated Streamable HTTP / gateway session binding (GWY-*)
-- MGR-002 formal privacy board sign-off + HSM/multi-sig (overlay force-off pin is **Done\* lite**)
-- KD-004 residual: migrate remaining `log.Printf` to `telemetry.Logger`; bare high-entropy detectors (Wave 25) + Writer line buffering (Wave 33) landed — residual sub-threshold hex FN / git-SHA FP / force-flush boundary only; Wave 34 self-check `writer_split_line_canary` guards line reassembly
-- KD-008 residual: loopback HTTP without require-token / deny-anonymous still open to local processes (default for pilot); opt-in via `--http-require-token` or `JENKINS_MCP_HTTP_REQUIRE_TOKEN` / `JENKINS_MCP_HTTP_DENY_ANONYMOUS`; self-check warns (`http_require_token_residual`); Host allow-list fail-closed covered by `http_allowed_hosts_residual`
+| Surface | Status |
+|---------|--------|
+| Subject quota metrics (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`) | **Done\* lite** — process-local counters on HOST-006 CodeQuota (rate `Allow` / slot `Hold`); also counted in `mcp_tool_error`; **never** subject keys, tokens, or free-form labels. Fleet allowlist includes both names. Multi-pod aggregation / shared rate still **residual** (HOST-008). |
+| Multi-pod / multi-replica audit aggregation (central sink) | **Residual** — per-pod JSONL only. **Done\* lite:** same-host admin merge of rotated siblings (`audit.jsonl.N`) for a single profile path — not fleet timeline |
+| Optional tool-success audit summaries | **Residual** opt-in (`JENKINS_MCP_AUDIT_TOOL_OK`, default off; metrics always on) |
+| Per-tool allowlisted counters | **Residual** (only if a closed seed name set is required; default is total ok/error/deny + subject quota) |
+| OTLP export / remote collector query | **Residual** (INT-002 approved backend adapter) |
+| Per-request latency histograms / compression-ratio gauges / decoder CPU | **Residual** (OBS follow-on) |
+| Circuit gauges / half-open+closed transition counters | **Residual** optional (Wave 27 ships open-events + doctor `State()` only) |
+| Wire `DoctorOptions.Circuit` / metrics from serve into MCP `jenkins_doctor` | **Residual** when that tool is registered |
+| Policy-controlled retention/export beyond size rotation | **Residual** |
+| Support bundle: optional live capability attach; signed/encrypted export | **Residual** |
+| Post-pack L1 release metrics (`cache_l1_released`, `cache_l1_release_bytes_reclaimed`) | Named residual (constants exist; wiring honesty in support/doctor paths as shipped) |
+| Authenticated Streamable HTTP / gateway session binding | GWY-* residual |
+| MGR-002 formal privacy board + HSM/multi-sig | **Residual** (overlay force-off pin is **Done\* lite**) |
+| KD-004 logging migration / bare high-entropy FN-FP | Residual sub-threshold hex FN / git-SHA FP / force-flush boundary only; Wave 34 `writer_split_line_canary` guards line reassembly |
+| KD-008 loopback HTTP without require-token | Residual open to local processes (default pilot); opt-in `--http-require-token` / `JENKINS_MCP_HTTP_REQUIRE_TOKEN` / `JENKINS_MCP_HTTP_DENY_ANONYMOUS`; self-check `http_require_token_residual` / `http_allowed_hosts_residual` |
 
 ## Pilot evidence
 

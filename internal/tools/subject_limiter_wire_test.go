@@ -10,6 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
 	"github.com/simonfxr/go-jenkins-mcp/internal/tools"
 )
 
@@ -297,5 +298,167 @@ func TestSubjectRateLimiter_EmptyKeySkips(t *testing.T) {
 	}
 	if rate.allows.Load() != 0 {
 		t.Fatalf("empty SubjectKey must skip Allow: allows=%d", rate.allows.Load())
+	}
+}
+
+// Regression: HOST-006 rate CodeQuota bumps mcp_subject_rate_quota (and mcp_tool_error)
+// without subject keys or canary secrets as metric names/labels.
+func TestSubjectRateQuotaMetrics(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	const canary = "CANARY_vault_token_must_never_appear_in_subject_quota_metrics_xyz"
+	// Subject key is opaque namespace material — must never appear as a metric name.
+	subjectKey := "tenant-a|alice|" + canary
+
+	rate := &mockSubjectRateLimiter{}
+	rate.failNext.Store(true)
+	metrics := telemetry.NewMetrics()
+	server := mcp.NewServer(&mcp.Implementation{Name: "subj-rate-metrics", Version: "test"}, nil)
+	tools.ForceRegisterReadToolForTest(server, &tools.RegisterOptions{
+		Gate:               policy.NewDefaultReadOnlyGate(),
+		SubjectKey:         subjectKey,
+		SubjectRateLimiter: rate,
+		Metrics:            metrics,
+	}, &mcp.Tool{Name: "test_subject_rate_metrics", Description: "test"},
+		func(ctx context.Context, req *mcp.CallToolRequest, args emptyArgs) (*mcp.CallToolResult, gateOut, error) {
+			t.Fatal("handler must not run when subject rate exceeded")
+			return structuredGateOK()
+		})
+
+	cs := connectToolClient(t, ctx, server)
+	_, _ = cs.CallTool(ctx, &mcp.CallToolParams{Name: "test_subject_rate_metrics", Arguments: map[string]any{}})
+
+	if got := metrics.GetCounter(telemetry.MetricMCPSubjectRateQuota); got != 1 {
+		t.Fatalf("mcp_subject_rate_quota=%d want 1", got)
+	}
+	if got := metrics.GetCounter(telemetry.MetricMCPSubjectSlotQuota); got != 0 {
+		t.Fatalf("mcp_subject_slot_quota=%d want 0 (rate path only)", got)
+	}
+	if got := metrics.GetCounter(telemetry.MetricMCPToolError); got != 1 {
+		t.Fatalf("mcp_tool_error=%d want 1", got)
+	}
+	// Success path must not inflate subject quota counters.
+	if got := metrics.GetCounter(telemetry.MetricMCPToolOK); got != 0 {
+		t.Fatalf("mcp_tool_ok=%d want 0", got)
+	}
+
+	assertSubjectQuotaMetricsSecretFree(t, metrics, canary, subjectKey)
+}
+
+// Regression: HOST-006 slot CodeQuota bumps mcp_subject_slot_quota without
+// subject keys or canary secrets as metric names/labels.
+func TestSubjectSlotQuotaMetrics(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	const canary = "CANARY_api_token_must_never_appear_in_slot_quota_metrics_abc"
+	subjectKey := "tenant-b|bob|" + canary
+
+	lim := &mockSubjectLimiter{}
+	lim.failNext.Store(true)
+	metrics := telemetry.NewMetrics()
+	server := mcp.NewServer(&mcp.Implementation{Name: "subj-slot-metrics", Version: "test"}, nil)
+	tools.ForceRegisterReadToolForTest(server, &tools.RegisterOptions{
+		Gate:           policy.NewDefaultReadOnlyGate(),
+		SubjectKey:     subjectKey,
+		SubjectLimiter: lim,
+		Metrics:        metrics,
+	}, &mcp.Tool{Name: "test_subject_slot_metrics", Description: "test"},
+		func(ctx context.Context, req *mcp.CallToolRequest, args emptyArgs) (*mcp.CallToolResult, gateOut, error) {
+			t.Fatal("handler must not run when subject slot exceeded")
+			return structuredGateOK()
+		})
+
+	cs := connectToolClient(t, ctx, server)
+	_, _ = cs.CallTool(ctx, &mcp.CallToolParams{Name: "test_subject_slot_metrics", Arguments: map[string]any{}})
+
+	if got := metrics.GetCounter(telemetry.MetricMCPSubjectSlotQuota); got != 1 {
+		t.Fatalf("mcp_subject_slot_quota=%d want 1", got)
+	}
+	if got := metrics.GetCounter(telemetry.MetricMCPSubjectRateQuota); got != 0 {
+		t.Fatalf("mcp_subject_rate_quota=%d want 0 (slot path only)", got)
+	}
+	if got := metrics.GetCounter(telemetry.MetricMCPToolError); got != 1 {
+		t.Fatalf("mcp_tool_error=%d want 1", got)
+	}
+
+	assertSubjectQuotaMetricsSecretFree(t, metrics, canary, subjectKey)
+}
+
+// Successful subject-budget dispatch must not bump quota counters.
+func TestSubjectQuotaMetrics_SuccessPathZero(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	rate := &mockSubjectRateLimiter{}
+	slots := &mockSubjectLimiter{}
+	metrics := telemetry.NewMetrics()
+	server := mcp.NewServer(&mcp.Implementation{Name: "subj-quota-ok", Version: "test"}, nil)
+	tools.ForceRegisterReadToolForTest(server, &tools.RegisterOptions{
+		Gate:               policy.NewDefaultReadOnlyGate(),
+		SubjectKey:         "tenant-a|carol|corp",
+		SubjectRateLimiter: rate,
+		SubjectLimiter:     slots,
+		Metrics:            metrics,
+	}, &mcp.Tool{Name: "test_subject_quota_ok", Description: "test"},
+		func(ctx context.Context, req *mcp.CallToolRequest, args emptyArgs) (*mcp.CallToolResult, gateOut, error) {
+			return structuredGateOK()
+		})
+
+	cs := connectToolClient(t, ctx, server)
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "test_subject_quota_ok", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res != nil && res.IsError {
+		t.Fatalf("unexpected tool error: %s", toolErrorText(res))
+	}
+	if got := metrics.GetCounter(telemetry.MetricMCPSubjectRateQuota); got != 0 {
+		t.Fatalf("mcp_subject_rate_quota=%d want 0 on success", got)
+	}
+	if got := metrics.GetCounter(telemetry.MetricMCPSubjectSlotQuota); got != 0 {
+		t.Fatalf("mcp_subject_slot_quota=%d want 0 on success", got)
+	}
+	if got := metrics.GetCounter(telemetry.MetricMCPToolOK); got != 1 {
+		t.Fatalf("mcp_tool_ok=%d want 1", got)
+	}
+}
+
+// assertSubjectQuotaMetricsSecretFree ensures snapshot counter names are the
+// closed OBS set and never embed subject keys / canary secrets (no high-cardinality
+// labels). Regression: secret-free subject quota metrics.
+func assertSubjectQuotaMetricsSecretFree(t *testing.T, metrics *telemetry.Metrics, canary, subjectKey string) {
+	t.Helper()
+	snap := metrics.Snapshot()
+	allowed := map[string]struct{}{
+		telemetry.MetricToolCalls:             {},
+		telemetry.MetricMCPToolOK:             {},
+		telemetry.MetricMCPToolError:          {},
+		telemetry.MetricMCPToolDeny:           {},
+		telemetry.MetricMCPSubjectRateQuota:   {},
+		telemetry.MetricMCPSubjectSlotQuota:   {},
+	}
+	for name := range snap.Counters {
+		if _, ok := allowed[name]; !ok {
+			t.Errorf("unexpected counter name (must stay closed/low-cardinality): %q", name)
+		}
+		if strings.Contains(name, canary) || strings.Contains(name, subjectKey) {
+			t.Errorf("counter name embeds canary/subject: %q", name)
+		}
+		if strings.Contains(name, "Bearer ") || strings.Contains(name, "token=") {
+			t.Errorf("counter name looks secret-bearing: %q", name)
+		}
+	}
+	// Constant names themselves are fixed secret-free identifiers.
+	if telemetry.MetricMCPSubjectRateQuota != "mcp_subject_rate_quota" {
+		t.Fatalf("MetricMCPSubjectRateQuota name drift: %q", telemetry.MetricMCPSubjectRateQuota)
+	}
+	if telemetry.MetricMCPSubjectSlotQuota != "mcp_subject_slot_quota" {
+		t.Fatalf("MetricMCPSubjectSlotQuota name drift: %q", telemetry.MetricMCPSubjectSlotQuota)
+	}
+	if strings.Contains(telemetry.MetricMCPSubjectRateQuota, canary) ||
+		strings.Contains(telemetry.MetricMCPSubjectSlotQuota, canary) {
+		t.Fatal("metric constant names must never embed canary material")
 	}
 }

@@ -665,13 +665,24 @@ Requires **`policy_write`**. Re-validates with the same rules as validate (**no 
 ```json
 {
   "available": true,
-  "counters": { "tool_calls": 0 },
+  "counters": {
+    "tool_calls": 0,
+    "mcp_subject_rate_quota": 0,
+    "mcp_subject_slot_quota": 0
+  },
   "gauges": {},
   "residual": "process-local snapshot; empty if no serve registry"
 }
 ```
 
 When global registry unset: `available: false`, empty maps, residual note.
+
+**Subject quota (HOST-006 / OBS residual lite):** when the linked serve registry
+is present, `mcp_subject_rate_quota` / `mcp_subject_slot_quota` may appear as
+process-local counters (CodeQuota from subject rate `Allow` / slot `Hold`).
+**Never** subject keys, principal ids, or tokens as series labels. Multi-pod
+aggregation residual. SPA Metrics page prefers those keys in sparkline selection
+when non-zero present.
 
 ## GET /admin/v1/profiles/{id}/audit
 
