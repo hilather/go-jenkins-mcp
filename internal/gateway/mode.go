@@ -161,9 +161,20 @@ func ModeMatrixFromEnviron(getenv func(string) string) (ModeMatrix, error) {
 			"gateway primary credential mode is not in JENKINS_MCP_GATEWAY_ENABLED_MODES")
 	}
 	mx := ModeMatrix{Primary: primary, Enabled: enabled}
+	var residuals []string
 	if ModeEnabledIn(CredentialModeJWTRSBearer, enabled, primary) {
 		// Offline vault Obtain is HOST-010 foundation; live RS pin is residual.
-		mx.Residual = "jwt_rs_bearer offline vault (HOST-010); live IdP/jwt-auth-filter pin residual (OAUTH-009)"
+		residuals = append(residuals,
+			"jwt_rs_bearer offline vault (HOST-010); live IdP/jwt-auth-filter pin residual (OAUTH-009)")
+	}
+	if ModeEnabledIn(CredentialModeAgentCore, enabled, primary) {
+		// Offline Live=false / mock Fetcher / consent matrix is OAUTH-010 Done*;
+		// live Entra 3LO/OBO + AgentCore Identity vault pin remains residual.
+		residuals = append(residuals,
+			"agentcore_3lo_obo offline Live=false/mock Fetcher/consent matrix (OAUTH-010); live Entra 3LO/OBO + AgentCore pin residual (not production)")
+	}
+	if len(residuals) > 0 {
+		mx.Residual = strings.Join(residuals, "; ")
 	}
 	return mx, nil
 }

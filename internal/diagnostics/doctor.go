@@ -64,7 +64,7 @@ type DoctorOptions struct {
 	Gate *policy.ReadOnlyGate
 	// Now is optional clock for tests.
 	Now func() time.Time
-	// Getenv optional env reader for gateway Mode B residual (OAUTH-009).
+	// Getenv optional env reader for gateway Mode B/C residual (OAUTH-009/010).
 	// nil → os.Getenv.
 	Getenv func(string) string
 }
@@ -166,7 +166,7 @@ func RunDoctor(ctx context.Context, opts DoctorOptions) (Report, error) {
 	rep.Checks = append(rep.Checks, checkCircuit(opts))
 
 	// HOST-008 / multi-user residual: secret-free gateway env posture (offline).
-	rep.Checks = append(rep.Checks, checkGatewayStatus())
+	rep.Checks = append(rep.Checks, checkGatewayStatus(opts.Getenv))
 
 	// UPD-001 Wave 35: LKG on-disk re-verify when a record exists (offline).
 	rep.Checks = append(rep.Checks, checkUpdateLKG(opts.Paths))
@@ -795,20 +795,20 @@ func checkRSAuth(ctx context.Context, opts DoctorOptions, p *profile.Profile) Ch
 	rep := auth.BuildOfflineRSProbe(method)
 	sum := auth.BuildOfflineRSQualificationSummary(method)
 	details := map[string]any{
-		"fallthrough_must_deny":          rep.FallthroughMustDeny,
-		"jwks_outage":                    rep.JWKSOutageBehavior,
-		"jwks_outage_acceptable":         rep.JWKSOutageAcceptable,
-		"required_routes":                rep.RequiredRouteCount,
-		"outside_api_glob":               rep.OutsideAPIGlobCount,
-		"inventory_ok":                   rep.InventoryOK,
-		"threats_contract_tested":        rep.ThreatsContractTested,
-		"threats_residual_lab":           rep.ThreatsResidualLab,
-		"offline_automated":              rep.OfflineAutomated,
-		"live_lab_residuals":             sum.LiveLabResiduals,
-		"path_level":                     rep.PathLevel,
-		"plugin_role":                    string(rep.PluginRole),
-		"doc":                            sum.Doc,
-		"live_lab_still_required":     sum.LiveLabStillRequired,
+		"fallthrough_must_deny":   rep.FallthroughMustDeny,
+		"jwks_outage":             rep.JWKSOutageBehavior,
+		"jwks_outage_acceptable":  rep.JWKSOutageAcceptable,
+		"required_routes":         rep.RequiredRouteCount,
+		"outside_api_glob":        rep.OutsideAPIGlobCount,
+		"inventory_ok":            rep.InventoryOK,
+		"threats_contract_tested": rep.ThreatsContractTested,
+		"threats_residual_lab":    rep.ThreatsResidualLab,
+		"offline_automated":       rep.OfflineAutomated,
+		"live_lab_residuals":      sum.LiveLabResiduals,
+		"path_level":              rep.PathLevel,
+		"plugin_role":             string(rep.PluginRole),
+		"doc":                     sum.Doc,
+		"live_lab_still_required": sum.LiveLabStillRequired,
 		// Note: detail keys must not contain "token" (SanitizeCheck drops them).
 		"id_jwt_never_api_credential": true,
 		"classifier_matrix_done_star": sum.ClassifierMatrixDoneStar,

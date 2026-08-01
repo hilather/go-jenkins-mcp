@@ -1436,7 +1436,8 @@ Inspect and measure invalid-token fallthrough, Basic/API-token/session/anonymous
 ## OAUTH-010 - Prototype AgentCore per-user Jenkins 3LO/OBO token acquisition
 
 **Priority:** P2  
-**Dependencies:** OAUTH-005, POL-003, FND-005
+**Dependencies:** OAUTH-005, POL-003, FND-005  
+**Status:** **Partial / offline prototype matrix Done\*** — **do not claim live Entra Done**
 
 **Objective**
 
@@ -1455,17 +1456,26 @@ Bind inbound gateway subject and workload identity to the downstream token subje
 
 **Acceptance criteria**
 
-- [ ] A compatibility matrix records which Authorization Code, OBO/token-exchange, and exact-audience passthrough paths work and the precise provider/resource configuration.
-- [ ] AgentCore issuer/authorization/token endpoints are Entra/approved authorization-server endpoints, never stock Jenkins, unless OAUTH-011 has an explicit go decision and the conditional plugin exists.
-- [ ] Authorization-code consent is session-bound and access/refresh material is stored under the correct user and workload identity.
-- [ ] One user cannot obtain/use another user's downstream token, cache entry, evidence handle, or archive namespace.
-- [ ] Token audience is Jenkins and Jenkins sees the expected individual principal.
-- [ ] Refresh/cache/vault storage is per-user, centrally revocable, and contains no user-pasted Jenkins key.
-- [ ] Direct passthrough rejects generic gateway, ID, Graph, wrong-tenant, and wrong-audience tokens.
-- [ ] No generic Jenkins account is used.
-- [ ] Local and gateway auth providers remain independent and testable.
+- [x] A compatibility matrix records which Authorization Code, OBO/token-exchange, and exact-audience passthrough paths work and the precise provider/resource configuration. — **offline prototype matrix Done\*** (`docs/auth/oauth-capability-matrix.md` §4; qualify `oauth010_mode_c_offline_matrix` + HOST-011 `mode_c_agentcore_live_matrix`). Live Entra path cells remain residual.
+- [x] AgentCore issuer/authorization/token endpoints are Entra/approved authorization-server endpoints, never stock Jenkins, unless OAUTH-011 has an explicit go decision and the conditional plugin exists. — offline `ValidateProviderConfig` + qualify Jenkins-as-AS reject; live endpoint pin residual
+- [ ] Authorization-code consent is session-bound and access/refresh material is stored under the correct user and workload identity. — offline ConsentRequired metadata + process cache Done\*; durable AgentCore vault residual
+- [x] One user cannot obtain/use another user's downstream token, cache entry, evidence handle, or archive namespace. — offline cache isolation / qualify vault hit-miss (process memory)
+- [ ] Token audience is Jenkins and Jenkins sees the expected individual principal. — offline wrong-audience fail + Bearer shape Done\*; live whoAmI principal residual
+- [ ] Refresh/cache/vault storage is per-user, centrally revocable, and contains no user-pasted Jenkins key. — process cache Done\*; durable vault residual
+- [x] Direct passthrough rejects generic gateway, ID, Graph, wrong-tenant, and wrong-audience tokens. — offline wrong-audience + claim paths; generic passthrough remains disabled
+- [x] No generic Jenkins account is used. — Obtain requires caller subject; no shared-SA fallback
+- [x] Local and gateway auth providers remain independent and testable. — package + qualify offline suites
 
-**Offline residual note (honest):** Gateway Obtain fail-closed + pluggable `TokenFetcher` mock + HOST-015 `mock-token` lab are foundation only (`docs/auth/oauth-capability-matrix.md` §4; `make live-oauth-*`). **Live Entra 3LO/OBO + AgentCore production pin remain open** (GWY-003).
+**Offline residual note (honest):** Gateway Obtain fail-closed + pluggable `TokenFetcher` mock + `HTTPTokenFetcher` https mock AS + HOST-015 `mock-token` lab + doctor Mode C residual are foundation only (`docs/auth/oauth-capability-matrix.md` §4; `make live-oauth-*`). **Live Entra 3LO/OBO + AgentCore production pin remain open** (GWY-003) — **never mark live Entra Done from offline evidence.**
+
+**Offline evidence (Done\*):**
+
+| Artifact | Role |
+|----------|------|
+| `TestOAUTH010_ModeC_OfflinePrototypeMatrix` | Named offline suite: Live=false; Live=true nil Fetcher; auth_code consent; token_exchange Bearer; wrong aud; HTTPTokenFetcher mock AS; ModeMatrix residual |
+| qualify `oauth010_mode_c_offline_matrix` | GWY-003 qualify row (complements HOST-011 `mode_c_agentcore_live_matrix`) |
+| doctor `gateway_status` Mode C residual | `mode_c_live_agentcore_qualified=false`; warn when Mode C explicit / LIVE / multi-user |
+| `make live-oauth-*` HOST-015 | Opt-in mock-token peer (not production Entra; TLS residual) |
 
 ---
 

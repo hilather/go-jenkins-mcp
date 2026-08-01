@@ -74,9 +74,10 @@ func RunOffline(ctx context.Context) Summary {
 			"Live Entra JWKS rotation under load and live IdP outage chaos remain residual (offline vault hit/miss + mock IdP outage + JWKS kid-lite + mode A/B/C matrix Done*)",
 			"Mode B live jwt-auth-filter / IdP pin residual (OAUTH-009); offline JWT vault Bearer + claim fail-closed matrix Done*",
 			"OAUTH-009 offline: wrong aud/exp/iss rejected; ID token never API credential; Mode B Obtain never Basic fallthrough — live RS pin still open",
-			"Mode C live Entra 3LO/OBO + AgentCore Identity vault residual; offline Live=false / mock Fetcher / consent matrix Done*",
-			"Opt-in residual lab: testdata/oauth-lab + make live-oauth-* (HOST-012…015; not default make test; not production Entra / jwt-auth-filter)",
-			"Cross-link: docs/auth/jwt-auth-filter-qualification.md + docs/gateway/qualification.md (GWY-003)",
+			"Mode C live Entra 3LO/OBO + AgentCore Identity vault residual (OAUTH-010 / GWY-003); offline Live=false / mock Fetcher / auth_code consent / token_exchange / wrong audience Done* (oauth010_mode_c_offline_matrix + mode_c_agentcore_live_matrix)",
+			"OAUTH-010: HTTPTokenFetcher https mock AS covered in package tests (TestOAUTH010_* / TestHTTPTokenFetcher_*); do not claim live Entra Done",
+			"Opt-in residual lab: testdata/oauth-lab + make live-oauth-* (HOST-012…015 mock-token Mode C peer; not default make test; not production Entra / jwt-auth-filter / AgentCore vault)",
+			"Cross-link: docs/auth/oauth-capability-matrix.md §4 + docs/auth/jwt-auth-filter-qualification.md + docs/gateway/qualification.md (GWY-003 / OAUTH-010)",
 			"P95/P99 live token acquisition SLOs require production pin evidence",
 			"Generic-token passthrough remains disabled; exact-audience exception is residual approval",
 		},
@@ -120,6 +121,9 @@ func RunOffline(ctx context.Context) Summary {
 	run("host011_no_silent_fallthrough", "security", caseHOST011NoSilentFallthrough)
 	// OAUTH-009 offline foundations (claim fail-closed + classifier + Mode B no Basic).
 	run("oauth009_offline_bearer_matrix", "security", caseOAUTH009OfflineBearerMatrix)
+	// OAUTH-010 Mode C prototype matrix (auth_code consent + OBO exchange + Live gates).
+	// Complements mode_c_agentcore_live_matrix (HOST-011 row) with flow-mode honesty.
+	run("oauth010_mode_c_offline_matrix", "security", caseOAUTH010ModeCOfflineMatrix)
 
 	// --- Performance cases (mock) ---
 	run("concurrent_obtain_stub_under_budget", "performance", caseConcurrentObtain)
@@ -1073,6 +1077,188 @@ func caseHOST011NoSilentFallthrough(ctx context.Context) error {
 	}
 	if apperr.CodeOf(err) != apperr.CodeInvalidArgument {
 		return fmt.Errorf("primary-not-enabled code %v", apperr.CodeOf(err))
+	}
+	return nil
+}
+
+// caseOAUTH010ModeCOfflineMatrix — OAUTH-010 Mode C prototype matrix (GWY-003 qualify):
+// authorization_code → ConsentRequired (URL+session only); token_exchange → Bearer
+// Jenkins audience; wrong audience fail; Live=false not_configured; Live=true nil
+// Fetcher fail closed; ModeMatrix residual honesty.
+// Complements mode_c_agentcore_live_matrix (HOST-011 row) with flow-mode separation.
+// Does not claim live Entra 3LO/OBO + AgentCore production pin.
+// HTTPTokenFetcher mock-AS TLS paths: package TestOAUTH010_* / TestHTTPTokenFetcher_*.
+// Opt-in lab residual: make live-oauth-* HOST-015 mock-token.
+func caseOAUTH010ModeCOfflineMatrix(ctx context.Context) error {
+	caller := gateway.Caller{
+		Subject: "oauth010-qualify", Tenant: "t", WorkloadID: "wl",
+		ProfileID: contracts.ProfileID("corp"),
+	}
+
+	// --- Live=false → not_configured (cache ignored even if Fetcher would succeed) ---
+	cfg := validASCfg()
+	cfg.Mode = gateway.ModeTokenExchange
+	p, err := gateway.NewAgentCoreProvider(cfg, gateway.NewMemoryTokenCache(time.Hour))
+	if err != nil {
+		return err
+	}
+	p.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, c gateway.Caller, cfg gateway.AgentCoreConfig) (gateway.Credential, error) {
+		return gateway.Credential{AccessToken: CanaryToken + "-must-not-run"}, nil
+	})
+	if p.Live {
+		return fmt.Errorf("default AgentCore Live must be false")
+	}
+	cred, err := p.Obtain(ctx, caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("Live=false must not_configured without token: err=%v", err)
+	}
+	if apperr.CodeOf(err) != apperr.CodeCapabilityMissing {
+		return fmt.Errorf("Live=false code %v", apperr.CodeOf(err))
+	}
+	if strings.Contains(err.Error(), CanaryToken) {
+		return fmt.Errorf("Live=false error leaked canary")
+	}
+	if p.Status(ctx).Ready {
+		return fmt.Errorf("Live=false Status must not be Ready")
+	}
+
+	// --- Live=true + nil Fetcher → fail closed ---
+	p.Live = true
+	p.Fetcher = nil
+	cred, err = p.Obtain(ctx, caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("Live=true nil Fetcher must fail closed: err=%v", err)
+	}
+	if apperr.CodeOf(err) != apperr.CodeCapabilityMissing {
+		return fmt.Errorf("nil Fetcher code %v", apperr.CodeOf(err))
+	}
+	low := strings.ToLower(err.Error())
+	if !strings.Contains(low, "tokenfetcher") && !strings.Contains(low, "fetcher") {
+		return fmt.Errorf("nil Fetcher wording: %v", err)
+	}
+	if p.Status(ctx).Ready {
+		return fmt.Errorf("nil Fetcher Status must not be Ready")
+	}
+
+	// --- authorization_code mock: ConsentRequired with auth URL + session only ---
+	cfgAuth := validASCfg()
+	cfgAuth.Mode = gateway.ModeAuthorizationCode
+	pAuth, err := gateway.NewAgentCoreProvider(cfgAuth, nil)
+	if err != nil {
+		return err
+	}
+	pAuth.Live = true
+	authURL := "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?client_id=public&state=oauth010-qualify"
+	sessionID := "sess-oauth010-qualify"
+	pAuth.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, c gateway.Caller, cfg gateway.AgentCoreConfig) (gateway.Credential, error) {
+		if gateway.NormalizeMode(cfg.Mode) != gateway.ModeAuthorizationCode {
+			return gateway.Credential{}, fmt.Errorf("want authorization_code got %s", cfg.Mode)
+		}
+		return gateway.Credential{}, gateway.NewConsentRequired(gateway.ConsentInfo{
+			AuthorizationURL: authURL,
+			SessionID:        sessionID,
+			Provider:         "agentcore",
+		})
+	})
+	cred, err = pAuth.Obtain(ctx, caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("authorization_code consent must fail closed without token")
+	}
+	cr, ok := gateway.AsConsentRequired(err)
+	if !ok || cr == nil || !cr.Info.Valid() {
+		return fmt.Errorf("want ConsentRequired got %T %v", err, err)
+	}
+	if cr.Info.AuthorizationURL != authURL || cr.Info.SessionID != sessionID {
+		return fmt.Errorf("consent metadata mismatch: %+v", cr.Info)
+	}
+	blob := err.Error() + " " + cr.Info.String() + " " + fmt.Sprint(cr.Info.StatusMap()) + " " + cr.Info.AuthorizationURL
+	for _, bad := range []string{CanaryToken, "access_token=", "refresh_token=", "client_secret="} {
+		if strings.Contains(strings.ToLower(blob), strings.ToLower(bad)) {
+			return fmt.Errorf("consent surface contained %q", bad)
+		}
+	}
+
+	// --- token_exchange / OBO mock: success Bearer Jenkins audience ---
+	cfgEx := validASCfg()
+	cfgEx.Mode = gateway.ModeTokenExchange
+	cache := gateway.NewMemoryTokenCache(time.Hour)
+	pEx, err := gateway.NewAgentCoreProvider(cfgEx, cache)
+	if err != nil {
+		return err
+	}
+	pEx.Live = true
+	wantTok := CanaryToken + "-oauth010-obo"
+	pEx.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, c gateway.Caller, cfg gateway.AgentCoreConfig) (gateway.Credential, error) {
+		if gateway.NormalizeMode(cfg.Mode) != gateway.ModeTokenExchange {
+			return gateway.Credential{}, fmt.Errorf("want token_exchange got %s", cfg.Mode)
+		}
+		return gateway.Credential{
+			AccessToken:      wantTok,
+			ExpiresAt:        time.Now().Add(time.Hour),
+			JenkinsPrincipal: "jp-" + c.Subject,
+			Mode:             gateway.ModeTokenExchange,
+		}, nil
+	})
+	ha, err := gateway.ObtainHTTPAuth(ctx, pEx, caller)
+	if err != nil {
+		return fmt.Errorf("token_exchange obtain: %w", err)
+	}
+	if ha.Scheme != gateway.HTTPAuthSchemeBearer || ha.Username != "" {
+		return fmt.Errorf("token_exchange must be Bearer: %+v", ha)
+	}
+	if ha.Token != wantTok {
+		return fmt.Errorf("token_exchange token material mismatch")
+	}
+	if strings.Contains(ha.String(), CanaryToken) {
+		return fmt.Errorf("token_exchange HTTPAuth.String leaked canary")
+	}
+
+	// --- wrong audience fail closed (no token; canary absent) ---
+	cache.Clear()
+	pEx.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, c gateway.Caller, cfg gateway.AgentCoreConfig) (gateway.Credential, error) {
+		return gateway.Credential{}, apperr.New(apperr.CodeAuthentication,
+			"token audience does not match configured Jenkins API resource")
+	})
+	cred, err = pEx.Obtain(ctx, caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("wrong audience must fail closed without token: err=%v", err)
+	}
+	if apperr.CodeOf(err) != apperr.CodeAuthentication {
+		return fmt.Errorf("wrong audience code %v", apperr.CodeOf(err))
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "audience") {
+		return fmt.Errorf("wrong audience wording: %v", err)
+	}
+	if strings.Contains(err.Error(), CanaryToken) {
+		return fmt.Errorf("wrong audience error leaked canary")
+	}
+
+	// --- ModeMatrix residual honesty when Mode C primary ---
+	env := map[string]string{
+		gateway.EnvGatewayCredentialMode: string(gateway.CredentialModeAgentCore),
+	}
+	mx, err := gateway.ModeMatrixFromEnviron(func(k string) string { return env[k] })
+	if err != nil {
+		return err
+	}
+	if mx.Primary != gateway.CredentialModeAgentCore {
+		return fmt.Errorf("primary %s", mx.Primary)
+	}
+	if mx.Residual == "" || !strings.Contains(mx.Residual, "OAUTH-010") {
+		return fmt.Errorf("Mode C residual must note OAUTH-010: %q", mx.Residual)
+	}
+	lowRes := strings.ToLower(mx.Residual)
+	if !strings.Contains(lowRes, "live") && !strings.Contains(lowRes, "entra") && !strings.Contains(lowRes, "agentcore") {
+		return fmt.Errorf("Mode C residual must be honest about live pin: %q", mx.Residual)
+	}
+
+	// AS endpoints never stock Jenkins (OAUTH-010 / ADR 0003).
+	if err := gateway.ValidateProviderConfig(gateway.AgentCoreConfig{
+		AuthorizationServerBaseURL: "https://jenkins.example.com",
+		Audience:                   "api://jenkins-api",
+		JenkinsBaseURL:             "https://jenkins.example.com",
+	}); err == nil {
+		return fmt.Errorf("Jenkins-as-AS must be rejected under OAUTH-010 matrix")
 	}
 	return nil
 }

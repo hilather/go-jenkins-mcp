@@ -979,6 +979,105 @@ func sha256SumDoctor(b []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
+// OAUTH-010: when gateway Mode C (agentcore_3lo_obo) is explicitly enabled,
+// doctor gateway_status must warn live AgentCore residual (offline matrix is not a pin).
+func TestRunDoctor_ModeC_GatewayStatusResidual(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.ProfilesDir(), 0o700)
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	getenv := func(k string) string {
+		if k == gateway.EnvGatewayCredentialMode {
+			return string(gateway.CredentialModeAgentCore)
+		}
+		return ""
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true,
+		Version:     "test",
+		Getenv:      getenv,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gs diagnostics.Check
+	for _, c := range rep.Checks {
+		if c.Name == "gateway_status" {
+			gs = c
+			break
+		}
+	}
+	if gs.Name == "" {
+		t.Fatal("gateway_status missing")
+	}
+	if gs.Status != diagnostics.StatusWarn {
+		t.Fatalf("Mode C gateway_status want warn got %s %s", gs.Status, gs.Message)
+	}
+	if !strings.Contains(gs.Message, "Mode C") && !strings.Contains(gs.Message, "agentcore") {
+		t.Fatalf("message must note Mode C: %s", gs.Message)
+	}
+	if !strings.Contains(gs.Message, "OAUTH-010") {
+		t.Fatalf("message must note OAUTH-010: %s", gs.Message)
+	}
+	if gs.Details["gateway_mode_c_enabled"] != true {
+		t.Fatalf("gateway_mode_c_enabled: %+v", gs.Details)
+	}
+	if gs.Details["mode_c_live_agentcore_qualified"] != false {
+		t.Fatalf("must not claim live AgentCore qualified: %+v", gs.Details)
+	}
+	if gs.Details["gateway_ready"] != false {
+		t.Fatalf("offline gateway_ready must stay false: %+v", gs.Details)
+	}
+	// Residual text secret-free.
+	if strings.Contains(gs.Message, doctorCanary) {
+		t.Fatal("canary in message")
+	}
+	// Mode A primary must not elevate Mode C warn.
+	getenvA := func(k string) string {
+		if k == gateway.EnvGatewayCredentialMode {
+			return string(gateway.CredentialModeAPITokenVault)
+		}
+		return ""
+	}
+	repA, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true,
+		Version:     "test",
+		Getenv:      getenvA,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range repA.Checks {
+		if c.Name == "gateway_status" {
+			if c.Details["gateway_mode_c_enabled"] == true {
+				t.Fatalf("Mode A must not report Mode C enabled: %+v", c.Details)
+			}
+			if c.Status == diagnostics.StatusWarn && strings.Contains(c.Message, "Mode C") {
+				t.Fatalf("Mode A must not Mode C warn: %s", c.Message)
+			}
+			return
+		}
+	}
+	t.Fatal("gateway_status missing on Mode A run")
+}
+
 // OAUTH-009: when gateway Mode B (jwt_rs_bearer) is enabled, doctor rs_auth
 // must warn live RS residual (offline vault is not a production pin).
 func TestRunDoctor_ModeB_RSAuthResidual(t *testing.T) {
