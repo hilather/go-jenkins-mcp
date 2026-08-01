@@ -20,6 +20,13 @@ const (
 	// session-gate denials at registration or dispatch).
 	MetricPolicyDenials = MetricMCPToolDeny
 
+	// HOST-006 / OBS residual lite: subject rate + concurrent-slot quota denials
+	// (CodeQuota from SubjectRateLimiter.Allow or SubjectLimiter.Hold).
+	// Process-local totals only — never subject keys, tokens, or free-form labels.
+	// Multi-pod aggregation residual (HOST-008).
+	MetricMCPSubjectRateQuota = "mcp_subject_rate_quota"
+	MetricMCPSubjectSlotQuota = "mcp_subject_slot_quota"
+
 	// Jenkins HTTP transport (wire vs decoded; request/error totals).
 	MetricJenkinsHTTPRequestsTotal     = "jenkins_http_requests_total"
 	MetricJenkinsHTTPErrorsTotal       = "jenkins_http_errors_total"

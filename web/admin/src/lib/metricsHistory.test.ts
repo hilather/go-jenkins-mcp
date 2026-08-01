@@ -22,6 +22,24 @@ describe("selectMetricKeys", () => {
     expect(keys.indexOf("tool_calls")).toBeLessThan(keys.indexOf("zzz_other"));
   });
 
+  // HOST-006 / OBS residual lite: subject quota counters are preferred when present;
+  // never subject keys as series names.
+  it("prefers subject quota counters without subject-key labels", () => {
+    const keys = selectMetricKeys({
+      counters: {
+        mcp_subject_rate_quota: 3,
+        mcp_subject_slot_quota: 1,
+        "tenant|alice|secret-canary": 99,
+      },
+      gauges: {},
+    });
+    expect(keys).toContain("mcp_subject_rate_quota");
+    expect(keys).toContain("mcp_subject_slot_quota");
+    expect(keys.indexOf("mcp_subject_rate_quota")).toBeLessThan(
+      keys.indexOf("tenant|alice|secret-canary"),
+    );
+  });
+
   it("falls back to top N by absolute value when preferred missing", () => {
     const keys = selectMetricKeys(
       {

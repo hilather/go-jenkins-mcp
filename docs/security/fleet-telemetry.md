@@ -72,6 +72,9 @@ Unknown top-level keys are **rejected** at validate time (fail closed).
 ### Allowlisted counters
 
 `tool_calls`, `mcp_tool_ok`, `mcp_tool_error`, `mcp_tool_deny`,
+`mcp_subject_rate_quota`, `mcp_subject_slot_quota` (HOST-006 / OBS residual lite;
+process-local subject rate/slot CodeQuota denials — **never** subject keys as
+labels),
 `jenkins_http_requests_total`, `jenkins_http_errors_total`,
 `jenkins_http_wire_bytes_total`, `jenkins_http_decoded_bytes_total`,
 `jenkins_circuit_open_events_total`,

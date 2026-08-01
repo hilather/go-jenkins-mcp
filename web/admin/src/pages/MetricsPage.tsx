@@ -178,9 +178,12 @@ export function MetricsPage() {
         <strong>Residual:</strong> counters/gauges are{" "}
         <em>process-local only</em> for the admin BFF / linked serve registry.
         Multi-process fleet aggregation is out of scope (MGR-002 residual). Empty
-        maps when the registry is unset are expected, not an error. History
-        sparklines are browser-session only (max {METRICS_HISTORY_MAX_POINTS}{" "}
-        points per key).
+        maps when the registry is unset are expected, not an error. Subject quota
+        counters (<code>mcp_subject_rate_quota</code> /{" "}
+        <code>mcp_subject_slot_quota</code>) are process-local HOST-006 CodeQuota
+        totals only — never subject keys as labels; multi-pod aggregation residual.
+        History sparklines are browser-session only (max{" "}
+        {METRICS_HISTORY_MAX_POINTS} points per key).
       </div>
 
       <div className="toolbar">

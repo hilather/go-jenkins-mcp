@@ -56,6 +56,8 @@ var AllowedCounterNames = map[string]struct{}{
 	telemetry.MetricMCPToolOK:                     {},
 	telemetry.MetricMCPToolError:                  {},
 	telemetry.MetricMCPToolDeny:                   {}, // also MetricPolicyDenials
+	telemetry.MetricMCPSubjectRateQuota:           {}, // HOST-006 / OBS residual lite
+	telemetry.MetricMCPSubjectSlotQuota:           {}, // HOST-006 / OBS residual lite
 	telemetry.MetricJenkinsHTTPRequestsTotal:      {},
 	telemetry.MetricJenkinsHTTPErrorsTotal:        {},
 	telemetry.MetricJenkinsHTTPWireBytesTotal:     {},

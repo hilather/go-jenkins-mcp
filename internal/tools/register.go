@@ -721,6 +721,10 @@ func addTool[In, Out any](
 			if st.subjectRateLimiter != nil {
 				if err := st.subjectRateLimiter.Allow(sk); err != nil {
 					mapped := mapToolErr(err)
+					// OBS residual lite: process-local rate-quota counter (no subject labels).
+					if st.metrics != nil {
+						st.metrics.Inc(telemetry.MetricMCPSubjectRateQuota, 1)
+					}
 					emitToolError(ctx, st, t.Name, string(effect), toolErrorReason(mapped), start)
 					logToolError(st, "tool_dispatch_error", mapped,
 						"tool", t.Name, "effect", string(effect), "phase", "subject_rate_limiter",
@@ -733,6 +737,10 @@ func addTool[In, Out any](
 				release, err := st.subjectLimiter.Hold(sk)
 				if err != nil {
 					mapped := mapToolErr(err)
+					// OBS residual lite: process-local slot-quota counter (no subject labels).
+					if st.metrics != nil {
+						st.metrics.Inc(telemetry.MetricMCPSubjectSlotQuota, 1)
+					}
 					emitToolError(ctx, st, t.Name, string(effect), toolErrorReason(mapped), start)
 					logToolError(st, "tool_dispatch_error", mapped,
 						"tool", t.Name, "effect", string(effect), "phase", "subject_limiter",
