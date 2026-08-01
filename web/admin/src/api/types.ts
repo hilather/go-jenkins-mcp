@@ -60,6 +60,12 @@ export interface HealthResponse {
    */
   sharedJwksFile?: boolean;
   /**
+   * HOST-007 / HOST-008 Done* lite: true when JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH set
+   * (same-host FileTokenCache). Not multi-pod Redis/HA. Path never returned.
+   * Residual never opens the cache file — never tokens.
+   */
+  sharedTokenCacheFile?: boolean;
+  /**
    * OAUTH-010 / GWY-001: ConsentRequired → authorization_url + session_id only
    * path Done* (always true). Static residual; never tokens or authorize query.
    */
@@ -416,6 +422,12 @@ export interface GatewayVaultResponse {
    * (same-host public JWKS snapshot). Not multi-pod external JWKS HA. Path never returned.
    */
   sharedJwksFile?: boolean;
+  /**
+   * HOST-007 / HOST-008 Done* lite: true when JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH set
+   * (same-host FileTokenCache). Not multi-pod Redis/HA. Path never returned.
+   * Residual never opens the cache file — never tokens.
+   */
+  sharedTokenCacheFile?: boolean;
   vaultConfigured: boolean;
   entryCount: number;
   subjects: string[];

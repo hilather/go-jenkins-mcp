@@ -52,6 +52,11 @@ type gatewayVaultResponse struct {
 	// (HOST-001 / HOST-008 same-host public JWKS snapshot lite). Not multi-pod
 	// external JWKS HA. Path value is never returned (bool only; public keys only).
 	SharedJwksFile bool `json:"sharedJwksFile"`
+	// SharedTokenCacheFile is true when JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH is
+	// non-empty (HOST-008 same-host FileTokenCache lite). Not multi-pod Redis/HA.
+	// Path value is never returned (bool only; secret-free). Residual never opens
+	// the cache file — never tokens.
+	SharedTokenCacheFile bool `json:"sharedTokenCacheFile"`
 	// VaultConfigured is true when the Mode A vault file exists on disk.
 	VaultConfigured bool `json:"vaultConfigured"`
 	// EntryCount is the number of subject entries (0 when missing/unreadable).
@@ -86,6 +91,7 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 	sharedSubjectRateFile := gateway.SubjectRatePathConfiguredFromEnviron(os.Getenv)
 	sharedPrincipalCacheFile := gateway.PrincipalCachePathConfiguredFromEnviron(os.Getenv)
 	sharedJwksFile := auth.JWKSCachePathConfiguredFromEnviron(os.Getenv)
+	sharedTokenCacheFile := gateway.TokenCachePathConfiguredFromEnviron(os.Getenv)
 	mp := diagnostics.MultiPodResidualFromEnviron(os.Getenv)
 	resp := gatewayVaultResponse{
 		Subjects:                   []string{},
@@ -101,8 +107,10 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 		SharedSubjectRateFile:      sharedSubjectRateFile,
 		SharedPrincipalCacheFile:   sharedPrincipalCacheFile,
 		SharedJwksFile:             sharedJwksFile,
+		SharedTokenCacheFile:       sharedTokenCacheFile,
 		// HOST-006 rate: process-local default; optional same-host file when path set.
 		// HOST-007 parity: shared*File bools only — never path values (HOST-008 lite).
+		// sharedTokenCacheFile never opens the token cache file.
 		// Multi-pod shared rate residual (HOST-008). Never tokens.
 		Residual: "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser); subject rate default process-local (HOST-006); optional same-host FileSubjectRateLimiter when path set (HOST-008 lite); multi-pod shared rate residual; multiPodVaultResidual=true",
 	}
@@ -114,6 +122,9 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 	}
 	if resp.SharedJwksFile {
 		resp.Residual = "sharedJwksFile=true (same-host public JWKS file lite only — not multi-pod external JWKS HA); " + resp.Residual
+	}
+	if resp.SharedTokenCacheFile {
+		resp.Residual = "sharedTokenCacheFile=true (same-host FileTokenCache lite only — not multi-pod Redis/HA); " + resp.Residual
 	}
 	if multiUser {
 		// Secret-free; SPA residual banner (no embed rebuild). host008_single_replica honesty.
