@@ -6,11 +6,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway/qualify"
 )
 
@@ -18,18 +16,22 @@ import (
 func runGateway(args []string) error {
 	if len(args) < 1 {
 		return apperr.New(apperr.CodeInvalidArgument,
-			"gateway subcommand required: qualify | vault-put | vault-delete")
+			"gateway subcommand required: qualify | vault | vault-put | vault-delete")
 	}
 	switch args[0] {
 	case "qualify":
 		return runGatewayQualify(args[1:])
+	case "vault":
+		return runGatewayVault(args[1:])
 	case "vault-put":
+		// Legacy alias for `gateway vault put` (HOST-009).
 		return runGatewayVaultPut(args[1:])
 	case "vault-delete":
+		// Legacy alias for `gateway vault delete` (HOST-009).
 		return runGatewayVaultDelete(args[1:])
 	default:
 		return apperr.New(apperr.CodeInvalidArgument,
-			fmt.Sprintf("unknown gateway subcommand %q (qualify|vault-put|vault-delete)", args[0]))
+			fmt.Sprintf("unknown gateway subcommand %q (qualify|vault|vault-put|vault-delete)", args[0]))
 	}
 }
 
@@ -66,103 +68,5 @@ func runGatewayQualify(args []string) error {
 		return apperr.New(apperr.CodeInternal,
 			fmt.Sprintf("gateway offline qualify failed: %d passed, %d failed", sum.Passed, sum.Failed))
 	}
-	return nil
-}
-
-// runGatewayVaultPut provisions a Mode A personal API token (HOST-009).
-//
-//	jenkins-mcp gateway vault-put --subject KEY --user U --token-env VAR
-//
-// Token is read from the named environment variable only — never from argv
-// (secrets must not appear in process lists / shell history).
-//
-// Optional: --vault-path PATH (default: XDG data gateway vault file).
-// subject KEY is the stable vault key (tenant|subject|profile or operator key).
-func runGatewayVaultPut(args []string) error {
-	fs := flag.NewFlagSet("gateway vault-put", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	subject := fs.String("subject", "", "Stable subject key (tenant|subject|profile); never a tool arg identity override")
-	user := fs.String("user", "", "Jenkins username for Basic auth")
-	tokenEnv := fs.String("token-env", "", "Name of environment variable holding the personal API token (not the token value)")
-	vaultPath := fs.String("vault-path", "", "Vault file path (default: $JENKINS_MCP_GATEWAY_VAULT_PATH or XDG data)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"subject":    true,
-		"user":       true,
-		"token-env":  true,
-		"vault-path": true,
-	})); err != nil {
-		return apperr.New(apperr.CodeInvalidArgument, err.Error())
-	}
-	sub := strings.TrimSpace(*subject)
-	if sub == "" {
-		return apperr.New(apperr.CodeInvalidArgument, "gateway vault-put requires --subject")
-	}
-	u := strings.TrimSpace(*user)
-	if u == "" {
-		return apperr.New(apperr.CodeInvalidArgument, "gateway vault-put requires --user")
-	}
-	envName := strings.TrimSpace(*tokenEnv)
-	if envName == "" {
-		return apperr.New(apperr.CodeInvalidArgument,
-			"gateway vault-put requires --token-env (token value must not appear on argv)")
-	}
-	// Reject accidental token-in-argv: env name must look like a variable name.
-	if strings.Contains(envName, "=") || strings.ContainsAny(envName, " \t\n") {
-		return apperr.New(apperr.CodeInvalidArgument,
-			"gateway vault-put --token-env must be an environment variable name only")
-	}
-	tok := strings.TrimSpace(os.Getenv(envName))
-	if tok == "" {
-		return apperr.New(apperr.CodeInvalidArgument,
-			fmt.Sprintf("environment variable %s is empty or unset", envName))
-	}
-
-	path := strings.TrimSpace(*vaultPath)
-	if path == "" {
-		path = gateway.VaultPathFromEnviron(nil)
-	}
-	vault, err := gateway.NewFileAPITokenVault(path)
-	if err != nil {
-		return err
-	}
-	if err := vault.Put(context.Background(), sub, u, tok); err != nil {
-		// Never include token in error surfaces (apperr redacts; still avoid embedding).
-		return err
-	}
-	// Secret-free confirmation.
-	fmt.Printf("vault-put ok subject=%s user=%s path=%s\n", sub, u, path)
-	return nil
-}
-
-// runGatewayVaultDelete revokes a Mode A vault entry (HOST-009).
-//
-//	jenkins-mcp gateway vault-delete --subject KEY [--vault-path PATH]
-func runGatewayVaultDelete(args []string) error {
-	fs := flag.NewFlagSet("gateway vault-delete", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	subject := fs.String("subject", "", "Stable subject key to delete")
-	vaultPath := fs.String("vault-path", "", "Vault file path (default: $JENKINS_MCP_GATEWAY_VAULT_PATH or XDG data)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"subject":    true,
-		"vault-path": true,
-	})); err != nil {
-		return apperr.New(apperr.CodeInvalidArgument, err.Error())
-	}
-	sub := strings.TrimSpace(*subject)
-	if sub == "" {
-		return apperr.New(apperr.CodeInvalidArgument, "gateway vault-delete requires --subject")
-	}
-	path := strings.TrimSpace(*vaultPath)
-	if path == "" {
-		path = gateway.VaultPathFromEnviron(nil)
-	}
-	vault, err := gateway.NewFileAPITokenVault(path)
-	if err != nil {
-		return err
-	}
-	if err := vault.Delete(context.Background(), sub); err != nil {
-		return err
-	}
-	fmt.Printf("vault-delete ok subject=%s path=%s\n", sub, path)
 	return nil
 }

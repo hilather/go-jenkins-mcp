@@ -51,7 +51,7 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 	resp := gatewayVaultResponse{
 		Subjects:     []string{},
 		EnabledModes: []string{},
-		Residual:     "vault write is CLI-only: jenkins-mcp gateway vault-put / vault-delete (never put tokens in the browser)",
+		Residual:     "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser)",
 	}
 
 	mx, err := gateway.ModeMatrixFromEnviron(os.Getenv)
@@ -63,7 +63,7 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 			resp.Mode = ""
 		}
 		resp.Residual = "gateway credential mode config invalid: " + err.Error() +
-			"; vault write is CLI-only (jenkins-mcp gateway vault-put)"
+			"; vault write is CLI-only (jenkins-mcp gateway vault put)"
 		return resp
 	}
 	resp.Mode = mx.Primary.String()

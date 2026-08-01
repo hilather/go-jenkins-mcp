@@ -219,6 +219,10 @@ Usage:
   jenkins-mcp redact validate-patterns --file PATH [--json]
   jenkins-mcp pilot-check --profile <id> [--offline] [--sample N]
   jenkins-mcp gateway qualify --offline
+  jenkins-mcp gateway vault put|set (--subject KEY | --tenant T --subject-id S [--profile P]) --user U [--token-env VAR] [--vault-path PATH]
+  jenkins-mcp gateway vault delete|revoke (--subject KEY | --tenant T --subject-id S [--profile P]) [--vault-path PATH]
+  jenkins-mcp gateway vault list [--vault-path PATH]
+  jenkins-mcp gateway vault status|exists (--subject KEY | --tenant T --subject-id S [--profile P]) [--vault-path PATH]
   jenkins-mcp policy verify --file PATH [--keys PATH] [--json]
   jenkins-mcp policy show-effective --profile <id> [--json]
   jenkins-mcp policy sign --file OVERLAY.json --key KEY.pem --key-id ID --out BUNDLE.json  # dev-only

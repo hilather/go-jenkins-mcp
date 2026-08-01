@@ -92,7 +92,7 @@ func TestGatewayVaultPutDelete(t *testing.T) {
 	if strings.Contains(out, canaryCLIToken) {
 		t.Fatal("token leaked in vault-put stdout")
 	}
-	if !strings.Contains(out, "vault-put ok") {
+	if !strings.Contains(out, "vault put ok") {
 		t.Fatalf("stdout %q", out)
 	}
 

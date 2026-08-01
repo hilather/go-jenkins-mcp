@@ -126,6 +126,23 @@ docker compose -f deploy/local/docker-compose.yml exec jenkins \
 From **containers**, Jenkins URL is `http://jenkins:8080`. From **host**,
 `http://127.0.0.1:18080`.
 
+**Mode A gateway vault (HOST-009 residual):** this stack does **not** auto-wire a
+multi-user API-token vault. For host-side gateway Mode A labs, provision with the
+operator CLI (token via env only — never argv):
+
+```bash
+export JENKINS_MCP_GATEWAY_VAULT_TOKEN='…lab personal token…'
+export JENKINS_MCP_GATEWAY_VAULT_PATH="$PWD/.local-vault/apitoken_vault.json"
+jenkins-mcp gateway vault put \
+  --subject 'lab|alice|corp' --user alice
+jenkins-mcp gateway vault list
+jenkins-mcp gateway vault status --subject 'lab|alice|corp'
+# revoke: jenkins-mcp gateway vault delete --subject 'lab|alice|corp'
+```
+
+See [`docs/gateway/README.md`](../../docs/gateway/README.md) Mode A. Admin console
+vault **write** remains residual (secret-free status only).
+
 ---
 
 ## Makefile targets

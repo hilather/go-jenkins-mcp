@@ -348,27 +348,54 @@ Production gateways should always set all three fields so keys never collide.
 CLI/operators may pass an explicit key string that matches that format.
 `SubjectKeyHash` is available for filesystem-safe names when needed.
 
-**Provision / rotate / revoke (CLI):**
+**Provision / rotate / revoke (operator CLI):**
 
 ```bash
-# Token value lives only in the environment — never on argv.
-export MY_TOKEN='…personal jenkins api token…'
-jenkins-mcp gateway vault-put \
+# Token value lives only in the environment — never on argv (process list / history).
+export JENKINS_MCP_GATEWAY_VAULT_TOKEN='…personal jenkins api token…'
+# Or: export MY_TOKEN='…' and pass --token-env MY_TOKEN
+
+jenkins-mcp gateway vault put \
   --subject 'tenant|entra-sub|corp' \
   --user alice \
-  --token-env MY_TOKEN \
-  --vault-path /path/to/apitoken_vault.json   # optional
+  --vault-path /path/to/apitoken_vault.json   # optional; else $JENKINS_MCP_GATEWAY_VAULT_PATH / XDG
 
-jenkins-mcp gateway vault-delete --subject 'tenant|entra-sub|corp'
+# Equivalent: compose subject key from parts (tenant|subject|profile)
+jenkins-mcp gateway vault set \
+  --tenant tenant --subject-id entra-sub --profile corp \
+  --user alice --token-env MY_TOKEN
+
+# Inventory: subject keys only (no usernames/tokens)
+jenkins-mcp gateway vault list [--vault-path PATH]
+
+# Non-secret presence check
+jenkins-mcp gateway vault status --subject 'tenant|entra-sub|corp'
+jenkins-mcp gateway vault exists --tenant tenant --subject-id entra-sub --profile corp
+
+# Revoke
+jenkins-mcp gateway vault delete --subject 'tenant|entra-sub|corp'
+jenkins-mcp gateway vault revoke --subject 'tenant|entra-sub|corp'
+
+# Legacy aliases (still work): vault-put / vault-delete
 ```
 
 | Env | Meaning |
 |-----|---------|
 | `JENKINS_MCP_GATEWAY_CREDENTIAL_MODE=api_token_vault` | Select Mode A for serve provider setup |
 | `JENKINS_MCP_GATEWAY_VAULT_PATH` | File vault path (default: `$XDG_DATA_HOME/jenkins-mcp/gateway/apitoken_vault.json`) |
+| `JENKINS_MCP_GATEWAY_VAULT_TOKEN` | Personal API token for `vault put` when `--token-env` is omitted |
 
-**Admin console residual:** Mode A vault provision/list is **CLI-only** in this
-foundation (HOST-007 / admin SPA residual). Never put vault tokens in admin JSON.
+| Subcommand | Effect |
+|------------|--------|
+| `vault put` / `set` | Provision or rotate personal token for subject key |
+| `vault delete` / `revoke` | Remove subject key |
+| `vault list` | Print **subject keys only** (never usernames/tokens) |
+| `vault status` / `exists` | `exists=true\|false` only (no username/token) |
+
+**Admin console residual:** Mode A vault **write** is **CLI-only** (HOST-007 / SPA
+residual). Admin exposes secret-free vault **status** (entry count + subject-key
+hashes only). Never put vault tokens in admin JSON or the browser. Live multi-host
+shared vault is residual (HOST-008).
 
 ## Mode B — Jenkins-audience JWT bearer (HOST-010 offline)
 
