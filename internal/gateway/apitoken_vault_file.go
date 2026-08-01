@@ -13,7 +13,13 @@ import (
 )
 
 // FileAPITokenVault is a lab/file-backed APITokenVault under a single JSON file
-// with mode 0600 (HOST-009 foundation). Not multi-replica safe (HOST-008 residual).
+// with mode 0600 (HOST-009 foundation).
+//
+// Multi-process safety (HOST-008 Done* lite): process-local mutex + exclusive
+// flock on path+".lock" (syscall.Flock on unix/Tier-1 Linux) around read/write.
+// Safe for CLI + serve (or multiple local processes) sharing one vault path on
+// a local/shared filesystem. Not multi-pod HA without a shared FS; sticky
+// sessions / multi-replica runtime remain residual.
 //
 // Path is operator-configurable (CLI / env). Default convention (documented):
 //
@@ -70,17 +76,27 @@ func (v *FileAPITokenVault) Get(ctx context.Context, subjectKey string) (string,
 	if v == nil {
 		return "", "", false, apperr.New(apperr.CodeInternal, "gateway vault is nil")
 	}
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	doc, err := v.loadLocked()
+	var (
+		username string
+		token    string
+		ok       bool
+	)
+	err := v.withLocked(func() error {
+		doc, err := v.loadLocked()
+		if err != nil {
+			return err
+		}
+		e, found := doc.Entries[strings.TrimSpace(subjectKey)]
+		if !found {
+			return nil
+		}
+		username, token, ok = e.Username, e.Token, true
+		return nil
+	})
 	if err != nil {
 		return "", "", false, err
 	}
-	e, ok := doc.Entries[strings.TrimSpace(subjectKey)]
-	if !ok {
-		return "", "", false, nil
-	}
-	return e.Username, e.Token, true, nil
+	return username, token, ok, nil
 }
 
 // Put implements APITokenVault.
@@ -102,18 +118,18 @@ func (v *FileAPITokenVault) Put(ctx context.Context, subjectKey, username, token
 	if v == nil {
 		return apperr.New(apperr.CodeInternal, "gateway vault is nil")
 	}
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	doc, err := v.loadLocked()
-	if err != nil {
-		return err
-	}
-	if doc.Entries == nil {
-		doc.Entries = make(map[string]fileVaultEntry)
-	}
-	doc.Version = 1
-	doc.Entries[strings.TrimSpace(subjectKey)] = fileVaultEntry{Username: user, Token: tok}
-	return v.saveLocked(doc)
+	return v.withLocked(func() error {
+		doc, err := v.loadLocked()
+		if err != nil {
+			return err
+		}
+		if doc.Entries == nil {
+			doc.Entries = make(map[string]fileVaultEntry)
+		}
+		doc.Version = 1
+		doc.Entries[strings.TrimSpace(subjectKey)] = fileVaultEntry{Username: user, Token: tok}
+		return v.saveLocked(doc)
+	})
 }
 
 // Delete implements APITokenVault.
@@ -127,17 +143,17 @@ func (v *FileAPITokenVault) Delete(ctx context.Context, subjectKey string) error
 	if v == nil {
 		return nil
 	}
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	doc, err := v.loadLocked()
-	if err != nil {
-		return err
-	}
-	if doc.Entries == nil {
-		return nil
-	}
-	delete(doc.Entries, strings.TrimSpace(subjectKey))
-	return v.saveLocked(doc)
+	return v.withLocked(func() error {
+		doc, err := v.loadLocked()
+		if err != nil {
+			return err
+		}
+		if doc.Entries == nil {
+			return nil
+		}
+		delete(doc.Entries, strings.TrimSpace(subjectKey))
+		return v.saveLocked(doc)
+	})
 }
 
 // ListSubjectKeys returns subject keys only (no usernames/tokens). Sorted for
@@ -150,17 +166,22 @@ func (v *FileAPITokenVault) ListSubjectKeys(ctx context.Context) ([]string, erro
 	if v == nil {
 		return nil, apperr.New(apperr.CodeInternal, "gateway vault is nil")
 	}
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	doc, err := v.loadLocked()
+	var out []string
+	err := v.withLocked(func() error {
+		doc, err := v.loadLocked()
+		if err != nil {
+			return err
+		}
+		out = make([]string, 0, len(doc.Entries))
+		for k := range doc.Entries {
+			out = append(out, k)
+		}
+		sortSubjectKeys(out)
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	out := make([]string, 0, len(doc.Entries))
-	for k := range doc.Entries {
-		out = append(out, k)
-	}
-	sortSubjectKeys(out)
 	return out, nil
 }
 
@@ -171,6 +192,14 @@ func (v *FileAPITokenVault) FileExists() bool {
 	}
 	st, err := os.Stat(v.path)
 	return err == nil && !st.IsDir()
+}
+
+// withLocked holds the process-local mutex and multi-process flock for the
+// duration of fn (load/save under one critical section).
+func (v *FileAPITokenVault) withLocked(fn func() error) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return withVaultFileLock(v.path, fn)
 }
 
 func sortSubjectKeys(keys []string) {

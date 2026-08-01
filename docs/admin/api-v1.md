@@ -94,7 +94,8 @@ Current process authentication state and console role. **Never includes the toke
   "credentialMode": "api_token_vault",
   "multiUserEnabled": false,
   "gatewayReady": false,
-  "haMultiReplica": false
+  "haMultiReplica": false,
+  "rateEnabled": true
 }
 ```
 
@@ -107,6 +108,7 @@ Current process authentication state and console role. **Never includes the toke
 | `multiUserEnabled` | **HOST-008 residual:** `true` when `JENKINS_MCP_GATEWAY_MULTI_USER` is truthy. Foundation residual only — **not** production multi-user GO. |
 | `gatewayReady` | Always **`false` on admin BFF** (separate process from MCP serve). Live Obtain Ready is `GET /readyz` on the gateway serve process. |
 | `haMultiReplica` | Always **`false`** (HOST-008 Tier A single-replica default; multi-replica runtime not implemented). |
+| `rateEnabled` | **HOST-006 / HOST-008 residual:** `true` when subject rate env would enable process-local limiting (empty `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` → default on; explicit `0` → false). **Not** multi-replica shared rate. Never tokens. |
 | `residual` | Present when multi-user env is set (secret-free honesty note; never tokens). Mentions foundation residual + HOST-008 single-replica (`haMultiReplica` always false). |
 
 ## GET /admin/v1/gateway/vault
@@ -121,6 +123,7 @@ Authorization headers, or raw subject keys.
   "enabledModes": ["api_token_vault"],
   "multiUserEnabled": false,
   "haMultiReplica": false,
+  "rateEnabled": true,
   "vaultConfigured": true,
   "entryCount": 1,
   "subjects": ["a1b2c3…"],
@@ -134,6 +137,7 @@ Authorization headers, or raw subject keys.
 | `enabledModes` | Allow-list of mode ids (secret-free) |
 | `multiUserEnabled` | `JENKINS_MCP_GATEWAY_MULTI_USER` truthy parse (foundation residual; not production GO) |
 | `haMultiReplica` | Always `false` (HOST-008 Tier A; multi-replica not implemented) |
+| `rateEnabled` | HOST-006 env residual (process-local rate would be enabled; not multi-replica shared rate) |
 | `vaultConfigured` | Whether the Mode A vault file exists |
 | `entryCount` | Number of subject entries |
 | `subjects` | **SubjectKeyHash** values only (never raw keys or tokens) |

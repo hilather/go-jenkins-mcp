@@ -26,6 +26,8 @@ export interface HealthResponse {
   gatewayReady?: boolean;
   /** Always false (HOST-008 Tier A single-replica residual). */
   haMultiReplica?: boolean;
+  /** HOST-006 rate env residual (process-local; not multi-replica shared rate). */
+  rateEnabled?: boolean;
   /** Multi-user / HA honesty note when relevant (never tokens). */
   residual?: string;
 }
@@ -309,6 +311,8 @@ export interface GatewayVaultResponse {
   multiUserEnabled?: boolean;
   /** Always false (HOST-008 Tier A residual). */
   haMultiReplica?: boolean;
+  /** HOST-006 rate env residual (process-local only). */
+  rateEnabled?: boolean;
   vaultConfigured: boolean;
   entryCount: number;
   subjects: string[];

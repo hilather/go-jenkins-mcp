@@ -236,6 +236,38 @@ func TestResolveSubjectRateCaps(t *testing.T) {
 	}
 }
 
+// HOST-008 residual: rateEnabled admin field source (secret-free env parse only).
+func TestSubjectRateEnabledFromEnviron(t *testing.T) {
+	t.Parallel()
+	if !gateway.SubjectRateEnabledFromEnviron(func(string) string { return "" }) {
+		t.Fatal("empty env → default enabled")
+	}
+	if gateway.SubjectRateEnabledFromEnviron(func(k string) string {
+		if k == gateway.EnvSubjectRatePerMinute {
+			return "0"
+		}
+		return ""
+	}) {
+		t.Fatal("explicit 0 → disabled")
+	}
+	if !gateway.SubjectRateEnabledFromEnviron(func(k string) string {
+		if k == gateway.EnvSubjectRatePerMinute {
+			return "30"
+		}
+		return ""
+	}) {
+		t.Fatal("positive → enabled")
+	}
+	if gateway.SubjectRateEnabledFromEnviron(func(k string) string {
+		if k == gateway.EnvSubjectRatePerMinute {
+			return "nope"
+		}
+		return ""
+	}) {
+		t.Fatal("invalid → fail closed not enabled")
+	}
+}
+
 func TestSubjectRateLimiter_AbsoluteCeilingsClamped(t *testing.T) {
 	t.Parallel()
 	l := gateway.NewSubjectRateLimiter(10_000, 10_000, 10_000, 10_000)

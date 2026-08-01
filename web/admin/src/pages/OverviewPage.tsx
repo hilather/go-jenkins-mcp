@@ -106,6 +106,11 @@ export function OverviewPage() {
               {health.data.haMultiReplica ? "yes" : "no"}{" "}
               <span className="muted">(HOST-008 Tier A single-replica default)</span>
             </dd>
+            <dt>rateEnabled</dt>
+            <dd>
+              {health.data.rateEnabled ? "yes" : "no"}{" "}
+              <span className="muted">(HOST-006 process-local residual; not multi-replica shared rate)</span>
+            </dd>
             {health.data.residual ? (
               <>
                 <dt>residual</dt>
@@ -186,6 +191,11 @@ export function OverviewPage() {
               <dd>{vault.data.multiUserEnabled ? "yes (foundation residual)" : "no"}</dd>
               <dt>haMultiReplica</dt>
               <dd>{vault.data.haMultiReplica ? "yes" : "no (HOST-008 residual)"}</dd>
+              <dt>rateEnabled</dt>
+              <dd>
+                {vault.data.rateEnabled ? "yes" : "no"}{" "}
+                <span className="muted">(process-local env residual)</span>
+              </dd>
               <dt>vaultConfigured</dt>
               <dd>{vault.data.vaultConfigured ? "yes" : "no"}</dd>
               <dt>entryCount</dt>

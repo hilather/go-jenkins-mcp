@@ -528,7 +528,7 @@ Obtain (APITokenVaultProvider):
 |------|------|
 | `APITokenVault` | `Get` / `Put` / `Delete` by `subjectKey` (never logs values) |
 | `MemoryAPITokenVault` | Process memory for tests |
-| `FileAPITokenVault` | Lab file under configurable path, mode **0600** |
+| `FileAPITokenVault` | Lab file under configurable path, mode **0600**; multi-process flock on `path.lock` (HOST-008 **Done* lite**; not multi-pod HA) |
 | `APITokenVaultProvider` | Mode A `CredentialProvider` |
 | `SubjectKey(caller)` | Stable `tenant\|subject\|profile` — **never** tool args |
 | `HTTPAuthFromCredential` | HOST-003 helper: Basic (A) vs Bearer (B/C) |
@@ -584,8 +584,9 @@ jenkins-mcp gateway vault revoke --subject 'tenant|entra-sub|corp'
 
 **Admin console residual:** Mode A vault **write** is **CLI-only** (HOST-007 / SPA
 residual). Admin exposes secret-free vault **status** (entry count + subject-key
-hashes only). Never put vault tokens in admin JSON or the browser. Live multi-host
-shared vault is residual (HOST-008).
+hashes only). Never put vault tokens in admin JSON or the browser. Same-host
+shared file path is multi-process safe via flock (**HOST-008 Done* lite**);
+multi-pod / sticky-session HA remains residual.
 
 ## Mode B — Jenkins-audience JWT bearer (HOST-010 offline)
 
@@ -602,7 +603,7 @@ Obtain (JWTRSBearerProvider):
 |------|------|
 | `JWTVault` | `Get` / `Put` / `Delete` by `subjectKey` (never logs values) |
 | `MemoryJWTVault` | Process memory for tests |
-| `FileJWTVault` | Lab file under configurable path, mode **0600** |
+| `FileJWTVault` | Lab file under configurable path, mode **0600**; multi-process flock on `path.lock` (HOST-008 **Done* lite**) |
 | `JWTRSBearerProvider` | Mode B `CredentialProvider` |
 | `SubjectKey(caller)` | Same `tenant\|subject\|profile` key as Mode A — **never** tool args |
 | `HTTPAuthFromCredential` | Bearer for Mode B (and Mode C) |

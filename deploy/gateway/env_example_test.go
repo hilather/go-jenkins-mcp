@@ -51,6 +51,8 @@ func TestEnvExample_ListsGatewayLabFlags(t *testing.T) {
 		"JENKINS_MCP_REQUIRE_SIGNED_POLICY",
 		"JENKINS_MCP_SUBJECT_MAX_CONCURRENT",
 		"JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT",
+		"JENKINS_MCP_SUBJECT_RATE_PER_MINUTE",
+		"JENKINS_MCP_SUBJECT_RATE_BURST",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing env name %s in .env.example", want)
@@ -83,6 +85,8 @@ func TestCompose_NonRootAndHealth(t *testing.T) {
 		"JENKINS_MCP_HTTP_PATH_PREFIX",
 		"JENKINS_MCP_REQUIRE_SIGNED_POLICY",
 		"JENKINS_MCP_SUBJECT_MAX_CONCURRENT",
+		"JENKINS_MCP_SUBJECT_RATE_PER_MINUTE",
+		"JENKINS_MCP_SUBJECT_RATE_BURST",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("compose missing %q", want)
