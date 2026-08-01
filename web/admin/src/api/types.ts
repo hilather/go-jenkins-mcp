@@ -28,7 +28,11 @@ export interface HealthResponse {
   haMultiReplica?: boolean;
   /** HOST-006 rate env residual (process-local; not multi-replica shared rate). */
   rateEnabled?: boolean;
-  /** Multi-user / HA honesty note when relevant (never tokens). */
+  /** Resolved bootstrap tools/min (default or env); 0 when disabled. Never tokens. */
+  ratePerMinute?: number;
+  /** Resolved bootstrap burst; 0 when rate disabled. Never tokens. */
+  rateBurst?: number;
+  /** Multi-user / HA / rate honesty note when relevant (never tokens). */
   residual?: string;
 }
 
@@ -313,6 +317,10 @@ export interface GatewayVaultResponse {
   haMultiReplica?: boolean;
   /** HOST-006 rate env residual (process-local only). */
   rateEnabled?: boolean;
+  /** Resolved bootstrap tools/min; 0 when disabled. Never tokens. */
+  ratePerMinute?: number;
+  /** Resolved bootstrap burst; 0 when rate disabled. Never tokens. */
+  rateBurst?: number;
   vaultConfigured: boolean;
   entryCount: number;
   subjects: string[];

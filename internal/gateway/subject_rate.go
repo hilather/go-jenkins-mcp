@@ -95,14 +95,33 @@ func ResolveSubjectRateCaps(ratePerMinuteEnv, burstEnv string) (ratePerMinute, b
 // false. Invalid parse → false (fail closed; do not claim rate is active).
 // Process-local only — multi-replica shared rate is HOST-008 residual.
 func SubjectRateEnabledFromEnviron(getenv func(string) string) bool {
+	enabled, _, _ := SubjectRateConfigFromEnviron(getenv)
+	return enabled
+}
+
+// SubjectRateConfigFromEnviron returns secret-free HOST-006 rate residual knobs
+// for admin health / gateway vault (never tokens). Uses ResolveSubjectRateCaps
+// on JENKINS_MCP_SUBJECT_RATE_PER_MINUTE / _RATE_BURST.
+//
+// Empty rate env → enabled with package defaults. Explicit rate 0 → disabled
+// with ratePerMinute=0 and rateBurst=0 (burst ignored when rate off). Invalid
+// parse → fail closed (false, 0, 0). Process-local only — multi-replica shared
+// rate is HOST-008 residual (admin surfaces must not claim shared HA rate).
+func SubjectRateConfigFromEnviron(getenv func(string) string) (enabled bool, ratePerMinute, rateBurst int) {
 	if getenv == nil {
 		getenv = os.Getenv
 	}
-	rpm, _, err := ResolveSubjectRateCaps(getenv(EnvSubjectRatePerMinute), "")
+	rpm, burst, err := ResolveSubjectRateCaps(
+		getenv(EnvSubjectRatePerMinute),
+		getenv(EnvSubjectRateBurst),
+	)
 	if err != nil {
-		return false
+		return false, 0, 0
 	}
-	return rpm > 0
+	if rpm <= 0 {
+		return false, 0, 0
+	}
+	return true, rpm, burst
 }
 
 // subjectBucket is one token bucket (subject or process).

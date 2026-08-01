@@ -309,7 +309,8 @@ concurrency still applies).
 **Done\*** Binding PrincipalID from PrincipalCache after Obtain (not on request
 ctx). **Residual:** multi-replica shared rate/slots (HOST-008); policy.Subject
 mid-call still not rewritten by Obtain (HTTP claim remains policy JenkinsUserID);
-admin SPA subject-rate knobs.
+admin SPA write/edit of subject-rate / overlay `max_tools_*` (read-only
+`rateEnabled`/`ratePerMinute`/`rateBurst` residual knobs on health + vault are Done*).
 
 ---
 

@@ -111,6 +111,24 @@ export function OverviewPage() {
               {health.data.rateEnabled ? "yes" : "no"}{" "}
               <span className="muted">(HOST-006 process-local residual; not multi-replica shared rate)</span>
             </dd>
+            {typeof health.data.ratePerMinute === "number" ? (
+              <>
+                <dt>ratePerMinute</dt>
+                <dd>
+                  {health.data.ratePerMinute}{" "}
+                  <span className="muted">(resolved default or env; 0 when disabled)</span>
+                </dd>
+              </>
+            ) : null}
+            {typeof health.data.rateBurst === "number" ? (
+              <>
+                <dt>rateBurst</dt>
+                <dd>
+                  {health.data.rateBurst}{" "}
+                  <span className="muted">(process-local residual; multi-replica shared rate residual)</span>
+                </dd>
+              </>
+            ) : null}
             {health.data.residual ? (
               <>
                 <dt>residual</dt>
@@ -196,6 +214,24 @@ export function OverviewPage() {
                 {vault.data.rateEnabled ? "yes" : "no"}{" "}
                 <span className="muted">(process-local env residual)</span>
               </dd>
+              {typeof vault.data.ratePerMinute === "number" ? (
+                <>
+                  <dt>ratePerMinute</dt>
+                  <dd>
+                    {vault.data.ratePerMinute}{" "}
+                    <span className="muted">(0 when disabled)</span>
+                  </dd>
+                </>
+              ) : null}
+              {typeof vault.data.rateBurst === "number" ? (
+                <>
+                  <dt>rateBurst</dt>
+                  <dd>
+                    {vault.data.rateBurst}{" "}
+                    <span className="muted">(HOST-006 process-local; not multi-replica shared)</span>
+                  </dd>
+                </>
+              ) : null}
               <dt>vaultConfigured</dt>
               <dd>{vault.data.vaultConfigured ? "yes" : "no"}</dd>
               <dt>entryCount</dt>

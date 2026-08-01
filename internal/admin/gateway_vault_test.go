@@ -60,15 +60,29 @@ func TestHealth_EnabledModesSecretFree(t *testing.T) {
 	if m["haMultiReplica"] != false {
 		t.Fatalf("HOST-008 haMultiReplica must be false: %v", m["haMultiReplica"])
 	}
-	// Default rate env empty → rateEnabled true (HOST-006 residual note).
+	// Default rate env empty → rateEnabled true + package defaults (HOST-006 residual).
 	if m["rateEnabled"] != true {
 		t.Fatalf("rateEnabled default want true got %v", m["rateEnabled"])
 	}
+	if m["ratePerMinute"] != float64(gateway.DefaultSubjectRatePerMinute) {
+		t.Fatalf("ratePerMinute default want %d got %v", gateway.DefaultSubjectRatePerMinute, m["ratePerMinute"])
+	}
+	if m["rateBurst"] != float64(gateway.DefaultSubjectRateBurst) {
+		t.Fatalf("rateBurst default want %d got %v", gateway.DefaultSubjectRateBurst, m["rateBurst"])
+	}
+	res, _ := m["residual"].(string)
+	if !strings.Contains(res, "process-local") {
+		t.Fatalf("want process-local rate residual note: %q", res)
+	}
+	if strings.Contains(res, vaultCanaryToken) {
+		t.Fatal("canary in residual")
+	}
 }
 
-// HOST-008 residual: rateEnabled reflects JENKINS_MCP_SUBJECT_RATE_PER_MINUTE (secret-free).
+// HOST-006 / HOST-008 residual: rate knobs from ResolveSubjectRateCaps (secret-free).
 func TestHealth_RateEnabledFromEnv(t *testing.T) {
 	t.Setenv(gateway.EnvSubjectRatePerMinute, "0")
+	t.Setenv(gateway.EnvSubjectRateBurst, "99")
 	t.Setenv(gateway.EnvGatewayMultiUser, "")
 	t.Setenv(gateway.EnvGatewayVaultPath, filepath.Join(t.TempDir(), "unused.json"))
 
@@ -93,6 +107,53 @@ func TestHealth_RateEnabledFromEnv(t *testing.T) {
 	}
 	if m["rateEnabled"] != false {
 		t.Fatalf("rateEnabled with env 0 want false got %v", m["rateEnabled"])
+	}
+	if m["ratePerMinute"] != float64(0) {
+		t.Fatalf("ratePerMinute disabled want 0 got %v", m["ratePerMinute"])
+	}
+	// Burst ignored when rate off → report 0 (not env 99).
+	if m["rateBurst"] != float64(0) {
+		t.Fatalf("rateBurst disabled want 0 got %v", m["rateBurst"])
+	}
+}
+
+// HOST-006 residual knobs: custom rate env surfaces numeric fields (secret-free canary).
+func TestHealth_RateKnobsFromEnv(t *testing.T) {
+	t.Setenv(gateway.EnvSubjectRatePerMinute, "45")
+	t.Setenv(gateway.EnvSubjectRateBurst, "7")
+	t.Setenv(gateway.EnvGatewayMultiUser, "")
+	t.Setenv(gateway.EnvGatewayVaultPath, filepath.Join(t.TempDir(), "unused.json"))
+	// Plant a fake secret env that must never appear in health JSON.
+	t.Setenv("JENKINS_MCP_FAKE_TOKEN", vaultCanaryToken)
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleViewer
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/admin/v1/health", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	raw := rr.Body.String()
+	if strings.Contains(raw, vaultCanaryToken) {
+		t.Fatal("Regression: canary token leaked in health rate knobs")
+	}
+	var m map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["rateEnabled"] != true {
+		t.Fatalf("rateEnabled=%v", m["rateEnabled"])
+	}
+	if m["ratePerMinute"] != float64(45) {
+		t.Fatalf("ratePerMinute=%v want 45", m["ratePerMinute"])
+	}
+	if m["rateBurst"] != float64(7) {
+		t.Fatalf("rateBurst=%v want 7", m["rateBurst"])
 	}
 }
 
@@ -204,9 +265,73 @@ func TestGatewayVault_ViewerRead_NoTokenLeak(t *testing.T) {
 	if body["rateEnabled"] != true && body["rateEnabled"] != false {
 		t.Fatalf("rateEnabled must be bool, got %v", body["rateEnabled"])
 	}
+	// HOST-006 residual knobs present and numeric (default or env; never tokens).
+	rpm, ok := body["ratePerMinute"].(float64)
+	if !ok {
+		t.Fatalf("ratePerMinute must be number, got %T %v", body["ratePerMinute"], body["ratePerMinute"])
+	}
+	burst, ok := body["rateBurst"].(float64)
+	if !ok {
+		t.Fatalf("rateBurst must be number, got %T %v", body["rateBurst"], body["rateBurst"])
+	}
+	if body["rateEnabled"] == true {
+		if rpm <= 0 {
+			t.Fatalf("rateEnabled true implies ratePerMinute>0, got %v", rpm)
+		}
+		if burst <= 0 {
+			t.Fatalf("rateEnabled true implies rateBurst>0, got %v", burst)
+		}
+	} else if rpm != 0 || burst != 0 {
+		t.Fatalf("disabled rate knobs must be 0, got rpm=%v burst=%v", rpm, burst)
+	}
+	if !strings.Contains(residual, "process-local") {
+		t.Fatalf("want process-local rate residual in vault: %q", residual)
+	}
 	// Secret-free: never tokens when rate residual is present.
 	if strings.Contains(rr.Body.String(), vaultCanaryToken) {
 		t.Fatal("canary after rateEnabled field")
+	}
+}
+
+// HOST-006 residual: vault JSON rate knobs follow env; secret-free canary.
+func TestGatewayVault_RateKnobsFromEnv(t *testing.T) {
+	dir := t.TempDir()
+	vaultPath := filepath.Join(dir, "apitoken_vault.json")
+	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAPITokenVault))
+	t.Setenv(gateway.EnvGatewayVaultPath, vaultPath)
+	t.Setenv(gateway.EnvGatewayEnabledModes, "")
+	t.Setenv(gateway.EnvSubjectRatePerMinute, "12")
+	t.Setenv(gateway.EnvSubjectRateBurst, "3")
+	t.Setenv("JENKINS_MCP_FAKE_TOKEN", vaultCanaryToken)
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleViewer
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/admin/v1/gateway/vault", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	raw := rr.Body.String()
+	if strings.Contains(raw, vaultCanaryToken) {
+		t.Fatal("Regression: canary token leaked in gateway/vault rate knobs")
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["rateEnabled"] != true {
+		t.Fatalf("rateEnabled=%v", body["rateEnabled"])
+	}
+	if body["ratePerMinute"] != float64(12) {
+		t.Fatalf("ratePerMinute=%v", body["ratePerMinute"])
+	}
+	if body["rateBurst"] != float64(3) {
+		t.Fatalf("rateBurst=%v", body["rateBurst"])
 	}
 }
 

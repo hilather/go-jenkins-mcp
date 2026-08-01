@@ -456,7 +456,8 @@ Prevent one user from exhausting process-wide budgets for others.
 `MutationBindingFromContext` prefers Valid PolicySubject PrincipalID (HTTP claim)
 else Caller + PrincipalCache (Obtain) else process principal. **Done\*** Obtain→
 Binding via PrincipalCache + policy rate `LowerRate` foundation.
-**Residual:** HOST-008 multi-replica; admin SPA subject-rate knobs; Obtain does
+**Residual:** HOST-008 multi-replica; admin SPA write/edit of subject-rate
+(read-only residual knobs Done*); Obtain does
 not rewrite policy.Subject on ctx mid-call.
 
 ---
