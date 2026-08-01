@@ -26,6 +26,7 @@ func TestHealth_EnabledModesSecretFree(t *testing.T) {
 	t.Setenv(gateway.EnvGatewayPrincipalCachePath, "")
 	t.Setenv(auth.EnvHTTPJWKSCachePath, "")
 	t.Setenv(gateway.EnvGatewayTokenCachePath, "")
+	t.Setenv(gateway.EnvConsentSessionStorePath, "")
 	t.Setenv("KUBERNETES_SERVICE_HOST", "")
 
 	cfg := admin.DefaultConfig()
@@ -97,6 +98,19 @@ func TestHealth_EnabledModesSecretFree(t *testing.T) {
 	}
 	if m["sharedTokenCacheFile"] != false {
 		t.Fatalf("sharedTokenCacheFile default want false: %v", m["sharedTokenCacheFile"])
+	}
+	// HOST-007 progressive consent store residual defaults (path unset).
+	if m["progressiveConsentFileBacked"] != false {
+		t.Fatalf("progressiveConsentFileBacked default want false: %v", m["progressiveConsentFileBacked"])
+	}
+	if m["progressiveConsentSameHostReload"] != false {
+		t.Fatalf("progressiveConsentSameHostReload default want false: %v", m["progressiveConsentSameHostReload"])
+	}
+	if m["progressiveConsentStoresTokens"] != false {
+		t.Fatalf("progressiveConsentStoresTokens always false: %v", m["progressiveConsentStoresTokens"])
+	}
+	if m["progressiveConsentMultiReplicaShared"] != false {
+		t.Fatalf("progressiveConsentMultiReplicaShared always false: %v", m["progressiveConsentMultiReplicaShared"])
 	}
 	res, _ := m["residual"].(string)
 	if !strings.Contains(res, "process-local") {
@@ -213,6 +227,101 @@ func TestHealth_SharedFileResidualBools(t *testing.T) {
 	}
 	if clear["sharedTokenCacheFile"] != false {
 		t.Fatalf("cleared sharedTokenCacheFile want false: %v", clear["sharedTokenCacheFile"])
+	}
+}
+
+// HOST-007 progressive consent store residual parity (camelCase health):
+// progressiveConsentFileBacked / progressiveConsentSameHostReload true only when
+// JENKINS_MCP_CONSENT_STORE_PATH set; stores_tokens / multi_replica always false;
+// path never in JSON; residual never opens the consent file.
+func TestHealth_ProgressiveConsentFileResidualBools(t *testing.T) {
+	dir := t.TempDir()
+	const consentMarker = "canary-consent-path-NEVER-IN-JSON"
+	consentPath := filepath.Join(dir, consentMarker+".json")
+
+	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAPITokenVault))
+	t.Setenv(gateway.EnvGatewayVaultPath, filepath.Join(dir, "unused.json"))
+	t.Setenv(gateway.EnvGatewayEnabledModes, "")
+	t.Setenv(gateway.EnvGatewayMultiUser, "")
+	t.Setenv(gateway.EnvConsentSessionStorePath, consentPath)
+	t.Setenv("JENKINS_MCP_FAKE_TOKEN", vaultCanaryToken)
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleViewer
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/admin/v1/health", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	raw := rr.Body.String()
+	if strings.Contains(raw, vaultCanaryToken) {
+		t.Fatal("Regression: canary token leaked in health progressiveConsent*")
+	}
+	// Path values / markers must never appear in admin JSON.
+	for _, mark := range []string{consentPath, consentMarker} {
+		if strings.Contains(raw, mark) {
+			t.Fatalf("Regression: consent path/marker %q leaked into health JSON", mark)
+		}
+	}
+	var m map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["progressiveConsentFileBacked"] != true {
+		t.Fatalf("progressiveConsentFileBacked want true: %v", m["progressiveConsentFileBacked"])
+	}
+	if m["progressiveConsentSameHostReload"] != true {
+		t.Fatalf("progressiveConsentSameHostReload want true when file-backed: %v", m["progressiveConsentSameHostReload"])
+	}
+	if m["progressiveConsentStoresTokens"] != false {
+		t.Fatalf("progressiveConsentStoresTokens always false: %v", m["progressiveConsentStoresTokens"])
+	}
+	if m["progressiveConsentMultiReplicaShared"] != false {
+		t.Fatalf("progressiveConsentMultiReplicaShared always false: %v", m["progressiveConsentMultiReplicaShared"])
+	}
+	res, _ := m["residual"].(string)
+	if !strings.Contains(res, "progressiveConsentFileBacked=true") {
+		t.Fatalf("want progressiveConsentFileBacked residual note: %q", res)
+	}
+	if !strings.Contains(res, "not multi-pod") {
+		t.Fatalf("want not multi-pod residual honesty: %q", res)
+	}
+	// Residual note must not embed path either.
+	if strings.Contains(res, consentPath) || strings.Contains(res, consentMarker) {
+		t.Fatalf("Regression: consent path leaked into residual note: %q", res)
+	}
+
+	// Default false when path cleared.
+	t.Setenv(gateway.EnvConsentSessionStorePath, "")
+	rr2 := httptest.NewRecorder()
+	h.ServeHTTP(rr2, httptest.NewRequest(http.MethodGet, "/admin/v1/health", nil))
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("clear status %d", rr2.Code)
+	}
+	var clear map[string]any
+	if err := json.Unmarshal(rr2.Body.Bytes(), &clear); err != nil {
+		t.Fatal(err)
+	}
+	if clear["progressiveConsentFileBacked"] != false {
+		t.Fatalf("cleared progressiveConsentFileBacked want false: %v", clear["progressiveConsentFileBacked"])
+	}
+	if clear["progressiveConsentSameHostReload"] != false {
+		t.Fatalf("cleared progressiveConsentSameHostReload want false: %v", clear["progressiveConsentSameHostReload"])
+	}
+	if clear["progressiveConsentStoresTokens"] != false {
+		t.Fatalf("cleared progressiveConsentStoresTokens always false: %v", clear["progressiveConsentStoresTokens"])
+	}
+	if clear["progressiveConsentMultiReplicaShared"] != false {
+		t.Fatalf("cleared progressiveConsentMultiReplicaShared always false: %v", clear["progressiveConsentMultiReplicaShared"])
+	}
+	clearRaw := rr2.Body.String()
+	if strings.Contains(clearRaw, consentPath) || strings.Contains(clearRaw, consentMarker) {
+		t.Fatal("Regression: consent path leaked after env clear")
 	}
 }
 

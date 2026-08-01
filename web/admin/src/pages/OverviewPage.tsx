@@ -304,10 +304,13 @@ export function OverviewPage() {
           <p className="muted" style={{ marginTop: 0 }}>
             OAUTH-010 / GWY-001 honesty from{" "}
             <code>GET /admin/v1/health</code> (
-            <code>gateway.NewProgressiveConsentResidual</code>) and residual-status{" "}
+            <code>gateway.NewProgressiveConsentResidual</code> + camelCase
+            consent-store residual) and residual-status{" "}
             <code>progressive_consent</code> nest when present. Static /
             secret-free — never live Obtain, tokens, paths, or{" "}
             <code>authorization_url</code> query strings in admin JSON.
+            File-backed bools are same-host lite only (path never shown; not
+            multi-pod HA).
             {!modeC ? (
               <>
                 {" "}
@@ -332,6 +335,38 @@ export function OverviewPage() {
                   : "no"}{" "}
                 <span className="muted">
                   (browser 3LO not automated residual)
+                </span>
+              </dd>
+              {/* HOST-007: health camelCase consent-store residual (parity with residual-status nest). */}
+              <dt>progressiveConsentFileBacked</dt>
+              <dd>
+                {health.data.progressiveConsentFileBacked ? "yes" : "no"}{" "}
+                <span className="muted">
+                  (same-host lite when{" "}
+                  <code>JENKINS_MCP_CONSENT_STORE_PATH</code> set; path never
+                  shown; not multi-pod HA)
+                </span>
+              </dd>
+              <dt>progressiveConsentSameHostReload</dt>
+              <dd>
+                {health.data.progressiveConsentSameHostReload ? "yes" : "no"}{" "}
+                <span className="muted">
+                  (true only when file-backed; reload-before-persist flock lite —
+                  not multi-pod HA)
+                </span>
+              </dd>
+              <dt>progressiveConsentStoresTokens</dt>
+              <dd>
+                {health.data.progressiveConsentStoresTokens ? "yes" : "no"}{" "}
+                <span className="muted">(always no — metadata only)</span>
+              </dd>
+              <dt>progressiveConsentMultiReplicaShared</dt>
+              <dd>
+                {health.data.progressiveConsentMultiReplicaShared
+                  ? "yes"
+                  : "no"}{" "}
+                <span className="muted">
+                  (always no — not multi-pod HA)
                 </span>
               </dd>
               {/* HOST-007: consent store honesty from residual-status when loaded. */}
