@@ -79,7 +79,7 @@ func runGatewayQualify(args []string) error {
 
 // residualStatusHonestyNote is the unified operator residual honesty sentence
 // (never tokens/subjects). Points operators at the live pin runbook.
-const residualStatusHonestyNote = "unified gateway residual snapshot (env/static honesty only): offline Mode A/B/C foundations Done*; live Entra / jwt-auth-filter / AgentCore / multi-replica HA residual — never production GO from this CLI; see docs/gateway/live-pin-blockers.md"
+const residualStatusHonestyNote = "unified gateway residual snapshot (env/static honesty only): offline Mode A/B/C foundations Done*; optional same-host FileSubjectRateLimiter / FileTokenCache / vault flock lite when paths set; live Entra / jwt-auth-filter / AgentCore / multi-pod shared rate+vault HA residual — never production GO from this CLI; see docs/gateway/live-pin-blockers.md"
 
 // residualStatusDoc is the primary operator pointer for residual honesty.
 const residualStatusDoc = "docs/gateway/live-pin-blockers.md"
@@ -205,10 +205,13 @@ func buildGatewayResidualStatus(getenv func(string) string) map[string]any {
 		"replicas_env_residual":         mp.ReplicasEnvResidual,
 		// Progressive consent residual (OAUTH-010 / GWY-001).
 		"progressive_consent": pc.StatusMap(),
-		// HOST-006 subject rate knobs (admin health field names; process-local only).
-		"rateEnabled":   rateEnabled,
-		"ratePerMinute": ratePerMinute,
-		"rateBurst":     rateBurst,
+		// HOST-006 subject rate knobs (admin health field names).
+		// shared_subject_rate_file=true only when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH
+		// set (HOST-008 same-host lite); multi-pod shared rate still residual.
+		"rateEnabled":              rateEnabled,
+		"ratePerMinute":            ratePerMinute,
+		"rateBurst":                rateBurst,
+		"shared_subject_rate_file": gateway.SubjectRatePathConfiguredFromEnviron(getenv),
 		// Process-local principal cache entry count only (never subjects/tokens).
 		"principal_cache_entries": gateway.ProcessPrincipalCache().Len(),
 		"residual_note":           residualStatusHonestyNote,

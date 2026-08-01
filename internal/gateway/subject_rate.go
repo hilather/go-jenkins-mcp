@@ -163,7 +163,9 @@ func (b *subjectBucket) take(n float64) bool {
 // tenant|subject|profile). Never put tokens in keys. Empty subjectKey fails
 // closed on Allow.
 //
-// Thread-safe. Not shared across processes (HOST-008 residual).
+// Thread-safe. Process-local by default. Optional same-host multi-process share
+// uses FileSubjectRateLimiter via JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH
+// (HOST-008 Done* lite). Multi-pod shared rate remains residual.
 type SubjectRateLimiter struct {
 	ratePerMinute int
 	burst         int
@@ -427,6 +429,7 @@ func (l *SubjectRateLimiter) StatusMap() map[string]any {
 	l.mu.Unlock()
 	return map[string]any{
 		"configured":                    true,
+		"kind":                          "memory",
 		"rate_per_minute":               rpm,
 		"burst":                         burst,
 		"process_rate_per_minute":       l.processRPM,
@@ -437,6 +440,7 @@ func (l *SubjectRateLimiter) StatusMap() map[string]any {
 		"absolute_min_rate_per_minute":  MinSubjectRatePerMinute,
 		"absolute_min_burst":            MinSubjectRateBurst,
 		"absolute_process_rate_per_min": AbsoluteMaxProcessRatePerMinute,
-		"ha_multi_replica":              false, // HOST-008 residual
+		"shared_subject_rate_file":      false, // set path → FileSubjectRateLimiter
+		"ha_multi_replica":              false, // HOST-008 multi-pod residual
 	}
 }

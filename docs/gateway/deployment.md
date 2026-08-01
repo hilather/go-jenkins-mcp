@@ -371,7 +371,7 @@ Obtain Ready and Streamable HTTP mTLS hardening remain residuals.
 | Service sticky (scaffold) | **`sessionAffinity: ClientIP`** + `sessionAffinityConfig` on `deploy/gateway/kustomize/service.yaml` (**Done* scaffold** only — does not enable multi-replica runtime) |
 | Token / JWT vault | File vault: process-local mutex + **flock** on `path.lock` (HOST-008 **Done* lite** multi-process **same host / shared FS**). Memory vault process-local only. **Not multi-pod** without shared FS + remaining checklist |
 | Token Obtain cache | Default in-process `MemoryTokenCache` (`shared_token_cache: false`). Optional **same-host** `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` (flock + 0600; `shared_token_cache_file: true`). **Not** multi-pod external Redis/HA |
-| Subject limiter / rate | Process-local (`SubjectLimiter` / `SubjectRateLimiter.StatusMap` → `ha_multi_replica: false`) |
+| Subject limiter / rate | Concurrency slots process-local. Rate: default process-local `SubjectRateLimiter` (`shared_subject_rate_file: false`). Optional **same-host** `FileSubjectRateLimiter` via `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` (flock + secret-free JSON 0600; `shared_subject_rate_file: true`). `ha_multi_replica: false` always — multi-pod shared rate residual |
 | Audit | Local file / sink per process |
 | Operator readiness | `GET /readyz` + `gateway_ready` on **this** process only |
 
@@ -406,7 +406,7 @@ Raise replicas **only** when every row is satisfied (org-owned design):
 | 5 | **Audit aggregation** (central sink) | Per-pod files are not a fleet audit plane | **Residual** — per-process JSONL may carry multi-user `externalSubject` / `subjectKeyHash` (opaque correlation foundation; see `docs/observability.md`); fleet merge / multi-pod timeline still residual |
 | 6 | Sticky or shared Obtain / consent correlation | Refresh/consent must not double-mint unsafely | **Residual** (Mode C progressive consent) |
 | 7 | JWKS / identity multi-instance behavior measured | Process-local JWKS refresh is not multi-region HA | **Residual** |
-| 8 | Shared subject rate / concurrency limiters | Process-local `SubjectRateLimiter` / `SubjectLimiter` only today | **Residual** (admin `rateEnabled`/`ratePerMinute`/`rateBurst` are process-local env residual only; external rate residual when scaling) |
+| 8 | Shared subject rate / concurrency limiters | Process-local default; multi-process same-host optional file rate | **Done\* lite** same-host: optional `FileSubjectRateLimiter` (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`, flock + secret-free JSON; `shared_subject_rate_file: true`). Default memory `SubjectRateLimiter`. Admin `rateEnabled`/`ratePerMinute`/`rateBurst` + `sharedSubjectRateFile`. Concurrency slots still process-local. **Multi-pod external** shared rate still **residual** — not multi-replica Done |
 
 **Honesty:**
 

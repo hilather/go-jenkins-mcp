@@ -336,10 +336,14 @@ Caller ExternalSubject isolation. Optional env:
 | `JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT` | Process-wide slots (empty → 64) |
 | `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` | Per-subject sustained tools/min (empty → 30; **0 = disabled** residual) |
 | `JENKINS_MCP_SUBJECT_RATE_BURST` | Per-subject token-bucket capacity (empty → 10) |
+| `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` | Optional same-host multi-process rate state file (`FileSubjectRateLimiter`, flock + secret-free JSON 0600). Empty → process-local `SubjectRateLimiter`. HOST-008 lite only — **not** multi-pod shared rate. Invalid path fails start |
 
 Rate limiter is wired under `--gateway` when `rate_per_minute > 0` after resolve
 (default enabled). Explicit `0` leaves `SubjectRateLimiter` nil (unlimited rate;
-concurrency still applies).
+concurrency still applies). When `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is set,
+serve constructs `FileSubjectRateLimiter` instead (same Allow / LowerRate wire;
+`StatusMap` / residual-status `shared_subject_rate_file: true`; still
+`ha_multi_replica: false`).
 
 **Policy-driven rate reduction (HOST-006 Done\* foundation):** serve constructs
 `SubjectRateLimiter` from env bootstrap, then optional overlay fields may only
@@ -355,8 +359,9 @@ PrincipalCache after Obtain (prefer cache over HTTP claim). **Admin residual
 knobs Done\* (read-only):** `rateEnabled` / `ratePerMinute` / `rateBurst` on
 health + vault. **Done\* SPA Policy editor:** plain pilot overlay
 `max_tools_per_minute` / `max_tools_burst` (policy_admin / `policy_write`; lower
-only; empty omit). **Residual:** multi-replica shared rate/slots (HOST-008);
-raise env bootstrap still needs serve restart.
+only; empty omit). **Residual:** multi-pod shared rate/slots (HOST-008); same-host file rate is
+**Done\* lite** via `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`. Raise env bootstrap
+still needs serve restart.
 
 ---
 
@@ -457,6 +462,7 @@ Enable gateway mode with any of:
 | `JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT` | Optional token URL; **required** when `JENKINS_MCP_GATEWAY_LIVE=1` |
 | `JENKINS_MCP_GATEWAY_LIVE` | Mode C only: `1`/`true` enables `HTTPTokenFetcher` Live wire (default off) |
 | `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` | Optional Mode C Obtain cache file (`FileTokenCache`, flock + 0600). Empty → `MemoryTokenCache`. HOST-008 same-host lite only — **not** multi-pod Redis/HA. Invalid path fails start |
+| `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` | Optional gateway subject rate state file (`FileSubjectRateLimiter`, flock + secret-free JSON 0600). Empty → process-local `SubjectRateLimiter`. HOST-008 same-host lite only — **not** multi-pod shared rate. Invalid path fails start |
 
 **Identity env (non-secret labels for foundation binding):**
 

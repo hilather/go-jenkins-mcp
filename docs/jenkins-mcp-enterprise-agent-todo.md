@@ -2811,8 +2811,12 @@ via `gateway.SubjectRateConfigFromEnviron` (SPA Overview shows when present).
 **Done\* SPA Policy editor:** plain pilot overlay write of `max_tools_per_minute`
 / `max_tools_burst` (policy_admin / `policy_write`; BFF monotonic lower-or-keep +
 `Overlay.Validate` positive-only; residual honesty on Policy page).
-**Residual:** multi-replica shared rate (HOST-008); raise env bootstrap needs
-serve restart.
+**Done\* lite same-host file rate (HOST-008):** optional
+`FileSubjectRateLimiter` via `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` (flock +
+secret-free JSON 0600; `shared_subject_rate_file: true` on StatusMap / residual-status
+/ admin health+vault). Process-local `SubjectRateLimiter` remains default.
+**Residual:** multi-pod external shared rate (HOST-008); concurrency slots still
+process-local; raise env bootstrap needs serve restart.
 
 ---
 
@@ -2846,11 +2850,12 @@ serve restart.
 - [x] Shared vault path + flock multi-process lite (**Done* lite**). — `FileAPITokenVault` / `FileJWTVault`: process mutex + `syscall.Flock` on `path.lock` (unix). **Honesty:** multi-process same host / shared FS only — **not** multi-pod HA
 - [x] Sticky session Service scaffold (**Done* scaffold**). — kustomize Service `sessionAffinity: ClientIP`; deployment scale comments. **Not** multi-replica runtime Done
 - [x] Obtain token cache residual interface + same-host file lite (**Done* lite**). — `TokenCache` + `MemoryTokenCache` (`StatusMap` `shared_token_cache: false`); optional `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` (Mode C wire, flock + 0600, `shared_token_cache_file: true`). **Honesty:** same-host multi-process only — **not** multi-pod external Redis/HA
+- [x] Shared subject rate same-host file lite (**Done* lite**). — process-local `SubjectRateLimiter` default; optional `FileSubjectRateLimiter` via `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` (flock + secret-free subjectKey→tokens/last JSON 0600; `shared_subject_rate_file: true`; serve wire under `--gateway`). **Honesty:** same-host multi-process only — **not** multi-pod external shared rate; concurrency slots still process-local
 - [x] Explicit non-goal until multi-pod durable vault + affinity exist. — do not claim multi-replica Done from affinity alone
-- [x] Secret-free residual surfaces: doctor + admin health/vault (`multiUserEnabled`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst`)
+- [x] Secret-free residual surfaces: doctor + admin health/vault (`multiUserEnabled`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst`, `sharedSubjectRateFile`)
 - [x] Multi-pod residual detection (honest residual, not multi-replica Done): doctor `gateway_status` always `multi_pod_vault_residual=true`; `KUBERNETES_SERVICE_HOST` / emptyDir-ish vault path / residual `REPLICAS`>1 → warn + checklist (sticky, shared vault, rate, Obtain cache); admin health/vault residual + `multiPodVaultResidual` / `kubernetesEnvDetected`; cross-link [deployment.md §9](gateway/deployment.md)
 
-**Status:** **Done*** lite for same-host shared file vault flock + optional `FileTokenCache` Obtain cache lite + sticky Service scaffold + docs residual + secret-free status fields + multi-pod residual detection honesty. **No multi-replica runtime** (multi-pod external Obtain cache, multi-pod vault, shared rate, audit aggregation still residual).
+**Status:** **Done*** lite for same-host shared file vault flock + optional `FileTokenCache` Obtain cache lite + optional `FileSubjectRateLimiter` subject rate lite + sticky Service scaffold + docs residual + secret-free status fields + multi-pod residual detection honesty. **No multi-replica runtime** (multi-pod external Obtain cache, multi-pod vault, multi-pod shared rate, audit aggregation still residual).
 
 ---
 

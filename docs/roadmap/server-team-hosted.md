@@ -460,7 +460,7 @@ Prevent one user from exhausting process-wide budgets for others.
 else Caller + PrincipalCache (Obtain) else process principal. **Done\*** Obtain→
 Binding + policy RBAC JenkinsUserID via PrincipalCache + rate `LowerRate` +
 admin read-only rate knobs.
-**Residual:** HOST-008 multi-replica shared rate. **Done\* SPA:** Policy page overlay edit of `max_tools_per_minute` / `max_tools_burst` (policy_admin; lower only).
+**Done\* lite:** optional same-host `FileSubjectRateLimiter` (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`). **Residual:** HOST-008 multi-pod external shared rate. **Done\* SPA:** Policy page overlay edit of `max_tools_per_minute` / `max_tools_burst` (policy_admin; lower only).
 
 ---
 
@@ -490,7 +490,7 @@ Operators of a **team gateway** can use admin BFF safely; still **not** a multi-
 **Priority:** P3  
 **Dependencies:** HOST-003, HOST-004, durable vault  
 **Maps to:** architecture HA session notes  
-**Progress:** **Done* lite** — same-host file vault flock + sticky Service scaffold + docs residual (no multi-replica runtime)  
+**Progress:** **Done* lite** — same-host file vault flock + optional FileTokenCache + optional FileSubjectRateLimiter + sticky Service scaffold + docs residual (no multi-replica runtime)  
 **Operator residual runbook:** [live-pin-blockers.md §4](../gateway/live-pin-blockers.md) + [deployment.md §9](../gateway/deployment.md)
 
 **Objective**
@@ -503,6 +503,7 @@ Define when multi-replica is allowed (external vault, sticky sessions, no split-
 - [x] Checklist for multi-replica: shared vault, session affinity, audit aggregation.
 - [x] Shared vault path + flock multi-process lite (not multi-pod Done).
 - [x] Sticky session kustomize Service scaffold (`sessionAffinity: ClientIP`) — Done* packaging; residual runtime HA.
+- [x] Shared subject rate same-host file lite (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` / `FileSubjectRateLimiter`) — not multi-pod Done.
 - [x] Explicit non-goal until multi-pod durable vault + sticky sessions exist.
 
 ---

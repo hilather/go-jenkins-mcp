@@ -14,7 +14,8 @@ import (
 // withVaultFileLock serializes multi-process access to a shared file path via
 // a sibling lock file (path+".lock") and syscall.Flock (LOCK_EX).
 //
-// HOST-008 Done* lite: used by FileAPITokenVault / FileJWTVault / FileTokenCache.
+// HOST-008 Done* lite: used by FileAPITokenVault / FileJWTVault / FileTokenCache /
+// FileSubjectRateLimiter.
 // Process-local mutex alone does not protect concurrent instances or CLI + serve
 // on the same path. Flock on a dedicated lock file (not the data inode) remains
 // valid across temp+rename of the JSON payload. Not multi-pod / multi-host HA
