@@ -1066,11 +1066,13 @@ func runServe(args []string) error {
 			// (JENKINS_MCP_GATEWAY_LIVE=1 + token endpoint → HTTPTokenFetcher).
 			// Local keyring/OIDC session remains residual Jenkins HTTP path only
 			// when Obtain is not Ready; Obtain stays fail-closed so no shared SA.
-			log.Printf("Gateway credential obtain is not Ready (Live wire residual or Mode B HOST-010); Jenkins HTTP uses local session residual")
+			log.Printf("Gateway credential obtain is not Ready (configure Mode A/B vault Live or Mode C JENKINS_MCP_GATEWAY_LIVE); Jenkins HTTP uses local session residual")
 		} else if st.Mode == gateway.ModeAPITokenVault {
 			// HOST-009 + HOST-003: Mode A Ready → per-request Obtain AuthProvider
 			// (Basic personal token; never shared SA / ambient keyring fallthrough).
 			log.Printf("Gateway mode A (api_token_vault) Obtain Ready; Jenkins HTTP will use per-request vault credentials only")
+		} else if st.Mode == gateway.ModeJWTRSBearer {
+			log.Printf("Gateway mode B (jwt_rs_bearer) Obtain Ready; Jenkins HTTP will use per-request JWT vault Bearer credentials only")
 		} else {
 			// Mode C Ready (HTTPTokenFetcher Live opt-in or test Fetcher): Obtain → Bearer.
 			log.Printf("Gateway Obtain Ready mode=%s; Jenkins HTTP will use per-request Obtain credentials only", st.Mode)
@@ -1938,16 +1940,29 @@ func runServe(args []string) error {
 		// HOST-005: /readyz reports gateway Obtain Ready when --gateway is on.
 		// Non-gateway HTTP leaves ReadyCheck nil (process-up only; residual).
 		if useGateway {
+			// Fail closed at start: gateway HTTP needs a trusted subject source
+			// (lab header path or JWKS). RequireSubject alone with nil resolver
+			// would only 401 every request while /readyz may still look ready.
+			if cfg.IdentityResolver == nil && !cfg.LabIdentity {
+				return apperr.New(apperr.CodeInvalidArgument,
+					"gateway --http requires JENKINS_MCP_LAB_IDENTITY=1 and/or JENKINS_MCP_HTTP_JWKS_URL+ISSUER+AUDIENCE (no trusted subject source)")
+			}
+			// Single-process foundation: pin HTTP ExternalSubject to process-bound
+			// gateway subject so multi-lab/JWT callers cannot share one Obtain caller.
+			if ext := strings.TrimSpace(subject.ExternalSubject); ext != "" {
+				cfg.ExpectedExternalSubject = ext
+			}
 			prov := gatewayProv
 			cfg.ReadyCheck = func() bool {
 				return gatewayObtainReady(prov)
 			}
 		}
 		// Never log token values — only required/configured bools and body cap.
-		log.Printf("http serve token policy: http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v http_jwt_configured=%v http_jwt_required=%v max_body_bytes=%d gateway_ready_probe=%v",
+		log.Printf("http serve token policy: http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v http_jwt_configured=%v http_jwt_required=%v max_body_bytes=%d gateway_ready_probe=%v expected_subject_pin=%v",
 			mcpserver.HTTPTokenRequired(cfg), cfg.BearerToken != "",
 			mcpserver.HTTPSubjectRequired(cfg), cfg.LabIdentity,
-			jwtEnv.Configured(), jwtEnv.Required, cfg.MaxBodyBytes, useGateway)
+			jwtEnv.Configured(), jwtEnv.Required, cfg.MaxBodyBytes, useGateway,
+			cfg.ExpectedExternalSubject != "")
 		if err := mcpserver.RunHTTP(serveCtx, server, cfg); err != nil {
 			return err
 		}

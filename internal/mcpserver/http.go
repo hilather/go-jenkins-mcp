@@ -139,6 +139,14 @@ type HTTPConfig struct {
 	// {"status":"not_ready","gateway_ready":false}. Must be secret-free.
 	ReadyCheck ReadyCheck
 
+	// ExpectedExternalSubject, when non-empty, requires every authenticated
+	// RequestIdentity.ExternalSubject to match exactly (HOST-001 / HOST-003).
+	// Used by single-process gateway foundation: HTTP lab/JWT subjects must
+	// equal the process-bound gateway subject so multi-subject HTTP cannot
+	// share one Obtain caller. Empty = no pin (stdio pilot / multi-user residual).
+	// Never log this value in errors. Compared trimmed exact match.
+	ExpectedExternalSubject string
+
 	// Logger receives start/stop messages. Default: log.Default().
 	Logger *log.Logger
 
@@ -324,8 +332,9 @@ func NewHTTPHandler(server *mcp.Server, cfg HTTPConfig) (http.Handler, error) {
 		bearerToken:      cfg.BearerToken,
 		requireSubject:   requireSubject,
 		labIdentity:      cfg.LabIdentity,
-		identityResolver: cfg.IdentityResolver,
-		readyCheck:       cfg.ReadyCheck,
+		identityResolver:         cfg.IdentityResolver,
+		readyCheck:               cfg.ReadyCheck,
+		expectedExternalSubject:  strings.TrimSpace(cfg.ExpectedExternalSubject),
 	}
 	// HOST-001: session→fingerprint table only when subject is required
 	// (gateway / non-local / --http-require-subject). Pilot loopback without
@@ -501,6 +510,9 @@ type protectHandler struct {
 	// IdentityFingerprint (mid-session subject swap → 401).
 	sessionBind *sessionIdentityTable
 	readyCheck  ReadyCheck
+	// expectedExternalSubject pins HTTP identity to process-bound subject
+	// (gateway single-caller foundation). Empty = no pin.
+	expectedExternalSubject string
 }
 
 func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -545,6 +557,14 @@ func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if h.requireSubject && !reqID.Present() {
 			unauthorizedIdentity(w)
 			return
+		}
+		// Single-process gateway pin: HTTP subject must match bound Obtain caller.
+		// Fail closed on mismatch so multi-lab/JWT subjects cannot share one vault entry.
+		if reqID.Present() && h.expectedExternalSubject != "" {
+			if strings.TrimSpace(reqID.ExternalSubject) != h.expectedExternalSubject {
+				unauthorizedIdentity(w)
+				return
+			}
 		}
 		// Mid-session subject rebind: when RequireSubject and Mcp-Session-Id is
 		// present, first Present identity establishes fingerprint; mismatch → 401.

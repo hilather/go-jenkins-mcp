@@ -125,9 +125,15 @@ Mode A Ready → Basic personal vault token. Mode B Ready → Bearer from JWT va
 
 **Bootstrap residual:** serve still loads a local profile/keyring session for
 process startup (AUTH-004) before Obtain wire. When Ready, Obtain whoAmI must
-match the bound Jenkins principal (env label and/or bootstrap whoAmI). Full
-multi-user gateway without a local bootstrap session is HOST-001 residual —
-never a shared SA substitute.
+match the bound Jenkins principal (env label and/or bootstrap whoAmI).
+
+**HTTP subject pin (foundation):** with `--gateway --http`, serve requires lab
+and/or JWKS as a trusted subject source and sets
+`HTTPConfig.ExpectedExternalSubject` to the process-bound gateway
+`ExternalSubject`. Lab/JWT callers that present a **different** subject get
+401 — so multi-subject HTTP cannot share one Obtain caller until true
+per-request Obtain rebind lands. Residual: per-request multi-user Obtain +
+policy rebind (not single-process pin).
 
 ## 3c. Multi-tenant isolation foundations (HOST-004 / HOST-006)
 

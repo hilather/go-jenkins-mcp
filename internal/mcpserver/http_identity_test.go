@@ -649,3 +649,38 @@ func TestNewHTTPHandler_IdentityInContextAfterBind(t *testing.T) {
 		t.Fatal("fingerprint empty")
 	}
 }
+
+// HOST-001/003: ExpectedExternalSubject pins HTTP identity to process-bound
+// gateway subject so multi-lab subjects cannot share one Obtain caller.
+func TestNewHTTPHandler_ExpectedExternalSubjectPin(t *testing.T) {
+	t.Parallel()
+	srv := mcpserver.NewServer("test", "0.0.1")
+	cfg := mcpserver.DefaultHTTPConfig()
+	cfg.RequireSubject = true
+	cfg.LabIdentity = true
+	cfg.ExpectedExternalSubject = "bound-alice"
+	h, err := mcpserver.NewHTTPHandler(srv, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Matching subject → pass.
+	rrOK := postLoopback(t, h, func(r *http.Request) {
+		r.Header.Set(mcpserver.HeaderLabSubject, "bound-alice")
+	})
+	if rrOK.Code == http.StatusUnauthorized {
+		t.Fatalf("matching subject must pass: %s", rrOK.Body.String())
+	}
+	// Mismatch → 401; body must not echo subjects or secrets.
+	rrBad := postLoopback(t, h, func(r *http.Request) {
+		r.Header.Set(mcpserver.HeaderLabSubject, "other-bob")
+	})
+	if rrBad.Code != http.StatusUnauthorized {
+		t.Fatalf("want 401 for mismatched subject, got %d body=%s", rrBad.Code, rrBad.Body.String())
+	}
+	body := rrBad.Body.String()
+	for _, leak := range []string{"bound-alice", "other-bob", "ExpectedExternal"} {
+		if strings.Contains(body, leak) {
+			t.Fatalf("Regression: must not echo pin/subjects: %s", body)
+		}
+	}
+}
