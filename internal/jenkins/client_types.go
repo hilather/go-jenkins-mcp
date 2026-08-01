@@ -95,8 +95,14 @@ func (t TimeMS) MarshalJSON() ([]byte, error) {
 
 // GetJobs bounds (legacy flat list; prefer jenkins_list_jobs for discovery).
 const (
-	defaultGetJobsLimit = 50
-	maxGetJobsLimit     = 200
+	// DefaultGetJobsLimit is the default page size for jenkins_get_jobs.
+	DefaultGetJobsLimit = 50
+	// MaxGetJobsLimit is the hard upper bound for get_jobs pagination limit.
+	MaxGetJobsLimit = 200
+
+	// Unexported aliases kept for package-local call sites / tests.
+	defaultGetJobsLimit = DefaultGetJobsLimit
+	maxGetJobsLimit     = MaxGetJobsLimit
 )
 
 // GetJobsToolArgs are the tool arguments for jenkins_get_jobs.

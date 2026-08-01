@@ -24,6 +24,17 @@ type AuthGate interface {
 	Check() error
 }
 
+// SubjectSlotLimiter is HOST-006 per-subject concurrent tool/preview slots under
+// a process ceiling. Implemented by *gateway.SubjectLimiter; the interface lives
+// here so tools does not import gateway (FND-004 depgraph).
+//
+// Hold acquires one slot and returns a release func suitable for defer.
+// On acquire error, release is a no-op and err is non-nil (CodeQuota /
+// CodeInvalidArgument). Nil limiter ⇒ no concurrent subject budget.
+type SubjectSlotLimiter interface {
+	Hold(subjectKey string) (release func(), err error)
+}
+
 // RegisterOptions configures POL-001 read-only gating, MCP-001 budgets, and
 // optional deny-only MCP RBAC (POL-002/003).
 // Nil options (or Register with nil opts) use pilot defaults: read-only true,
@@ -120,6 +131,18 @@ type RegisterOptions struct {
 	// WorkItemLookup is optional work-items adapter stub (refs only; no network).
 	// Used only when EnableChangeCorrelation is true.
 	WorkItemLookup WorkItemLookuper
+	// SubjectKey is the non-secret multi-tenant namespace key
+	// (tenant|subject|profile) for HOST-004 page_token binding and HOST-006
+	// SubjectLimiter. Serve sets this from gateway.SubjectKey(CallerFromBoundSubject)
+	// when --gateway is on. Empty ⇒ stdio pilot residual: skip limiter and leave
+	// page tokens unbound (jenkins.BindSubjectToPageFilter is a no-op on empty).
+	// Never derived from tool args.
+	SubjectKey string
+	// SubjectLimiter is optional HOST-006 concurrent slot budget. When set and
+	// SubjectKey is non-empty, addTool Holds a slot around handler dispatch
+	// (fail closed CodeQuota). Empty SubjectKey skips the limiter (stdio pilot).
+	// Wire *gateway.SubjectLimiter from cmd; tools only sees this interface.
+	SubjectLimiter SubjectSlotLimiter
 }
 
 // regState is the effective configuration for one Register call.
@@ -156,6 +179,10 @@ type regState struct {
 
 	// Profile Meta for durable survey compact cache (schema v7); optional.
 	meta *store.Meta
+
+	// HOST-004 / HOST-006: process-bound subject key + optional concurrent limiter.
+	subjectKey     string
+	subjectLimiter SubjectSlotLimiter
 }
 
 func resolveRegisterOptions(opts *RegisterOptions) regState {
@@ -199,6 +226,8 @@ func resolveRegisterOptions(opts *RegisterOptions) regState {
 	}
 	st.diagBudget = opts.DiagOpBudgets
 	st.meta = opts.Meta
+	st.subjectKey = strings.TrimSpace(opts.SubjectKey)
+	st.subjectLimiter = opts.SubjectLimiter
 	// MUT-001: process-scoped manager so preview tokens survive until confirm.
 	// Create once when mutations may register and caller did not inject one.
 	// Wave 30: also create under AllowMutations opt-in while Effective RO so
@@ -263,7 +292,8 @@ func Register(s *mcp.Server, client *jenkins.Client, opts *RegisterOptions) {
 		Description: "Get paginated list of root Jenkins jobs with status (offset/limit or opaque page_token; prefer jenkins_list_jobs for folders)"},
 		func(ctx context.Context, req *mcp.CallToolRequest, args jenkins.GetJobsToolArgs) (*mcp.CallToolResult, jenkins.GetJobsToolResponse, error) {
 			// MCP-001: opaque page_token + offset/limit; EnforceBudget still caps full response size.
-			res, err := client.GetJobs(ctx, args)
+			// HOST-004: subject-bound page tokens when SubjectKey is set at serve.
+			res, err := getJobsWithSubject(ctx, client, st, args)
 			if err != nil {
 				return nil, jenkins.GetJobsToolResponse{}, mapToolErr(err)
 			}
@@ -593,6 +623,25 @@ func addTool[In, Out any](
 				)
 				return nil, nil, mapped
 			}
+		}
+		// HOST-006: per-subject concurrent tool slots (gateway multi-tenant).
+		// Empty SubjectKey skips limiter (stdio pilot residual). When limiter is
+		// set and key is non-empty, Hold fails closed as CodeQuota (error path,
+		// same family as MCP budget quota — not a policy deny).
+		if st.subjectLimiter != nil && st.subjectKey != "" {
+			release, err := st.subjectLimiter.Hold(st.subjectKey)
+			if err != nil {
+				if st.metrics != nil {
+					st.metrics.Inc(telemetry.MetricMCPToolError, 1)
+				}
+				mapped := mapToolErr(err)
+				logToolError(st, "tool_dispatch_error", mapped,
+					"tool", t.Name, "effect", string(effect), "phase", "subject_limiter",
+					"duration_ms", durationMS(start),
+				)
+				return nil, nil, mapped
+			}
+			defer release()
 		}
 		// POL-001: mutation re-check at dispatch.
 		if effect == policy.EffectMutate {

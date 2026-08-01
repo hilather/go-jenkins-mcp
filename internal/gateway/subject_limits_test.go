@@ -243,6 +243,36 @@ func TestSubjectLimiter_StatusMapSecretFree(t *testing.T) {
 	l.Release(key)
 }
 
+func TestResolveSubjectLimiterCaps(t *testing.T) {
+	t.Parallel()
+	per, proc, err := gateway.ResolveSubjectLimiterCaps("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if per != gateway.DefaultMaxConcurrentPerSubject || proc != gateway.DefaultProcessConcurrentSlots {
+		t.Fatalf("defaults: per=%d proc=%d", per, proc)
+	}
+	per, proc, err = gateway.ResolveSubjectLimiterCaps("4", "16")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if per != 4 || proc != 16 {
+		t.Fatalf("override: per=%d proc=%d", per, proc)
+	}
+	if _, _, err := gateway.ResolveSubjectLimiterCaps("-1", ""); err == nil {
+		t.Fatal("negative per-subject must fail closed")
+	}
+	if _, _, err := gateway.ResolveSubjectLimiterCaps("x", ""); err == nil {
+		t.Fatal("non-integer must fail closed")
+	}
+	if gateway.EnvSubjectMaxConcurrent != "JENKINS_MCP_SUBJECT_MAX_CONCURRENT" {
+		t.Fatalf("env name: %q", gateway.EnvSubjectMaxConcurrent)
+	}
+	if gateway.EnvSubjectProcessMaxConcurrent != "JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT" {
+		t.Fatalf("process env name: %q", gateway.EnvSubjectProcessMaxConcurrent)
+	}
+}
+
 func TestSubjectLimiter_AbsoluteCeilingsClamped(t *testing.T) {
 	t.Parallel()
 	l := gateway.NewSubjectLimiter(10_000, 10_000)

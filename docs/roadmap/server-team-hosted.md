@@ -405,8 +405,9 @@ Ensure derived cache, L1/L2 handles, and list continuations cannot cross users/p
 
 **Foundation (done):** `CacheKey.Tenant`, `Caller.CacheKey`/`SubjectKey`,
 `jenkins.*WithSubject` page tokens, offline Alice/Bob tests,
-`docs/gateway/README.md` §3b. **Residual:** list-tool serve wire; durable L1/L2
-namespace; multi-replica (HOST-008).
+`docs/gateway/README.md` §3c. **Serve wire Done*:** `tools.RegisterOptions.SubjectKey`
++ list tools subject-bound pagination when `--gateway`. **Residual:**
+per-HTTP-request SubjectKey rebind; durable L1/L2 namespace; multi-replica (HOST-008).
 
 ---
 
@@ -448,8 +449,9 @@ Prevent one user from exhausting process-wide budgets for others.
 - [x] Mutation confirm cooldown tokens cannot be replayed across subjects.
 
 **Foundation (done):** `gateway.SubjectLimiter` + fair-share tests; mutation
-tokens already profile+principal bound. **Residual:** full `tools.Register`
-wire; token-bucket rate (beyond concurrency); HOST-008 multi-replica.
+tokens already profile+principal bound. **Serve wire Done*:** `tools.SubjectSlotLimiter`
++ `addTool` Hold under `--gateway`; optional subject max env caps. **Residual:**
+token-bucket rate (beyond concurrency); HOST-008 multi-replica; per-request rebind.
 
 ---
 

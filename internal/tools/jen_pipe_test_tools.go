@@ -62,7 +62,8 @@ func registerJenPipeTestTools(s *mcp.Server, client *jenkins.Client, st regState
 			}
 			args.JobName = name
 			// MCP-001: page_token wins over offset/limit; invalid tokens fail closed.
-			res, err := client.ListBuilds(ctx, args)
+			// HOST-004: subject-bound page tokens when SubjectKey is set at serve.
+			res, err := listBuildsWithSubject(ctx, client, st, args)
 			if err != nil {
 				return nil, nil, mapToolErr(err)
 			}
