@@ -107,7 +107,7 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 | Path | Status |
 |------|--------|
 | `ConsentRequired` → auth URL + session id only (Obtain / AuthProvider / `mapToolErr`) | **Done\*** |
-| Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway residual-status`, `gateway consent-residual`) | **Done\*** (env/static honesty) |
+| Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway residual-status`, `gateway consent-residual`, `gateway subject-invalidate`) | **Done\*** (env/static honesty; subject-invalidate is force re-auth residual lite) |
 | Process-local consent metadata store (TTL; optional file under XDG data) | **Done\*** — auth URL + session id + timestamps only; never tokens |
 | Browser 3LO interactive UX automation | **Residual** — not automated; operator/agent opens `authorization_url` out-of-band |
 | AgentCore durable consent / token vault | **Residual** (not this process-local metadata store) |
@@ -129,9 +129,43 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 ```bash
 jenkins-mcp gateway residual-status    # unified secret-free residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count)
 jenkins-mcp gateway consent-residual   # progressive consent residual + last consent_sessions if file present
+jenkins-mcp gateway subject-invalidate --subject-key tenant|sub|profile   # force re-auth residual lite (GWY-002/HOST-003)
 jenkins-mcp gateway qualify --offline  # includes progressive_consent_residual case + residual note
 jenkins-mcp doctor --offline           # gateway_status progressive_consent_* fields when Mode C
 ```
+
+### Force re-auth residual lite (GWY-002 / HOST-003 subject invalidate)
+
+Operator-facing **subject invalidate** clears process-local multi-user caches for one
+subject so the next Obtain / Binding path re-fetches. This is **offline foundation**
+for revocation / force re-auth — **not** live Entra or AgentCore revocation, **not**
+multi-pod fan-out.
+
+| Path | Status |
+|------|--------|
+| `gateway.InvalidateSubjectLocal(caller, principalCache, tokenCache?)` | **Done\*** — secret-free; drops `PrincipalCache` + optional `TokenCache` (subject-namespace purge when `DeleteBySubjectKey` available) |
+| `CredentialProvider.Invalidate` companion principal drop (AgentCore / Mode A / Mode B) | **Done\*** — token cache (Mode C) + `PrincipalCache`; durable vault entries **not** deleted (use `gateway vault delete`) |
+| CLI `jenkins-mcp gateway subject-invalidate` (alias `invalidate-subject`) | **Done\*** — process-local principal clear + optional `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` |
+| Live IdP / AgentCore token revocation | **Residual** (OAUTH-010 / GWY-003) |
+| Multi-pod / multi-replica invalidate fan-out | **Residual** (HOST-008) |
+| CLI clear of a remote serve process `PrincipalCache` / `MemoryTokenCache` | **Residual** — CLI is another process; use shared `FileTokenCache` path for same-host token purge, or call `Invalidate` in-process (future admin path) |
+
+```bash
+# Compose subject key or pass --subject-key:
+jenkins-mcp gateway subject-invalidate --subject-key 'tenant|alice-sub|corp'
+jenkins-mcp gateway subject-invalidate --tenant tenant --subject-id alice-sub --profile corp
+# Optional same-host FileTokenCache purge (shared with serve when path matches):
+export JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH=/var/lib/jenkins-mcp/gateway/token_cache.json
+jenkins-mcp gateway subject-invalidate --subject-key 'tenant|alice-sub|corp'
+```
+
+**CLI JSON (secret-free):** `subject_key` (operator echo of typed key), `subject_key_hash`
+(`audit.HashOpaque`), `cleared.principal` / `cleared.token_cache`, `token_cache_note`,
+`residual_note`. Never tokens, vault material, or `Authorization` headers.
+
+**Library:** after `provider.Invalidate(ctx, caller)`, both token material (Mode C) and
+`PrincipalCache` entry for `SubjectKey(caller)` are dropped so multi-user policy
+JenkinsUserID / mutation Binding re-resolve on the next tool call.
 
 **`gateway residual-status`** combines mode-matrix residual, `multi_user_enabled`,
 `ha_multi_replica=false`, `session_affinity_recommended`, multi-pod residual fields,

@@ -196,6 +196,7 @@ Fill during live lab; keep secrets out of git, tickets, and support bundles.
 | Per-user vault binding | Process memory cache / mock | **Durable AgentCore Identity vault** |
 | Wrong audience fail-closed | Unit + qualify | Live canary tokens (redacted evidence) |
 | Progressive consent tool path | `authorization_url` + `session_id` only | Operator runbook for reauth storms |
+| Force re-auth / revocation foundation | **Done\* lite:** `InvalidateSubjectLocal` + `gateway subject-invalidate` (process-local principal + optional same-host `FileTokenCache`); provider `Invalidate` drops principal companion | **Live IdP/AgentCore revocation window** still residual (OAUTH-010); multi-pod fan-out residual (HOST-008); CLI does not clear remote serve `MemoryTokenCache` / other-process principal |
 | Graph group expansion | Fail-closed incomplete overage | Optional funded residual — not invented membership |
 | AgentCore sidecar / binary pin | None in-repo | Org AgentCore release + GWY-003/004 |
 
@@ -211,11 +212,18 @@ Fill during live lab; keep secrets out of git, tickets, and support bundles.
 - [ ] No shared Jenkins SA on interactive path  
 - [ ] Doctor residual `mode_c_live_agentcore_qualified` only flipped after evidence (today always offline false)
 
+**OAUTH-010 revocation honesty:** offline **Done\* lite** only for process-local
+force re-auth (`InvalidateSubjectLocal` / `gateway subject-invalidate` clears
+principal + optional file token cache). Live Entra/AgentCore revocation, refresh
+reuse detection, and multi-pod invalidate fan-out remain **open** — do not mark
+revocation DoD Done from this CLI alone.
+
 ```bash
 # Offline / mock only — not live Entra Done:
 jenkins-mcp gateway qualify --offline
 jenkins-mcp gateway consent-residual
-go test ./internal/gateway ./internal/gateway/qualify -count=1 -run 'OAUTH010|ModeC|HTTPTokenFetcher'
+jenkins-mcp gateway subject-invalidate --subject-key 'tenant|sub|profile'  # force re-auth residual lite
+go test ./internal/gateway ./internal/gateway/qualify -count=1 -run 'OAUTH010|ModeC|HTTPTokenFetcher|InvalidateSubject'
 make live-oauth-test   # mock-token peer; opt-in; not production Entra
 ```
 
@@ -338,6 +346,7 @@ live pin complete without lab evidence.
 | Admin `GET /admin/v1/health` / `gateway/vault` | `haMultiReplica=false`, `sessionAffinityRecommended`, mode ids only | Never tokens |
 | `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count) | Env/static honesty; Mode B id `oauth009_offline`; never tokens |
 | `gateway consent-residual` | Progressive consent residual snapshot | Browser 3LO not automated |
+| `gateway subject-invalidate` | Force re-auth residual lite: process-local principal + optional FileTokenCache | Not live Entra revocation; multi-pod residual; CLI ≠ remote serve MemoryTokenCache |
 | `gateway qualify --offline` | Residual notes in JSON summary | Live residuals always listed |
 
 ```bash

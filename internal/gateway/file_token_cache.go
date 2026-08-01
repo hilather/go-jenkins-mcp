@@ -223,6 +223,74 @@ func (c *FileTokenCache) Clear() {
 	})
 }
 
+// DeleteBySubjectKey removes all entries whose NamespaceSubjectKey matches
+// subjectKey (tenant|user|profile, all workloads). Returns the number of
+// entries removed. IO failures return 0 (fail closed / best-effort). Secret-free.
+// Used by force re-auth residual lite (GWY-002 / HOST-003).
+func (c *FileTokenCache) DeleteBySubjectKey(subjectKey string) int {
+	if c == nil {
+		return 0
+	}
+	sk := strings.TrimSpace(subjectKey)
+	if sk == "" {
+		return 0
+	}
+	deleted := 0
+	_ = c.withLocked(func() error {
+		doc, err := c.loadLocked()
+		if err != nil {
+			return err
+		}
+		if doc.Entries == nil {
+			return nil
+		}
+		for ek := range doc.Entries {
+			ck, ok := decodeCacheKey(ek)
+			if !ok {
+				continue
+			}
+			if ck.NamespaceSubjectKey() == sk {
+				delete(doc.Entries, ek)
+				deleted++
+			}
+		}
+		if deleted == 0 {
+			return nil
+		}
+		return c.saveLocked(doc)
+	})
+	return deleted
+}
+
+// decodeCacheKey reverses encodeCacheKey (JSON array of 4 strings).
+// Fail closed on corrupt keys (returns ok=false).
+func decodeCacheKey(s string) (CacheKey, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return CacheKey{}, false
+	}
+	var arr [4]string
+	if err := json.Unmarshal([]byte(s), &arr); err != nil {
+		// Legacy fallback join with unit separator.
+		parts := strings.Split(s, "\x1f")
+		if len(parts) != 4 {
+			return CacheKey{}, false
+		}
+		return CacheKey{
+			Tenant:   parts[0],
+			User:     parts[1],
+			Workload: parts[2],
+			Profile:  parts[3],
+		}.Normalize(), true
+	}
+	return CacheKey{
+		Tenant:   arr[0],
+		User:     arr[1],
+		Workload: arr[2],
+		Profile:  arr[3],
+	}.Normalize(), true
+}
+
 // StatusMap is a non-secret doctor/status summary (HOST-008 residual honesty).
 // Never includes tokens, path contents, or subject inventory.
 func (c *FileTokenCache) StatusMap() map[string]any {

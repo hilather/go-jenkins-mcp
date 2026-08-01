@@ -126,6 +126,11 @@ type AgentCoreProvider struct {
 	// default (ProcessConsentSessionStore). Optional file-backed path is residual
 	// crash recovery of metadata only — not multi-replica shared store.
 	ConsentStore ConsentSessionStore
+	// Principals is the optional companion PrincipalCache cleared on Invalidate
+	// (GWY-002 / HOST-003 force re-auth residual lite). When nil, Invalidate
+	// uses ProcessPrincipalCache so multi-user Binding/policy principals drop
+	// with the token cache. Tests may inject a private *PrincipalCache.
+	Principals *PrincipalCache
 }
 
 // NewAgentCoreProvider constructs a provider after validating cfg.
@@ -233,14 +238,21 @@ func (p *AgentCoreProvider) Obtain(ctx context.Context, caller Caller) (Credenti
 }
 
 // Invalidate implements CredentialProvider.
+// Drops token-cache material for the caller and the companion PrincipalCache
+// entry (SubjectKey) so the next Obtain / Binding re-binds (force re-auth residual lite).
+// Never logs tokens. Multi-pod / live Entra revocation remain residual.
 func (p *AgentCoreProvider) Invalidate(ctx context.Context, caller Caller) error {
 	if err := ctx.Err(); err != nil {
 		return apperr.Wrap(apperr.CodeCancelled, "gateway invalidate cancelled", err)
 	}
-	if p == nil || p.Cache == nil {
+	if p == nil {
 		return nil
 	}
-	p.Cache.Delete(caller.CacheKey())
+	principals := p.Principals
+	if principals == nil {
+		principals = ProcessPrincipalCache()
+	}
+	_ = InvalidateSubjectLocal(caller, principals, p.Cache)
 	return nil
 }
 

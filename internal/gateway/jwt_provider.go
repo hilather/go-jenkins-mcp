@@ -24,6 +24,10 @@ type JWTRSBearerProvider struct {
 	Vault JWTVault
 	// Live enables Obtain. When false, always not_configured (vault ignored).
 	Live bool
+	// Principals is the optional companion PrincipalCache cleared on Invalidate
+	// (GWY-002 / HOST-003 force re-auth residual lite). When nil, Invalidate
+	// uses ProcessPrincipalCache. Does not delete durable JWT vault entries.
+	Principals *PrincipalCache
 }
 
 // NewJWTRSBearerProvider constructs a fail-closed Mode B provider (Live=false).
@@ -104,13 +108,22 @@ func (p *JWTRSBearerProvider) Obtain(ctx context.Context, caller Caller) (Creden
 }
 
 // Invalidate implements CredentialProvider.
-// Mode B lab vault has no short-lived token cache; delete is operator-driven
-// via vault Delete. Invalidate is a no-op success (does not delete durable entry).
+// Mode B lab vault has no short-lived token cache; durable vault delete is
+// operator-driven via vault Delete. Invalidate clears the companion
+// PrincipalCache entry so the next Binding/policy path re-Obtains (force
+// re-auth residual lite) — never the durable JWT vault entry.
 func (p *JWTRSBearerProvider) Invalidate(ctx context.Context, caller Caller) error {
 	if err := ctx.Err(); err != nil {
 		return apperr.Wrap(apperr.CodeCancelled, "gateway invalidate cancelled", err)
 	}
-	_ = caller
+	if p == nil {
+		return nil
+	}
+	principals := p.Principals
+	if principals == nil {
+		principals = ProcessPrincipalCache()
+	}
+	_ = InvalidateSubjectLocal(caller, principals, nil)
 	return nil
 }
 

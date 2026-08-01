@@ -206,6 +206,33 @@ func (c *MemoryTokenCache) Clear() {
 	c.entries = make(map[CacheKey]CachedToken)
 }
 
+// DeleteBySubjectKey removes all entries whose NamespaceSubjectKey matches
+// subjectKey (tenant|user|profile, all workloads). Returns the number of
+// entries removed. Secret-free (never logs tokens). Used by force re-auth
+// residual lite (GWY-002 / HOST-003 InvalidateSubjectLocal).
+func (c *MemoryTokenCache) DeleteBySubjectKey(subjectKey string) int {
+	if c == nil {
+		return 0
+	}
+	sk := strings.TrimSpace(subjectKey)
+	if sk == "" {
+		return 0
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.entries == nil {
+		return 0
+	}
+	n := 0
+	for k := range c.entries {
+		if k.NamespaceSubjectKey() == sk {
+			delete(c.entries, k)
+			n++
+		}
+	}
+	return n
+}
+
 // StatusMap is a non-secret doctor/status summary (HOST-008 residual honesty).
 // Never includes tokens, keys, or subject inventory dumps.
 func (c *MemoryTokenCache) StatusMap() map[string]any {
