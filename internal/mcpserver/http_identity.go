@@ -37,6 +37,14 @@ const HeaderLabWorkload = "X-Jenkins-MCP-Lab-Workload"
 // HeaderLabJenkinsPrincipal is an optional lab Jenkins principal (lab mode only).
 const HeaderLabJenkinsPrincipal = "X-Jenkins-MCP-Lab-Jenkins-Principal"
 
+// HeaderLabGroups is an optional comma-separated lab groups/roles list (lab mode only).
+// Fail closed when LabIdentity is false — spoof headers are ignored.
+// Bounds applied by gateway PolicySubjectFromHTTPInbound / BindSubject (OAUTH-006).
+const HeaderLabGroups = "X-Jenkins-MCP-Lab-Groups"
+
+// MaxLabGroupsHeaderBytes caps the raw lab groups header (fail closed on absurd size).
+const MaxLabGroupsHeaderBytes = 16 * 1024
+
 // Health path constants (secret-free; may skip subject auth when RequireSubject).
 const (
 	HealthzPath = "/healthz"
@@ -68,6 +76,10 @@ type RequestIdentity struct {
 	WorkloadID string
 	// JenkinsPrincipal is optional exchanged / lab Jenkins user id.
 	JenkinsPrincipal string
+	// Groups is an optional list of IdP group/role ids from JWT claims or lab
+	// header (OAUTH-006 / GWY-002 residual lite). Bounded at policy bind.
+	// Never elevates deny_tools or force_read_only.
+	Groups []string
 	// Source describes the trusted origin of this identity.
 	Source IdentitySource
 	// Verified is true only when the trust path authenticated the caller
@@ -143,9 +155,36 @@ func extractLabIdentity(r *http.Request, labIdentity bool) RequestIdentity {
 		Tenant:           boundClaim(r.Header.Get(HeaderLabTenant), 256),
 		WorkloadID:       boundClaim(r.Header.Get(HeaderLabWorkload), 256),
 		JenkinsPrincipal: boundClaim(r.Header.Get(HeaderLabJenkinsPrincipal), 256),
+		Groups:           parseLabGroupsHeader(r.Header.Get(HeaderLabGroups)),
 		Source:           IdentitySourceLabHeader,
 		Verified:         true, // operator-provisioned lab trust
 	}
+}
+
+// parseLabGroupsHeader splits a comma-separated lab groups header.
+// Oversize raw values yield nil (fail closed). Final group bounds apply at
+// gateway bind (MaxInboundGroups / name length).
+func parseLabGroupsHeader(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	if len(raw) > MaxLabGroupsHeaderBytes {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func boundClaim(v string, max int) string {

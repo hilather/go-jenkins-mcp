@@ -5,6 +5,21 @@ import (
 	"testing"
 )
 
+func TestIdentityFingerprint_IncludesGroups(t *testing.T) {
+	t.Parallel()
+	base := RequestIdentity{ExternalSubject: "alice", Tenant: "t"}
+	withG := RequestIdentity{ExternalSubject: "alice", Tenant: "t", Groups: []string{"ops", "dev"}}
+	if IdentityFingerprint(base) == IdentityFingerprint(withG) {
+		t.Fatal("groups must participate in fingerprint")
+	}
+	// Order-independent.
+	a := IdentityFingerprint(RequestIdentity{ExternalSubject: "a", Groups: []string{"x", "y"}})
+	b := IdentityFingerprint(RequestIdentity{ExternalSubject: "a", Groups: []string{"y", "x"}})
+	if a != b {
+		t.Fatal("sorted groups must yield stable fingerprint")
+	}
+}
+
 // HOST-001 unit: sessionIdentityTable bind-once / mismatch fail closed.
 func TestSessionIdentityTable_BindOrCheck(t *testing.T) {
 	t.Parallel()

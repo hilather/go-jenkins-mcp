@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"sort"
 	"strings"
 	"sync"
 
@@ -40,14 +41,21 @@ const MaxMCPSessionIDBytes = 128
 // IdentityFingerprint builds a non-secret stable hash of binding-critical
 // RequestIdentity fields for mid-session change detection (HOST-001 / GWY-002
 // parity with gateway.ClaimsFingerprint for the HTTP transport layer).
+// Includes sorted Groups so mid-session group claim changes fail closed.
 // Empty Present() identity yields a deterministic empty-field hash; callers
 // must not bind empty subjects under RequireSubject.
 func IdentityFingerprint(id RequestIdentity) string {
+	groups := append([]string(nil), id.Groups...)
+	for i := range groups {
+		groups[i] = strings.TrimSpace(groups[i])
+	}
+	sort.Strings(groups)
 	raw := strings.Join([]string{
 		strings.TrimSpace(id.ExternalSubject),
 		strings.TrimSpace(id.Tenant),
 		strings.TrimSpace(id.WorkloadID),
 		strings.TrimSpace(id.JenkinsPrincipal),
+		strings.Join(groups, ","),
 	}, "|")
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:16])

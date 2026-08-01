@@ -46,7 +46,7 @@ func ContextWithCallerAndPolicySubject(ctx context.Context, c Caller, s policy.S
 }
 
 // PolicySubjectFromHTTPInbound maps trusted HTTPInbound + process profile to
-// policy.Subject for multi-user RBAC rebind (GWY-002 / HOST).
+// policy.Subject for multi-user RBAC rebind (GWY-002 / HOST / OAUTH-006 lite).
 //
 // Rules (never tool args):
 //   - ProfileID is always the process profile (defaults when inbound empty).
@@ -55,11 +55,31 @@ func ContextWithCallerAndPolicySubject(ctx context.Context, c Caller, s policy.S
 //   - ExternalSubject from inbound (required for multi-user identity).
 //   - Tenant / WorkloadID fill from defaults when inbound empty (same as
 //     MergeCallerDefaults).
-//   - Groups are not taken from process defaults for a different ExternalSubject
-//     (live Entra groups claim completeness residual).
+//   - Groups come only from inbound (JWT groups/roles or lab header). Never
+//     inherited from process defaults for a different ExternalSubject.
+//     Bounded with MaxInboundGroups / MaxInboundGroupNameBytes and
+//     FailOnGroupOverage=true (production gateway default). On overage or
+//     oversize name, groups are dropped (empty) so unbounded claims cannot
+//     attach — cannot broaden deny-only / RO. Live Entra group overage /
+//     Microsoft Graph membership expansion remains residual.
 //   - Verified is true only when inbound.Verified and JenkinsUserID is non-empty
 //     and non-anonymous.
 func PolicySubjectFromHTTPInbound(in HTTPInbound, profileID contracts.ProfileID, defaults policy.Subject) policy.Subject {
+	s, _, _ := PolicySubjectFromHTTPInboundWithMeta(in, profileID, defaults, nil)
+	return s
+}
+
+// PolicySubjectFromHTTPInboundWithMeta is PolicySubjectFromHTTPInbound plus
+// group overage residual metadata and optional BindOptions for group bounds.
+// opts nil uses MaxInboundGroups + FailOnGroupOverage=true (gateway default).
+// Group bind errors yield Groups=nil (fail closed for elevation; subject
+// otherwise still built for audit / Obtain caller path).
+func PolicySubjectFromHTTPInboundWithMeta(
+	in HTTPInbound,
+	profileID contracts.ProfileID,
+	defaults policy.Subject,
+	opts *BindOptions,
+) (policy.Subject, GroupMeta, error) {
 	pid := contracts.ProfileID(strings.TrimSpace(string(profileID)))
 	if pid == "" {
 		pid = contracts.ProfileID(strings.TrimSpace(string(defaults.ProfileID)))
@@ -77,6 +97,22 @@ func PolicySubjectFromHTTPInbound(in HTTPInbound, profileID contracts.ProfileID,
 		workload = strings.TrimSpace(defaults.WorkloadID)
 	}
 	verified := in.Verified && jenkins != ""
+
+	maxGroups := MaxInboundGroups
+	failOverage := true
+	if opts != nil {
+		if opts.MaxGroups > 0 {
+			maxGroups = opts.MaxGroups
+		}
+		failOverage = opts.FailOnGroupOverage
+	}
+	groups, meta, gerr := boundGroups(in.Groups, maxGroups, failOverage)
+	// On group bind error: fail closed for elevation — Groups stay nil; do not
+	// inherit process Groups. Other subject fields still built for audit/Obtain.
+	if gerr != nil {
+		groups = nil
+		meta = GroupMeta{}
+	}
 	return policy.Subject{
 		ProfileID:       pid,
 		JenkinsUserID:   jenkins,
@@ -84,6 +120,6 @@ func PolicySubjectFromHTTPInbound(in HTTPInbound, profileID contracts.ProfileID,
 		Verified:        verified,
 		Tenant:          tenant,
 		WorkloadID:      workload,
-		Groups:          nil, // residual: JWT/Entra groups claim completeness
-	}
+		Groups:          groups,
+	}, meta, gerr
 }

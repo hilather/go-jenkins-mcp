@@ -2,6 +2,7 @@ package gateway_test
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -98,6 +99,24 @@ func TestPolicySubjectFromHTTPInbound(t *testing.T) {
 		t.Fatalf("must not inherit process groups: %v", s.Groups)
 	}
 
+	// Inbound groups map through with bounds (OAUTH-006 / GWY-002 residual lite).
+	withGroups := gateway.HTTPInbound{
+		ExternalSubject:  "alice-sub",
+		JenkinsPrincipal: "alice-j",
+		Groups:           []string{"ops", "dev", "ops"},
+		Verified:         true,
+	}
+	sg := gateway.PolicySubjectFromHTTPInbound(withGroups, contracts.ProfileID("corp"), defaults)
+	if len(sg.Groups) != 2 || sg.Groups[0] != "ops" || sg.Groups[1] != "dev" {
+		t.Fatalf("inbound groups dedupe: %v", sg.Groups)
+	}
+	// Process groups still not merged in.
+	for _, g := range sg.Groups {
+		if g == "process-group" {
+			t.Fatal("must not merge process groups")
+		}
+	}
+
 	// Must not elevate JenkinsUserID from process defaults when inbound empty.
 	partial := gateway.HTTPInbound{
 		ExternalSubject: "eve-sub",
@@ -137,6 +156,64 @@ func TestPolicySubjectFromHTTPInbound(t *testing.T) {
 	}
 	if s4.JenkinsUserID != "u-j" {
 		t.Fatalf("principal still set: %q", s4.JenkinsUserID)
+	}
+}
+
+func TestPolicySubjectFromHTTPInbound_GroupOverageAndDenyOnly(t *testing.T) {
+	t.Parallel()
+	defaults := policy.Subject{
+		ProfileID: contracts.ProfileID("corp"),
+		Groups:    []string{"process-admin"},
+	}
+
+	// Overage with default fail-closed: groups dropped; process groups not used.
+	over := make([]string, gateway.MaxInboundGroups+1)
+	for i := range over {
+		over[i] = "g" + strconv.Itoa(i)
+	}
+	in := gateway.HTTPInbound{
+		ExternalSubject:  "alice-sub",
+		JenkinsPrincipal: "alice-j",
+		Groups:           over,
+		Verified:         true,
+	}
+	s, meta, err := gateway.PolicySubjectFromHTTPInboundWithMeta(in, "corp", defaults, nil)
+	if err == nil {
+		t.Fatal("expected overage fail closed")
+	}
+	if len(s.Groups) != 0 {
+		t.Fatalf("overage must drop groups: %v", s.Groups)
+	}
+	if meta.Count != 0 {
+		t.Fatalf("meta: %+v", meta)
+	}
+	// Truncate mode keeps max groups.
+	opts := gateway.BindOptions{MaxGroups: 3, FailOnGroupOverage: false}
+	s2, meta2, err := gateway.PolicySubjectFromHTTPInboundWithMeta(in, "corp", defaults, &opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !meta2.Truncated || len(s2.Groups) != 3 {
+		t.Fatalf("truncate: groups=%v meta=%+v", s2.Groups, meta2)
+	}
+
+	// Groups never elevate past deny_tools.
+	subj := gateway.PolicySubjectFromHTTPInbound(gateway.HTTPInbound{
+		ExternalSubject:  "alice-sub",
+		JenkinsPrincipal: "alice-j",
+		Groups:           []string{"admins", "ops"},
+		Verified:         true,
+	}, "corp", defaults)
+	if len(subj.Groups) != 2 {
+		t.Fatalf("groups: %v", subj.Groups)
+	}
+	ev := policy.NewDenyOnlyEvaluator(policy.Document{
+		Mode:      policy.ModePilot,
+		DenyTools: map[string]struct{}{"jenkins_get_build_logs": {}},
+	})
+	d := ev.Evaluate(subj, policy.Action{ToolName: "jenkins_get_build_logs", Class: policy.EffectRead}, policy.Target{})
+	if !d.Denied() {
+		t.Fatal("deny_tools must apply regardless of inbound groups")
 	}
 }
 

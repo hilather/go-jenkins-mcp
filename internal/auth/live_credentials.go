@@ -187,8 +187,9 @@ func GroupsFromValidatedToken(raw string, result AccessTokenResult, cfg GroupCla
 		// Opaque: skip JWT parse; rely on whoAmI (AUTH-004) for principal binding.
 		return GroupExtractResult{}, nil
 	}
-	// Prefer re-parse with GroupClaimConfig (roles + groups); claims on result
-	// only include the JWT "groups" array field. MaxStoredGroups + MaxGroupNameBytes apply.
+	// Prefer re-parse with GroupClaimConfig (roles + groups). AccessTokenClaims.Groups
+	// also merges groups+roles after ValidateAccessToken; ExtractGroupsFromJWT applies
+	// MaxStoredGroups + MaxGroupNameBytes and overage handling.
 	return ExtractGroupsFromJWT(raw, cfg)
 }
 

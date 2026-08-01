@@ -150,7 +150,7 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 |------|----------|
 | Auth | `attachGatewayObtainAuthProviderDynamic` installs `AuthProviderCtx` |
 | Context Caller | HTTP `AfterIdentity` maps trusted `RequestIdentity` → `gateway.Caller` (ExternalSubject→Subject; Tenant/Workload from identity; ProfileID from process) |
-| Context policy.Subject | Same `AfterIdentity` builds `policy.Subject` via `PolicySubjectFromHTTPInbound` (JenkinsPrincipal→JenkinsUserID; ProfileID from process; **Verified** only when lab/JWT verified **and** Jenkins principal present) and stores with `ContextWithCallerAndPolicySubject` |
+| Context policy.Subject | Same `AfterIdentity` builds `policy.Subject` via `PolicySubjectFromHTTPInbound` (JenkinsPrincipal→JenkinsUserID; ProfileID from process; **Groups** from JWT `groups`/`roles` or lab `X-Jenkins-MCP-Lab-Groups` only — never process defaults; bounded MaxInboundGroups/name length; **Verified** only when lab/JWT verified **and** Jenkins principal present) and stores with `ContextWithCallerAndPolicySubject` |
 | Obtain | `CallerFromContext` when Valid → Obtain for that caller; else process defaultCaller |
 | Policy RBAC | `tools.RegisterOptions.SubjectFromContext` = `gateway.PolicySubjectFromContext`; `addTool` / `listToolsAllows` use `effectiveSubject` (ctx subject when present, else process Subject) |
 | Subject pin | `ExpectedExternalSubject` is **not** set (distinct lab/JWT subjects allowed) |
@@ -168,9 +168,19 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
   (`ContextWithPolicySubject` / `SubjectFromContext` / `effectiveSubject`).
   Process `RegisterOptions.Subject` remains the multi-user-off / missing-ctx
   default. Tool args never supply identity (`RejectIdentityToolArgs`).
-- **Live Entra groups claim completeness** remains residual (OAUTH-010 /
-  GWY-003): lab/JWT path may leave `Groups` empty; binding helpers do not
-  inherit process groups for a different ExternalSubject.
+- **IdP groups foundation (OAUTH-006 / GWY-002 residual lite): Done\*** —
+  JWT access-token `groups`/`roles` → `AccessTokenClaims.Groups` →
+  `HTTPInbound` / `RequestIdentity` → `PolicySubjectFromHTTPInbound` /
+  `BindSubject` with `MaxInboundGroups=64`, name length 256, default
+  `FailOnGroupOverage=true` (drop groups on overage for rebind path; fail
+  closed at `BindSubject`). Lab header `X-Jenkins-MCP-Lab-Groups`
+  (comma-separated) only when `JENKINS_MCP_LAB_IDENTITY=1` (spoof ignored
+  when lab off). Groups never elevate `deny_tools` / `force_read_only`.
+- **Live Entra group overage / Microsoft Graph membership expansion** remains
+  residual (OAUTH-010 / GWY-003): when Entra returns `_claim_names` /
+  `_claim_sources` overage references instead of a full group list, the
+  gateway does not invent membership (no Graph call yet). Binding helpers
+  still never inherit process groups for a different ExternalSubject.
 - **Live Entra / JWKS rotation / Mode C 3LO browser UX** remain GWY-003 /
   OAUTH-010 residuals.
 - **MCP SDK context flow:** AuthProviderCtx / SubjectFromContext only see the
@@ -539,8 +549,9 @@ remain honest when RS is not live-qualified.
 
 | Helper | Role |
 |--------|------|
-| `InboundClaimsFromJWTClaims(auth.AccessTokenClaims, profileID, workloadID)` | Verified JWT claims → `InboundClaims` (`Verified=true`); requires `sub` + profile |
-| `InboundClaimsFromRequestIdentity(HTTPInbound, profileID)` | Fail-closed HTTP inbound → claims (subject + verified + profile) |
+| `InboundClaimsFromJWTClaims(auth.AccessTokenClaims, profileID, workloadID)` | Verified JWT claims → `InboundClaims` (`Verified=true`); requires `sub` + profile; copies `Groups` |
+| `InboundClaimsFromRequestIdentity(HTTPInbound, profileID)` | Fail-closed HTTP inbound → claims (subject + verified + profile + groups) |
+| `PolicySubjectFromHTTPInbound` / `…WithMeta` | Multi-user rebind: Jenkins principal + bounded inbound groups (never process groups) |
 | `RejectIdentityToolArgs` | Tool args still cannot set identity |
 
 ### AgentCore modes (Mode C / GWY-001)
