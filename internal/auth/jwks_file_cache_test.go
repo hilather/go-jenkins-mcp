@@ -350,6 +350,82 @@ func TestRefreshingJWKS_FileCache_GetPrefersFileOnRefreshFail(t *testing.T) {
 	}
 }
 
+// Regression: on refresh failure, an older same-host file snapshot must not
+// replace newer in-memory keys (would re-surface rotated-out kids).
+func TestRefreshingJWKS_FileCache_GetDoesNotRegressToOlderFile(t *testing.T) {
+	t.Parallel()
+	_, jNew := testRSAJWKS(t, "mem-new")
+	_, jOld := testRSAJWKS(t, "file-old")
+	path := filepath.Join(t.TempDir(), "older-file-jwks.json")
+
+	var clockMu sync.Mutex
+	now := time.Unix(1_700_450_000, 0).UTC()
+	nowFn := func() time.Time {
+		clockMu.Lock()
+		defer clockMu.Unlock()
+		return now
+	}
+
+	// Plant an older public JWKS snapshot on disk (rotated-out kid only).
+	oldAt := now.Add(-2 * time.Minute)
+	raw, err := json.Marshal(map[string]any{
+		"version":    1,
+		"fetched_at": oldAt.UTC().Format(time.RFC3339),
+		"keys":       jOld.Keys,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, append(raw, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Process starts with newer keys from network (memory ahead of file).
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) == 1 {
+			_ = json.NewEncoder(w).Encode(jNew)
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(srv.Close)
+
+	src, err := auth.NewRefreshingJWKS(context.Background(), auth.RefreshingJWKSConfig{
+		Client:    srv.Client(),
+		URI:       srv.URL,
+		TTL:       30 * time.Second,
+		CachePath: path,
+		Now:       nowFn,
+		Logf:      func(string, ...any) {},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := src.Get(context.Background())
+	if err != nil || got.Keys[0].Kid != "mem-new" {
+		t.Fatalf("initial memory want mem-new: %+v err=%v", got, err)
+	}
+
+	// Overwrite file with the older snapshot again (peer lag / failed peer write).
+	// Successful init may have persisted mem-new; force file back to old keys.
+	if err := os.WriteFile(path, append(raw, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// TTL expire + network fail: must keep memory mem-new, not regress to file-old.
+	clockMu.Lock()
+	now = now.Add(40 * time.Second)
+	clockMu.Unlock()
+	got, err = src.Get(context.Background())
+	if err != nil {
+		t.Fatalf("stale-if-error memory path: %v", err)
+	}
+	if got.Keys[0].Kid != "mem-new" {
+		t.Fatalf("Regression: older file must not replace newer memory keys; got kid=%q want mem-new", got.Keys[0].Kid)
+	}
+}
+
 func TestRefreshingJWKS_FileCache_InvalidPathFailClosed(t *testing.T) {
 	t.Parallel()
 	_, j1 := testRSAJWKS(t, "k")

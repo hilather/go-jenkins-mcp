@@ -357,9 +357,10 @@ func (r *RefreshingJWKS) Snapshot() *JWKS {
 }
 
 // Get returns a JWKS snapshot. When the TTL has elapsed, attempts a refresh
-// (singleflight). Refresh failure prefers a fresh enough same-host file snapshot
-// when configured, else last good in memory (stale-if-error) unless MaxStaleAge
-// is exceeded. Cancelled context fails closed without clearing cache.
+// (singleflight). Refresh failure prefers a same-host file snapshot only when it
+// is at least as new as last good memory; otherwise keeps last good in memory
+// (stale-if-error) unless MaxStaleAge is exceeded. Cancelled context fails
+// closed without clearing cache.
 //
 // Safe on a nil *RefreshingJWKS receiver (typed-nil interface edge): returns error.
 func (r *RefreshingJWKS) Get(ctx context.Context) (*JWKS, error) {
@@ -406,14 +407,17 @@ func (r *RefreshingJWKS) Get(ctx context.Context) (*JWKS, error) {
 		if cerr := ctx.Err(); cerr != nil {
 			return nil, apperr.Wrap(apperr.CodeCancelled, "jwks get cancelled", cerr)
 		}
-		// Prefer fresh enough same-host file snapshot (multi-process share lite).
+		// Prefer same-host file snapshot only when it is at least as new as last
+		// good memory (multi-process share lite). An older file must not regress
+		// keys: that can re-surface rotated-out kids after a successful memory
+		// refresh (security) or drop newly rotated kids (availability).
 		if fileSet, fileAt, ok := r.loadFileSnapshot(); ok {
-			// Adopt file into memory when newer than (or equal for share) last good.
 			if s == nil || !fileAt.Before(s.fetchedAt) {
 				r.snap.Store(&jwksSnapshot{set: fileSet, fetchedAt: fileAt})
+				r.logf("jwks refresh failed; using file snapshot (stale-if-error same-host lite; no secrets): %v", err)
+				return fileSet, nil
 			}
-			r.logf("jwks refresh failed; using file snapshot (stale-if-error same-host lite; no secrets): %v", err)
-			return fileSet, nil
+			// File older than memory: fall through to memory stale-if-error.
 		}
 		// Stale-if-error: keep last good unless max stale exceeded.
 		// Logs are secret-free: no tokens, no JWKS n/e material, no URI query secrets, no path.
