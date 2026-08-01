@@ -6,8 +6,11 @@
 
 **Agent hint:** This contract is the SoT for the operator console. When product
 features change operator day-2 behavior, **update this document and the BFF/SPA
-together** (or mark residual). See root [`AGENTS.md`](../../AGENTS.md) → “keep
-the admin console current”.
+together** (or mark residual). Also expose the same capability via **MCP
+`admin_*` tools** (or **MCP-OPS-*** residual) so agents can manage without
+calling admin HTTP — see [mcp-ops-parity.md](mcp-ops-parity.md) and root
+[`AGENTS.md`](../../AGENTS.md) → “keep the admin console current” + “admin MCP
+ops parity”.
 
 ## Authentication (shared secret)
 

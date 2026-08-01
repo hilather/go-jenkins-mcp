@@ -66,6 +66,7 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [gateway/qualification.md](gateway/qualification.md) | Offline qualify residual |
 | [gateway/live-pin-blockers.md](gateway/live-pin-blockers.md) | Live production GO residual (OAUTH-009/010, HOST-008) |
 | [adapters/README.md](adapters/README.md) | Optional adapters (default off) |
+| [admin/mcp-ops-parity.md](admin/mcp-ops-parity.md) | Admin console ↔ **MCP `admin_*` tools** parity backlog (MCP-OPS-*) |
 | [adapters/ext-logs.md](adapters/ext-logs.md) | External logs + Jenkins ACL preflight |
 | [adapters/work-items.md](adapters/work-items.md) | Change / work-item correlation |
 | [adapters/otel-correlate.md](adapters/otel-correlate.md) | Trace refs |

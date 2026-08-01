@@ -123,6 +123,7 @@ review findings unless the user explicitly accepts them.
 - Package boundaries (Jenkins client must not import MCP; tools must not raw-HTTP)  
 - Platform claims match the Tier-1 matrix (no accidental Windows support claims)  
 - **Admin console parity:** operator-relevant changes update BFF/SPA/api-v1 (or document residual)  
+- **Admin MCP ops parity:** same capabilities as `admin_*` MCP tools (or MCP-OPS residual) — agents manage via MCP  
 - **Audit trail:** security-relevant actions emit AUD-001 events (or explicit residual) — see audit section below  
 - **Docker lab residual:** integration-facing work has compose/Makefile/docs scaffold or an explicit residual
 
@@ -164,16 +165,20 @@ BFF in `internal/admin/`, contract in `docs/admin/api-v1.md`, ADR 0014) is a
 interface in the same change** (or leave an explicit residual TODO with task ID
 if intentionally deferred — never silent drift).
 
+**Also expose the same capability via MCP** for agent management (see *Admin MCP
+ops parity* below) — browser BFF alone is not enough for first-class agent ops.
+
 | Product change | Admin follow-through (as applicable) |
 |----------------|--------------------------------------|
-| New/changed **policy / RO / deny-lists / signed bundles** | Effective/overlay APIs; Policy page; validate/apply rules; docs |
-| New/changed **metrics / telemetry / budgets / caps** | `GET /admin/v1/metrics` (or residual note); Metrics page; **ECharts** visualization for every metric surface (see chart rules below); honesty banners |
-| New/changed **audit event types or fields** | **Emit sites** + Audit list/filter; SPA columns/drawer; never secret fields; canary tests |
-| New/changed **doctor / support-bundle / security self-check** | Doctor/ops endpoints; SPA; fail-closed online paths |
-| New/changed **cache / pin / quota / eviction** | Cache APIs; Cache page; operator-only destructive + confirm |
-| New/changed **profiles / config paths / packaging** | Profile list/show; asset packaging if operator-facing |
-| New **CLI day-2 commands** operators will use | Prefer BFF parity or document CLI-only residual on the SPA page |
-| Authn/z for **admin itself** (roles, tokens, CSP) | `rbac`, `/me`, middleware, SPA role gates, adversarial tests (UI-009) |
+| New/changed **policy / RO / deny-lists / signed bundles** | Effective/overlay APIs; Policy page; validate/apply rules; docs; **`admin_*` MCP tools** |
+| New/changed **metrics / telemetry / budgets / caps** | `GET /admin/v1/metrics` (or residual note); Metrics page; **ECharts** visualization; **`admin_metrics` MCP** |
+| New/changed **audit event types or fields** | **Emit sites** + Audit list/filter; SPA; canary tests; **`admin_audit_list` (or fields) MCP** |
+| New/changed **doctor / support-bundle / security self-check** | Doctor/ops endpoints; SPA; **`admin_doctor` / selfcheck / support-bundle MCP** |
+| New/changed **cache / pin / quota / eviction** | Cache APIs; Cache page; **`admin_cache_*` MCP** |
+| New/changed **profiles / config paths / packaging** | Profile list/show; **`admin_list_profiles` / get MCP** |
+| New/changed **gateway residual / vault inventory / consent / subject-invalidate** | BFF routes + SPA; **`admin_gateway_*` / consent / invalidate MCP** |
+| New **CLI day-2 commands** operators will use | BFF + **MCP** parity preferred; residual if deferred |
+| Authn/z for **admin itself** (roles, tokens, CSP) | `rbac`, `/me`, middleware, SPA; MCP admin tools respect same role/confirm gates |
 
 **Rules**
 
@@ -224,7 +229,50 @@ if intentionally deferred — never silent drift).
 | **UI-POLISH-007** | Done | Light theme CSS + `chartThemeLight` for ECharts options |
 | **UI-POLISH-008** | Done\* residual | Tree-shaken ECharts; prod JS ~887 kB min / ~287 kB gzip — further code-split optional residual |
 
-Before claiming a feature “done for operators,” ask: *Can an operator see or safely act on this from `admin serve` if we already have that surface — and if not, is the residual documented? If metrics/charts: is it ECharts with at least a basic viz?*
+Before claiming a feature “done for operators,” ask: *Can an operator see or safely act on this from `admin serve` if we already have that surface — and if not, is the residual documented? If metrics/charts: is it ECharts with at least a basic viz? Can an **agent** do the same via MCP `admin_*` tools (or is MCP-OPS residual explicit)?*
+
+---
+
+## Non-negotiable: admin MCP ops parity (agent management)
+
+The product MCP server must grow **first-class management tools** for day-2
+operations that the admin console exposes. Agents must not rely on calling
+loopback admin HTTP.
+
+**SoT gap analysis + backlog:** [docs/admin/mcp-ops-parity.md](docs/admin/mcp-ops-parity.md)
+(**MCP-OPS-001…008**). Tool namespace target: **`admin_*`** (distinct from
+`jenkins_*` triage tools). Registration opt-in (`--enable-admin-mcp` /
+RegisterOptions residual until implemented).
+
+### When MCP tools are required (same change as admin BFF/SPA)
+
+| Admin / ops change | MCP requirement |
+|--------------------|-----------------|
+| New **BFF route** under `/admin/v1` that is operator-actionable | Matching **`admin_*` tool** (or **MCP-OPS-*** residual id on api-v1 + mcp-ops-parity matrix) |
+| New **SPA page/section** that invokes BFF | Same as BFF route — tools follow API, not only UI chrome |
+| New **destructive** admin action | MCP tool with same **confirm** string + role gate; **AUD-001** emit |
+| Read-only ops snapshot (health, metrics, audit, doctor, residual, profiles, policy effective, cache status) | Prefer **P0** tools first (MCP-OPS-002) |
+
+### Rules
+
+| Rule | Detail |
+|------|--------|
+| **Shared libraries, not HTTP proxy** | MCP tools call `internal/policy`, `diagnostics`, `audit`, `store`, `gateway`, etc. — same as BFF. Do **not** implement tools as “HTTP client to admin serve”. |
+| **Secret-free** | Same scrubbing as admin JSON / support-bundle. Canary tests on new tools. |
+| **Fail closed** | Respect enterprise `force_read_only` / deny lists; console role (or equivalent serve gate); destructive confirms (`EVICT`, `CLEAR_ALL`, …). |
+| **Opt-in default** | Admin MCP tools default **off** for pure pilot RO triage until flag enabled — document residual. When building managed/agent-ops profiles, enable and test. |
+| **Namespace** | `admin_*` for management; `jenkins_*` for Jenkins data plane. Do not overload job tools for policy/cache/audit. |
+| **Docs matrix** | Update [mcp-ops-parity.md](docs/admin/mcp-ops-parity.md) parity table when adding routes/tools. |
+| **Audit** | Admin MCP writes emit AUD-001 (see audit non-negotiable). |
+| **Not replacing SPA** | Browser console remains for humans; MCP is for agents. Both must stay capable. |
+
+### Pre-done checklist
+
+1. New admin capability exists in **shared lib**?  
+2. Exposed on **BFF + SPA** (or residual)?  
+3. Exposed as **`admin_*` MCP tool** (or **MCP-OPS-*** residual)?  
+4. Secret-free + confirm + role tests?  
+5. Matrix row in mcp-ops-parity.md updated?
 
 ---
 
@@ -323,9 +371,9 @@ comment):
 2. Implement within task scope
 3. Add/update tests (features + regression tests for fixes)
 4. If security-relevant: wire **audit emit** (AUD-001) or explicit AUD-T residual — see audit section
-5. If external-system/integration: add or extend Docker compose lab (opt-in Makefile) or residual TODO
-6. Update documentation and backlog/todo status
-7. If operator-relevant: update admin BFF/SPA/api-v1 (or explicit residual TODO)
+5. If operator-relevant: update admin BFF/SPA/api-v1 **and** `admin_*` MCP tools (or MCP-OPS residual) — see admin MCP parity
+6. If external-system/integration: add or extend Docker compose lab (opt-in Makefile) or residual TODO
+7. Update documentation and backlog/todo status
 8. Run lint/tests/race as applicable; attach perf evidence if required
 9. Structured code review (/review); fix bug findings; re-test
 10. If incomplete: write next steps; do not mark DoD complete

@@ -17,7 +17,7 @@ User Cursor path: [`../user/README.md`](../user/README.md).
 
 A **reactive SPA** lives under `web/admin/` (React + TypeScript + Vite; ADR [0014](../adr/0014-admin-console-reactive-spa.md)). The **local admin BFF** is started only via explicit CLI or Docker — **admin HTTP is off by default** until `jenkins-mcp admin serve` (or the local Docker stack). Contract: [`api-v1.md`](api-v1.md).
 
-**Agent / implementer note:** Treat the console as a living operator surface. Feature work that affects policy, metrics, audit, doctor/cache, profiles, or other day-2 ops **must** update BFF + SPA + this API contract in the same change (or record an explicit residual). Standing rule: root [`AGENTS.md`](../../AGENTS.md) → “keep the admin console current”.
+**Agent / implementer note:** Treat the console as a living operator surface. Feature work that affects policy, metrics, audit, doctor/cache, profiles, or other day-2 ops **must** update BFF + SPA + this API contract in the same change (or record an explicit residual). **Also** expose the same capability via MCP **`admin_*` tools** (or **MCP-OPS-*** residual) so agents manage without admin HTTP — [mcp-ops-parity.md](mcp-ops-parity.md). Standing rules: root [`AGENTS.md`](../../AGENTS.md) → “keep the admin console current” + “admin MCP ops parity”.
 
 #### Enable path A — Docker (no host package install)
 

@@ -12,12 +12,13 @@ Reactive operator SPA for day-2 tasks: profiles, policy, metrics, audit, doctor,
 ## Agent hint: stay in sync with product features
 
 When another change adds or alters **operator-relevant** behavior (policy, metrics,
-audit, doctor/support-bundle, cache/evict, profiles, packaging), update the
-matching page under `src/pages/`, client helpers in `src/api/`, and the BFF
-contract (`docs/admin/api-v1.md` + `internal/admin`) in the **same change** —
-or document an honest CLI-only residual on the page. Do not leave the console
-silently stale. Full rules: root `AGENTS.md` → “Non-negotiable: keep the admin
-console current”.
+audit, doctor/cache, profiles, packaging, gateway residual ops), update the matching
+page under `src/pages/`, client helpers in `src/api/`, and the BFF contract
+(`docs/admin/api-v1.md` + `internal/admin`) in the **same change** — **and** MCP
+**`admin_*` tools** for agent management (or **MCP-OPS-*** residual in
+[docs/admin/mcp-ops-parity.md](../../docs/admin/mcp-ops-parity.md)). Do not leave
+the console or MCP ops surface silently stale. Full rules: root `AGENTS.md` →
+“keep the admin console current” + “admin MCP ops parity”.
 
 ## Stack
 
