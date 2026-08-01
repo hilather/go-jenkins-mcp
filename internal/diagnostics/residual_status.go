@@ -10,7 +10,8 @@ import (
 
 // ResidualStatusHonestyNote is the unified operator residual honesty sentence
 // (never tokens/subjects). Points operators at the live pin runbook.
-// Shared by CLI `gateway residual-status` and admin GET /admin/v1/gateway/residual-status.
+// Shared by CLI `gateway residual-status`, admin GET /admin/v1/gateway/residual-status,
+// and doctor Report.gateway_residual_status (offline/online embed).
 const ResidualStatusHonestyNote = "unified gateway residual snapshot (env/static honesty only): offline Mode A/B/C foundations Done*; optional same-host FileSubjectRateLimiter / FileTokenCache / FilePrincipalCache / vault flock lite when paths set; live Entra / jwt-auth-filter / AgentCore / multi-pod shared rate+vault+principal HA residual — never production GO from this surface; see docs/gateway/live-pin-blockers.md"
 
 // ResidualStatusDoc is the primary operator pointer for residual honesty.
@@ -24,14 +25,16 @@ const ResidualStatusDoc = "docs/gateway/live-pin-blockers.md"
 const PrincipalCacheProcessNote = "principal_cache_entries: file Len() when PRINCIPAL_CACHE_PATH set (same-host lite); else this process memory only (CLI/admin ≠ serve unless same file path installed)"
 
 // BuildGatewayResidualStatus assembles the unified secret-free residual snapshot
-// used by `jenkins-mcp gateway residual-status` and
-// GET /admin/v1/gateway/residual-status (HOST-007).
+// used by `jenkins-mcp gateway residual-status`,
+// GET /admin/v1/gateway/residual-status (HOST-007), and doctor Report field
+// gateway_residual_status (OPS doctor residual embed — informational only).
 //
 // Env/static only — no Obtain, vault open, or browser. Never tokens, vault
 // bytes, Authorization material, or raw subjects. getenv nil → os.Getenv.
 //
 // Field names match the CLI JSON contract (snake_case for residual honesty
 // fields; rate knobs use admin health names rateEnabled/ratePerMinute/rateBurst).
+// Never claims live GO: mode_*_live_*_qualified always false on this surface.
 func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 	if getenv == nil {
 		getenv = os.Getenv

@@ -18,6 +18,42 @@ func FormatReportText(w io.Writer, rep Report) {
 			fmt.Fprintf(w, "  %s: %v\n", k, v)
 		}
 	}
+	// Unified residual snapshot (same as gateway residual-status). Informational;
+	// never claims live GO. Prefer --json for machine parse of full map.
+	if len(rep.GatewayResidualStatus) > 0 {
+		fmt.Fprintln(w, "gateway_residual_status:")
+		// Stable honesty keys first for residual-smoke / operator grepping.
+		prefer := []string{
+			"residual_id",
+			"oauth009_offline",
+			"ha_multi_replica",
+			"gateway_ready",
+			"mode_a_live_obtain_qualified",
+			"mode_b_live_rs_qualified",
+			"mode_c_live_agentcore_qualified",
+			"multi_user_enabled",
+			"multi_pod_vault_residual",
+			"shared_subject_rate_file",
+			"principal_cache_entries",
+			"principal_cache_process_note",
+			"residual_note",
+			"doc",
+		}
+		printed := make(map[string]bool, len(prefer))
+		for _, k := range prefer {
+			if v, ok := rep.GatewayResidualStatus[k]; ok {
+				fmt.Fprintf(w, "  %s: %v\n", k, v)
+				printed[k] = true
+			}
+		}
+		// Remaining keys (map iteration order is randomized; acceptable for text).
+		for k, v := range rep.GatewayResidualStatus {
+			if printed[k] {
+				continue
+			}
+			fmt.Fprintf(w, "  %s: %v\n", k, v)
+		}
+	}
 }
 
 // FormatCacheStatusText writes cache status to w.

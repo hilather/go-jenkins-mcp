@@ -336,11 +336,11 @@ operator residual: **Cursor host stdio CI** still open — see
 
 | Surface | Command / tool | Notes |
 |---------|----------------|--------|
-| Doctor | `jenkins-mcp doctor --profile <id> [--offline] [--allow-mutations] [--read-only]` · MCP `jenkins_doctor` | Local checks; never returns secrets; `mutations` reports register vs executable posture (Wave 32); `circuit_breaker` when client wired; optional pack verify (ARC-008) |
+| Doctor | `jenkins-mcp doctor --profile <id> [--offline] [--json] [--allow-mutations] [--read-only]` · MCP `jenkins_doctor` · admin `GET …/doctor?offline=1` | Local checks; never returns secrets; `mutations` reports register vs executable posture (Wave 32); `circuit_breaker` when client wired; optional pack verify (ARC-008). **`gateway_residual_status`**: embeds the same secret-free map as `gateway residual-status` / `BuildGatewayResidualStatus` (informational; does not drive overall fail; live `mode_*_qualified` stay false; pointer to [gateway/live-pin-blockers.md](gateway/live-pin-blockers.md)). Prefer `--json` for machine parse; text surfaces a `gateway_residual_status:` section. Requires `--profile` (no profile-less offline doctor). |
 | Cache status | `jenkins-mcp cache status --profile <id>` | L1 store schema / counts only |
 | Cache verify | `jenkins-mcp cache verify --profile <id> [--full] [--sample N]` | ARC-008 integrity; issue kinds pack/entry/checksum/catalog/index; support-safe |
 | Cache repair | `jenkins-mcp cache repair --profile <id> [--index-only]` | Rebuild sidecar indexes only after pack verify; never mutates pack body |
-| Support bundle | `jenkins-mcp support-bundle --profile <id> [--preview]` · `doctor --bundle` / `--bundle-preview` | Privacy-scrubbed zip under XDG cache |
+| Support bundle | `jenkins-mcp support-bundle --profile <id> [--preview]` · `doctor --bundle` / `--bundle-preview` | Privacy-scrubbed zip under XDG cache (doctor.json includes `gateway_residual_status` when doctor ran) |
 
 ### Support bundle path and redaction
 

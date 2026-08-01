@@ -194,7 +194,7 @@ Usage:
   jenkins-mcp login --profile <id> [--user USER] [--method api-token|oidc] [--oidc]
   jenkins-mcp logout --profile <id>
   jenkins-mcp status --profile <id>
-  jenkins-mcp doctor --profile <id> [--offline] [--bundle|--bundle-preview]
+  jenkins-mcp doctor --profile <id> [--offline] [--json] [--bundle|--bundle-preview]
   jenkins-mcp support-bundle --profile <id> [--preview] [--offline]
   jenkins-mcp cache status --profile <id>
   jenkins-mcp cache verify --profile <id> [--full] [--sample N]
