@@ -319,27 +319,22 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 | `vault_path_emptydir_heuristic` | Heuristic residual when vault path looks emptyDir-like (value never embeds host path secrets) |
 | `replicas_env_residual` | Residual when replica-count env suggests multi-pod intent (not HA Done) |
 | `multi_pod_residual_checklist` | Optional secret-free multi-pod honesty checklist string |
-| `progressive_consent` | OAUTH-010 / GWY-001 StatusMap + consent-store honesty: `stores_tokens=false`, `multi_replica_shared=false`, `file_backed` / `same_host_reload_before_persist` when `JENKINS_MCP_CONSENT_STORE_PATH` set (path never returned; HOST-007 SPA Overview/Doctor residual cards surface these; not multi-pod HA) |
-| `rateEnabled` / `ratePerMinute` / `rateBurst` | HOST-006 process-local rate knobs |
-| `shared_subject_rate_file` | `true` only when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` set (HOST-008 same-host lite); path never returned |
-| `principal_cache_entries` | Principal cache **count** for **this process only** (CLI or admin BFF — not remote MCP serve unless shared file caches) |
+| `progressive_consent` | OAUTH-010 / GWY-001 StatusMap + consent-store honesty: `stores_tokens=false`, `multi_replica_shared=false`; `file_backed` / `same_host_reload_before_persist` default **false**, **true** when `JENKINS_MCP_CONSENT_STORE_PATH` set (path never returned; residual never opens consent file; HOST-007 SPA Overview/Doctor residual cards surface these; not multi-pod HA) |
+| `rateEnabled` / `ratePerMinute` / `rateBurst` | HOST-006 process-local rate knobs (admin health field names) |
+| `shared_subject_rate_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is non-empty (same-host `FileSubjectRateLimiter`). **Not** multi-pod HA. Path value **never** returned. Never tokens. |
+| `subject_rate_max_subjects` | Optional rate-map MaxSubjects when env > 0 (omit = unlimited). Process/file-local only — not multi-pod. |
+| `subject_limiter_max_subjects` | Optional SubjectLimiter MaxSubjects when `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` > 0 (omit = unlimited). Process-local only — not multi-pod. |
+| `subject_slots_process_local` | **Always `true`:** SubjectLimiter concurrency slots are process-local (HOST-008 residual; **not** multi-pod shared concurrency). Secret-free honesty. |
+| `principal_cache_entries` | Principal cache **count** for **this process only** (CLI or admin BFF — not remote MCP serve unless shared file caches; never subjects inventory) |
 | `principal_cache_process_note` | Secret-free honesty sentence for process-local count scope |
-| `shared_subject_rate_file` | `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` set (path never returned) |
-| `principal_cache_entries` | Principal cache **count** only (memory or file; never inventory) |
+| `principal_cache_max_entries` | Optional hygiene max when env > 0 (omit = unlimited). Never subjects. |
+| `principal_cache_ttl_seconds` | Optional hygiene TTL seconds when env > 0 (omit = no TTL). Never subjects. |
 | `shared_principal_cache_file` | `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` set (HOST-008 same-host `FilePrincipalCache` lite; path never returned; never tokens) |
 | `shared_jwks_file` | **HOST-001 / HOST-008 Done\* lite:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path value **never** returned. Public keys only — never tokens. |
 | `shared_token_cache_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` set (same-host `FileTokenCache`). **Not** multi-pod Redis/HA. Path value **never** returned. Residual never opens the cache file — never tokens. |
 | `shared_api_token_vault_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_VAULT_PATH` is **explicitly set** (Mode A same-host `FileAPITokenVault` path residual). Default XDG vault path does **not** count. Path value **never** returned. Residual never opens the vault — never tokens. **Not** multi-pod shared vault HA. |
 | `shared_jwt_vault_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_JWT_VAULT_PATH` is **explicitly set** (Mode B same-host `FileJWTVault` path residual). Default XDG JWT vault path does **not** count. Path value **never** returned. Residual never opens the vault — never tokens. **Not** multi-pod shared vault HA. |
 | `progressive_consent_residual` / `progressive_consent_surfaces` | Mode C only; secret-free residual note + surface ids |
-| `rateEnabled` / `ratePerMinute` / `rateBurst` | HOST-006 process-local rate knobs (admin health field names) |
-| `shared_subject_rate_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is non-empty (same-host `FileSubjectRateLimiter`). **Not** multi-pod HA. Path value **never** returned. Never tokens. |
-| `subject_rate_max_subjects` | Optional rate-map MaxSubjects when env > 0 (omit = unlimited). Process/file-local only — not multi-pod. |
-| `subject_limiter_max_subjects` | Optional SubjectLimiter MaxSubjects when `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` > 0 (omit = unlimited). Process-local only — not multi-pod. |
-| `subject_slots_process_local` | **Always `true`:** SubjectLimiter concurrency slots are process-local (HOST-008 residual; **not** multi-pod shared concurrency). Secret-free honesty. |
-| `principal_cache_entries` | Process-local principal cache **count** only (never subjects). On admin BFF this is **the admin process**, not necessarily MCP serve. |
-| `principal_cache_max_entries` | Optional hygiene max when env > 0 (omit = unlimited). Never subjects. |
-| `principal_cache_ttl_seconds` | Optional hygiene TTL seconds when env > 0 (omit = no TTL). Never subjects. |
 | `residual_note` / `doc` | Honesty sentence + pointer to [live-pin-blockers.md](../gateway/live-pin-blockers.md) |
 
 **SPA:** Overview card “Gateway residual status” loads this route; **404 hides the
