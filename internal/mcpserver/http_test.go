@@ -1201,6 +1201,9 @@ func TestHOST002_TrustedProxyTrueStillIgnoresXForwarded(t *testing.T) {
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("TrustedProxy residual must not trust X-Forwarded-Host: status=%d body=%s", rr.Code, rr.Body.String())
 	}
+	if strings.Contains(rr.Body.String(), canaryHTTPToken) {
+		t.Fatalf("403 body leaked token canary: %s", rr.Body.String())
+	}
 	// DefaultHTTPConfig leaves TrustedProxy false.
 	if mcpserver.DefaultHTTPConfig().TrustedProxy {
 		t.Fatal("DefaultHTTPConfig.TrustedProxy must be false (fail closed)")

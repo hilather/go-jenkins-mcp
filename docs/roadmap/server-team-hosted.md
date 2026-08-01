@@ -354,7 +354,7 @@ Replace “optional shared secret on loopback” as the multi-user story with **
 **Priority:** P1  
 **Dependencies:** HOST-001, NET-001 origin pin  
 **Maps to:** GWY-004 deployment  
-**Progress:** **Partial / Done*** — docs matrix + fail-closed tests + `PathPrefix` strip/`--http-path-prefix`; live edge origin pin residual  
+**Progress:** **Partial / Done*** — docs matrix + fail-closed tests + `PathPrefix` strip/`--http-path-prefix` + offline Host/Origin fixture expansion residual lite; live edge origin pin residual  
 
 **Objective**
 
@@ -364,7 +364,8 @@ Prove safe placement behind site reverse-proxy (TLS terminate, path prefix, Host
 
 - [x] Documented allowed deployment shapes (TLS at proxy vs app; no CORS wildcard).
 - [x] Empty AllowedHosts / AllowedOrigins fail closed for non-local.
-- [ ] Live or fixture matrix for path-prefix origin pin (extends NET-001 residual).
+- [x] Offline fixture matrix for path-prefix + Host/Origin pin (app-side). — `TestHOST002_PathPrefixOriginPinFixtureMatrix` + `TestHOST002_StreamableHTTPOriginHostMatrix` residual lite expand
+- [ ] Live edge path-prefix origin pin matrix (extends NET-001 residual). — offline Done*; live edge residual
 - [x] Health endpoints do not leak secrets or broad tool inventory without auth.
 
 ---

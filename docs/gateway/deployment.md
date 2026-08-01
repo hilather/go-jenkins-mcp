@@ -132,19 +132,32 @@ still listens on loopback or a private port.
 
 #### Path-prefix + origin pin fixture matrix (offline)
 
-Offline unit fixtures (`TestHOST002_PathPrefixOriginPinFixtureMatrix` in
-`internal/mcpserver`) pin the reverse-proxy contract:
+Offline unit fixtures in `internal/mcpserver` pin the reverse-proxy + Host/Origin
+contract. **Done\*** expanded residual lite (no live edge claim):
+
+| Test | What it covers |
+|------|----------------|
+| `TestHOST002_PathPrefixOriginPinFixtureMatrix` | Path-prefix pin, dual health unauth, `X-Forwarded-Host`/`X-Forwarded-Prefix` not trusted (`TrustedProxy=false`) |
+| `TestHOST002_StreamableHTTPOriginHostMatrix` (`http_host002_origin_matrix_test.go`) | Expanded Host/Origin matrix: missing Origin on non-GET (policy allow), wrong Origin 403, exact AllowedOrigins accept, Host not in AllowedHosts 403, `X-Forwarded-Host`/`X-Forwarded-Origin` ignored (false **and** true residual no-op), PathPrefix strip does not weaken Origin/Host, secret-free error bodies |
+| `TestHOST002_TrustedProxyTrueStillIgnoresXForwarded` | `TrustedProxy=true` still ignores `X-Forwarded-Host`/`X-Forwarded-Prefix` (fail-closed residual honesty) |
 
 | Fixture | PathPrefix | Host | Origin | Extra headers | Expect |
 |---------|------------|------|--------|---------------|--------|
-| Origin exact match under prefix | `/mcp` | allowed | exact allow-list | — | Pass protect (not 401/403/404) |
-| Wrong Origin under prefix | `/mcp` | allowed | evil | — | **403** |
+| Missing Origin on non-GET (non-local) | none / `/mcp` | allowed | *(absent)* | — | Pass protect (non-browser clients; policy as coded) |
+| Origin exact match | none / `/mcp` | allowed | exact allow-list | — | Pass protect (not 401/403/404) |
+| Wrong Origin | none / `/mcp` | allowed | evil | — | **403** |
 | Host allow-list OK (non-local + prefix) | `/mcp` | allowed | allowed | — | Pass protect |
-| Host allow-list reject (non-local + prefix) | `/mcp` | evil | allowed | — | **403** |
+| Host allow-list reject (non-local) | none / `/mcp` | evil | allowed | — | **403** |
 | Health root unauthenticated | `/mcp` | any | — | no token | **200** `GET /healthz` |
 | Health `{prefix}/healthz` unauthenticated | `/mcp` | any | — | no token | **200** `GET /mcp/healthz` |
-| `X-Forwarded-Host` spoof | `/mcp` | evil | allowed | `X-Forwarded-Host: allowed` | **403** (not trusted) |
+| `X-Forwarded-Host` spoof | none / `/mcp` | evil | allowed | `X-Forwarded-Host: allowed` | **403** (not trusted; Host header wins) |
+| `X-Forwarded-Origin` spoof | none | allowed | evil | `X-Forwarded-Origin: allowed` | **403** (not trusted; Origin header wins) |
+| `X-Forwarded-Origin` when Origin missing | none | allowed | *(absent)* | `X-Forwarded-Origin: evil` | Pass protect (XFO never treated as Origin) |
 | `X-Forwarded-Prefix` spoof | `/mcp` | allowed | allowed | path `/` + `X-Forwarded-Prefix` | **404** (prefix from config only) |
+| `TrustedProxy=true` + `X-Forwarded-Host` | residual | evil | allowed | `X-Forwarded-Host: allowed` | **403** (true is still no-op residual) |
+| `TrustedProxy=true` + `X-Forwarded-Origin` | residual | allowed | evil | `X-Forwarded-Origin: allowed` | **403** (true is still no-op residual) |
+| PathPrefix strip + wrong Origin | `/mcp` | allowed | evil | optional X-Forwarded-* | **403** (strip does not weaken Origin) |
+| Error bodies secret-free | any | — | — | Bearer canary | Body never echoes token / `Authorization` |
 
 ```bash
 # App: loopback MCP under /mcp (proxy terminates TLS and forwards /mcp/*)
@@ -180,10 +193,12 @@ AllowedOrigins on the app to match the public edge URL.
 **Residual (NET-001 / HOST-002 live matrix):** a full **live** path-prefix origin
 pin matrix (real edge container that strips/rewrites `Host`/`Origin`/
 `X-Forwarded-*`, multi-prefix Jenkins vs MCP edge) is **not** automated here.
-Offline fixtures above cover app-side pin behavior. Document site proxy config
-in pilot evidence. Do not claim automatic multi-prefix production support or
-trusted-proxy mode beyond the strip + dual health + fail-closed X-Forwarded
-surface above.
+Offline fixtures above (**Done\*** expanded residual lite) cover app-side Host/
+Origin/`TrustedProxy` no-op pin behavior only — **no live edge claim**. Document
+site proxy config in pilot evidence. Do not claim automatic multi-prefix
+production support or trusted-proxy mode beyond the strip + dual health +
+fail-closed X-Forwarded surface above (`TrustedProxy=true` remains ignore-all
+until a future residual lands).
 
 ### Health endpoints — secret-free (HOST-002 / HOST-005)
 
@@ -205,7 +220,7 @@ surface above.
 Regression tests:
 
 ```bash
-go test ./internal/mcpserver -count=1 -run 'Health|Readyz|PathPrefix|AllowedHosts|Wildcard|HOST002'
+go test ./internal/mcpserver -count=1 -run 'Health|Readyz|PathPrefix|AllowedHosts|Wildcard|HOST002|StreamableHTTPOriginHost'
 ```
 
 ---
@@ -468,7 +483,7 @@ See [roadmap § HOST-008](../roadmap/server-team-hosted.md) and
 | **Live AgentCore sidecar / binary pin** | GWY-003 live pin + org AgentCore release |
 | **Image signing** (cosign / registry signing) | Org release pipeline; not in `make package` |
 | Streamable HTTP transport hardening + mTLS | GWY-004 production / HOST-001 |
-| Live edge path-prefix origin pin matrix (container) | HOST-002 / NET-001 residual — offline fixtures + `TrustedProxy` fail-closed ship |
+| Live edge path-prefix origin pin matrix (container) | HOST-002 / NET-001 residual — offline Host/Origin fixtures expanded residual lite + `TrustedProxy` fail-closed ship; **no live edge claim** |
 | Multi-tenant quotas + enforced namespace isolation in one process | Storage / MGR / HOST-004 |
 | Private ratarmount-rs sidecar packaging | ARC / platform |
 | Measurable near-source bandwidth benefit study | PERF / pilot metrics |
