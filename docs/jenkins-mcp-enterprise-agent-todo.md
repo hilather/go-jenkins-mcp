@@ -2702,7 +2702,7 @@ When `--gateway` and provider Ready, Jenkins credentials come from **Obtain for 
 - [x] Mode A → Basic personal token for subject only.
 - [x] Mode B/C → Bearer access token only (never ID token as API credential). *(Mode C Ready + unit tests; Mode B residual provider not Ready)*
 - [x] Obtain failure does not use another subject’s credential.
-- [x] ConsentRequired (mode C) surfaces auth URL metadata only.
+- [x] ConsentRequired (mode C) surfaces auth URL metadata only. — Obtain → AuthProvider → `mapToolErr` progressive `authorization_url` + `session_id` (tool path residual documented; full 3LO browser UX residual)
 - [x] Unit/integration tests per mode with mocks. *(A + C offline; B residual)*
 - [x] `docs/gateway/README.md` residuals closed for wiring. *(wiring section; Entra pin still residual)*
 
@@ -2795,11 +2795,12 @@ per-subject + process ceilings, `Hold`/`WithSubjectSlot`, fair-share tests,
 
 **Acceptance criteria**
 
-- [x] Single-replica Tier A default documented. — `docs/gateway/deployment.md` §9; kustomize `replicas: 1`
-- [x] Multi-replica checklist: shared vault, affinity, audit aggregation. — checklist in deployment.md (not implemented)
-- [x] Explicit non-goal until vault exists. — documented non-goal
+- [x] Single-replica Tier A default documented. — `docs/gateway/deployment.md` §9 runbook; kustomize/compose `replicas: 1` comments
+- [x] Multi-replica checklist: shared vault, affinity, no memory-only token cache, audit aggregation. — expanded checklist in deployment.md §9 (not implemented)
+- [x] Explicit non-goal until vault exists. — documented non-goal; do not claim multi-replica Done
+- [x] Secret-free residual surfaces: doctor `gateway_status` + admin health/vault (`multi_user_enabled` / `multiUserEnabled`, `credential_mode`, `gateway_ready=false`, `ha_multi_replica=false`)
 
-**Status:** **Done*** as **documentation residual** only. No multi-replica runtime.
+**Status:** **Done*** as **documentation residual** + secret-free status fields only. **No multi-replica runtime.**
 
 ---
 

@@ -96,7 +96,14 @@ fetcher later. Real Entra discovery, durable vault, and 3LO browser UX remain
 
 Consent metadata (`ConsentInfo`) may carry **authorization URL + session id** only —
 never access tokens, refresh tokens, client secrets, or auth codes.
-`ConsentRequired` is preserved through Obtain → AuthProvider (HOST-003).
+`ConsentRequired` is preserved through Obtain → AuthProvider (HOST-003) and through
+the **tool error path** (`mapToolErr`): MCP model-visible message includes
+`authorization_url=` + `session_id=` only (progressive consent UX residual).
+`Error()` / logs stay host + truncated session (no full authorize query dump).
+
+**Progressive consent residual (Mode C):** full browser 3LO UX, durable consent
+session store, and multi-replica consent correlation remain **GWY-003 /
+OAUTH-010 / HOST-008** — not closed by metadata propagation alone.
 
 Token cache: in-memory, keyed by `(tenant, user, workload, profile)` (HOST-004),
 TTL-bounded. `String()` / errors / `Status` **never** include token bytes (canary tests).
@@ -119,7 +126,7 @@ time). There is **no** keyring / static / shared-SA fallthrough after Ready.
 | Static residual | `clearGatewayLocalSessionCredentials` clears client User/Token after attach |
 | Session-start identity | `verifyGatewayObtainWhoAmI` runs whoAmI with Obtain credentials (default caller); mismatch / anonymous / Obtain fail → serve fails closed |
 | Obtain failure | AuthProvider/AuthProviderCtx returns error; request not sent; never another subject’s credential |
-| ConsentRequired (Mode C) | Surfaces auth URL + session id only (`AsConsentRequired`) |
+| ConsentRequired (Mode C) | Surfaces auth URL + session id only (`AsConsentRequired` → AuthProvider → `mapToolErr` progressive fields) |
 | Provider !Ready | Residual local session (Mode C default Live=false) |
 
 Mode A Ready → Basic personal vault token. Mode B Ready → Bearer from JWT vault
@@ -196,7 +203,7 @@ ctx lands; durable L1/L2 archive namespace (STO / HOST-008).
 |------|------|
 | `SubjectLimiter` | Per-`subjectKey` concurrent slots under a process ceiling |
 | `Hold` / `WithSubjectSlot` | Acquire → work → Release (prefer over bare Acquire) |
-| `StatusMap` | Non-secret doctor summary (`ha_multi_replica: false`) |
+| `StatusMap` | Non-secret doctor summary (`ha_multi_replica: false` — HOST-008 residual) |
 
 Defaults: **8** concurrent per subject, **64** process-wide (abs ceilings **64** / **256**).
 Excess → `CodeQuota`.
@@ -549,6 +556,8 @@ opt in via `JENKINS_MCP_GATEWAY_LIVE` + token endpoint (`EnableLiveHTTPFetcher`)
 
 Consent metadata (`ConsentInfo`) may carry **authorization URL + session id** only —
 never access tokens, refresh tokens, client secrets, or auth codes.
+Tool path: `mapToolErr` surfaces progressive `authorization_url` + `session_id`
+(Mode C residual; full 3LO browser UX remains GWY-003 / OAUTH-010).
 
 Token cache: in-memory, keyed by `(user, workload, profile)`, TTL-bounded.
 `String()` / errors / `Status` **never** include token bytes (canary tests).

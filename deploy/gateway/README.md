@@ -21,7 +21,7 @@ Illustrative packaging for `jenkins-mcp serve --gateway` near Jenkins.
 | Secrets | **None** in compose/image; `.env` is gitignored operator copy of `.env.example` |
 | HTTP bind | Container **loopback** `127.0.0.1:8081` (host port mapped loopback); all-interfaces + mesh residual |
 | CORS | Exact AllowedOrigins only when non-local; **no wildcard** |
-| Replicas | **1** (Tier A; HOST-008 multi-replica residual) |
+| Replicas | **1** (Tier A default; HOST-008 multi-replica HA non-goal until durable vault — see deployment.md §9) |
 
 ## Pilot resource limits (HOST-005)
 
@@ -50,7 +50,7 @@ Bodies are **secret-free** (no inventory, tokens, subjects). See deployment.md �
 | Image signing / SBOM attach | Org pipeline |
 | Streamable HTTP mTLS + non-local production pin | HOST-001 / HOST-002 |
 | Live reverse-proxy path-prefix matrix | HOST-002 / NET-001 |
-| Multi-replica HA | HOST-008 Tier B |
+| Multi-replica HA | HOST-008 Tier B (docs residual only; replicas stay 1) |
 | Real Entra / jwt-auth-filter production pin | OAUTH-009 / OAUTH-010 |
 
 **Windows is out of scope** (ADR 0008).

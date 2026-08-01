@@ -16,6 +16,18 @@ export interface HealthResponse {
   version: string;
   commit: string;
   uiBuild?: string;
+  /** HOST-011 mode ids only (secret-free). */
+  enabledModes?: string[];
+  /** Primary JENKINS_MCP_GATEWAY_CREDENTIAL_MODE id. */
+  credentialMode?: string;
+  /** JENKINS_MCP_GATEWAY_MULTI_USER env parse (foundation residual, not production GO). */
+  multiUserEnabled?: boolean;
+  /** Always false on admin BFF (Ready is MCP serve /readyz). */
+  gatewayReady?: boolean;
+  /** Always false (HOST-008 Tier A single-replica residual). */
+  haMultiReplica?: boolean;
+  /** Multi-user / HA honesty note when relevant (never tokens). */
+  residual?: string;
 }
 
 /** Subset of `jenkins-mcp version --json`. */
@@ -293,6 +305,10 @@ export interface PolicyApplyResponse {
 export interface GatewayVaultResponse {
   mode: string;
   enabledModes?: string[];
+  /** JENKINS_MCP_GATEWAY_MULTI_USER env parse (foundation residual). */
+  multiUserEnabled?: boolean;
+  /** Always false (HOST-008 Tier A residual). */
+  haMultiReplica?: boolean;
   vaultConfigured: boolean;
   entryCount: number;
   subjects: string[];

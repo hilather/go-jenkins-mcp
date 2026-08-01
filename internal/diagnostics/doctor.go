@@ -161,6 +161,9 @@ func RunDoctor(ctx context.Context, opts DoctorOptions) (Report, error) {
 	// NET-003 / OBS Wave 27: circuit state when a client is available (no network).
 	rep.Checks = append(rep.Checks, checkCircuit(opts))
 
+	// HOST-008 / multi-user residual: secret-free gateway env posture (offline).
+	rep.Checks = append(rep.Checks, checkGatewayStatus())
+
 	// UPD-001 Wave 35: LKG on-disk re-verify when a record exists (offline).
 	rep.Checks = append(rep.Checks, checkUpdateLKG(opts.Paths))
 

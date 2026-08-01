@@ -90,6 +90,28 @@ export function OverviewPage() {
             <dd>{health.data.commit || "—"}</dd>
             <dt>uiBuild</dt>
             <dd>{health.data.uiBuild || "(none)"}</dd>
+            <dt>credentialMode</dt>
+            <dd>
+              <code>{health.data.credentialMode || "—"}</code>
+            </dd>
+            <dt>multiUserEnabled</dt>
+            <dd>{health.data.multiUserEnabled ? "yes (foundation residual)" : "no"}</dd>
+            <dt>gatewayReady</dt>
+            <dd>
+              {health.data.gatewayReady ? "yes" : "no"}{" "}
+              <span className="muted">(admin BFF residual; Ready is serve /readyz)</span>
+            </dd>
+            <dt>haMultiReplica</dt>
+            <dd>
+              {health.data.haMultiReplica ? "yes" : "no"}{" "}
+              <span className="muted">(HOST-008 Tier A single-replica default)</span>
+            </dd>
+            {health.data.residual ? (
+              <>
+                <dt>residual</dt>
+                <dd className="muted">{health.data.residual}</dd>
+              </>
+            ) : null}
           </dl>
         ) : (
           !health.isLoading && (
@@ -160,6 +182,10 @@ export function OverviewPage() {
                     ))
                   : "—"}
               </dd>
+              <dt>multiUserEnabled</dt>
+              <dd>{vault.data.multiUserEnabled ? "yes (foundation residual)" : "no"}</dd>
+              <dt>haMultiReplica</dt>
+              <dd>{vault.data.haMultiReplica ? "yes" : "no (HOST-008 residual)"}</dd>
               <dt>vaultConfigured</dt>
               <dd>{vault.data.vaultConfigured ? "yes" : "no"}</dd>
               <dt>entryCount</dt>

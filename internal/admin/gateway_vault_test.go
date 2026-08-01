@@ -15,10 +15,11 @@ import (
 
 const vaultCanaryToken = "admin-vault-canary-token-NEVER-IN-JSON"
 
-// HOST-007: health lists enabledModes secret-free (mode ids only; no vault tokens).
+// HOST-007 / HOST-008: health lists enabledModes + gateway residual posture (secret-free).
 func TestHealth_EnabledModesSecretFree(t *testing.T) {
 	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAPITokenVault))
 	t.Setenv(gateway.EnvGatewayEnabledModes, "api_token_vault,jwt_rs_bearer")
+	t.Setenv(gateway.EnvGatewayMultiUser, "")
 	t.Setenv(gateway.EnvGatewayVaultPath, filepath.Join(t.TempDir(), "unused.json"))
 
 	cfg := admin.DefaultConfig()
@@ -42,6 +43,60 @@ func TestHealth_EnabledModesSecretFree(t *testing.T) {
 	}
 	if !strings.Contains(body, `"enabledModes"`) {
 		t.Fatalf("health missing enabledModes field: %s", body)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["credentialMode"] != string(gateway.CredentialModeAPITokenVault) {
+		t.Fatalf("credentialMode=%v", m["credentialMode"])
+	}
+	if m["multiUserEnabled"] != false {
+		t.Fatalf("multiUserEnabled=%v", m["multiUserEnabled"])
+	}
+	if m["gatewayReady"] != false {
+		t.Fatalf("admin gatewayReady residual must be false: %v", m["gatewayReady"])
+	}
+	if m["haMultiReplica"] != false {
+		t.Fatalf("HOST-008 haMultiReplica must be false: %v", m["haMultiReplica"])
+	}
+}
+
+// HOST-008 residual: multi_user env surfaces residual note without tokens.
+func TestHealth_MultiUserResidualNote(t *testing.T) {
+	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAgentCore))
+	t.Setenv(gateway.EnvGatewayMultiUser, "true")
+	t.Setenv(gateway.EnvGatewayVaultPath, filepath.Join(t.TempDir(), "unused.json"))
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleViewer
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/admin/v1/health", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	raw := rr.Body.String()
+	if strings.Contains(raw, vaultCanaryToken) {
+		t.Fatal("canary in multi-user health")
+	}
+	var m map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["multiUserEnabled"] != true {
+		t.Fatalf("multiUserEnabled=%v", m["multiUserEnabled"])
+	}
+	res, _ := m["residual"].(string)
+	if !strings.Contains(res, "MULTI_USER") && !strings.Contains(res, "multi-user") {
+		t.Fatalf("want multi-user residual note: %q", res)
+	}
+	if m["haMultiReplica"] != false {
+		t.Fatalf("haMultiReplica=%v", m["haMultiReplica"])
 	}
 }
 

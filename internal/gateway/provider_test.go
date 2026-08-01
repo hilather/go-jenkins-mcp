@@ -164,9 +164,13 @@ func TestCredentialAndCachedTokenStringNoSecrets(t *testing.T) {
 
 func TestConsentRequiredNoSecrets(t *testing.T) {
 	t.Parallel()
+	const (
+		authURL = "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?state=abc"
+		sessID  = "sess-1234567890"
+	)
 	err := gateway.NewConsentRequired(gateway.ConsentInfo{
-		AuthorizationURL: "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?state=abc",
-		SessionID:        "sess-1234567890",
+		AuthorizationURL: authURL,
+		SessionID:        sessID,
 		Provider:         "agentcore",
 	})
 	if err == nil {
@@ -175,9 +179,19 @@ func TestConsentRequiredNoSecrets(t *testing.T) {
 	if strings.Contains(err.Error(), canaryAccessToken) {
 		t.Fatal("canary")
 	}
+	// Error() is log-safe (host + truncated session); full URL is progressive UX only.
+	if strings.Contains(err.Error(), "state=abc") {
+		t.Fatalf("Error() must not dump full authorize URL with state: %q", err.Error())
+	}
 	cr, ok := gateway.AsConsentRequired(err)
 	if !ok || !cr.Info.Valid() {
 		t.Fatalf("%v %v", ok, cr)
+	}
+	if cr.ConsentAuthorizationURL() != authURL {
+		t.Fatalf("ConsentAuthorizationURL=%q", cr.ConsentAuthorizationURL())
+	}
+	if cr.ConsentSessionID() != sessID {
+		t.Fatalf("ConsentSessionID=%q", cr.ConsentSessionID())
 	}
 	// Incomplete consent rejected.
 	if err := gateway.NewConsentRequired(gateway.ConsentInfo{}); err == nil {

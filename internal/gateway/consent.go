@@ -69,11 +69,32 @@ type ConsentRequired struct {
 }
 
 // Error implements error without tokens or codes.
+// Log-safe: host + truncated session only (full URL is for progressive MCP UX
+// via ConsentAuthorizationURL / mapToolErr, not default Error() dumps).
 func (e *ConsentRequired) Error() string {
 	if e == nil {
 		return "consent required"
 	}
 	return "consent required: " + e.Info.String()
+}
+
+// ConsentAuthorizationURL returns the progressive-consent browser URL (auth URL
+// only; never an access token). Used by tools.mapToolErr via duck-typed
+// progressiveConsent so tools does not import gateway.
+func (e *ConsentRequired) ConsentAuthorizationURL() string {
+	if e == nil {
+		return ""
+	}
+	return strings.TrimSpace(e.Info.AuthorizationURL)
+}
+
+// ConsentSessionID returns the opaque consent/session correlation id (non-secret).
+// Never an access token, refresh token, or client secret.
+func (e *ConsentRequired) ConsentSessionID() string {
+	if e == nil {
+		return ""
+	}
+	return strings.TrimSpace(e.Info.SessionID)
 }
 
 // AsConsentRequired extracts ConsentRequired from err when present.
