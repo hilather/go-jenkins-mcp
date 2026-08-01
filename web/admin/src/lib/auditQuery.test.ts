@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { AuditEvent } from "../api/types";
 import {
+  AUDIT_TYPE_OPTIONS,
   buildAuditExportPayload,
   buildAuditQueryString,
   datetimeLocalToRfc3339,
+  filterEventsByExternalSubject,
+  formatAuditSubjectCell,
   normalizeAuditLimit,
   olderBeforeCursor,
   presentAuditFields,
@@ -88,6 +91,73 @@ describe("datetimeLocalToRfc3339", () => {
   });
 });
 
+describe("AUDIT_TYPE_OPTIONS", () => {
+  it("includes tool_deny, tool_error, tool_success, mutation_*", () => {
+    const values = AUDIT_TYPE_OPTIONS.map((o) => o.value);
+    expect(values).toContain("");
+    expect(values).toContain("tool_deny");
+    expect(values).toContain("tool_error");
+    expect(values).toContain("tool_success");
+    expect(values).toContain("mutation_preview");
+    expect(values).toContain("mutation_confirm");
+    expect(values).toContain("mutation_deny");
+    // Metrics name tool_ok is not an audit type string.
+    expect(values).not.toContain("tool_ok");
+  });
+});
+
+describe("formatAuditSubjectCell", () => {
+  it("returns em dash for empty", () => {
+    expect(formatAuditSubjectCell(undefined)).toBe("—");
+    expect(formatAuditSubjectCell("")).toBe("—");
+    expect(formatAuditSubjectCell("   ")).toBe("—");
+  });
+
+  it("returns short values whole", () => {
+    expect(formatAuditSubjectCell("alice@idp")).toBe("alice@idp");
+    expect(formatAuditSubjectCell("a1b2c3d4e5f67890")).toBe("a1b2c3d4e5f67890");
+  });
+
+  it("truncates long values with ellipsis", () => {
+    const long = "abcdefghijklmnopqrstuvwxyz";
+    expect(formatAuditSubjectCell(long, 8)).toBe("abcdefgh…");
+  });
+});
+
+describe("filterEventsByExternalSubject", () => {
+  const events: AuditEvent[] = [
+    {
+      time: "t1",
+      type: "tool_deny",
+      schemaVersion: 1,
+      externalSubject: "alice@corp",
+      subjectKeyHash: "deadbeefcafebabe",
+    },
+    {
+      time: "t2",
+      type: "tool_error",
+      schemaVersion: 1,
+      externalSubject: "bob@corp",
+    },
+    { time: "t3", type: "login_success", schemaVersion: 1 },
+  ];
+
+  it("returns all when filter empty", () => {
+    expect(filterEventsByExternalSubject(events, "")).toEqual(events);
+    expect(filterEventsByExternalSubject(events, undefined)).toEqual(events);
+  });
+
+  it("substring matches case-insensitively", () => {
+    const got = filterEventsByExternalSubject(events, "ALICE");
+    expect(got).toHaveLength(1);
+    expect(got[0].externalSubject).toBe("alice@corp");
+  });
+
+  it("excludes events without externalSubject when filter set", () => {
+    expect(filterEventsByExternalSubject(events, "corp")).toHaveLength(2);
+  });
+});
+
 describe("presentAuditFields", () => {
   it("shows only present schema fields", () => {
     const fields = presentAuditFields({
@@ -107,6 +177,19 @@ describe("presentAuditFields", () => {
     ]);
   });
 
+  it("includes multi-user correlation fields when present", () => {
+    const fields = presentAuditFields({
+      time: "t1",
+      type: "tool_deny",
+      schemaVersion: 1,
+      externalSubject: "alice@idp",
+      subjectKeyHash: "a1b2c3d4e5f67890",
+    });
+    const map = Object.fromEntries(fields.map((f) => [f.key, f.value]));
+    expect(map.externalSubject).toBe("alice@idp");
+    expect(map.subjectKeyHash).toBe("a1b2c3d4e5f67890");
+  });
+
   it("skips secret-shaped extra keys (canary)", () => {
     const ev = {
       time: "t1",
@@ -115,11 +198,14 @@ describe("presentAuditFields", () => {
       password: "should-not-appear",
       access_token: "tok",
       Authorization: "Bearer x",
+      // Canary: vault-shaped raw key must never be a detail field name we invent.
+      vault_token: "CANARY_vault_must_not_appear",
     } as AuditEvent & Record<string, unknown>;
     const fields = presentAuditFields(ev as AuditEvent);
     const blob = JSON.stringify(fields);
     expect(blob).not.toContain("should-not-appear");
     expect(blob).not.toContain("Bearer");
+    expect(blob).not.toContain("CANARY_vault");
     expect(blob.toLowerCase()).not.toContain("password");
     expect(blob.toLowerCase()).not.toContain("token");
   });
@@ -141,6 +227,42 @@ describe("buildAuditExportPayload", () => {
     expect(payload.truncated).toBe(true);
     expect(payload.events).toEqual(events);
     const text = JSON.stringify(payload);
+    expect(text.toLowerCase()).not.toContain("password");
+  });
+
+  it("includes multi-user fields on events and client externalSubject filter meta", () => {
+    const events: AuditEvent[] = [
+      {
+        time: "t1",
+        type: "tool_error",
+        schemaVersion: 1,
+        externalSubject: "alice@idp",
+        subjectKeyHash: "a1b2c3d4e5f67890",
+        decision: "error",
+      },
+    ];
+    const payload = buildAuditExportPayload(
+      "corp",
+      events,
+      {
+        truncated: false,
+        filters: {
+          limit: 50,
+          type: "tool_error",
+          externalSubject: "alice",
+        },
+      },
+      "2026-01-01T00:00:00.000Z",
+    );
+    expect(payload.events).toEqual(events);
+    const filters = payload.filters as Record<string, unknown>;
+    expect(filters.externalSubject).toBe("alice");
+    const text = JSON.stringify(payload);
+    expect(text).toContain("externalSubject");
+    expect(text).toContain("subjectKeyHash");
+    expect(text).toContain("a1b2c3d4e5f67890");
+    // Canary: never invent tokens into export.
+    expect(text.toLowerCase()).not.toContain("bearer");
     expect(text.toLowerCase()).not.toContain("password");
   });
 });

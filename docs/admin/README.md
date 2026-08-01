@@ -104,7 +104,7 @@ HTTP server timeouts (local admin, not multi-tenant gateway): `ReadHeaderTimeout
 |---------|---------------------|
 | Overview / policy effective / doctor read | Scaffold (UI-001) + BFF (UI-002) + role badge / token control (UI-003) + serve/CSP packaging (UI-008) |
 | **Metrics** (UI-005) | Auto-refresh (15s) with pause on hidden tab + manual pause, session sparklines (≤60 pts), secret-free JSON export. **Residual:** process-local only; no fleet aggregation |
-| **Audit** (UI-006) | type/limit/before filters, detail drawer, load-older via `before` cursor, export loaded events. **Residual:** no live SSE tail; page-capped client export only |
+| **Audit** (UI-006) | type dropdown (tool_deny/error/success, mutation_*), limit/before, **externalSubject** / **subjectKeyHash** table columns (muted/truncated), client-side externalSubject filter on loaded page, detail drawer, load-older, export includes multi-user fields. **Residual:** no BFF externalSubject query param; no live SSE tail; page-capped client export only; multi-pod aggregation residual |
 | Policy write editor | Not yet (UI-004) |
 | Destructive ops | Not yet (UI-007) |
 
