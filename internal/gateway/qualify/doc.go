@@ -8,6 +8,10 @@
 //   - OAUTH-009 offline bearer / fallthrough matrix (Mode B)
 //   - OAUTH-010 Mode C prototype matrix (auth_code consent, token_exchange
 //     Bearer, Live gates, ModeMatrix residual honesty)
+//   - Progressive consent residual honesty (browser 3LO not automated)
+//   - Gateway residual-status offline honesty (BuildGatewayResidualStatus:
+//     residual_ids, ha_multi_replica false, live mode pins false,
+//     oauth009_offline, shared_*_file default false, no secrets)
 //   - No silent cross-mode fallthrough (HOST-011)
 //   - Fail-closed config/binding, process vault hit/miss, mock IdP outage chaos,
 //     JWKS kid-selection lite

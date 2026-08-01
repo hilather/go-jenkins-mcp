@@ -44,6 +44,7 @@ jenkins-mcp gateway qualify --offline   # JSON summary, no secrets
 | `oauth009_offline_bearer_matrix` | security | **OAUTH-009:** wrong aud/exp/iss fail closed; ID token reject; OfflineFallthroughFixtures; Mode B empty ≠ Mode A; ModeMatrix residual honesty |
 | `oauth010_mode_c_offline_matrix` | security | **OAUTH-010:** auth_code ConsentRequired (URL+session only); token_exchange Bearer; wrong audience; Live=false; Live=true nil Fetcher; ModeMatrix residual; Jenkins-as-AS reject (**not** live Entra Done) |
 | `progressive_consent_residual` | security | **OAUTH-010 / GWY-001:** progressive consent residual honesty — browser 3LO not automated; metadata path Done*; ConsentRequired helpers + Error() canary-free |
+| `gateway_residual_status_offline_honesty` | security | **GWY-003 residual lite:** `BuildGatewayResidualStatus` (CLI `gateway residual-status` / doctor embed) — `residual_ids` present, `ha_multi_replica=false`, live `mode_*_*_qualified=false`, `oauth009_offline`, `shared_*_file` default false, secret-free (**not** live Entra Done) |
 | `concurrent_obtain_stub_under_budget` | performance | N=32 concurrent stub Obtain under 500ms wall budget |
 | `fail_closed_obtain_latency` | performance | Fail-closed Obtain under 50ms |
 
@@ -54,6 +55,7 @@ jenkins-mcp gateway qualify --offline   # JSON summary, no secrets
 - Mode B live jwt-auth-filter / IdP pin residual (OAUTH-009); offline JWT vault Bearer + claim fail-closed matrix Done* (`oauth009_offline_bearer_matrix`)
 - Mode C live Entra 3LO/OBO + AgentCore Identity vault residual (OAUTH-010 / GWY-003); offline prototype matrix Done* (`oauth010_mode_c_offline_matrix` + `mode_c_agentcore_live_matrix`) — **do not claim live Entra Done**
 - Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; process-local consent metadata store Done* (optional file; never tokens; same-host reload-before-persist flock lite; not multi-replica shared store); multi-pod consent correlation residual (HOST-008)
+- Gateway residual-status offline honesty Done* (`gateway_residual_status_offline_honesty`): `residual_ids` + `ha_multi_replica=false` + live mode pins false + `oauth009_offline` + `shared_*_file` default false; no secrets — live Entra/AgentCore pin residual
 - OAUTH-010: `HTTPTokenFetcher` https mock AS in package tests (`TestOAUTH010_*` / `TestHTTPTokenFetcher_*`)
 - Opt-in residual lab: `testdata/oauth-lab` + `make live-oauth-*` + `go test -tags=live_oauth` Mode C Obtain vs mock-token (TLS test shim; not default `make test`; not production Entra)
 - Production P95/P99 token acquisition SLOs  
