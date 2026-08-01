@@ -304,29 +304,33 @@ jenkins-mcp doctor --profile <id> --offline --json  # optional: gateway_residual
 # script: scripts/gateway-residual-smoke.sh → dist/residual-smoke/<ts>/
 #   (gateway-qualify.json, release-evidence.json, gateway-residual-status.json,
 #    security-self-check.json, doctor-offline.json when PROFILE set, …)
-# security self-check residual lite: item gateway_residual_status_honesty present;
-#   status ok|warn (never fail for empty-env honesty); secret-free canary; soft-skip if subcommand missing
 # qualify residual lite canaries (Wave 13): gateway-qualify.json must include
 #   case gateway_residual_status_offline_honesty (passed), residuals[] residual-status
 #   honesty note (case name or residual-status + honesty), passed >= 20, residual_count >= 8
-# residual-status canaries (residual lite): shared_subject_rate_file=false by default;
-#   with JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set → true (path never dumped);
+# residual-status honesty canaries (residual lite; offline ≠ live GO):
+#   shared_subject_rate_file=false by default;
+#     with JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set → true (path never dumped);
 #   shared_principal_cache_file=false by default;
-#   with JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH set → true (path never dumped);
+#     with JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH set → true (path never dumped);
 #   shared_jwks_file=false by default;
-#   with JENKINS_MCP_HTTP_JWKS_CACHE_PATH set → true (path never dumped; public JWKS only);
+#     with JENKINS_MCP_HTTP_JWKS_CACHE_PATH set → true (path never dumped; public JWKS only);
 #   shared_token_cache_file=false by default;
-#   with JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH set → true (path never dumped; never opens token file);
+#     with JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH set → true (path never dumped; never opens token file);
 #   shared_api_token_vault_file=false by default;
-#   with JENKINS_MCP_GATEWAY_VAULT_PATH set → true (path never dumped; never opens vault; default XDG does not count);
+#     with JENKINS_MCP_GATEWAY_VAULT_PATH set → true (path never dumped; never opens vault; default XDG does not count);
 #   shared_jwt_vault_file=false by default;
-#   with JENKINS_MCP_GATEWAY_JWT_VAULT_PATH set → true (path never dumped; never opens vault; default XDG does not count);
+#     with JENKINS_MCP_GATEWAY_JWT_VAULT_PATH set → true (path never dumped; never opens vault; default XDG does not count);
 #   subject_limiter_max_subjects omit/absent by default (unlimited);
-#   with JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS=N → subject_limiter_max_subjects==N
+#     with JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS=N → subject_limiter_max_subjects==N
 #     (HOST-006 residual lite; path never involved; process-local only);
-#   optional file Len: principal_cache_entries count when file has entries (secret-free only);
-#   principal_cache_process_note: principal_cache_entries is this-process / file Len only
-#   (CLI/admin ≠ remote serve MemoryTokenCache/PrincipalCache unless shared file caches)
+#   progressive_consent.file_backed / same_host_reload_before_persist default false;
+#     true when JENKINS_MCP_CONSENT_STORE_PATH set (path never dumped; residual never opens
+#     consent file; stores_tokens=false; multi_replica_shared=false);
+#   principal_cache_entries file Len when seeded (secret-free only);
+#     principal_cache_process_note: this-process / file Len only
+#     (CLI/admin ≠ remote serve MemoryTokenCache/PrincipalCache unless shared file caches);
+#   security self-check residual lite: item gateway_residual_status_honesty present;
+#     status ok|warn (never fail for empty-env honesty); secret-free canary; soft-skip if subcommand missing
 ```
 
 ### 5.2 Residual ids that **must remain present** offline
@@ -352,8 +356,7 @@ That is an **honesty canary**, not a readiness badge.
 | Secret-free JSON surfaces (no tokens in qualify/evidence/self-check) | Production AgentCore Identity vault |
 | Doctor residual fields stay honest when profile/env set | Multi-pod shared vault safety |
 | Mode B/C “live qualified” flags remain **false** offline | Production multi-user GO |
-| residual-status: `shared_subject_rate_file` default false / true when path set (path never dumped); `shared_principal_cache_file` default false / true when path set (path never dumped); `shared_jwks_file` default false / true when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set (path never dumped); `shared_token_cache_file` default false / true when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` set (path never dumped; never opens token file); `shared_api_token_vault_file` / `shared_jwt_vault_file` default false / true when Mode A/B vault path env **explicitly** set (path never dumped; never opens vault; default XDG does not count); file Len `principal_cache_entries` when seeded; `principal_cache_process_note` this-process / file Len only | Live multi-pod shared rate/principal/JWKS/token/vault or remote serve cache inventory |
-| residual-status: `shared_subject_rate_file` default false / true when path set (path never dumped); `shared_principal_cache_file` default false / true when path set (path never dumped); `shared_jwks_file` default false / true when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set (path never dumped); `subject_limiter_max_subjects` omit default / `==N` when `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS=N` (path never involved); file Len `principal_cache_entries` when seeded; `principal_cache_process_note` this-process / file Len only | Live multi-pod shared rate/principal/JWKS/concurrency or remote serve cache inventory |
+| residual-status honesty canaries (offline ≠ live GO): all `shared_*_file` default false / true when path env set — `shared_subject_rate_file`, `shared_principal_cache_file`, `shared_jwks_file`, `shared_token_cache_file`, `shared_api_token_vault_file`, `shared_jwt_vault_file` (vaults need **explicit** path; default XDG does not count; path never dumped; token/vault residual never opens files); `subject_limiter_max_subjects` omit default / `==N` when `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS=N` (path never involved; process-local); `progressive_consent.file_backed` / `same_host_reload_before_persist` default false / true when `JENKINS_MCP_CONSENT_STORE_PATH` set (path never dumped; residual never opens consent file; `stores_tokens=false`; `multi_replica_shared=false`); file Len `principal_cache_entries` when seeded; `principal_cache_process_note` this-process / file Len only; security self-check item `gateway_residual_status_honesty` (ok\|warn; offline posture only) | Live multi-pod shared rate/principal/JWKS/token/vault/concurrency, multi-replica consent, remote serve cache inventory, or live multi-user / Entra / AgentCore GO |
 | Mock oauth-lab wire (separate opt-in) | Production TLS edge / real plugin |
 
 ### 5.4 Operator rule
@@ -381,12 +384,10 @@ live pin complete without lab evidence.
 | `security self-check` | item `rs_qualification` (OAUTH-009 residual summary) | Warn on `oidc_bearer` or Mode B |
 | `security self-check` | item `gateway_residual_status_honesty` (GWY-003 residual lite) | Pure offline `BuildGatewayResidualStatus` honesty (same spirit as qualify `gateway_residual_status_offline_honesty`): `residual_ids` present, `ha_multi_replica=false`, live pins false, `shared_*_file` default false, secret-free; **ok** when honesty holds; **warn** if multi_user env set without claiming live multi-user GO; **exercised by residual-smoke** (`security self-check --json`, no profile); not live GO |
 | Admin `GET /admin/v1/health` / `gateway/vault` | `haMultiReplica=false`, `sessionAffinityRecommended`, mode ids only | Never tokens |
-| `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count + process note, JWKS/token/vault path file bools) | Env/static honesty; Mode B id `oauth009_offline`; `shared_subject_rate_file` / `shared_principal_cache_file` / `shared_jwks_file` / `shared_token_cache_file` / `shared_api_token_vault_file` / `shared_jwt_vault_file` path residual (path never dumped; token/vault residual never opens files; vault bools need env-explicit path, not default XDG); `principal_cache_entries` **this process / file Len only** (CLI/admin ≠ serve); never tokens/subjects; **exercised by residual-smoke** |
-| `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count + process note, JWKS file bool, optional limiter/rate max subjects) | Env/static honesty; Mode B id `oauth009_offline`; `shared_subject_rate_file` / `shared_principal_cache_file` / `shared_jwks_file` path residual (path never dumped); `subject_limiter_max_subjects` when `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` set (omit unlimited; path never involved); `principal_cache_entries` **this process / file Len only** (CLI/admin ≠ serve); never tokens/subjects; **exercised by residual-smoke** |
+| `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count + process note, JWKS/token/vault path file bools, optional limiter max subjects) | Env/static honesty; Mode B id `oauth009_offline`; all `shared_*_file` path residual (`shared_subject_rate_file` / `shared_principal_cache_file` / `shared_jwks_file` / `shared_token_cache_file` / `shared_api_token_vault_file` / `shared_jwt_vault_file` — path never dumped; token/vault residual never opens files; vault bools need env-explicit path, not default XDG); `subject_limiter_max_subjects` when `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` set (omit unlimited; path never involved); `progressive_consent.file_backed` / `same_host_reload_before_persist` when `JENKINS_MCP_CONSENT_STORE_PATH` set (`stores_tokens=false`; `multi_replica_shared=false`; path never dumped); `principal_cache_entries` **this process / file Len only** (CLI/admin ≠ serve); never tokens/subjects; **exercised by residual-smoke** |
 | Admin `GET /admin/v1/gateway/residual-status` | Same secret-free map as CLI (HOST-007 SPA Overview + Doctor residual cards surface `mode_*_live_*_qualified` / `gateway_ready` / `ha_multi_replica` as no/false; `progressive_consent.file_backed` / `same_host_reload_before_persist` when `CONSENT_STORE_PATH` set; `multi_replica_shared=false`; `stores_tokens=false`) | Viewer read; 404 hides card on older BFF; offline residual — not production GO; never tokens/paths |
 | `gateway consent-residual` | Progressive consent residual snapshot | Browser 3LO not automated; residual-smoke optional |
-| `gateway consent-purge` / `consent-expire` | Purge TTL-expired consent metadata (or `--session-id` / `--all`) | Metadata only; secret-free counts; same-host file reload-before-persist **Done\* lite** (no serve Put resurrection); persist fail closed (non-zero on disk write fail); not multi-replica HA |
-| `gateway consent-purge` / `consent-expire` | Purge TTL-expired consent metadata (or `--session-id` / `--all --confirm=CLEAR_ALL`) | Metadata only; secret-free counts; clear_all requires exact confirm token; same-host file reload-before-persist **Done\* lite** (no serve Put resurrection); not multi-replica HA |
+| `gateway consent-purge` / `consent-expire` | Purge TTL-expired consent metadata (or `--session-id` / `--all --confirm=CLEAR_ALL`) | Metadata only; secret-free counts; clear_all requires exact confirm token; same-host file reload-before-persist **Done\* lite** (no serve Put resurrection); persist fail closed (non-zero on disk write fail); not multi-replica HA |
 | `gateway subject-invalidate` | Force re-auth residual lite: process-local principal **or** FilePrincipalCache + optional FileTokenCache | Not live Entra revocation; multi-pod residual; share file paths for same-host CLI↔serve |
 | Admin `POST /admin/v1/gateway/subject-invalidate` | Same residual lite as CLI (HOST-007 SPA Overview form; `gateway_ops`) | Not live Entra; multi-pod residual; share file paths for same-host admin↔serve |
 | Admin `POST /admin/v1/gateway/consent-purge` | Same residual lite as CLI consent-purge (HOST-007 SPA Mode C form; `gateway_ops`; clear_all + `confirm: "CLEAR_ALL"`) | Metadata only; never tokens; session_id not echoed; multi-pod residual; share `JENKINS_MCP_CONSENT_STORE_PATH` for same-host admin↔serve |

@@ -2862,8 +2862,7 @@ serve restart.
 - [x] Admin consent-purge residual lite: `POST /admin/v1/gateway/consent-purge` + Overview Mode C residual SPA form (mirrors CLI `gateway consent-purge`; `gateway_ops`; OpenConsentSessionStoreForPurge / env path; purge_expired \| delete_session \| clear_all; secret-free counts; never tokens; session_id not echoed). **Residual:** multi-pod shared store, browser 3LO automation, memory-only serve without shared FilePath.
 - [x] Consent clear_all confirm token residual lite: destructive clear_all requires exact `confirm: "CLEAR_ALL"` (BFF 400 without; CLI `--all --confirm=CLEAR_ALL`; SPA type-to-confirm). Parity with cache `EVICT`. purge_expired / delete_session unchanged.
 
-**Status:** **Done*** for operator residual documentation + secret-free mode listing + multi-user honesty + residual-status BFF/SPA + subject-invalidate BFF/SPA residual lite + consent-purge BFF/SPA residual lite (+ clear_all `CLEAR_ALL` confirm). Cookie sessions / multi-operator OIDC remain residual.
-**Status:** **Done*** for operator residual documentation + secret-free mode listing + multi-user honesty + residual-status BFF/SPA + health/vault shared*File parity + subject-invalidate BFF/SPA residual lite + consent-purge BFF/SPA residual lite. Cookie sessions / multi-operator OIDC remain residual.
+**Status:** **Done*** for operator residual documentation + secret-free mode listing + multi-user honesty + residual-status BFF/SPA + health/vault shared*File parity (incl. `sharedTokenCacheFile`) + progressive consent SPA nest + subject-invalidate BFF/SPA residual lite + consent-purge BFF/SPA residual lite (+ clear_all `CLEAR_ALL` confirm). Cookie sessions / multi-operator OIDC remain residual.
 
 ---
 
