@@ -47,7 +47,8 @@ Versioned, secret-free JSON loaded at `serve` time.
   "deny_branch_names": ["release/*"],
   "max_result_bytes": 65536,
   "max_tools_per_minute": 15,
-  "max_tools_burst": 5
+  "max_tools_burst": 5,
+  "fleet_telemetry_force_off": true
 }
 ```
 
@@ -55,6 +56,7 @@ Versioned, secret-free JSON loaded at `serve` time.
 |-------|---------|
 | `version` | Must be `1` |
 | `force_read_only` | When true, cannot be defeated by `--allow-mutations`, profile, or weaker flags |
+| `fleet_telemetry_force_off` | When true, forces fleet health telemetry **off** regardless of `JENKINS_MCP_TELEMETRY` (MGR-002). Fail closed / lower-only: env cannot re-enable while pin is true. Serve applies on load + hot-reload (`Collector.SetForceOff`). Admin pilot apply cannot clear a true pin. See [fleet-telemetry.md](security/fleet-telemetry.md). |
 | `mode` | `pilot` (default) or `strict` |
 | `deny_tools` | Exact MCP tool names to deny |
 | `deny_job_prefixes` | Job full names / folder patterns denied at **call time** when args include `job_name` or seed `name`. See [Job pattern language](#job-pattern-language-deny_job_prefixes-pol-002-wave-26). Empty / overly broad entries fail load. **Wave 37/39:** also omits matching rows from `jenkins_list_jobs` (collect+filter+repaginate when patterns live; `policy_filtered` / `policy_omitted_count`). |
@@ -259,8 +261,9 @@ is wrapped in `policy.ReloadableDenyOnly`:
 | **What reloads (Wave 24/35/36)** | `deny_tools`, `deny_job_prefixes`, `deny_node_names`, `deny_view_names`, `deny_artifact_paths`, `mode` (pilot/strict), document used at **dispatch**, store PEP, and **ListTools** (Wave 28 live filter) |
 | **What hot-applies (Wave 25/31)** | `force_read_only` → `DynamicForce.Set`; `max_result_bytes` → `LiveHardMax.SetWithinCeiling` (raise or lower **within serve-bootstrap ceiling**; never above ceiling) |
 | **What hot-applies (HOST-006)** | `max_tools_per_minute` / `max_tools_burst` → `gateway.SubjectRateLimiter.LowerRate` (**lower only**; omitted/0 keeps last live; raise needs restart with higher env bootstrap; no-op when rate limiter not wired) |
+| **What hot-applies (MGR-002)** | `fleet_telemetry_force_off` → `fleet.Collector.SetForceOff` (env cannot re-enable while true; bootstrap force-off with no collector still needs restart to enable after clear) |
 | **Fail closed** | Corrupt JSON, signature fail, downgrade, I/O error → **keep last-good** and log (no secrets). File deleted mid-session → keep last-good (do not silently open access). Never loaded → deny (`no_evaluator`). |
-| **Logging** | Success: `deny_tools` count, `deny_job_prefixes` count, `deny_node_names` count, `deny_view_names` count, `deny_artifact_paths` count, `bundle_seq`, `signature_state`, `mode`, `force_read_only`, `max_result_bytes`, `max_tools_per_minute`, `max_tools_burst`. Never signature bytes or key material. |
+| **Logging** | Success: `deny_tools` count, `deny_job_prefixes` count, `deny_node_names` count, `deny_view_names` count, `deny_artifact_paths` count, `bundle_seq`, `signature_state`, `mode`, `force_read_only`, `fleet_telemetry_force_off`, `max_result_bytes`, `max_tools_per_minute`, `max_tools_burst`. Never signature bytes or key material. |
 | **Signed bundles** | Reload re-runs full Ed25519 + last-good anti-rollback path via `LoadFromEnviron`. |
 
 ### Residuals (require process restart)

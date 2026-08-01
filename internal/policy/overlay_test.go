@@ -1,6 +1,7 @@
 package policy_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -20,6 +21,7 @@ func TestLoadValidOverlay(t *testing.T) {
 	const body = `{
 		"version": 1,
 		"force_read_only": true,
+		"fleet_telemetry_force_off": true,
 		"mode": "pilot",
 		"deny_tools": ["jenkins_get_build_logs", "jenkins_start_job"],
 		"deny_job_prefixes": ["secret-folder"],
@@ -40,6 +42,9 @@ func TestLoadValidOverlay(t *testing.T) {
 	}
 	if !res.Overlay.ForceReadOnly {
 		t.Fatal("force_read_only")
+	}
+	if !res.Overlay.FleetTelemetryForceOff {
+		t.Fatal("fleet_telemetry_force_off")
 	}
 	if res.Overlay.NormalizeMode() != policy.ModePilot {
 		t.Fatalf("mode=%s", res.Overlay.NormalizeMode())
@@ -567,7 +572,12 @@ func TestRequiringSignatureVerifier(t *testing.T) {
 
 func TestOverlayStatusMapNoSecrets(t *testing.T) {
 	t.Parallel()
-	o := &policy.Overlay{Version: 1, ForceReadOnly: true, DenyTools: []string{"jenkins_get_job"}}
+	o := &policy.Overlay{
+		Version:                1,
+		ForceReadOnly:          true,
+		FleetTelemetryForceOff: true,
+		DenyTools:              []string{"jenkins_get_job"},
+	}
 	res := policy.LoadResult{
 		Overlay:        o,
 		Path:           "/home/alice/.config/jenkins-mcp/policy/overlay.json",
@@ -584,6 +594,43 @@ func TestOverlayStatusMapNoSecrets(t *testing.T) {
 	// Path should be basenamed, not full home path.
 	if m["policy_path_base"] != "overlay.json" {
 		t.Fatalf("path_base=%v", m["policy_path_base"])
+	}
+	if m["fleet_telemetry_force_off"] != true {
+		t.Fatalf("fleet_telemetry_force_off missing: %+v", m)
+	}
+}
+
+// MGR-002: ExplainEffective / Document surface fleet_telemetry_force_off (secret-free).
+func TestExplainEffectiveFleetTelemetryForceOff(t *testing.T) {
+	t.Parallel()
+	o := &policy.Overlay{Version: 1, FleetTelemetryForceOff: true}
+	res := policy.LoadResult{
+		Overlay:        o,
+		Present:        true,
+		SignatureState: "unverified_pilot",
+		Path:           "/tmp/overlay.json",
+	}
+	ex := policy.ExplainEffective("corp", res, policy.Inputs{})
+	if !ex.FleetTelemetryForceOff {
+		t.Fatal("ExplainEffective must surface fleet_telemetry_force_off")
+	}
+	doc := policy.DocumentFromOverlay(o)
+	if !doc.FleetTelemetryForceOff {
+		t.Fatal("Document must mirror fleet_telemetry_force_off")
+	}
+	// Secret-free JSON canary.
+	raw, err := json.Marshal(ex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(raw)
+	if !strings.Contains(s, `"fleet_telemetry_force_off":true`) {
+		t.Fatalf("json: %s", s)
+	}
+	for _, bad := range []string{"api_token", "Authorization", "password"} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("secret-ish %q in explain", bad)
+		}
 	}
 }
 

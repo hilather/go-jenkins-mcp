@@ -145,6 +145,8 @@ type Document struct {
 	MaxToolsBurst int
 	// ForceReadOnly mirrors overlay force_read_only for status.
 	ForceReadOnly bool
+	// FleetTelemetryForceOff mirrors overlay fleet_telemetry_force_off (MGR-002).
+	FleetTelemetryForceOff bool
 	// Version is the source overlay version (0 if synthetic).
 	Version int
 	// RequireVerifiedSubject when true denies subjects with Verified=false.
@@ -160,15 +162,16 @@ func DocumentFromOverlay(o *Overlay) Document {
 		return Document{Mode: ModePilot}
 	}
 	doc := Document{
-		Mode:              o.NormalizeMode(),
-		DenyTools:         o.DenyToolSet(),
-		DenyJobPrefixes:   o.DenyJobPrefixList(),
-		DenyNodeNames:     o.DenyNodeNameList(),
-		DenyViewNames:     o.DenyViewNameList(),
-		DenyArtifactPaths: o.DenyArtifactPathList(),
-		DenyBranchNames:   o.DenyBranchNameList(),
-		ForceReadOnly:     o.ForceReadOnly,
-		Version:           o.Version,
+		Mode:                   o.NormalizeMode(),
+		DenyTools:              o.DenyToolSet(),
+		DenyJobPrefixes:        o.DenyJobPrefixList(),
+		DenyNodeNames:          o.DenyNodeNameList(),
+		DenyViewNames:          o.DenyViewNameList(),
+		DenyArtifactPaths:      o.DenyArtifactPathList(),
+		DenyBranchNames:        o.DenyBranchNameList(),
+		ForceReadOnly:          o.ForceReadOnly,
+		FleetTelemetryForceOff: o.FleetTelemetryForceOff,
+		Version:                o.Version,
 	}
 	if n, ok := o.EffectiveMaxResultBytes(); ok {
 		doc.MaxResultBytes = n

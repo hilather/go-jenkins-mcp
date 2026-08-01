@@ -245,7 +245,7 @@ jenkins-mcp policy verify \
 
 # Secret-free effective policy for a profile
 jenkins-mcp policy show-effective --profile corp --json
-# Prints force_read_only, deny_tools, deny_job_prefixes, deny_node_names, deny_view_names, deny_artifact_paths, deny_branch_names, max_result_bytes, max_tools_per_minute, max_tools_burst, signature_state
+# Prints force_read_only, fleet_telemetry_force_off, deny_tools, deny_job_prefixes, deny_node_names, deny_view_names, deny_artifact_paths, deny_branch_names, max_result_bytes, max_tools_per_minute, max_tools_burst, signature_state
 
 # DEV ONLY — requires JENKINS_MCP_POLICY_SIGN_DEV=1; never commit private keys
 export JENKINS_MCP_POLICY_SIGN_DEV=1

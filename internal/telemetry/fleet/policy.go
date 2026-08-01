@@ -27,8 +27,9 @@ func ExportURLFromEnv() string {
 }
 
 // EffectiveEnabled resolves enablement from env and optional force-off.
-// forceOff models a future enterprise policy pin (MGR-002 residual when nil).
-// When forceOff is true, telemetry is always disabled regardless of env.
+// forceOff models the enterprise policy pin (overlay fleet_telemetry_force_off /
+// CollectorConfig.ForceOff). When forceOff is true, telemetry is always disabled
+// regardless of JENKINS_MCP_TELEMETRY (fail closed; never elevates).
 func EffectiveEnabled(forceOff bool) bool {
 	if forceOff {
 		return false

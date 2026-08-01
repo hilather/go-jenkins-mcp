@@ -1357,8 +1357,10 @@ func runServe(args []string) error {
 	// HOST-006: concrete rate limiter for OnSuccess LowerRate (filled under --gateway).
 	// Memory SubjectRateLimiter default; optional FileSubjectRateLimiter when
 	// JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH is set (HOST-008 same-host lite).
+	// MGR-002: fleetColl filled after metrics init; OnSuccess applies ForceOff.
 	var dynForce *policy.DynamicForce
 	var enterpriseForce policy.EnterpriseForce
+	var fleetColl *fleet.Collector
 	var liveSubjectRate interface {
 		LowerRate(perMin, burst int) bool
 		RatePerMinute() int
@@ -1367,8 +1369,8 @@ func runServe(args []string) error {
 	if polRes.Overlay != nil {
 		dynForce = policy.NewDynamicForceFromOverlay(polRes.Overlay)
 		enterpriseForce = dynForce
-		log.Printf("Enterprise policy loaded force_read_only=%v mode=%s deny_tools=%d deny_job_prefixes=%d deny_node_names=%d deny_view_names=%d deny_artifact_paths=%d deny_branch_names=%d signature_state=%s",
-			polRes.Overlay.ForceReadOnly, polRes.Overlay.NormalizeMode(),
+		log.Printf("Enterprise policy loaded force_read_only=%v fleet_telemetry_force_off=%v mode=%s deny_tools=%d deny_job_prefixes=%d deny_node_names=%d deny_view_names=%d deny_artifact_paths=%d deny_branch_names=%d signature_state=%s",
+			polRes.Overlay.ForceReadOnly, polRes.Overlay.FleetTelemetryForceOff, polRes.Overlay.NormalizeMode(),
 			len(polRes.Overlay.DenyTools), len(polRes.Overlay.DenyJobPrefixes),
 			len(polRes.Overlay.DenyNodeNames), len(polRes.Overlay.DenyViewNames),
 			len(polRes.Overlay.DenyArtifactPaths), len(polRes.Overlay.DenyBranchNames),
@@ -1501,15 +1503,22 @@ func runServe(args []string) error {
 			Path: polRes.Path,
 			OnSuccess: func(info policy.ReloadInfo) {
 				// Counts + bundle_seq only — never signature bytes or key material.
-				log.Printf("Enterprise policy reloaded deny_tools=%d deny_job_prefixes=%d deny_node_names=%d deny_view_names=%d deny_artifact_paths=%d deny_branch_names=%d bundle_seq=%d signature_state=%s mode=%s force_read_only=%v max_result_bytes=%d max_tools_per_minute=%d max_tools_burst=%d",
+				log.Printf("Enterprise policy reloaded deny_tools=%d deny_job_prefixes=%d deny_node_names=%d deny_view_names=%d deny_artifact_paths=%d deny_branch_names=%d bundle_seq=%d signature_state=%s mode=%s force_read_only=%v fleet_telemetry_force_off=%v max_result_bytes=%d max_tools_per_minute=%d max_tools_burst=%d",
 					info.DenyToolsCount, info.DenyJobPrefixesCount,
 					info.DenyNodeNamesCount, info.DenyViewNamesCount, info.DenyArtifactPathsCount,
 					info.DenyBranchNamesCount,
-					info.BundleSeq, info.SignatureState, info.Mode, info.ForceReadOnly, info.MaxResultBytes,
+					info.BundleSeq, info.SignatureState, info.Mode, info.ForceReadOnly,
+					info.FleetTelemetryForceOff, info.MaxResultBytes,
 					info.MaxToolsPerMinute, info.MaxToolsBurst)
 				// Wave 25: hot-apply force_read_only into the live gate Force.
 				if dynForce != nil {
 					dynForce.Set(info.ForceReadOnly, true)
+				}
+				// MGR-002: hot-apply fleet_telemetry_force_off (env cannot re-enable while true).
+				// When collector is nil (force-off at bootstrap or env off), pin is already
+				// effective for this process until restart creates a collector.
+				if fleetColl != nil {
+					fleetColl.SetForceOff(info.FleetTelemetryForceOff)
 				}
 				// Wave 31/37: set live hard max within serve-bootstrap ceiling.
 				// MaxResultBytes==0 (overlay omitted field) keeps last live value.
@@ -1654,6 +1663,7 @@ func runServe(args []string) error {
 
 	// MGR-002: privacy-preserving fleet health telemetry (disabled by default).
 	// Network/export failures never fail serve. Enable with JENKINS_MCP_TELEMETRY=1.
+	// Enterprise overlay fleet_telemetry_force_off wins over env (fail closed).
 	if paths, perr := config.Resolve(); perr == nil {
 		authMeth := ""
 		profileID := ""
@@ -1664,6 +1674,10 @@ func runServe(args []string) error {
 		if usedLegacy {
 			authMeth = fleet.AuthMethodLegacy
 		}
+		forceOff := false
+		if polRes.Overlay != nil {
+			forceOff = polRes.Overlay.FleetTelemetryForceOff
+		}
 		if coll, cerr := fleet.NewCollector(fleet.CollectorConfig{
 			Paths:      paths,
 			Metrics:    metrics,
@@ -1671,12 +1685,16 @@ func runServe(args []string) error {
 			ProfileID:  profileID,
 			AuthMethod: authMeth,
 			ReadOnly:   gate.Effective(),
+			ForceOff:   forceOff,
 		}); cerr != nil {
 			// Collector construction must never fail serve.
 			log.Printf("fleet telemetry: init skipped")
 		} else if coll != nil {
+			fleetColl = coll
 			coll.Start(serveCtx)
-			log.Printf("fleet telemetry enabled (local queue; export URL %v)", fleet.ExportURLFromEnv() != "")
+			log.Printf("fleet telemetry enabled (local queue; export URL %v; force_off=%v)", fleet.ExportURLFromEnv() != "", forceOff)
+		} else if forceOff {
+			log.Printf("fleet telemetry force-off from enterprise policy overlay (env cannot re-enable)")
 		}
 	}
 

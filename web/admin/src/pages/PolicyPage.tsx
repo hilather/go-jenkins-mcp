@@ -49,6 +49,7 @@ function emptyDraft(): PolicyOverlay {
   return {
     version: 1,
     force_read_only: true,
+    fleet_telemetry_force_off: false,
     mode: "pilot",
     deny_tools: [],
     deny_job_prefixes: [],
@@ -66,6 +67,7 @@ function overlayFromSource(src?: PolicyOverlay | null): PolicyOverlay {
   return {
     version: src.version || 1,
     force_read_only: Boolean(src.force_read_only),
+    fleet_telemetry_force_off: Boolean(src.fleet_telemetry_force_off),
     mode: src.mode || "pilot",
     deny_tools: [...(src.deny_tools ?? [])],
     deny_job_prefixes: [...(src.deny_job_prefixes ?? [])],
@@ -150,6 +152,7 @@ export function PolicyPage() {
       const next: PolicyOverlay = {
         version: 1,
         force_read_only: e.force_read_only,
+        fleet_telemetry_force_off: Boolean(e.fleet_telemetry_force_off),
         mode: e.mode || "pilot",
         deny_tools: [...(e.deny_tools ?? [])],
         deny_job_prefixes: [...(e.deny_job_prefixes ?? [])],
@@ -181,6 +184,7 @@ export function PolicyPage() {
     return {
       version: 1,
       force_read_only: draft.force_read_only,
+      fleet_telemetry_force_off: Boolean(draft.fleet_telemetry_force_off),
       mode: draft.mode || "pilot",
       deny_tools: parseDenyListText(denyText.tools),
       deny_job_prefixes: parseDenyListText(denyText.jobs),
@@ -194,6 +198,7 @@ export function PolicyPage() {
     };
   }, [
     draft.force_read_only,
+    draft.fleet_telemetry_force_off,
     draft.mode,
     denyText,
     maxBytesText,
@@ -273,6 +278,8 @@ export function PolicyPage() {
               <dd>{effectiveQ.data.signature_state}</dd>
               <dt>force_read_only</dt>
               <dd>{String(effectiveQ.data.force_read_only)}</dd>
+              <dt>fleet_telemetry_force_off</dt>
+              <dd>{String(Boolean(effectiveQ.data.fleet_telemetry_force_off))}</dd>
               <dt>mode</dt>
               <dd>{effectiveQ.data.mode || "—"}</dd>
               <dt>max_result_bytes</dt>
@@ -392,6 +399,29 @@ export function PolicyPage() {
               }
             />
             {errorsByField.get("force_read_only")?.map((m, i) => (
+              <span key={i} className="field-error">
+                {m}
+              </span>
+            ))}
+          </label>
+
+          <label className="form-field">
+            <span>fleet_telemetry_force_off</span>
+            <input
+              type="checkbox"
+              checked={Boolean(draft.fleet_telemetry_force_off)}
+              disabled={!canWrite}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  fleet_telemetry_force_off: e.target.checked,
+                }))
+              }
+            />
+            <span className="muted" style={{ fontSize: "0.85em" }}>
+              MGR-002: when true, env cannot re-enable fleet telemetry (lower-only pin)
+            </span>
+            {errorsByField.get("fleet_telemetry_force_off")?.map((m, i) => (
               <span key={i} className="field-error">
                 {m}
               </span>

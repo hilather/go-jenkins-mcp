@@ -351,8 +351,9 @@ func BuildStatus(q *Queue, installID string, enabled, urlSet bool, urlHost strin
 // residualNotes is secret-free operator guidance (not free-text logs).
 func residualNotes(enabled, urlSet bool) string {
 	parts := []string{
-		"enterprise force-off via signed policy overlay is residual (env-only enable in MVP)",
+		"enterprise fleet_telemetry_force_off overlay pin is wired (env cannot re-enable while force-off is true; serve applies on load/reload)",
 		"central analytics / production enablement requires operator privacy review (not production-ready by default)",
+		"HSM / true multi-sig t-of-n policy residual unchanged",
 	}
 	if enabled && !urlSet {
 		parts = append(parts, "enabled without export URL: local queue only (no network export)")

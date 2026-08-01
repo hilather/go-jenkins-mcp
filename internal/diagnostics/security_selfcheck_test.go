@@ -377,7 +377,7 @@ func TestSecuritySelfCheck_OfflineCanaries(t *testing.T) {
 			t.Fatalf("resilience message must mention GET/HEAD: %s", jr.Message)
 		}
 	}
-	// Wave 46 Track C / MGR-002: fleet ForceOff lite + signed-policy pin residual honesty.
+	// Wave 46 Track C / MGR-002: fleet ForceOff + overlay fleet_telemetry_force_off pin.
 	if ft, ok := names["fleet_telemetry_force_off_residual"]; !ok {
 		t.Fatal("missing fleet_telemetry_force_off_residual")
 	} else if ft.Status != diagnostics.SelfCheckOK {
@@ -389,14 +389,18 @@ func TestSecuritySelfCheck_OfflineCanaries(t *testing.T) {
 		if ft.Details["force_off_disables"] != true {
 			t.Fatalf("force_off_disables: %+v", ft.Details)
 		}
-		if ft.Details["policy_overlay_pin"] != false {
-			t.Fatalf("policy_overlay_pin must be false (residual): %+v", ft.Details)
+		// Overlay pin is wired (MGR-002 ForceOff from overlay lite).
+		if ft.Details["policy_overlay_pin"] != true {
+			t.Fatalf("policy_overlay_pin must be true (overlay field wired): %+v", ft.Details)
 		}
 		if ft.Details["env_enable_path_present"] != true {
 			t.Fatalf("env_enable_path_present: %+v", ft.Details)
 		}
 		if ft.Details["collector_force_off_nil"] != true || ft.Details["effective_enabled_force_off"] != true {
 			t.Fatalf("fleet force-off proof details: %+v", ft.Details)
+		}
+		if ft.Details["explain_surfaces_force_off"] != true {
+			t.Fatalf("explain_surfaces_force_off: %+v", ft.Details)
 		}
 		// Bool details only (secret-free).
 		for k, v := range ft.Details {
@@ -411,8 +415,12 @@ func TestSecuritySelfCheck_OfflineCanaries(t *testing.T) {
 		if !strings.Contains(msgLower, "forceoff") && !strings.Contains(msgLower, "force off") {
 			t.Fatalf("fleet force-off message must note ForceOff: %s", ft.Message)
 		}
-		if !strings.Contains(msgLower, "residual") || !strings.Contains(msgLower, "policy") {
-			t.Fatalf("fleet force-off message must note signed-policy residual: %s", ft.Message)
+		// HSM / multi-sig residual honesty remains; overlay pin is no longer residual.
+		if !strings.Contains(msgLower, "residual") {
+			t.Fatalf("fleet force-off message must note residual (HSM/multi-sig): %s", ft.Message)
+		}
+		if !strings.Contains(msgLower, "overlay") && !strings.Contains(msgLower, "fleet_telemetry_force_off") {
+			t.Fatalf("fleet force-off message must note overlay pin: %s", ft.Message)
 		}
 	}
 	// Wave 47 Track C / UPD-001: LKG residual honesty offline (metadata only, not auto-install).

@@ -84,6 +84,8 @@ export interface EffectivePolicy {
   policy_path_base?: string;
   signature_state: string;
   force_read_only: boolean;
+  /** MGR-002: enterprise pin forces fleet telemetry off (env cannot re-enable). */
+  fleet_telemetry_force_off?: boolean;
   mode?: string;
   deny_tools?: string[];
   deny_job_prefixes?: string[];
@@ -287,6 +289,8 @@ export interface SecuritySelfCheckReport {
 export interface PolicyOverlay {
   version: number;
   force_read_only: boolean;
+  /** MGR-002: force fleet telemetry off (lower-only pin; admin cannot clear when set). */
+  fleet_telemetry_force_off?: boolean;
   mode?: string;
   deny_tools?: string[];
   deny_job_prefixes?: string[];

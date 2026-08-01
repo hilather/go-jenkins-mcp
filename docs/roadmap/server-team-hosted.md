@@ -28,8 +28,8 @@ JWT on Jenkins (**mode B/C**) and “OAuth” (**Entra AS + obtain path**) are *
 | **Global RO + deny-only MCP RBAC** | **Done** (local) | ADR 0004; `internal/policy`; tool AuthGate |
 | **Local OIDC PKCE → Jenkins-audience token** | **Partial** — offline claim validation, refresh, epoch, whoAmI re-verify landed; **live Entra / jwt-auth-filter lab residual** | OAUTH-001…008 foundations; OAUTH-003/004/006/007 lite; OAUTH-009 residual |
 | **Tool contracts, budgets, progressive logs, L2 multi-frame** | **Done*** (MVP) | Phase 0–2 waves; native Go L2 required path |
-| **Signed policy bundles (Ed25519)** | **Partial / lite** — envelope verify + multi-sig lite + ForceOff lite offline | MGR-001 lite; `docs/security/policy-bundles.md`; fleet ForceOff residual pin |
-| **Fleet telemetry** | **Partial** — opt-in queue/export schema; force-off lite; privacy pack | MGR-002 lite; `docs/security/fleet-telemetry.md` |
+| **Signed policy bundles (Ed25519)** | **Partial / lite** — envelope verify + multi-sig lite + ForceOff overlay pin lite | MGR-001 lite; `docs/security/policy-bundles.md`; fleet `fleet_telemetry_force_off` |
+| **Fleet telemetry** | **Partial** — opt-in queue/export schema; overlay force-off pin lite; privacy pack | MGR-002 lite; `docs/security/fleet-telemetry.md` |
 | **Admin console** | **Partial (Phase 6 mid-flight)** — SPA + loopback BFF + RBAC roles + CSP/packaging | UI-000…UI-008; ADR 0014; multi-user residual |
 | **Package / pilot evidence** | **Partial** — RPM/DEB/tar, offline release-evidence, pilot kit | PKG-001 lite; REL-001/002 lite |
 | **Adapters framework** | **Partial** — INT-001 MVP offline; production SaaS clients residual | `docs/adapters/` |
@@ -158,7 +158,7 @@ Legend: **Done** / **Partial** / **Not started** relative to Tier A needs.
 | Network placement near Jenkins | N/A (local) | Deploy next to controller; measure bytes | GWY-004, PERF-* | P1 | Prove near-source benefit |
 | Packaging (container, non-root, health) | Scaffold envelope **Done*** | Signed image + live AgentCore | GWY-004, PKG-001, **HOST-005** | P1 | limits+probes; signing residual |
 | Rate limits / multi-tenant budgets | Process budgets **Done*** | Per-subject quotas + fan-out caps | MCP-001, GWY-004, **HOST-006** | P1 | Mutations multi-tenant residual |
-| Policy distribution (signed bundles) | **Partial** lite | Enforce on gateway host | MGR-001 | P1 | ForceOff enterprise pin residual |
+| Policy distribution (signed bundles) | **Partial** lite | Enforce on gateway host | MGR-001 | P1 | HSM / true multi-sig residual; ForceOff overlay pin Done* lite |
 | Observability / correlation | Metrics/doctor **Partial** | Jenkins↔gateway vs gateway↔client byte metrics | OBS-*, GWY-004, MGR-002 | P2 | Fleet export privacy board |
 | Admin console multi-operator | Loopback SPA **Partial** + HOST-007 docs | Cookie/OIDC multi-operator | UI-003…010, **HOST-007** | P2 | enabledModes secret-free; not SaaS |
 | jwt-auth-filter / RS pin | Offline **Done***; mock lab scaffold | Live plugin pin + Entra | OAUTH-009 | P0 for OAuth path | `make live-oauth-*` ≠ production |

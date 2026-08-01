@@ -200,9 +200,10 @@ func (s *server) handlePolicyApply(w http.ResponseWriter, r *http.Request) {
 	ex := explainDraft(profileID, draft, paths, outPath)
 	s.emitPolicyAudit(r.Context(), profileID, "policy_apply", audit.DecisionSuccess,
 		"applied", map[string]string{
-			"path_base":        filepath.Base(outPath),
-			"force_read_only":  fmt.Sprintf("%v", draft.ForceReadOnly),
-			"deny_tools_count": fmt.Sprintf("%d", len(draft.DenyTools)),
+			"path_base":                 filepath.Base(outPath),
+			"force_read_only":           fmt.Sprintf("%v", draft.ForceReadOnly),
+			"fleet_telemetry_force_off": fmt.Sprintf("%v", draft.FleetTelemetryForceOff),
+			"deny_tools_count":          fmt.Sprintf("%d", len(draft.DenyTools)),
 		})
 	writeJSON(w, http.StatusOK, PolicyApplyResponse{
 		Applied:   true,
@@ -313,6 +314,8 @@ func (s *server) validateDraftOverlay(paths config.Paths, draft *policy.Overlay,
 //
 // v1 rules (documented residual for multi-source merge complexity):
 //   - When current effective force_read_only is true, draft must keep force_read_only=true.
+//   - When current fleet_telemetry_force_off is true, draft must keep it true
+//     (MGR-002; admin cannot re-enable fleet telemetry against enterprise pin).
 //   - When a current overlay exists, each deny list on the draft must be a set
 //     superset of the corresponding current list (entries may only grow).
 //   - When current mode is strict, draft must remain strict (pilot would widen).
@@ -341,6 +344,15 @@ func checkMonotonicRestrict(current *policy.Overlay, draft *policy.Overlay, curr
 
 	if current == nil {
 		return errs
+	}
+
+	// MGR-002: fleet_telemetry_force_off is lower-only (true pin cannot be cleared
+	// via admin pilot apply — same fail-closed posture as force_read_only).
+	if current.FleetTelemetryForceOff && !draft.FleetTelemetryForceOff {
+		errs = append(errs, PolicyFieldError{
+			Field:   "fleet_telemetry_force_off",
+			Message: "cannot set fleet_telemetry_force_off=false when current overlay forces fleet telemetry off (admin cannot re-enable against enterprise pin)",
+		})
 	}
 
 	if current.NormalizeMode() == policy.ModeStrict && draft.NormalizeMode() != policy.ModeStrict {
@@ -674,6 +686,8 @@ func fieldErrorsFromValidate(err error) []PolicyFieldError {
 	field := "overlay"
 	lower := strings.ToLower(msg)
 	switch {
+	case strings.Contains(lower, "fleet_telemetry_force_off"):
+		field = "fleet_telemetry_force_off"
 	case strings.Contains(lower, "force_read_only"):
 		field = "force_read_only"
 	case strings.Contains(lower, "deny_tools"):

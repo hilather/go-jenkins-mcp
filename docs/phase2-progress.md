@@ -72,7 +72,7 @@ make lint
 - Adapter allowlist cosign / SBOM / HSM supply-chain provenance
 - Live multi-controller chaos / network matrix
 - Live reverse-proxy path-prefix origin pin matrix (pure pin helpers Done*)
-- Signed-policy fleet enterprise pin (ForceOff **lite** Done*)
+- Signed-policy fleet enterprise pin (ForceOff + overlay `fleet_telemetry_force_off` **lite** Done*; privacy board / HSM residual)
 - LKG auto-install / binary rollback (operator-owned)
 - Soft TargetBytes absolute lifted to **64 MiB** (`AbsoluteMaxHardMaxBytes`) Wave 51 Track C; still clamped to live hard max at enforce; resolve may yield target > bootstrap hard — serve clamps after Normalize and logs `target_bytes_clamped` / `target_bytes_resolved` (Wave 53 Track C). Overlay re-clamp not separately flagged.
 - Production multi-tenant gateway mutation isolation

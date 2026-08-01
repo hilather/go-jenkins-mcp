@@ -26,7 +26,8 @@ type Collector struct {
 	authMeth string
 	readOnly bool
 	interval time.Duration
-	// forceOff models enterprise pin (residual).
+	// forceOff models enterprise pin (overlay fleet_telemetry_force_off).
+	// Guarded by mu for hot-reload SetForceOff.
 	forceOff bool
 	// lastSnap holds the most recent in-process event for show/status without disk.
 	lastSnap *Event
@@ -48,7 +49,9 @@ type CollectorConfig struct {
 	Queue *Queue
 	// Exporter optional; built from env URL when nil.
 	Exporter *Exporter
-	// ForceOff disables even when env is set (future policy pin).
+	// ForceOff disables even when env is set (enterprise overlay pin
+	// fleet_telemetry_force_off). When true at NewCollector, returns nil.
+	// Live collectors honor SetForceOff for mid-session hot-reload.
 	ForceOff bool
 	// Enabled overrides env when non-nil (tests).
 	Enabled *bool
@@ -133,6 +136,9 @@ func (c *Collector) loop(ctx context.Context) {
 		case <-snapTicker.C:
 			c.SnapshotOnce()
 		case <-exportTicker.C:
+			if c.ForceOff() {
+				continue
+			}
 			if c.exporter == nil || !c.exporter.URLConfigured() {
 				continue
 			}
@@ -155,29 +161,66 @@ func (c *Collector) loop(ctx context.Context) {
 
 // SnapshotOnce builds an event from current metrics and enqueues it.
 // Nil-safe; never panics; never returns errors to the serve path.
+// No-ops when force-off is set (enterprise pin / hot-reload).
 func (c *Collector) SnapshotOnce() {
 	if c == nil {
 		return
 	}
+	c.mu.Lock()
+	if c.forceOff || c.stopped {
+		c.mu.Unlock()
+		return
+	}
+	install, profile, version, authMeth, readOnly := c.install, c.profile, c.version, c.authMeth, c.readOnly
+	metrics, q := c.metrics, c.queue
+	c.mu.Unlock()
 	// Pass full counter map; BuildEvent allowlists counters and extracts error:* codes.
+	// Do not hold c.mu across metrics.Snapshot or Enqueue.
 	var counters map[string]int64
-	if c.metrics != nil {
-		counters = c.metrics.Snapshot().Counters
+	if metrics != nil {
+		counters = metrics.Snapshot().Counters
 	}
 	ev := BuildEvent(BuildOptions{
-		InstallationID: c.install,
-		ProfileID:      c.profile,
-		Version:        c.version,
-		AuthMethod:     c.authMeth,
-		ReadOnly:       c.readOnly,
+		InstallationID: install,
+		ProfileID:      profile,
+		Version:        version,
+		AuthMethod:     authMeth,
+		ReadOnly:       readOnly,
 		Counters:       counters,
 	})
 	c.mu.Lock()
+	if c.forceOff || c.stopped {
+		c.mu.Unlock()
+		return
+	}
 	c.lastSnap = &ev
 	c.mu.Unlock()
-	if c.queue != nil {
-		_ = c.queue.Enqueue(ev)
+	if q != nil {
+		_ = q.Enqueue(ev)
 	}
+}
+
+// SetForceOff hot-applies enterprise fleet_telemetry_force_off (MGR-002).
+// When true, further snapshots and exports are suppressed; env cannot re-enable
+// until SetForceOff(false). Nil-safe. True wins for the process until cleared.
+func (c *Collector) SetForceOff(forceOff bool) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.forceOff = forceOff
+	c.mu.Unlock()
+}
+
+// ForceOff reports whether enterprise force-off is currently applied.
+// Nil collector reports false (no pin); use EffectiveEnabled for enablement.
+func (c *Collector) ForceOff() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.forceOff
 }
 
 // LastEvent returns the most recent in-process snapshot, if any.
@@ -202,7 +245,12 @@ func (c *Collector) Queue() *Queue {
 	return c.queue
 }
 
-// Enabled reports whether this collector is active.
+// Enabled reports whether this collector is active and not force-off'd.
 func (c *Collector) Enabled() bool {
-	return c != nil
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return !c.forceOff
 }
