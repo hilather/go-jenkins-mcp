@@ -36,6 +36,8 @@ import {
   SHARED_JWKS_FILE_HONESTY,
   SHARED_SUBJECT_RATE_FILE_HONESTY,
   SHARED_TOKEN_CACHE_FILE_HONESTY,
+  SUBJECT_LIMITER_MAX_SUBJECTS_HONESTY,
+  SUBJECT_SLOTS_PROCESS_LOCAL_HONESTY,
 } from "../lib/residualStatus";
 
 export function OverviewPage() {
@@ -1078,6 +1080,20 @@ function ResidualStatusDl({ data }: { data: GatewayResidualStatusResponse }) {
           </dd>
         </>
       ) : null}
+      {typeof rateCache.subject_limiter_max_subjects === "number" ? (
+        <>
+          <dt>subject_limiter_max_subjects</dt>
+          <dd>
+            {rateCache.subject_limiter_max_subjects}{" "}
+            <span className="muted">({SUBJECT_LIMITER_MAX_SUBJECTS_HONESTY})</span>
+          </dd>
+        </>
+      ) : null}
+      <dt>subject_slots_process_local</dt>
+      <dd>
+        {formatResidualBool(rateCache.subject_slots_process_local)}{" "}
+        <span className="muted">({SUBJECT_SLOTS_PROCESS_LOCAL_HONESTY})</span>
+      </dd>
       <dt>shared_principal_cache_file</dt>
       <dd>
         {rateCache.shared_principal_cache_file ? "yes" : "no"}{" "}

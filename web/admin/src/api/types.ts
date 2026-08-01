@@ -511,6 +511,18 @@ export interface GatewayResidualStatusResponse {
    */
   subject_rate_max_subjects?: number;
   /**
+   * Optional MaxSubjects for SubjectLimiter map hygiene when env > 0
+   * (JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS; omit = unlimited).
+   * Process-local only — not multi-pod. HOST-006 / HOST-007 SPA residual lite.
+   */
+  subject_limiter_max_subjects?: number;
+  /**
+   * Always true on residual-status: SubjectLimiter concurrency slots are
+   * process-local (HOST-008 residual; not multi-pod shared concurrency).
+   * Secret-free honesty field.
+   */
+  subject_slots_process_local?: boolean;
+  /**
    * Principal cache entry count (never subjects). When shared_principal_cache_file,
    * BFF may open file for Len(); else this-process memory.
    */

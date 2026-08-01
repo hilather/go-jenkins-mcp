@@ -258,6 +258,7 @@ rate knobs keep admin health names `rateEnabled` / `ratePerMinute` / `rateBurst`
   "ratePerMinute": 30,
   "rateBurst": 10,
   "shared_subject_rate_file": false,
+  "subject_slots_process_local": true,
   "principal_cache_entries": 0,
   "principal_cache_process_note": "principal_cache_entries is count for this process only (CLI/admin ≠ serve MemoryTokenCache/PrincipalCache unless shared file caches)",
   "shared_principal_cache_file": false,
@@ -309,6 +310,9 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 | `progressive_consent_residual` / `progressive_consent_surfaces` | Mode C only; secret-free residual note + surface ids |
 | `rateEnabled` / `ratePerMinute` / `rateBurst` | HOST-006 process-local rate knobs (admin health field names) |
 | `shared_subject_rate_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is non-empty (same-host `FileSubjectRateLimiter`). **Not** multi-pod HA. Path value **never** returned. Never tokens. |
+| `subject_rate_max_subjects` | Optional rate-map MaxSubjects when env > 0 (omit = unlimited). Process/file-local only — not multi-pod. |
+| `subject_limiter_max_subjects` | Optional SubjectLimiter MaxSubjects when `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` > 0 (omit = unlimited). Process-local only — not multi-pod. |
+| `subject_slots_process_local` | **Always `true`:** SubjectLimiter concurrency slots are process-local (HOST-008 residual; **not** multi-pod shared concurrency). Secret-free honesty. |
 | `principal_cache_entries` | Process-local principal cache **count** only (never subjects). On admin BFF this is **the admin process**, not necessarily MCP serve. |
 | `principal_cache_max_entries` | Optional hygiene max when env > 0 (omit = unlimited). Never subjects. |
 | `principal_cache_ttl_seconds` | Optional hygiene TTL seconds when env > 0 (omit = no TTL). Never subjects. |
@@ -324,6 +328,11 @@ path never shown; secrets never shown; not multi-pod Redis/HA), principal_cache
 count, and optional max/ttl with honesty (same-host rate/principal/JWKS/token
 lite; admin BFF process for cache count). Operators may also run CLI
 `gateway residual-status`.
+shown; not multi-pod external JWKS HA), principal_cache count, optional
+max/ttl, optional `subject_limiter_max_subjects` when env set, and always
+`subject_slots_process_local` with honesty (same-host rate/principal/JWKS lite;
+admin BFF process for cache count; concurrency process-local — not multi-pod).
+Operators may also run CLI `gateway residual-status`.
 
 ## POST /admin/v1/gateway/subject-invalidate
 
