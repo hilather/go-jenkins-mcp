@@ -1,0 +1,87 @@
+# Publish GitHub Releases for version tags (v*).
+# Builds Tier-1 Linux packages and attaches them with SHA256SUMS / BUILD_INFO.
+#
+# Trigger: push of tags matching v* (e.g. v0.1.0).
+# Permissions: contents: write (create release + upload assets).
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release (e.g. v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: build-and-publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Resolve version
+        id: ver
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          # Strip leading v for package_version when present
+          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+          COMMIT="$(git rev-parse --short HEAD)"
+          echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and package
+        env:
+          VERSION: ${{ steps.ver.outputs.tag }}
+          COMMIT: ${{ steps.ver.outputs.commit }}
+        run: |
+          set -euo pipefail
+          make package
+          ls -la dist/
+          # Keep only artifacts for this version
+          mkdir -p dist/upload
+          cp -v dist/jenkins-mcp_${VERSION}_linux_amd64.tar.gz dist/upload/ || \
+            cp -v dist/jenkins-mcp_*_linux_amd64.tar.gz dist/upload/
+          if ls dist/jenkins-mcp_${VERSION}_amd64.deb >/dev/null 2>&1; then
+            cp -v dist/jenkins-mcp_${VERSION}_amd64.deb dist/upload/
+          elif ls dist/jenkins-mcp_*_amd64.deb >/dev/null 2>&1; then
+            cp -v dist/jenkins-mcp_*_amd64.deb dist/upload/ || true
+          fi
+          cp -v dist/BUILD_INFO dist/upload/
+          (cd dist/upload && sha256sum * > SHA256SUMS)
+          ls -la dist/upload/
+          cat dist/upload/SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }} — enterprise pilot baseline
+          body_path: docs/release/RELEASE_NOTES_v0.1.0.md
+          draft: false
+          prerelease: false
+          files: |
+            dist/upload/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
