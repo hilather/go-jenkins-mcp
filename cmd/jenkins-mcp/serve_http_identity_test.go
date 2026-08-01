@@ -777,6 +777,146 @@ func TestNewHTTPIdentityResolver_JWTThenLabFallback(t *testing.T) {
 	}
 }
 
+// HOST-001 residual offline expand: lab-minted JWT Alice then Bob mid-session
+// swap on the same Mcp-Session-Id → 401; group claim change → 401; same groups
+// different order OK; health still exempt; bodies secret-free.
+// Not live Entra Done (offline JWKS + authlab mint only).
+func TestHTTPHandler_LabJWT_MidSessionAliceBobSwapAndGroups(t *testing.T) {
+	t.Parallel()
+	const (
+		iss    = "https://issuer.example"
+		aud    = "jenkins-api"
+		secret = "gate-secret-host001-jwt-rebind"
+	)
+	key, err := authlab.GenerateLabKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwks := authJWKSFromLab(t, key)
+	now := time.Now()
+	params := auth.AccessTokenParams{
+		Issuer:   iss,
+		Audience: aud,
+		Now:      func() time.Time { return now },
+	}
+	res := newHTTPIdentityResolver(false, secret, auth.NewStaticJWKS(jwks), params)
+	if res == nil {
+		t.Fatal("resolver")
+	}
+
+	mint := func(sub string, groups []string) string {
+		t.Helper()
+		extra := map[string]any{"tid": "tid-jwt-rebind"}
+		if len(groups) > 0 {
+			extra["groups"] = groups
+		}
+		tok, err := key.MintAccessToken(authlab.MintParams{
+			Issuer:   iss,
+			Subject:  sub,
+			Audience: aud,
+			TTL:      time.Hour,
+			Extra:    extra,
+			Now:      func() time.Time { return now },
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tok
+	}
+
+	aliceTok := mint("alice-jwt", []string{"ops", "dev"})
+	aliceTokOrder := mint("alice-jwt", []string{"dev", "ops"}) // order-stable groups
+	aliceTokGroups := mint("alice-jwt", []string{"ops", "dev", "admins"})
+	bobTok := mint("bob-jwt", []string{"ops", "dev"})
+
+	cfg := mcpserver.DefaultHTTPConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.BearerToken = secret
+	cfg.RequireSubject = true
+	cfg.IdentityResolver = res
+	cfg.PathPrefix = "/mcp"
+	h, err := mcpserver.NewHTTPHandler(mcpserver.NewServer("test", "0.0.1"), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	postJWT := func(sessionID, accessToken string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", strings.NewReader(`{}`))
+		req.Host = "127.0.0.1:8765"
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		// Transport secret on dedicated header; JWT on Authorization.
+		req.Header.Set(mcpserver.HeaderJenkinsMCPToken, secret)
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+		if sessionID != "" {
+			req.Header.Set(mcpserver.HeaderMCPSessionID, sessionID)
+		}
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		return rr
+	}
+
+	assert401Canary := func(rr *httptest.ResponseRecorder, leaks ...string) {
+		t.Helper()
+		if rr.Code != http.StatusUnauthorized {
+			t.Fatalf("want 401, got %d body=%s", rr.Code, rr.Body.String())
+		}
+		body := rr.Body.String()
+		for _, leak := range append([]string{secret, aliceTok, bobTok, aliceTokOrder, aliceTokGroups}, leaks...) {
+			if leak != "" && strings.Contains(body, leak) {
+				t.Fatalf("Regression: material leaked in 401: %q in %q", leak, body)
+			}
+		}
+		if strings.Contains(body, "Bearer ") {
+			t.Fatalf("Regression: Bearer material in 401: %s", body)
+		}
+	}
+
+	const sessionID = "sess-lab-jwt-mid-swap"
+
+	// Alice establishes under PathPrefix.
+	rrAlice := postJWT(sessionID, aliceTok)
+	if rrAlice.Code == http.StatusUnauthorized {
+		t.Fatalf("alice JWT establish should not 401: %s", rrAlice.Body.String())
+	}
+
+	// Same subject + groups different order → still OK (stable fingerprint).
+	rrOrder := postJWT(sessionID, aliceTokOrder)
+	if rrOrder.Code == http.StatusUnauthorized {
+		t.Fatalf("Regression: group order change must not 401: %s", rrOrder.Body.String())
+	}
+
+	// Bob on Alice session → 401 secret-free.
+	rrBob := postJWT(sessionID, bobTok)
+	assert401Canary(rrBob, "alice-jwt", "bob-jwt", "ops", "dev")
+
+	// Fresh session: group claim membership change (same sub) → 401.
+	const sessionG = "sess-lab-jwt-group-change"
+	rrG1 := postJWT(sessionG, aliceTok)
+	if rrG1.Code == http.StatusUnauthorized {
+		t.Fatalf("group establish: %s", rrG1.Body.String())
+	}
+	rrG2 := postJWT(sessionG, aliceTokGroups)
+	assert401Canary(rrG2, "alice-jwt", "admins")
+
+	// Health under prefix remains exempt (no JWT, spoofed session).
+	for _, path := range []string{mcpserver.HealthzPath, "/mcp" + mcpserver.HealthzPath} {
+		req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1"+path, nil)
+		req.Host = "127.0.0.1:8765"
+		req.Header.Set(mcpserver.HeaderMCPSessionID, sessionID)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("%s want 200, got %d body=%s", path, rr.Code, rr.Body.String())
+		}
+		body := rr.Body.String()
+		if strings.Contains(body, secret) || strings.Contains(body, aliceTok) || strings.Contains(body, "alice-jwt") {
+			t.Fatalf("%s leaked material: %s", path, body)
+		}
+	}
+}
+
 // HOST-001 canary: invalid JWT through HTTP handler never echoes token.
 func TestHTTPHandler_InvalidJWT_NoTokenEcho(t *testing.T) {
 	t.Parallel()

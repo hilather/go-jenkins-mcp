@@ -296,6 +296,108 @@ func TestMultiUserHTTP_MidSessionSubjectSwap_401Canary(t *testing.T) {
 	}
 }
 
+// HOST-001 residual expand: multi-user protect under PathPrefix — Alice/Bob
+// independent sessions still OK; mid-session swap on same Mcp-Session-Id → 401;
+// Bob never reaches AfterIdentity / inner; body secret-free.
+func TestMultiUserHTTP_PathPrefix_MidSessionSubjectSwap_401Canary(t *testing.T) {
+	t.Parallel()
+
+	defaultCaller := gateway.Caller{
+		Subject:   "process-default",
+		ProfileID: contracts.ProfileID("corp"),
+	}
+	processSubject := policy.Subject{
+		ProfileID: contracts.ProfileID("corp"),
+	}
+	after := multiUserAfterIdentity(defaultCaller, processSubject, contracts.ProfileID("corp"))
+
+	var seen multiUserSeen
+	cfg := multiUserProtectCfg(t, after)
+	cfg.PathPrefix = "/mcp"
+	h, err := mcpserver.NewHTTPProtectHandler(multiUserMockInner(t, &seen), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	postPrefix := func(sessionID, subject, tenant, jenkinsPrincipal string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", strings.NewReader(`{}`))
+		req.Host = "127.0.0.1:8765"
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		req.Header.Set("Authorization", "Bearer "+multiUserCanaryToken)
+		if sessionID != "" {
+			req.Header.Set(mcpserver.HeaderMCPSessionID, sessionID)
+		}
+		req.Header.Set(mcpserver.HeaderLabSubject, subject)
+		if tenant != "" {
+			req.Header.Set(mcpserver.HeaderLabTenant, tenant)
+		}
+		if jenkinsPrincipal != "" {
+			req.Header.Set(mcpserver.HeaderLabJenkinsPrincipal, jenkinsPrincipal)
+		}
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		return rr
+	}
+
+	const sessionID = "sess-mu-prefix-mid-swap"
+
+	rrAlice := postPrefix(sessionID, "alice", "tid-a", "j-alice")
+	if rrAlice.Code != http.StatusOK {
+		t.Fatalf("alice under PathPrefix: want 200, got %d body=%s", rrAlice.Code, rrAlice.Body.String())
+	}
+	// Bob independent session under same PathPrefix process.
+	rrBobIndep := postPrefix("sess-mu-prefix-bob", "bob", "tid-b", "j-bob")
+	if rrBobIndep.Code != http.StatusOK {
+		t.Fatalf("bob independent under PathPrefix: want 200, got %d body=%s",
+			rrBobIndep.Code, rrBobIndep.Body.String())
+	}
+	// Mid-session Bob on Alice session → 401 before inner.
+	rrSwap := postPrefix(sessionID, "bob", "tid-b", "j-bob")
+	if rrSwap.Code != http.StatusUnauthorized {
+		t.Fatalf("Regression: PathPrefix mid-session swap must 401, got %d body=%s",
+			rrSwap.Code, rrSwap.Body.String())
+	}
+	assertNoSecretOrSubjectLeak(t, rrSwap.Body.String(), "alice", "bob", "j-alice", "j-bob")
+
+	// Health under prefix remains unauth OK (session spoof ignored).
+	reqH := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/mcp"+mcpserver.HealthzPath, nil)
+	reqH.Host = "127.0.0.1:8765"
+	reqH.Header.Set(mcpserver.HeaderMCPSessionID, sessionID)
+	reqH.Header.Set(mcpserver.HeaderLabSubject, "bob")
+	rrH := httptest.NewRecorder()
+	h.ServeHTTP(rrH, reqH)
+	if rrH.Code != http.StatusOK {
+		t.Fatalf("prefixed health must stay 200, got %d body=%s", rrH.Code, rrH.Body.String())
+	}
+	assertNoSecretOrSubjectLeak(t, rrH.Body.String(), "alice", "bob")
+
+	ids, callers, _ := seen.snapshot()
+	// After swap, Bob may appear from independent session only — never on Alice's session path.
+	// Independent Bob is allowed; ensure we still saw Alice and at least one Bob from independent.
+	foundAlice, foundBobIndep := false, false
+	for _, id := range ids {
+		if id.ExternalSubject == "alice" {
+			foundAlice = true
+		}
+		if id.ExternalSubject == "bob" {
+			foundBobIndep = true
+		}
+	}
+	if !foundAlice {
+		t.Fatal("want Alice inner hit under PathPrefix")
+	}
+	if !foundBobIndep {
+		t.Fatal("want independent Bob inner hit under PathPrefix")
+	}
+	// Swap must not add a third Alice-session Bob — callers length:
+	// Alice establish + Bob independent = 2; swap 401 must not increase.
+	if len(callers) != 2 {
+		t.Fatalf("want exactly 2 inner hits (alice + independent bob), got %d", len(callers))
+	}
+}
+
 // RequireSubject without lab subject: 401 even with transport secret; no leak.
 func TestMultiUserHTTP_RequireSubject_SecretAlone401Canary(t *testing.T) {
 	t.Parallel()

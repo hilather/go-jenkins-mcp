@@ -220,7 +220,9 @@ until a future residual lands).
 Regression tests:
 
 ```bash
-go test ./internal/mcpserver -count=1 -run 'Health|Readyz|PathPrefix|AllowedHosts|Wildcard|HOST002|StreamableHTTPOriginHost'
+go test ./internal/mcpserver -count=1 -run 'Health|Readyz|PathPrefix|AllowedHosts|Wildcard|HOST002|StreamableHTTPOriginHost|HOST001_'
+# HOST-001 mid-session rebind residual offline expand (not live Entra):
+go test ./internal/mcpserver ./cmd/jenkins-mcp -count=1 -run 'HOST001_|LabJWT_MidSession|MultiUserHTTP_PathPrefix_MidSession'
 ```
 
 ---

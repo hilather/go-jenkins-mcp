@@ -2673,7 +2673,7 @@ Produce a signed non-root Linux container/service with approved Streamable HTTP 
 
 **Priority:** P0  
 **Dependencies:** GWY-002, MCP-001  
-**Status:** **Partial Done*** offline (mid-session subject rebind + RequireSubject); **not** live Entra production
+**Status:** **Partial Done*** offline (mid-session subject rebind + RequireSubject + rebind residual expand); **not** live Entra production
 
 **Objective**
 
@@ -2684,10 +2684,11 @@ Authenticated individual subjects on MCP HTTP in gateway mode (shared secret alo
 - [x] Non-local bind requires authenticated subject (not anonymous).
 - [x] Shared-secret is transport gate only if retained; still requires per-user identity.
 - [x] Session/request credentials bind to identity fingerprint; mid-session subject change fails closed (`internal/mcpserver` `Mcp-Session-Id`→`IdentityFingerprint`; gateway `Binding.Revalidate` for `policy.Subject`).
+- [x] Mid-session rebind residual **offline expand** (HOST-001): PathPrefix strip + multi-user Alice/Bob swap still 401; lab JWT Alice/Bob swap 401; group claim change on same session 401 (fingerprint includes sorted Groups); same subject + different group order still OK; health/ready (root + `{prefix}`) stay exempt; 401 bodies secret-free (no tokens/subjects/group names). Tests: `http_host001_rebind_expand_test.go`, `TestMultiUserHTTP_PathPrefix_MidSessionSubjectSwap_401Canary`, `TestHTTPHandler_LabJWT_MidSessionAliceBobSwapAndGroups`.
 - [x] Tokens never in logs/errors/metrics/support bundles (canaries).
 - [x] Gateway mode cannot enable anonymous multi-user; local KD-008 residual remains explicit for non-gateway.
 
-**Residual:** multi-pod / under-load JWKS HA (process-local TTL refresh + stale-if-error + optional `JENKINS_MCP_HTTP_JWKS_MAX_STALE` fail-closed landed; optional same-host `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` public JWKS file **Done\* lite** / `shared_jwks_file`; multi-pod external JWKS still residual); live Entra / jwt-auth-filter; durable multi-replica session store.
+**Residual:** multi-pod / under-load JWKS HA (process-local TTL refresh + stale-if-error + optional `JENKINS_MCP_HTTP_JWKS_MAX_STALE` fail-closed landed; optional same-host `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` public JWKS file **Done\* lite** / `shared_jwks_file`; multi-pod external JWKS still residual); **live Entra / jwt-auth-filter (OAUTH-009) still residual — offline lab JWT + IdentityFingerprint expand is not live Entra Done**; durable multi-replica session store; per-POST (intra-session) handler-ctx rebind if SDK adds it.
 
 ---
 
