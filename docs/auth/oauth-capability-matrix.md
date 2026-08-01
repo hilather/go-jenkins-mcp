@@ -82,17 +82,50 @@ Code constant: `auth.FallbackAuthMethodWhenOnlyOICAuth == MethodAPIToken`.
 | Flows | User-delegated auth code, then OBO/exchange as needed |
 | Full Jenkins AS | Only after ADR 0011 go decision |
 
+### Offline Mode C prototype matrix (OAUTH-010 Done*)
+
+**Do not claim live Entra Done.** Offline + mock lab only.
+
+| Flow / gate | Offline contract | Evidence |
+|-------------|------------------|----------|
+| `authorization_code` mock | `ConsentRequired` with **auth URL + session only** (no tokens/secrets) | `TestOAUTH010_*` + qualify `oauth010_mode_c_offline_matrix` |
+| `token_exchange` / OBO mock | Success → **Bearer** Jenkins-audience credential | same + HOST-011 `mode_c_agentcore_live_matrix` |
+| Wrong audience | Fail closed; canary absent from errors | same + `TestHTTPTokenFetcher_WrongAudience` |
+| `Live=false` | `not_configured` / capability_missing; Ready=false; cache ignored | `TestOAUTH010_*` / `TestAgentCoreProvider_LiveFalse*` |
+| `Live=true` without Fetcher | Fail closed (capability_missing); Ready=false | `TestOAUTH010_*` / `TestAgentCoreProvider_LiveTrueNilFetcher` |
+| `HTTPTokenFetcher` mock AS | HTTPS mock success, wrong aud, consent; https-only; no redirects | `TestOAUTH010_ModeC_OfflinePrototypeMatrix/http_token_fetcher_mock_as` + `TestHTTPTokenFetcher_*` |
+| ModeMatrix residual honesty | Mode C residual notes **OAUTH-010** + live pin residual | `ModeMatrixFromEnviron` + doctor `gateway_status` |
+| Doctor residual | Mode C enabled → warn offline foundation only; `mode_c_live_agentcore_qualified=false` | `TestRunDoctor_ModeC_GatewayStatusResidual` |
+
+**Qualify rows (not redundant):**
+
+| Case | Role |
+|------|------|
+| `mode_c_agentcore_live_matrix` | HOST-011 Mode C row (Live=false / mock Bearer / wrong aud / consent) |
+| `oauth010_mode_c_offline_matrix` | OAUTH-010 prototype matrix: flow-mode separation (auth_code vs token_exchange), Live=true nil Fetcher, ModeMatrix residual, Jenkins-as-AS reject |
+
 ### Offline / mock vs live (OAUTH-010 honesty)
 
 | Path | Status | Evidence |
 |------|--------|----------|
 | Gateway Obtain contract (`Live=false` fail-closed) | **Done*** foundation | `internal/gateway` unit tests; no shared SA |
-| Offline mock `TokenFetcher` + consent URL metadata | **Done*** offline | Mock AS / `HTTPTokenFetcher` https-only tests |
+| Offline prototype matrix (auth_code + OBO + Live gates) | **Done*** offline | `oauth010_mode_c_offline_matrix` + `TestOAUTH010_*` |
+| Offline mock `TokenFetcher` / `HTTPTokenFetcher` + consent URL metadata | **Done*** offline | Mock AS / https-only tests (never live Entra) |
 | Docker mock token peer (HOST-015) | **Scaffold** opt-in | `testdata/oauth-lab/` `mock-token`; `make live-oauth-*` |
-| Live Entra 3LO + OBO + durable vault | **Residual** | OAUTH-010 / GWY-001 / GWY-003 production pin |
+| Live Entra 3LO + OBO + durable vault | **Residual** | OAUTH-010 / GWY-001 / GWY-003 production pin — **not Done** |
 | AgentCore production binary pin | **Residual** | GWY-003 / GWY-004 |
 
-Cross-links: [gateway/README.md](../gateway/README.md), [jwt-auth-filter-qualification.md](jwt-auth-filter-qualification.md) §9, HOST-012…015 in [roadmap](../roadmap/server-team-hosted.md), lab [`testdata/oauth-lab/README.md`](../../testdata/oauth-lab/README.md).
+```bash
+# Offline (default make test path)
+go test ./internal/gateway/ ./internal/gateway/qualify/ ./internal/diagnostics/ -count=1 -run 'OAUTH010|ModeC|oauth010'
+
+# Opt-in HOST-015 mock-token peer (not production Entra)
+make live-oauth-up    # mock-token :18083
+make live-oauth-smoke
+make live-oauth-down
+```
+
+Cross-links: [gateway/README.md](../gateway/README.md), [gateway/qualification.md](../gateway/qualification.md), [jwt-auth-filter-qualification.md](jwt-auth-filter-qualification.md) §9, HOST-012…015 in [roadmap](../roadmap/server-team-hosted.md), lab [`testdata/oauth-lab/README.md`](../../testdata/oauth-lab/README.md).
 
 ---
 

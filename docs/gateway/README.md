@@ -441,10 +441,13 @@ go test ./internal/gateway/ ./internal/gateway/qualify/ ./internal/mcpserver/ ./
 Coverage includes: Live=false not_configured; Live+nil Fetcher; cache hit
 (Fetcher once); wrong audience; ConsentRequired; token canary never in
 errors/Status/String; cancelled context; HTTPS-only HTTPTokenFetcher + mock AS;
-offline qualify vault hit/miss, IdP outage chaos, JWKS kid-lite (see
-[qualification.md](qualification.md)); HOST-001 `RequireSubject` + shared-secret
-not identity; mid-session `Mcp-Session-Id` subject swap 401; HOST-004 two-user
-token-cache + page_token subject isolation; HOST-006 SubjectLimiter + SubjectRateLimiter fair-share.
+**OAUTH-010** offline Mode C prototype matrix (`TestOAUTH010_*` + qualify
+`oauth010_mode_c_offline_matrix` — not live Entra Done); offline qualify vault
+hit/miss, IdP outage chaos, JWKS kid-lite (see [qualification.md](qualification.md));
+HOST-001 `RequireSubject` + shared-secret not identity; mid-session
+`Mcp-Session-Id` subject swap 401; HOST-004 two-user token-cache + page_token
+subject isolation; HOST-006 SubjectLimiter + SubjectRateLimiter fair-share.
+Opt-in Mode C mock peer: `make live-oauth-*` (HOST-015).
 
 ---
 

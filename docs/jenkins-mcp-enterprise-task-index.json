@@ -2155,7 +2155,13 @@
         "Local and gateway auth providers remain independent and testable."
       ],
       "acceptance_criteria_count": 9,
-      "evidence_tests": [],
+      "evidence_tests": [
+        "TestOAUTH010_ModeC_OfflinePrototypeMatrix",
+        "qualify/oauth010_mode_c_offline_matrix",
+        "qualify/mode_c_agentcore_live_matrix",
+        "TestRunDoctor_ModeC_GatewayStatusResidual"
+      ],
+      "status_note": "Partial/offline prototype matrix Done*; live Entra 3LO/OBO + AgentCore pin residual — do not claim live Entra Done",
       "source_line": 1344,
       "dependency_depth": 13,
       "dependents": [

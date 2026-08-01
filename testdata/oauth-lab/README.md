@@ -92,7 +92,7 @@ Fail closed:
 **Residual:** this is a **mock RS proxy**, not the Jenkins `jwt-auth-filter`
 plugin. Production pin remains [jwt-auth-filter qualification](../../docs/auth/jwt-auth-filter-qualification.md).
 
-### mock-token (HOST-015)
+### mock-token (HOST-015 / OAUTH-010 Mode C wire residual)
 
 | Method | Path | Notes |
 |--------|------|-------|
@@ -104,10 +104,20 @@ plugin. Production pin remains [jwt-auth-filter qualification](../../docs/auth/j
 
 JSON shape is compatible with `gateway.HTTPTokenFetcher` fields
 (`access_token`, `token_type`, `expires_in`, `audience`, `jenkins_principal`,
-consent metadata). **Residual:** production `HTTPTokenFetcher` requires
-**https** token URLs; this lab publishes plain HTTP on loopback for curl smoke.
-TLS termination / live gateway Obtain against the lab is a follow-up residual
-(real AgentCore vault remains residual).
+consent metadata).
+
+**OAUTH-010 wire notes (honest):**
+
+| Layer | What it proves | What it does **not** prove |
+|-------|----------------|----------------------------|
+| Offline package + qualify | Live=false; Live=true nil Fetcher; auth_code ConsentRequired; token_exchange Bearer; wrong aud; https mock AS | Live Entra / AgentCore Identity vault |
+| This lab (`make live-oauth-*`) | Loopback mock-token peer reachability + curl scenarios | Production AgentCore, Entra Conditional Access, durable vault |
+| `HTTPTokenFetcher` vs lab | Shape-compatible JSON | Lab is **http** loopback; production fetcher is **https-only** (TLS residual) |
+
+**Residual:** production `HTTPTokenFetcher` requires **https** token URLs; this lab
+publishes plain HTTP on loopback for curl smoke. TLS termination / live gateway
+Obtain against the lab is a follow-up residual (real AgentCore vault remains
+residual). **Do not mark OAUTH-010 live Entra Done from this lab.**
 
 ## Environment variables
 
@@ -167,7 +177,8 @@ curl -sS -D- 'http://127.0.0.1:18083/token?scenario=consent' -o /dev/null
 
 ## Related docs
 
-- [Gateway qualification (GWY-003)](../../docs/gateway/qualification.md) — offline modes A/B/C matrix + residual live pin notes (§7)
+- [Gateway qualification (GWY-003)](../../docs/gateway/qualification.md) — offline modes A/B/C matrix + OAUTH-010 row + residual live pin notes (§7)
+- [OAuth capability matrix §4](../../docs/auth/oauth-capability-matrix.md) — OAUTH-010 Mode C offline prototype matrix
 - [server-team-hosted roadmap](../../docs/roadmap/server-team-hosted.md) — HOST-012…015
 - [jwt-auth-filter qualification](../../docs/auth/jwt-auth-filter-qualification.md) — OAUTH-009 residual
 - [jenkins-compose mode A](../jenkins-compose/README.md) — API token lab
