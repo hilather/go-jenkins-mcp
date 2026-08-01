@@ -6,6 +6,11 @@ import { describe, expect, it } from "vitest";
 import type { GatewayResidualStatusResponse } from "../api/types";
 import {
   formatPrincipalCacheHygiene,
+  formatResidualBool,
+  GATEWAY_READY_RESIDUAL_HONESTY,
+  HA_MULTI_REPLICA_RESIDUAL_HONESTY,
+  LIVE_PIN_RESIDUAL_HONESTY,
+  pickResidualLivePinFields,
   pickResidualRateCacheFields,
   PRINCIPAL_CACHE_PROCESS_HONESTY,
   SHARED_JWKS_FILE_HONESTY,
@@ -103,6 +108,79 @@ describe("formatPrincipalCacheHygiene", () => {
   });
 });
 
+describe("pickResidualLivePinFields", () => {
+  it("defaults all live pins false when payload missing", () => {
+    expect(pickResidualLivePinFields(undefined)).toEqual({
+      mode_a_live_obtain_qualified: false,
+      mode_b_live_rs_qualified: false,
+      mode_c_live_agentcore_qualified: false,
+      gateway_ready: false,
+      ha_multi_replica: false,
+    });
+    expect(pickResidualLivePinFields(null)).toEqual({
+      mode_a_live_obtain_qualified: false,
+      mode_b_live_rs_qualified: false,
+      mode_c_live_agentcore_qualified: false,
+      gateway_ready: false,
+      ha_multi_replica: false,
+    });
+  });
+
+  it("mirrors residual-status live pin keys and defaults missing to false", () => {
+    const data: GatewayResidualStatusResponse = {
+      mode_a_live_obtain_qualified: false,
+      mode_b_live_rs_qualified: false,
+      mode_c_live_agentcore_qualified: false,
+      gateway_ready: false,
+      ha_multi_replica: false,
+    };
+    expect(pickResidualLivePinFields(data)).toEqual({
+      mode_a_live_obtain_qualified: false,
+      mode_b_live_rs_qualified: false,
+      mode_c_live_agentcore_qualified: false,
+      gateway_ready: false,
+      ha_multi_replica: false,
+    });
+    // Partial payload: omitted keys stay false (fail-closed honesty).
+    expect(
+      pickResidualLivePinFields({
+        mode_b_live_rs_qualified: false,
+      }),
+    ).toEqual({
+      mode_a_live_obtain_qualified: false,
+      mode_b_live_rs_qualified: false,
+      mode_c_live_agentcore_qualified: false,
+      gateway_ready: false,
+      ha_multi_replica: false,
+    });
+  });
+
+  it("only treats explicit true as true (never invent live GO from truthy noise)", () => {
+    // Regression: residual-status always emits false; SPA must not claim GO from
+    // adversarial/accidental truthy strings if a proxy rewrote JSON.
+    const data = {
+      mode_a_live_obtain_qualified: true,
+      mode_b_live_rs_qualified: false,
+      mode_c_live_agentcore_qualified: false,
+      gateway_ready: false,
+      ha_multi_replica: false,
+      token: "canary-secret-token",
+      subject: "tenant|alice|profile",
+    } as GatewayResidualStatusResponse;
+    const picked = pickResidualLivePinFields(data);
+    expect(picked.mode_a_live_obtain_qualified).toBe(true);
+    expect(picked.mode_b_live_rs_qualified).toBe(false);
+    expect(JSON.stringify(picked)).not.toMatch(/canary|alice|token|secret/i);
+  });
+});
+
+describe("formatResidualBool", () => {
+  it("formats false as no/false and true as yes/true", () => {
+    expect(formatResidualBool(false)).toBe("no/false");
+    expect(formatResidualBool(true)).toBe("yes/true");
+  });
+});
+
 describe("honesty constants", () => {
   it("rate file honesty is same-host lite not multi-pod", () => {
     expect(SHARED_SUBJECT_RATE_FILE_HONESTY).toMatch(/same-host/i);
@@ -121,5 +199,14 @@ describe("honesty constants", () => {
   it("principal cache honesty is admin BFF process-local", () => {
     expect(PRINCIPAL_CACHE_PROCESS_HONESTY).toMatch(/admin BFF/i);
     expect(PRINCIPAL_CACHE_PROCESS_HONESTY).toMatch(/not necessarily MCP serve/i);
+  });
+
+  it("live pin honesty never claims production GO or secrets", () => {
+    expect(LIVE_PIN_RESIDUAL_HONESTY).toMatch(/offline residual/i);
+    expect(LIVE_PIN_RESIDUAL_HONESTY).toMatch(/not production GO/i);
+    expect(LIVE_PIN_RESIDUAL_HONESTY).not.toMatch(/token|secret|qualified=true/i);
+    expect(GATEWAY_READY_RESIDUAL_HONESTY).toMatch(/readyz/i);
+    expect(GATEWAY_READY_RESIDUAL_HONESTY).toMatch(/false/i);
+    expect(HA_MULTI_REPLICA_RESIDUAL_HONESTY).toMatch(/HOST-008|single-replica/i);
   });
 });

@@ -443,8 +443,20 @@ export interface GatewayResidualStatusResponse {
   mode_a_enabled?: boolean;
   mode_b_enabled?: boolean;
   mode_c_enabled?: boolean;
+  /**
+   * Live Mode A Obtain pin residual. residual-status always false
+   * (offline honesty only — not production GO).
+   */
   mode_a_live_obtain_qualified?: boolean;
+  /**
+   * Live Mode B jwt-auth-filter / Entra RS pin residual. residual-status always
+   * false (offline honesty only — not production GO).
+   */
   mode_b_live_rs_qualified?: boolean;
+  /**
+   * Live Mode C AgentCore pin residual. residual-status always false
+   * (offline honesty only — not production GO).
+   */
   mode_c_live_agentcore_qualified?: boolean;
   /** Always oauth009_offline (Mode B residual id pointer). */
   residual_id?: string;
@@ -452,7 +464,11 @@ export interface GatewayResidualStatusResponse {
   oauth009_offline_only?: boolean;
   residual_ids?: string[];
   multi_user_enabled?: boolean;
+  /**
+   * Always false on residual-status / admin BFF (Ready is serve /readyz only).
+   */
   gateway_ready?: boolean;
+  /** Always false (HOST-008 Tier A single-replica residual). */
   ha_multi_replica?: boolean;
   session_affinity_recommended?: boolean;
   multi_pod_vault_residual?: boolean;
