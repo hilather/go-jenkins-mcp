@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"strconv"
 	"strings"
 	"sync"
 
@@ -12,10 +13,11 @@ import (
 // Single-process MVP only (HOST-008 multi-replica residual). Policy may only
 // reduce these caps — never elevate past process absolute ceilings.
 //
-// Wiring residual: export SubjectLimiter + Hold/WithSubjectSlot for serve / tool
-// middleware. Full tools.Register integration is optional; use Hold around
-// dispatch when multi-tenant. AuthGate is Check-only and cannot Release slots —
-// do not model concurrent limiting as a pure AuthGate.
+// Serve wire (Done*): cmd sets tools.RegisterOptions.SubjectLimiter to a
+// *SubjectLimiter and SubjectKey from SubjectKey(CallerFromBoundSubject) when
+// --gateway is on. tools.addTool Holds a slot around dispatch. AuthGate is
+// Check-only and cannot Release slots — do not model concurrent limiting as a
+// pure AuthGate.
 
 const (
 	// DefaultMaxConcurrentPerSubject is the default concurrent tool slots per
@@ -31,7 +33,40 @@ const (
 	// DefaultProcessConcurrentSlots is the default process-wide cap when
 	// processMax is non-positive at construction.
 	DefaultProcessConcurrentSlots = 64
+
+	// EnvSubjectMaxConcurrent is the optional env for per-subject concurrent
+	// tool slots (HOST-006 serve wire). Empty → DefaultMaxConcurrentPerSubject.
+	EnvSubjectMaxConcurrent = "JENKINS_MCP_SUBJECT_MAX_CONCURRENT"
+	// EnvSubjectProcessMaxConcurrent is the optional env for process-wide
+	// concurrent tool slots. Empty → DefaultProcessConcurrentSlots.
+	EnvSubjectProcessMaxConcurrent = "JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT"
 )
+
+// ResolveSubjectLimiterCaps resolves optional env overrides for NewSubjectLimiter.
+// Empty env strings keep package defaults. Invalid (non-integer / negative)
+// values fail closed. Values above absolute ceilings are accepted here and
+// clamped by NewSubjectLimiter (same as explicit constructor args).
+func ResolveSubjectLimiterCaps(perSubjectEnv, processEnv string) (perSubject, process int, err error) {
+	perSubject = DefaultMaxConcurrentPerSubject
+	process = DefaultProcessConcurrentSlots
+	if raw := strings.TrimSpace(perSubjectEnv); raw != "" {
+		v, perr := strconv.Atoi(raw)
+		if perr != nil || v < 0 {
+			return 0, 0, apperr.New(apperr.CodeInvalidArgument,
+				"invalid "+EnvSubjectMaxConcurrent+" (non-negative integer; empty = default)")
+		}
+		perSubject = v
+	}
+	if raw := strings.TrimSpace(processEnv); raw != "" {
+		v, perr := strconv.Atoi(raw)
+		if perr != nil || v < 0 {
+			return 0, 0, apperr.New(apperr.CodeInvalidArgument,
+				"invalid "+EnvSubjectProcessMaxConcurrent+" (non-negative integer; empty = default)")
+		}
+		process = v
+	}
+	return perSubject, process, nil
+}
 
 // SubjectLimiter enforces per-subject concurrent slots under a process ceiling.
 //

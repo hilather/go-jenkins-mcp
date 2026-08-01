@@ -2696,8 +2696,11 @@ When `--gateway` and provider Ready, Jenkins credentials come from **Obtain for 
 **Foundation done (package APIs + offline tests):** `CacheKey` includes `Tenant`;
 `Caller.CacheKey` / `SubjectKey`; `jenkins.BindSubjectToPageFilter` +
 `*WithSubject` page-token helpers; two-user cache + Alice/Bob page_token tests;
-`docs/gateway/README.md` §3b. **Residual:** list-tool serve wire of subject-bound
-pagination; durable L1/L2 archive namespace (STO / HOST-008).
+`docs/gateway/README.md` §3c. **Serve wire Done*:** `tools.RegisterOptions.SubjectKey`
+from `gateway.SubjectKey` when `--gateway`; list tools (`list_jobs` / `get_jobs` /
+`list_builds`) use `*WithSubject` pagination; Alice/Bob tools-path regression.
+**Residual:** per-HTTP-request SubjectKey swap; durable L1/L2 archive namespace
+(STO / HOST-008).
 
 ---
 
@@ -2732,8 +2735,11 @@ pagination; durable L1/L2 archive namespace (STO / HOST-008).
 **Foundation done:** `gateway.SubjectLimiter` (`subject_limits.go`) with
 per-subject + process ceilings, `Hold`/`WithSubjectSlot`, fair-share tests,
 `StatusMap` secret-free. Mutation confirms already profile+principal bound
-(`internal/mutation`). **Residual:** full `tools.Register`/`addTool` wire of
-limiter; token-bucket rate (not only concurrency); multi-replica (HOST-008).
+(`internal/mutation`). **Serve wire Done*:** `tools.SubjectSlotLimiter` interface
++ `addTool` Hold when `SubjectKey` non-empty; cmd wires `NewSubjectLimiter` under
+`--gateway`; optional `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` /
+`JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT`. **Residual:** token-bucket rate
+(not only concurrency); multi-replica (HOST-008); per-request subject rebind.
 
 ---
 

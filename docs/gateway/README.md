@@ -183,8 +183,12 @@ Stable namespace: `gateway.SubjectKey(Caller)` / `Caller.SubjectKey()` /
 Empty `subjectKey` leaves page tokens unbound (stdio single-user pilot). Gateway
 mode should always pass a non-empty subject key.
 
-**Residual (HOST-004 serve wire):** list tools still use unbound
-`ResolveListPagination` by default; package APIs + tests are ready.
+**Serve wire (Done*):** when `--gateway` is on, `cmd/jenkins-mcp` sets
+`tools.RegisterOptions.SubjectKey` from `gateway.SubjectKey(CallerFromBoundSubject)`.
+List tools (`jenkins_list_jobs`, `jenkins_get_jobs`, `jenkins_list_builds`) resolve
+and mint page tokens with `*WithSubject` helpers. Empty `SubjectKey` (stdio)
+skips binding. **Residual:** per-HTTP-request `SubjectKey` swap when multi-user
+ctx lands; durable L1/L2 archive namespace (STO / HOST-008).
 
 ### HOST-006 — per-subject concurrent budgets
 
@@ -195,7 +199,20 @@ mode should always pass a non-empty subject key.
 | `StatusMap` | Non-secret doctor summary (`ha_multi_replica: false`) |
 
 Defaults: **8** concurrent per subject, **64** process-wide (abs ceilings **64** / **256**).
-Excess → `CodeQuota`. **Residual:** full `tools.Register` middleware wire optional.
+Excess → `CodeQuota`.
+
+**Serve wire (Done*):** `tools.RegisterOptions.SubjectLimiter` is a
+`tools.SubjectSlotLimiter` interface (implemented by `*gateway.SubjectLimiter`;
+tools does not import gateway). `addTool` Holds a slot when both limiter and
+non-empty `SubjectKey` are set. Optional env:
+
+| Env | Role |
+|-----|------|
+| `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` | Per-subject slots (empty → 8) |
+| `JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT` | Process-wide slots (empty → 64) |
+
+**Residual:** token-bucket rate (not only concurrency); multi-replica (HOST-008);
+per-request subject rebind.
 
 ---
 

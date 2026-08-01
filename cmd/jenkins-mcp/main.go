@@ -1889,6 +1889,27 @@ func runServe(args []string) error {
 			})
 		}
 	}
+	// HOST-004 / HOST-006: process-level subject key + concurrent limiter when
+	// gateway mode is on. Empty key leaves page tokens unbound and skips
+	// SubjectLimiter (stdio pilot residual). Residual: per-HTTP-request
+	// SubjectKey swap when multi-user ctx lands.
+	var serveSubjectKey string
+	var serveSubjectLimiter tools.SubjectSlotLimiter
+	if useGateway {
+		serveSubjectKey = gateway.SubjectKey(gateway.CallerFromBoundSubject(subject))
+		if serveSubjectKey != "" {
+			perSubj, procMax, lerr := gateway.ResolveSubjectLimiterCaps(
+				os.Getenv(gateway.EnvSubjectMaxConcurrent),
+				os.Getenv(gateway.EnvSubjectProcessMaxConcurrent),
+			)
+			if lerr != nil {
+				return lerr
+			}
+			serveSubjectLimiter = gateway.NewSubjectLimiter(perSubj, procMax)
+			log.Printf("HOST-006 subject limiter: max_per_subject=%d process_max=%d (subject_key_set=%v)",
+				perSubj, procMax, serveSubjectKey != "")
+		}
+	}
 	tools.Register(server, client, &tools.RegisterOptions{
 		Gate:                    gate,
 		Budgets:                 budgets,
@@ -1910,6 +1931,8 @@ func runServe(args []string) error {
 		EnableChangeCorrelation: enableChangeCorrelation,
 		WorkItemLookup:          workItemLookup,
 		Doctor:                  doctorFn,
+		SubjectKey:              serveSubjectKey,
+		SubjectLimiter:          serveSubjectLimiter,
 	})
 	if *httpAddr != "" {
 		cfg := mcpserver.DefaultHTTPConfig()

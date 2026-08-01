@@ -14,10 +14,20 @@ import (
 
 // Build history bounds (JEN-003).
 const (
-	defaultListBuildsLimit    = 20
-	maxListBuildsLimit        = 100
-	defaultListBuildsLookback = 100
-	maxListBuildsLookback     = 500
+	// DefaultListBuildsLimit is the default page size for jenkins_list_builds.
+	DefaultListBuildsLimit = 20
+	// MaxListBuildsLimit is the hard upper bound for list_builds pagination limit.
+	MaxListBuildsLimit = 100
+	// DefaultListBuildsLookback is the default build history scan window.
+	DefaultListBuildsLookback = 100
+	// MaxListBuildsLookback is the hard upper bound for list_builds lookback.
+	MaxListBuildsLookback = 500
+
+	// Unexported aliases kept for package-local call sites / tests.
+	defaultListBuildsLimit    = DefaultListBuildsLimit
+	maxListBuildsLimit        = MaxListBuildsLimit
+	defaultListBuildsLookback = DefaultListBuildsLookback
+	maxListBuildsLookback     = MaxListBuildsLookback
 	maxListBuildsBodyBytes    = 4 << 20
 )
 
