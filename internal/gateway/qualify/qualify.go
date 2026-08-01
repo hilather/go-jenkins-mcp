@@ -75,6 +75,7 @@ func RunOffline(ctx context.Context) Summary {
 			"Mode B live jwt-auth-filter / IdP pin residual (OAUTH-009); offline JWT vault Bearer + claim fail-closed matrix Done*",
 			"OAUTH-009 offline: wrong aud/exp/iss rejected; ID token never API credential; Mode B Obtain never Basic fallthrough — live RS pin still open",
 			"Mode C live Entra 3LO/OBO + AgentCore Identity vault residual (OAUTH-010 / GWY-003); offline Live=false / mock Fetcher / auth_code consent / token_exchange / wrong audience Done* (oauth010_mode_c_offline_matrix + mode_c_agentcore_live_matrix)",
+			gateway.ProgressiveConsentResidualNote,
 			"OAUTH-010: HTTPTokenFetcher https mock AS covered in package tests (TestOAUTH010_* / TestHTTPTokenFetcher_*); do not claim live Entra Done",
 			"Opt-in residual lab: testdata/oauth-lab + make live-oauth-* (HOST-012…015); go test -tags=live_oauth Mode C Obtain vs mock-token via TLS test shim (HTTPTokenFetcher https-only; lab is HTTP loopback — TLS residual; not production Entra / jwt-auth-filter / AgentCore vault)",
 			"Cross-link: docs/auth/oauth-capability-matrix.md §4 + docs/auth/jwt-auth-filter-qualification.md + docs/gateway/qualification.md (GWY-003 / OAUTH-010)",
@@ -124,6 +125,8 @@ func RunOffline(ctx context.Context) Summary {
 	// OAUTH-010 Mode C prototype matrix (auth_code consent + OBO exchange + Live gates).
 	// Complements mode_c_agentcore_live_matrix (HOST-011 row) with flow-mode honesty.
 	run("oauth010_mode_c_offline_matrix", "security", caseOAUTH010ModeCOfflineMatrix)
+	// Progressive consent residual honesty (metadata Done*; browser 3LO residual).
+	run("progressive_consent_residual", "security", caseProgressiveConsentResidual)
 
 	// --- Performance cases (mock) ---
 	run("concurrent_obtain_stub_under_budget", "performance", caseConcurrentObtain)
@@ -353,6 +356,67 @@ func caseConsentURLNoToken(ctx context.Context) error {
 	// only at the application layer; harness documents the rule.
 	if strings.Contains(info.AuthorizationURL, CanaryToken) {
 		return fmt.Errorf("authorization URL must not embed canary token")
+	}
+	return nil
+}
+
+// caseProgressiveConsentResidual proves Mode C progressive consent residual honesty:
+// browser 3LO not automated; metadata path Done*; ConsentRequired surfaces only
+// auth URL + session id; residual note secret-free (no canary tokens).
+func caseProgressiveConsentResidual(ctx context.Context) error {
+	_ = ctx
+	pc := gateway.NewProgressiveConsentResidual()
+	if pc.Browser3LOAutomated {
+		return fmt.Errorf("browser_3lo_automated must be false (residual)")
+	}
+	if !pc.MetadataPathDoneStar {
+		return fmt.Errorf("metadata_path_done_star must be true (Done*)")
+	}
+	if pc.DurableConsentSessionStore || pc.MultiReplicaConsentCorrelation {
+		return fmt.Errorf("durable store / multi-replica must stay residual false")
+	}
+	if !pc.LastConsentWouldApply {
+		return fmt.Errorf("last_consent_would_apply residual marker must be true")
+	}
+	if !strings.Contains(pc.ResidualNote, "OAUTH-010") {
+		return fmt.Errorf("residual note must mention OAUTH-010: %q", pc.ResidualNote)
+	}
+	if !strings.Contains(strings.ToLower(pc.ResidualNote), "browser") ||
+		!strings.Contains(strings.ToLower(pc.ResidualNote), "not automated") {
+		return fmt.Errorf("residual note must say browser 3LO not automated: %q", pc.ResidualNote)
+	}
+	if !strings.Contains(strings.ToLower(pc.Surfaces), "authorization_url") ||
+		!strings.Contains(strings.ToLower(pc.Surfaces), "session_id") {
+		return fmt.Errorf("surfaces must name authorization_url + session_id: %q", pc.Surfaces)
+	}
+	// ConsentRequired progressive helpers + Error() canaries.
+	authURL := "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?state=prog-consent"
+	sessionID := "sess-prog-consent-qualify"
+	cerr := gateway.NewConsentRequired(gateway.ConsentInfo{
+		AuthorizationURL: authURL,
+		SessionID:        sessionID,
+		Provider:         "agentcore",
+	})
+	cr, ok := gateway.AsConsentRequired(cerr)
+	if !ok || cr == nil || !cr.Info.Valid() {
+		return fmt.Errorf("want ConsentRequired: %v", cerr)
+	}
+	if cr.ConsentAuthorizationURL() != authURL || cr.ConsentSessionID() != sessionID {
+		return fmt.Errorf("progressive helpers mismatch")
+	}
+	// Error() is log-safe: host + truncated session (not full authorize query).
+	if strings.Contains(cerr.Error(), "state=prog-consent") {
+		return fmt.Errorf("Error() must not dump full authorize URL with state: %q", cerr.Error())
+	}
+	// Residual / Error / StatusMap must never embed live canary token material.
+	// Note: Surfaces may mention the words access_token/refresh_token as denials
+	// ("never access_token…"); only material markers and CanaryToken fail.
+	blob := cerr.Error() + " " + cr.Info.String() + " " + fmt.Sprint(cr.Info.StatusMap()) +
+		" " + pc.ResidualNote + " " + fmt.Sprint(pc.StatusMap())
+	for _, bad := range []string{CanaryToken, "access_token=", "refresh_token=", "client_secret=", "Bearer " + CanaryToken} {
+		if strings.Contains(blob, bad) {
+			return fmt.Errorf("progressive consent residual surface contained %q", bad)
+		}
 	}
 	return nil
 }

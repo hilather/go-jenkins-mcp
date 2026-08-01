@@ -77,6 +77,11 @@ func TestMapToolErr_ConsentRequiredMetadataOnly(t *testing.T) {
 	if strings.Contains(msg, canary) {
 		t.Fatalf("token canary leaked: %q", msg)
 	}
+	// Progressive format embedded in apperr (code prefix + message).
+	wantBody := progressiveConsentMessage(authURL, session)
+	if !strings.Contains(msg, wantBody) {
+		t.Fatalf("msg=%q want body %q", msg, wantBody)
+	}
 
 	// Wrapped under fmt.Errorf %w (jenkins applyAuth path).
 	wrapped := fmt.Errorf("jenkins applyAuth: %w", fakeConsent{url: authURL, session: session})
@@ -88,12 +93,71 @@ func TestMapToolErr_ConsentRequiredMetadataOnly(t *testing.T) {
 		t.Fatalf("wrapped lost consent metadata: %q", mapped2.Error())
 	}
 
-	// Incomplete consent → authentication without inventing tokens.
+	// Multi-level wrap (AuthProvider → applyAuth → tool).
+	deep := fmt.Errorf("tool: %w", fmt.Errorf("jenkins: %w", fakeConsent{url: authURL, session: session}))
+	mappedDeep := mapToolErr(deep)
+	if !strings.Contains(mappedDeep.Error(), wantBody) {
+		t.Fatalf("deep wrap lost progressive format: %q", mappedDeep.Error())
+	}
+
+	// Incomplete consent → authentication without inventing tokens or URL.
 	incomplete := mapToolErr(fakeConsent{url: "", session: ""})
 	if apperr.CodeOf(incomplete) != apperr.CodeAuthentication {
 		t.Fatalf("incomplete code=%q", apperr.CodeOf(incomplete))
 	}
 	if strings.Contains(incomplete.Error(), canary) {
 		t.Fatal("canary in incomplete path")
+	}
+	if strings.Contains(incomplete.Error(), "authorization_url=") ||
+		strings.Contains(incomplete.Error(), "session_id=") {
+		t.Fatalf("incomplete must not invent progressive fields: %q", incomplete.Error())
+	}
+
+	// Partial metadata (URL only or session only) → fail closed without half-fields.
+	urlOnly := mapToolErr(fakeConsent{url: authURL, session: ""})
+	if apperr.CodeOf(urlOnly) != apperr.CodeAuthentication {
+		t.Fatalf("url-only code=%q", apperr.CodeOf(urlOnly))
+	}
+	if strings.Contains(urlOnly.Error(), "authorization_url=") {
+		t.Fatalf("url-only must not surface unpaired URL: %q", urlOnly.Error())
+	}
+	sessOnly := mapToolErr(fakeConsent{url: "", session: session})
+	if strings.Contains(sessOnly.Error(), "session_id=") {
+		t.Fatalf("session-only must not surface unpaired session: %q", sessOnly.Error())
+	}
+}
+
+// Regression: progressive consent tool path never embeds secret canaries.
+func TestMapToolErr_ConsentRequired_SecretCanaries(t *testing.T) {
+	t.Parallel()
+	const authURL = "https://login.microsoftonline.com/tenant/oauth2/v2.0/authorize?client_id=public&state=xyz"
+	const session = "opaque-consent-session-99"
+	// Canaries that must never appear on the progressive tool surface.
+	canaries := []string{
+		"access_token_must_never_appear_xyz789",
+		"refresh_token=super-secret-refresh",
+		"client_secret=super-secret-client",
+		"Authorization: Bearer super-secret-token-value",
+		"Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.canary",
+	}
+	mapped := mapToolErr(fakeConsent{url: authURL, session: session})
+	msg := mapped.Error()
+	for _, c := range canaries {
+		if strings.Contains(msg, c) {
+			t.Fatalf("canary %q leaked in progressive consent message: %q", c, msg)
+		}
+	}
+	// Only progressive keys allowed as structured fields.
+	if !strings.Contains(msg, "authorization_url="+authURL) {
+		t.Fatalf("want authorization_url=: %q", msg)
+	}
+	if !strings.Contains(msg, "session_id="+session) {
+		t.Fatalf("want session_id=: %q", msg)
+	}
+	// Must not invent token-shaped keys.
+	for _, badKey := range []string{"access_token=", "refresh_token=", "client_secret=", "id_token="} {
+		if strings.Contains(strings.ToLower(msg), badKey) {
+			t.Fatalf("forbidden key %q in progressive message: %q", badKey, msg)
+		}
 	}
 }

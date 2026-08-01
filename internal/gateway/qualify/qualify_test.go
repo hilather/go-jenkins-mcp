@@ -19,13 +19,14 @@ func TestRunOffline_AllPass(t *testing.T) {
 	if sum.Suite != "offline" {
 		t.Fatalf("suite %q", sum.Suite)
 	}
-	if sum.Passed < 18 {
-		t.Fatalf("expected >= 18 cases (incl. mode A/B/C + HOST-011 + OAUTH-009/010 matrix), got %d", sum.Passed)
+	if sum.Passed < 19 {
+		t.Fatalf("expected >= 19 cases (incl. mode A/B/C + HOST-011 + OAUTH-009/010 + progressive consent), got %d", sum.Passed)
 	}
 	// Residuals must document live AgentCore gap and offline vault/IdP/mode matrix Done*.
 	foundLive := false
 	foundOfflineDone := false
 	foundOAuthLab := false
+	foundProgressiveConsent := false
 	for _, r := range sum.Residuals {
 		low := strings.ToLower(r)
 		if strings.Contains(low, "agentcore") || strings.Contains(low, "live") {
@@ -37,6 +38,10 @@ func TestRunOffline_AllPass(t *testing.T) {
 		if strings.Contains(low, "oauth-lab") || strings.Contains(low, "live-oauth") {
 			foundOAuthLab = true
 		}
+		if strings.Contains(low, "progressive consent") &&
+			strings.Contains(low, "not automated") {
+			foundProgressiveConsent = true
+		}
 	}
 	if !foundLive {
 		t.Fatal("expected live AgentCore residual note")
@@ -46,6 +51,9 @@ func TestRunOffline_AllPass(t *testing.T) {
 	}
 	if !foundOAuthLab {
 		t.Fatal("expected residual noting oauth-lab / live-oauth opt-in")
+	}
+	if !foundProgressiveConsent {
+		t.Fatal("expected residual noting progressive consent UX (browser 3LO not automated)")
 	}
 	// JSON summary must never include canary token.
 	raw, err := json.Marshal(sum)
@@ -77,6 +85,7 @@ func TestRunOffline_SecurityCaseNames(t *testing.T) {
 		"host011_no_silent_fallthrough":       false,
 		"oauth009_offline_bearer_matrix":      false,
 		"oauth010_mode_c_offline_matrix":      false,
+		"progressive_consent_residual":        false,
 		"concurrent_obtain_stub_under_budget": false,
 		"fail_closed_obtain_latency":          false,
 	}

@@ -428,9 +428,9 @@ When (and only if) org design closes 1b–8 and operators set `replicas` > 1:
 | Surface | Fields | Honesty |
 |---------|--------|---------|
 | `SubjectLimiter.StatusMap` | `ha_multi_replica: false` | Always false until multi-replica runtime exists |
-| Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `mode_a/b/c_enabled`, `mode_*_live_*_qualified=false`, `oauth009_offline_only`, `gateway_ready=false`, `ha_multi_replica=false`, `session_affinity_recommended` (true when multi-user env set), `mode_matrix_residual` | Env parse only; Ready is serve `/readyz`; sticky recommendation is residual honesty, not HA Done |
-| Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst` | Admin BFF ≠ MCP serve; rate knobs = HOST-006 env resolve only (process-local) |
-| Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst` + mode matrix | Never tokens; multi-user residual note when env set; file vault flock is multi-process lite only |
+| Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `mode_a/b/c_enabled`, `mode_*_live_*_qualified=false`, `oauth009_offline_only`, `gateway_ready=false`, `ha_multi_replica=false`, `session_affinity_recommended`, `mode_matrix_residual`, `progressive_consent_*` (browser 3LO not automated; metadata Done*) | Env parse only; Ready is serve `/readyz`; sticky + progressive consent residual honesty, not HA Done |
+| Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst` | Admin BFF ≠ MCP serve; rate knobs process-local HOST-006 |
+| Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst` + mode matrix | Never tokens; multi-user residual note when env set; file vault flock multi-process lite only |
 
 **Never** claim multi-replica Done from docs, kustomize `replicas: 1`, Service
 `sessionAffinity`, or these status fields. See [roadmap § HOST-008](../roadmap/server-team-hosted.md).

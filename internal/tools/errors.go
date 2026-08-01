@@ -15,13 +15,21 @@ type progressiveConsent interface {
 	ConsentSessionID() string
 }
 
+// progressiveConsentMessage formats the model/operator-visible progressive
+// consent fields. Only authorization_url and session_id — never tokens.
+func progressiveConsentMessage(authURL, sessionID string) string {
+	return fmt.Sprintf("consent required; authorization_url=%s session_id=%s",
+		strings.TrimSpace(authURL), strings.TrimSpace(sessionID))
+}
+
 // mapToolErr converts failures to stable apperr codes for MCP surfaces.
 // Seed handlers still return Go errors; the SDK stringifies them. Using apperr
 // ensures Error() is model-safe and coded (FND-005 light wiring).
 //
 // Mode C ConsentRequired is preserved as authentication with authorization_url
-// + session_id only (progressive consent UX residual). Never tokens, refresh
-// material, client secrets, or Authorization headers.
+// + session_id only (progressive consent UX residual / OAUTH-010). Never tokens,
+// refresh material, client secrets, or Authorization headers. Browser 3LO is
+// not automated — metadata path only (Done*); full UX residual GWY-003.
 func mapToolErr(err error) error {
 	if err == nil {
 		return nil
@@ -33,11 +41,11 @@ func mapToolErr(err error) error {
 		url := strings.TrimSpace(pc.ConsentAuthorizationURL())
 		sid := strings.TrimSpace(pc.ConsentSessionID())
 		if url != "" && sid != "" {
-			return apperr.New(apperr.CodeAuthentication,
-				fmt.Sprintf("consent required; authorization_url=%s session_id=%s", url, sid))
+			return apperr.New(apperr.CodeAuthentication, progressiveConsentMessage(url, sid))
 		}
 		// Incomplete consent metadata: still fail closed as authentication.
-		return apperr.Wrap(apperr.CodeAuthentication, "consent required", err)
+		// Do not invent URL/session; do not forward raw secret-bearing text.
+		return apperr.New(apperr.CodeAuthentication, "consent required")
 	}
 	var ae *apperr.Error
 	if errors.As(err, &ae) && ae != nil {

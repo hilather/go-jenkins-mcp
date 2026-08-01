@@ -2726,7 +2726,7 @@ When `--gateway` and provider Ready, Jenkins credentials come from **Obtain for 
 - [x] Mode A → Basic personal token for subject only.
 - [x] Mode B/C → Bearer access token only (never ID token as API credential). *(Mode C Ready + unit tests; Mode B residual provider not Ready)*
 - [x] Obtain failure does not use another subject’s credential.
-- [x] ConsentRequired (mode C) surfaces auth URL metadata only. — Obtain → AuthProvider → `mapToolErr` progressive `authorization_url` + `session_id` (tool path residual documented; full 3LO browser UX residual)
+- [x] ConsentRequired (mode C) surfaces auth URL metadata only. — Obtain → AuthProvider → `mapToolErr` progressive `authorization_url` + `session_id` only (Done\*); doctor `gateway_status` + `gateway qualify` residual row + `gateway consent-residual` CLI; browser 3LO not automated residual
 - [x] Unit/integration tests per mode with mocks. *(A + C offline; B residual)*
 - [x] `docs/gateway/README.md` residuals closed for wiring. *(wiring section; Entra pin still residual)*
 

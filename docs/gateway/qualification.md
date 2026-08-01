@@ -43,6 +43,7 @@ jenkins-mcp gateway qualify --offline   # JSON summary, no secrets
 | `host011_no_silent_fallthrough` | security | **HOST-011:** empty Mode B does not use Mode A token; residual Mode B fail closed; A stays Basic / B stays Bearer; invalid mode & primary-not-enabled fail start |
 | `oauth009_offline_bearer_matrix` | security | **OAUTH-009:** wrong aud/exp/iss fail closed; ID token reject; OfflineFallthroughFixtures; Mode B empty ≠ Mode A; ModeMatrix residual honesty |
 | `oauth010_mode_c_offline_matrix` | security | **OAUTH-010:** auth_code ConsentRequired (URL+session only); token_exchange Bearer; wrong audience; Live=false; Live=true nil Fetcher; ModeMatrix residual; Jenkins-as-AS reject (**not** live Entra Done) |
+| `progressive_consent_residual` | security | **OAUTH-010 / GWY-001:** progressive consent residual honesty — browser 3LO not automated; metadata path Done*; ConsentRequired helpers + Error() canary-free |
 | `concurrent_obtain_stub_under_budget` | performance | N=32 concurrent stub Obtain under 500ms wall budget |
 | `fail_closed_obtain_latency` | performance | Fail-closed Obtain under 50ms |
 
@@ -52,10 +53,13 @@ jenkins-mcp gateway qualify --offline   # JSON summary, no secrets
 - Live Entra JWKS rotation under load and live IdP outage chaos (offline vault hit/miss + mock IdP outage + JWKS kid-lite + mode A/B/C matrix Done*)
 - Mode B live jwt-auth-filter / IdP pin residual (OAUTH-009); offline JWT vault Bearer + claim fail-closed matrix Done* (`oauth009_offline_bearer_matrix`)
 - Mode C live Entra 3LO/OBO + AgentCore Identity vault residual (OAUTH-010 / GWY-003); offline prototype matrix Done* (`oauth010_mode_c_offline_matrix` + `mode_c_agentcore_live_matrix`) — **do not claim live Entra Done**
+- Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; durable consent session store / multi-replica correlation residual
 - OAUTH-010: `HTTPTokenFetcher` https mock AS in package tests (`TestOAUTH010_*` / `TestHTTPTokenFetcher_*`)
 - Opt-in residual lab: `testdata/oauth-lab` + `make live-oauth-*` + `go test -tags=live_oauth` Mode C Obtain vs mock-token (TLS test shim; not default `make test`; not production Entra)
 - Production P95/P99 token acquisition SLOs  
 - Exact-audience JWT passthrough exception process  
+
+Operator CLI residual snapshot (no Obtain): `jenkins-mcp gateway consent-residual`.
 
 ### Offline vault / IdP / JWKS kid-lite (Done*)
 
