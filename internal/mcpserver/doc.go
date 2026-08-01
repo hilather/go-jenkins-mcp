@@ -19,7 +19,9 @@
 // HOST-002: optional HTTPConfig.PathPrefix / --http-path-prefix /
 // JENKINS_MCP_HTTP_PATH_PREFIX mounts MCP under a reverse-proxy path (stripped
 // before the SDK); /healthz and /readyz remain at root and under the prefix.
+// X-Forwarded-Host / X-Forwarded-Prefix are not trusted by default
+// (HTTPConfig.TrustedProxy residual, default false — fail closed).
 // Residual: loopback without require-token/subject still open to local processes;
 // continuous JWKS rotation under load incomplete; live Entra residual; live
-// path-prefix origin pin matrix residual; prefer stdio for pilot (ADR 0002).
+// edge reverse-proxy origin pin residual; prefer stdio for pilot (ADR 0002).
 package mcpserver

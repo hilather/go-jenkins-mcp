@@ -1003,6 +1003,210 @@ func TestNewHTTPHandler_PathPrefix_OriginHostUnchanged(t *testing.T) {
 	}
 }
 
+// TestHOST002_PathPrefixOriginPinFixtureMatrix is the offline HOST-002 fixture
+// matrix for reverse-proxy path-prefix + Origin/Host pin + unauthenticated
+// health + fail-closed X-Forwarded-* (TrustedProxy residual default false).
+//
+// Live edge rewrite of Host/Origin/X-Forwarded-* remains NET-001 residual.
+func TestHOST002_PathPrefixOriginPinFixtureMatrix(t *testing.T) {
+	t.Parallel()
+	const (
+		prefix      = "/mcp"
+		allowedOrig = "https://portal.example.corp"
+		allowedHost = "mcp.example.corp"
+	)
+	srv := mcpserver.NewServer("test", "0.0.1")
+	cfg := mcpserver.DefaultHTTPConfig()
+	cfg.PathPrefix = prefix
+	cfg.AllowNonLocal = true
+	cfg.AllowedOrigins = []string{allowedOrig}
+	cfg.AllowedHosts = []string{allowedHost}
+	cfg.BearerToken = canaryHTTPToken
+	cfg.LabIdentity = true
+	// TrustedProxy default false — explicit for matrix documentation.
+	cfg.TrustedProxy = false
+	h, err := mcpserver.NewHTTPHandler(srv, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type want struct {
+		status int
+		// when status is 0: assert not protect-layer 401/403/404 (SDK may 4xx)
+		passProtect bool
+		bodySubstr  string
+	}
+	type row struct {
+		name   string
+		method string
+		path   string
+		host   string
+		origin string
+		// extraHeaders applied after base auth headers when withAuth
+		extraHeaders map[string]string
+		withAuth     bool // shared secret + lab subject
+		want         want
+	}
+
+	rows := []row{
+		{
+			name:     "origin_exact_match_under_prefix",
+			method:   http.MethodPost,
+			path:     prefix,
+			host:     allowedHost,
+			origin:   allowedOrig,
+			withAuth: true,
+			want:     want{passProtect: true},
+		},
+		{
+			name:     "wrong_origin_403_under_prefix",
+			method:   http.MethodPost,
+			path:     prefix,
+			host:     allowedHost,
+			origin:   "https://evil.example",
+			withAuth: true,
+			want:     want{status: http.StatusForbidden, bodySubstr: "Origin"},
+		},
+		{
+			name:     "host_allow_list_ok_non_local_prefix",
+			method:   http.MethodPost,
+			path:     prefix + "/rpc",
+			host:     allowedHost,
+			origin:   allowedOrig,
+			withAuth: true,
+			want:     want{passProtect: true},
+		},
+		{
+			name:     "host_allow_list_reject_non_local_prefix",
+			method:   http.MethodPost,
+			path:     prefix,
+			host:     "evil.example",
+			origin:   allowedOrig,
+			withAuth: true,
+			want:     want{status: http.StatusForbidden, bodySubstr: "Host"},
+		},
+		{
+			name:     "health_root_unauthenticated",
+			method:   http.MethodGet,
+			path:     mcpserver.HealthzPath,
+			host:     allowedHost,
+			withAuth: false,
+			want:     want{status: http.StatusOK, bodySubstr: `"status":"ok"`},
+		},
+		{
+			name:     "health_prefixed_unauthenticated",
+			method:   http.MethodGet,
+			path:     prefix + mcpserver.HealthzPath,
+			host:     allowedHost,
+			withAuth: false,
+			want:     want{status: http.StatusOK, bodySubstr: `"status":"ok"`},
+		},
+		{
+			// Spoofed X-Forwarded-Host must not satisfy AllowedHosts when Host is wrong.
+			name:   "x_forwarded_host_not_trusted_default",
+			method: http.MethodPost,
+			path:   prefix,
+			host:   "evil.example",
+			origin: allowedOrig,
+			extraHeaders: map[string]string{
+				"X-Forwarded-Host": allowedHost,
+			},
+			withAuth: true,
+			want:     want{status: http.StatusForbidden, bodySubstr: "Host"},
+		},
+		{
+			// X-Forwarded-Prefix must not mount MCP outside configured PathPrefix.
+			name:   "x_forwarded_prefix_not_trusted_for_path",
+			method: http.MethodPost,
+			path:   "/", // outside /mcp
+			host:   allowedHost,
+			origin: allowedOrig,
+			extraHeaders: map[string]string{
+				"X-Forwarded-Prefix": prefix,
+			},
+			withAuth: true,
+			want:     want{status: http.StatusNotFound},
+		},
+	}
+
+	for _, tc := range rows {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest(tc.method, "http://"+tc.host+tc.path, strings.NewReader(`{}`))
+			req.Host = tc.host
+			if tc.origin != "" {
+				req.Header.Set("Origin", tc.origin)
+			}
+			if tc.method == http.MethodPost {
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("Accept", "application/json, text/event-stream")
+			}
+			if tc.withAuth {
+				req.Header.Set("Authorization", "Bearer "+canaryHTTPToken)
+				req.Header.Set(mcpserver.HeaderLabSubject, "lab-user-1")
+			}
+			for k, v := range tc.extraHeaders {
+				req.Header.Set(k, v)
+			}
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			body := rr.Body.String()
+			if strings.Contains(body, canaryHTTPToken) {
+				t.Fatalf("response leaked token canary: %s", body)
+			}
+			if tc.want.passProtect {
+				if rr.Code == http.StatusForbidden || rr.Code == http.StatusUnauthorized || rr.Code == http.StatusNotFound {
+					t.Fatalf("want pass protect, got status=%d body=%s", rr.Code, body)
+				}
+				return
+			}
+			if rr.Code != tc.want.status {
+				t.Fatalf("status=%d want %d body=%s", rr.Code, tc.want.status, body)
+			}
+			if tc.want.bodySubstr != "" && !strings.Contains(body, tc.want.bodySubstr) {
+				t.Fatalf("body missing %q: %s", tc.want.bodySubstr, body)
+			}
+		})
+	}
+}
+
+// HOST-002: TrustedProxy=true remains fail-closed residual (still ignores X-Forwarded-*).
+func TestHOST002_TrustedProxyTrueStillIgnoresXForwarded(t *testing.T) {
+	t.Parallel()
+	srv := mcpserver.NewServer("test", "0.0.1")
+	cfg := mcpserver.DefaultHTTPConfig()
+	cfg.PathPrefix = "/mcp"
+	cfg.AllowNonLocal = true
+	cfg.AllowedOrigins = []string{"https://portal.example.corp"}
+	cfg.AllowedHosts = []string{"mcp.example.corp"}
+	cfg.BearerToken = canaryHTTPToken
+	cfg.LabIdentity = true
+	cfg.TrustedProxy = true // residual: must not auto-trust
+	h, err := mcpserver.NewHTTPHandler(srv, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "http://evil.example/mcp", strings.NewReader(`{}`))
+	req.Host = "evil.example"
+	req.Header.Set("Origin", "https://portal.example.corp")
+	req.Header.Set("X-Forwarded-Host", "mcp.example.corp")
+	req.Header.Set("X-Forwarded-Prefix", "/mcp")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Authorization", "Bearer "+canaryHTTPToken)
+	req.Header.Set(mcpserver.HeaderLabSubject, "lab-user-1")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("TrustedProxy residual must not trust X-Forwarded-Host: status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	// DefaultHTTPConfig leaves TrustedProxy false.
+	if mcpserver.DefaultHTTPConfig().TrustedProxy {
+		t.Fatal("DefaultHTTPConfig.TrustedProxy must be false (fail closed)")
+	}
+}
+
 // HOST-002: trailing-slash prefix config normalizes; invalid rejected at handler build.
 func TestNewHTTPHandler_PathPrefix_NormalizeAndReject(t *testing.T) {
 	t.Parallel()
