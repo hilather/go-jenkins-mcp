@@ -355,7 +355,8 @@ func (s *server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	aq := AuditQuery{
-		Type: q.Get("type"),
+		Type:            q.Get("type"),
+		ExternalSubject: q.Get("external_subject"),
 	}
 	if lim := strings.TrimSpace(q.Get("limit")); lim != "" {
 		n, err := strconv.Atoi(lim)
@@ -378,6 +379,8 @@ func (s *server) handleAudit(w http.ResponseWriter, r *http.Request) {
 		t = t.UTC()
 		aq.Before = &t
 	}
+	// external_subject: optional exact-match IdP subject label (not a token).
+	// Oversize is clipped in AuditQuery.Normalize to MaxExternalSubjectFilterLen.
 
 	// Prefer profile.DataDir when the profile exists; missing profile still
 	// allows reading default XDG audit path (empty events if no file).

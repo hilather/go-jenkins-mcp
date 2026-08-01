@@ -706,8 +706,9 @@ Query:
 | Param | Default | Max | Notes |
 |-------|---------|-----|--------|
 | `limit` | 50 | 200 | page size |
-| `type` | | | filter event type |
+| `type` | | | filter event type (exact match) |
 | `before` | | | RFC3339 exclusive upper bound |
+| `external_subject` | | 128 runes | optional **exact** match (case-sensitive) on event `externalSubject` after Normalize; empty / whitespace skips; oversize clipped. IdP subject label only — **never a token** |
 
 ```json
 {
@@ -726,12 +727,16 @@ SPA list columns surface those fields (truncated/muted); type filter includes
 **Same-host rotated merge (Done\* lite):** the BFF merges the active profile audit
 JSONL with numbered rotates produced by the File sink (`audit.jsonl.1` …
 `audit.jsonl.N`, default keep 3) and optional timestamp-like siblings next to the
-active path. Newest matching events first; `limit` / `type` / `before` apply across
-the merge set; corrupt lines are skipped. Memory stays bounded to `limit`.
+active path. Newest matching events first; `limit` / `type` / `before` /
+`external_subject` apply across the merge set; corrupt lines are skipped. Memory
+stays bounded to `limit`.
 
-**Residual:** no `externalSubject` query param on this BFF (SPA may client-filter
-the loaded page); **multi-pod** audit aggregation (central sink / fleet timeline)
-is not provided — this is per-host profile path merge only (HOST-008).
+**`external_subject` (Done\* lite):** exact match on the normalized
+`externalSubject` field so multi-user correlation works across page loads without
+loading the full JSONL into the browser. Prefer exact identity match (fail-closed)
+over substring. SPA sends the filter as `external_subject` and keeps a client-side
+exact residual for older BFFs. **Multi-pod** audit aggregation (central sink /
+fleet timeline) is not provided — this is per-host profile path merge only (HOST-008).
 
 Missing audit file (and no rotated siblings) → empty `events` (not 500). Path
 traversal on `{id}` rejected.

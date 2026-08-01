@@ -45,7 +45,10 @@ export function buildAuditQueryString(query: AuditQuery = {}): string {
   if (query.before?.trim()) {
     params.set("before", query.before.trim());
   }
-  // BFF AuditQuery has no externalSubject server filter (residual: client-side only).
+  // BFF: exact match on ExternalSubject (case-sensitive). Query param snake_case.
+  if (query.externalSubject?.trim()) {
+    params.set("external_subject", query.externalSubject.trim());
+  }
   return params.toString();
 }
 
@@ -69,20 +72,19 @@ export function formatAuditSubjectCell(
 }
 
 /**
- * Client-side filter on loaded events by externalSubject (substring, case-insensitive).
- * Residual: BFF does not accept externalSubject query param — page-local only.
+ * Client-side exact match on loaded events by externalSubject (case-sensitive).
+ * Primary filter is BFF `external_subject` (server-side across rotated merge).
+ * This residual page-local filter helps older BFFs that ignore the query param.
  */
 export function filterEventsByExternalSubject(
   events: AuditEvent[],
   externalSubject: string | undefined | null,
 ): AuditEvent[] {
-  const needle = (externalSubject ?? "").trim().toLowerCase();
+  const needle = (externalSubject ?? "").trim();
   if (!needle) {
     return events;
   }
-  return events.filter((e) =>
-    (e.externalSubject ?? "").toLowerCase().includes(needle),
-  );
+  return events.filter((e) => (e.externalSubject ?? "") === needle);
 }
 
 /** Normalize limit to allowed page sizes (API max 200). */
@@ -133,13 +135,13 @@ export function datetimeLocalToRfc3339(localValue: string): string | undefined {
 export function buildAuditExportPayload(
   profileId: string,
   events: AuditEvent[],
-  meta: { truncated: boolean; filters: AuditQuery & { externalSubject?: string } },
+  meta: { truncated: boolean; filters: AuditQuery },
   exportedAt: string = new Date().toISOString(),
 ): Record<string, unknown> {
   return {
     exportedAt,
     source: "GET /admin/v1/profiles/{id}/audit",
-    note: "privacy-preserving audit fields only; client-side page export, size-capped to loaded events; externalSubject client filter is residual (not a BFF query param)",
+    note: "privacy-preserving audit fields only; client-side page export, size-capped to loaded events; external_subject is BFF exact-match filter (SPA client filter residual for older BFF)",
     profileId,
     truncated: meta.truncated,
     filters: {

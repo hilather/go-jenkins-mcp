@@ -69,7 +69,7 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
 | Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
 | Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
-| Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; client-side externalSubject filter) | **Done\*** residual polish (BFF has no externalSubject query param; multi-pod aggregation still residual) |
+| Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; BFF `external_subject` exact match + client residual) | **Done\*** lite (same-host BFF filter; multi-pod aggregation still residual) |
 | Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **Done\*** lite — multi-user correlation more complete on one host after rotation |
 | Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod / per-host JSONL only; no fleet merge |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
@@ -513,7 +513,7 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
 | Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
 | Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
-| Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; client-side externalSubject filter) | **Done\*** residual polish (BFF has no externalSubject query param; multi-pod aggregation still residual) |
+| Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; BFF `external_subject` exact match + client residual) | **Done\*** lite (same-host BFF filter; multi-pod aggregation still residual) |
 | Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **Done\*** lite — multi-user correlation more complete on one host after rotation |
 | Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod / per-host JSONL only; no fleet merge |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |

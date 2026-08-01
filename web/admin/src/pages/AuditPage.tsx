@@ -25,7 +25,8 @@ interface AuditFilters {
   /** datetime-local form value; takes precedence when set. */
   beforeLocal: string;
   /**
-   * Client-side only filter on loaded events (BFF has no externalSubject query param).
+   * IdP subject label: sent as BFF `external_subject` (exact match).
+   * Client-side exact filter remains residual fallback for older BFF.
    */
   externalSubject: string;
 }
@@ -70,8 +71,9 @@ export function AuditPage() {
       limit: applied.limit,
       type: applied.type || undefined,
       before: pageBefore ?? formBefore,
+      externalSubject: applied.externalSubject || undefined,
     }),
-    [applied.limit, applied.type, pageBefore, formBefore],
+    [applied.limit, applied.type, pageBefore, formBefore, applied.externalSubject],
   );
 
   const q = useQuery({
@@ -81,6 +83,7 @@ export function AuditPage() {
       query.limit ?? 50,
       query.type ?? "",
       query.before ?? "",
+      query.externalSubject ?? "",
     ],
     queryFn: () => fetchAudit(profileId, query),
     retry: 1,
@@ -154,7 +157,10 @@ export function AuditPage() {
     setPageBefore(cursor);
   };
 
-  /** Page-local view after optional client-side externalSubject filter. */
+  /**
+   * With current BFF, loaded events are already exact-filtered by external_subject.
+   * Client exact filter remains residual for older BFFs that ignore the param.
+   */
   const displayed = useMemo(
     () => filterEventsByExternalSubject(loaded, applied.externalSubject),
     [loaded, applied.externalSubject],
@@ -163,10 +169,7 @@ export function AuditPage() {
   const exportLoaded = () => {
     const payload = buildAuditExportPayload(profileId, displayed, {
       truncated: Boolean(q.data?.truncated),
-      filters: {
-        ...query,
-        externalSubject: applied.externalSubject || undefined,
-      },
+      filters: query,
     });
     downloadJson("audit-export.json", payload);
   };
@@ -190,9 +193,10 @@ export function AuditPage() {
         (<code>GET /admin/v1/profiles/{"{id}"}/audit</code>). Cap limit ≤ 200.
         Same-host lite: BFF merges active <code>audit.jsonl</code> with rotated
         siblings (<code>audit.jsonl.N</code>). Multi-pod fleet aggregation remains
-        residual. Multi-user correlation columns:{" "}
-        <code>externalSubject</code> / <code>subjectKeyHash</code> (opaque hash
-        only — never tokens). No live SSE tail in v1.
+        residual. Multi-user correlation: BFF <code>external_subject</code> exact
+        match on <code>externalSubject</code>; table also shows{" "}
+        <code>subjectKeyHash</code> (opaque hash only — never tokens). No live
+        SSE tail in v1.
       </p>
 
       <form className="card filters-card" onSubmit={applyFilters}>
@@ -259,12 +263,13 @@ export function AuditPage() {
           </label>
           <label className="field field-wide">
             <span>
-              externalSubject (client filter on loaded page; BFF residual)
+              externalSubject (BFF exact match via external_subject; never a
+              token)
             </span>
             <input
               type="text"
               className="input mono"
-              placeholder="IdP subject substring"
+              placeholder="IdP subject label (exact)"
               value={draft.externalSubject}
               onChange={(e) =>
                 setDraft((d) => ({ ...d, externalSubject: e.target.value }))
@@ -297,7 +302,7 @@ export function AuditPage() {
             {q.data?.truncated ? " · truncated (more on server)" : ""}
             {pageBefore ? ` · cursor before=${pageBefore}` : ""}
             {applied.externalSubject
-              ? ` · externalSubject≈${applied.externalSubject}`
+              ? ` · externalSubject=${applied.externalSubject}`
               : ""}
           </span>
         </div>
@@ -330,7 +335,8 @@ export function AuditPage() {
                 <p className="muted">{emptyMessage}</p>
               ) : !displayed.length ? (
                 <p className="muted">
-                  No events match externalSubject client filter on this page.
+                  No events match externalSubject exact filter (BFF
+                  external_subject; client residual for older BFF).
                 </p>
               ) : (
                 <div className="table-scroll">

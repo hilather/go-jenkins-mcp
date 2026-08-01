@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
@@ -21,6 +22,9 @@ import (
 const (
 	DefaultAuditLimit = 50
 	MaxAuditLimit     = 200
+	// MaxExternalSubjectFilterLen caps external_subject query length (matches
+	// audit.Event ExternalSubject maxIDLen / identity field clip).
+	MaxExternalSubjectFilterLen = 128
 	// maxRotatedProbe is an upper bound on numbered rotated siblings to
 	// consider (audit.jsonl.1 … N). File sink keeps DefaultMaxRotated (3);
 	// allow headroom for operator-retained copies without unbounded dir walks.
@@ -74,6 +78,11 @@ type AuditQuery struct {
 	Type string
 	// Before is an exclusive upper bound on event time (RFC3339 parse).
 	Before *time.Time
+	// ExternalSubject filters by Event.ExternalSubject (case-sensitive exact
+	// match after Normalize). Empty = all subjects. Prefer exact identity
+	// match (fail-closed) over substring for multi-user correlation.
+	// Query param: external_subject. Never a token — IdP subject label only.
+	ExternalSubject string
 }
 
 // AuditPage is the secret-free audit list response.
@@ -92,6 +101,12 @@ func (q AuditQuery) Normalize() AuditQuery {
 		q.Limit = MaxAuditLimit
 	}
 	q.Type = strings.TrimSpace(q.Type)
+	q.ExternalSubject = strings.TrimSpace(q.ExternalSubject)
+	// Cap filter length to identity field bound (fail closed: no unbounded needle).
+	if utf8.RuneCountInString(q.ExternalSubject) > MaxExternalSubjectFilterLen {
+		r := []rune(q.ExternalSubject)
+		q.ExternalSubject = string(r[:MaxExternalSubjectFilterLen])
+	}
 	return q
 }
 
@@ -280,6 +295,11 @@ func appendAuditFileMatches(path string, q AuditQuery, ring *[]audit.Event, over
 		}
 		e = e.Normalize()
 		if q.Type != "" && e.Type != q.Type {
+			continue
+		}
+		// Exact match on ExternalSubject (case-sensitive). Empty filter skips.
+		// Compare against normalized event field (redacted + length-capped on write/read).
+		if q.ExternalSubject != "" && e.ExternalSubject != q.ExternalSubject {
 			continue
 		}
 		if q.Before != nil && !q.Before.IsZero() {
