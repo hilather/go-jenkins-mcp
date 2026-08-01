@@ -41,6 +41,8 @@ help:
 	@echo "  make package-smoke  PKG-001 offline package script smoke (SKIP_DEB/RPM; not in default test)"
 	@echo "  make stdio-smoke    FND-006 offline MCP stdio host-lifecycle smoke (not in default test; Cursor product residual)"
 	@echo "  make pilot-evidence  Offline pilot/release evidence under dist/pilot-evidence/ (REL-001/002)"
+	@echo "  make residual-smoke     REL offline residual honesty (qualify + release-evidence residual ids; not default test)"
+	@echo "  make gateway-residual-smoke  Alias for residual-smoke"
 	@echo "  make live-jenkins-up    Start disposable Jenkins LTS (Docker; not in default test)"
 	@echo "  make live-jenkins-test  Compose up + live smoke + down (needs Docker)"
 	@echo "  make live-jenkins-down  Stop disposable Jenkins and remove volume"
@@ -195,6 +197,23 @@ pilot-evidence: build
 	SKIP_GO_TEST="$(SKIP_GO_TEST)" \
 	OUT_ROOT=$(CURDIR)/$(DIST_DIR)/pilot-evidence \
 	$(CURDIR)/scripts/pilot-evidence.sh
+
+# REL offline residual honesty smoke (opt-in; NOT part of make test / make ci).
+# Runs gateway qualify --offline + release-evidence --offline and asserts residual
+# ids multi_user_offline, oauth009_offline, host008_single_replica, gateway_modes_live.
+# Optional: PROFILE=<id> also checks doctor --offline residual fields.
+# Artifacts: dist/residual-smoke/<timestamp>/  (or OUT_DIR=).
+# See docs/release/gates.md · docs/pilot/checklist.md §0.
+.PHONY: residual-smoke gateway-residual-smoke
+residual-smoke: build
+	@chmod +x $(CURDIR)/scripts/gateway-residual-smoke.sh
+	BIN=$(CURDIR)/$(BIN_DIR)/$(BINARY) \
+	PROFILE="$(PROFILE)" \
+	$(if $(OUT_DIR),OUT_DIR="$(OUT_DIR)",) \
+	$(CURDIR)/scripts/gateway-residual-smoke.sh
+	@echo "residual-smoke complete (offline residual honesty; not live multi-user GO — docs/release/gates.md)"
+
+gateway-residual-smoke: residual-smoke
 
 .PHONY: ci
 ci: lint test build
