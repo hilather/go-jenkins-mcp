@@ -249,9 +249,19 @@ rate knobs keep admin health names `rateEnabled` / `ratePerMinute` / `rateBurst`
   "rateEnabled": true,
   "ratePerMinute": 30,
   "rateBurst": 10,
+  "shared_subject_rate_file": false,
   "principal_cache_entries": 0,
   "residual_note": "unified gateway residual snapshot … see docs/gateway/live-pin-blockers.md",
   "doc": "docs/gateway/live-pin-blockers.md"
+}
+```
+
+When PrincipalCache hygiene env is set (positive max/ttl only), also includes:
+
+```json
+{
+  "principal_cache_max_entries": 256,
+  "principal_cache_ttl_seconds": 7200
 }
 ```
 
@@ -271,13 +281,22 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 | `session_affinity_recommended` | `true` when multi-user env set (scaffold honesty) |
 | `multi_pod_vault_residual` | Always `true` (HOST-008 multi-pod vault residual) |
 | `kubernetes_env_detected` | `true` when `KUBERNETES_SERVICE_HOST` set (value never embedded) |
+| `vault_path_emptydir_heuristic` | Heuristic residual when vault path looks emptyDir-like (value never embeds host path secrets) |
+| `replicas_env_residual` | Residual when replica-count env suggests multi-pod intent (not HA Done) |
+| `multi_pod_residual_checklist` | Optional secret-free multi-pod honesty checklist string |
 | `progressive_consent` | OAUTH-010 / GWY-001 StatusMap (static; never tokens) |
-| `rateEnabled` / `ratePerMinute` / `rateBurst` | HOST-006 process-local rate knobs |
-| `principal_cache_entries` | Process-local principal cache **count** only |
+| `progressive_consent_residual` / `progressive_consent_surfaces` | Mode C only; secret-free residual note + surface ids |
+| `rateEnabled` / `ratePerMinute` / `rateBurst` | HOST-006 process-local rate knobs (admin health field names) |
+| `shared_subject_rate_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is non-empty (same-host `FileSubjectRateLimiter`). **Not** multi-pod HA. Path value **never** returned. Never tokens. |
+| `principal_cache_entries` | Process-local principal cache **count** only (never subjects). On admin BFF this is **the admin process**, not necessarily MCP serve. |
+| `principal_cache_max_entries` | Optional hygiene max when env > 0 (omit = unlimited). Never subjects. |
+| `principal_cache_ttl_seconds` | Optional hygiene TTL seconds when env > 0 (omit = no TTL). Never subjects. |
 | `residual_note` / `doc` | Honesty sentence + pointer to [live-pin-blockers.md](../gateway/live-pin-blockers.md) |
 
 **SPA:** Overview card “Gateway residual status” loads this route; **404 hides the
-card** on older BFF builds. Operators may also run CLI `gateway residual-status`.
+card** on older BFF builds. SPA shows `shared_subject_rate_file`, principal_cache
+count, and optional max/ttl with honesty (same-host rate lite; admin BFF process
+for cache count). Operators may also run CLI `gateway residual-status`.
 
 ## GET /admin/v1/version
 

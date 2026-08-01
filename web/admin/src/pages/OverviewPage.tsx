@@ -7,7 +7,15 @@ import {
   fetchVersion,
   getProfileId,
 } from "../api/client";
+import type { GatewayResidualStatusResponse } from "../api/types";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
+import {
+  formatPrincipalCacheHygiene,
+  pickResidualRateCacheFields,
+  PRINCIPAL_CACHE_HYGIENE_HONESTY,
+  PRINCIPAL_CACHE_PROCESS_HONESTY,
+  SHARED_SUBJECT_RATE_FILE_HONESTY,
+} from "../lib/residualStatus";
 
 export function OverviewPage() {
   const profileId = getProfileId();
@@ -170,6 +178,14 @@ export function OverviewPage() {
                 </dd>
               </>
             ) : null}
+            <dt>sharedSubjectRateFile</dt>
+            <dd>
+              {health.data.sharedSubjectRateFile ? "yes" : "no"}{" "}
+              <span className="muted">
+                (HOST-008 same-host file rate lite when path set; not multi-pod HA —
+                path never shown)
+              </span>
+            </dd>
             {health.data.residual ? (
               <>
                 <dt>residual</dt>
@@ -296,136 +312,7 @@ export function OverviewPage() {
               <ErrorBanner error={residual.error} />
             )}
           {residual.isSuccess ? (
-            <dl className="dl">
-              <dt>mode_a / mode_b / mode_c enabled</dt>
-              <dd>
-                {residual.data.mode_a_enabled ? "A" : "—"}
-                {" / "}
-                {residual.data.mode_b_enabled ? "B" : "—"}
-                {" / "}
-                {residual.data.mode_c_enabled ? "C" : "—"}{" "}
-                <span className="muted">(config enablement only; not live GO)</span>
-              </dd>
-              <dt>mode_matrix</dt>
-              <dd>
-                primary{" "}
-                <code>{residual.data.mode_matrix?.primary || "—"}</code>
-                {residual.data.mode_matrix?.enabled?.length ? (
-                  <>
-                    {" "}
-                    · enabled{" "}
-                    {residual.data.mode_matrix.enabled.map((m) => (
-                      <code key={m} style={{ marginRight: "0.35rem" }}>
-                        {m}
-                      </code>
-                    ))}
-                  </>
-                ) : null}
-              </dd>
-              <dt>multi_user_enabled</dt>
-              <dd>
-                {residual.data.multi_user_enabled ? "yes (foundation residual)" : "no"}
-              </dd>
-              <dt>ha_multi_replica</dt>
-              <dd>
-                {residual.data.ha_multi_replica ? "yes" : "no"}{" "}
-                <span className="muted">(HOST-008 Tier A single-replica default)</span>
-              </dd>
-              <dt>session_affinity_recommended</dt>
-              <dd>
-                {residual.data.session_affinity_recommended ? "yes" : "no"}{" "}
-                <span className="muted">(sticky scaffold honesty; not multi-replica Done)</span>
-              </dd>
-              <dt>multi_pod_vault_residual</dt>
-              <dd>
-                {residual.data.multi_pod_vault_residual !== false ? "yes" : "no"}{" "}
-                <span className="muted">(always residual until multi-pod HA)</span>
-              </dd>
-              <dt>kubernetes_env_detected</dt>
-              <dd>
-                {residual.data.kubernetes_env_detected ? "yes" : "no"}{" "}
-                <span className="muted">(in-cluster residual only)</span>
-              </dd>
-              {residual.data.multi_pod_residual_checklist ? (
-                <>
-                  <dt>multi_pod_residual_checklist</dt>
-                  <dd className="muted">{residual.data.multi_pod_residual_checklist}</dd>
-                </>
-              ) : null}
-              <dt>rateEnabled / ratePerMinute / rateBurst</dt>
-              <dd>
-                {residual.data.rateEnabled ? "on" : "off"}
-                {" · "}
-                {typeof residual.data.ratePerMinute === "number"
-                  ? residual.data.ratePerMinute
-                  : "—"}
-                {" / "}
-                {typeof residual.data.rateBurst === "number"
-                  ? residual.data.rateBurst
-                  : "—"}{" "}
-                <span className="muted">(HOST-006 process-local; not multi-replica shared)</span>
-              </dd>
-              <dt>principal_cache_entries</dt>
-              <dd>
-                {typeof residual.data.principal_cache_entries === "number"
-                  ? residual.data.principal_cache_entries
-                  : "—"}{" "}
-                <span className="muted">(count only; never subjects)</span>
-              </dd>
-              <dt>residual_id (Mode B)</dt>
-              <dd>
-                <code>{residual.data.residual_id || "oauth009_offline"}</code>{" "}
-                <span className="muted">
-                  (oauth009_offline=
-                  {residual.data.oauth009_offline !== false ? "true" : "false"}; live RS residual)
-                </span>
-              </dd>
-              <dt>residual_ids</dt>
-              <dd>
-                {residual.data.residual_ids?.length ? (
-                  residual.data.residual_ids.map((id) => (
-                    <code key={id} style={{ marginRight: "0.35rem" }}>
-                      {id}
-                    </code>
-                  ))
-                ) : (
-                  <span className="muted">—</span>
-                )}
-              </dd>
-              {residual.data.progressive_consent ? (
-                <>
-                  <dt>progressive_consent (Mode C residual)</dt>
-                  <dd>
-                    metadata_done*
-                    {residual.data.progressive_consent.metadata_path_done_star
-                      ? "=yes"
-                      : "=no"}
-                    {" · browser_3lo_automated="}
-                    {residual.data.progressive_consent.browser_3lo_automated
-                      ? "yes"
-                      : "no"}
-                  </dd>
-                </>
-              ) : null}
-              {residual.data.progressive_consent_residual ? (
-                <>
-                  <dt>progressive_consent_residual</dt>
-                  <dd className="muted">{residual.data.progressive_consent_residual}</dd>
-                </>
-              ) : null}
-              {residual.data.residual_note ? (
-                <>
-                  <dt>residual_note</dt>
-                  <dd className="muted">{residual.data.residual_note}</dd>
-                </>
-              ) : null}
-              <dt>doc</dt>
-              <dd>
-                <code>
-                  {residual.data.doc || "docs/gateway/live-pin-blockers.md"}
-                </code>
-              </dd>
-            </dl>
+            <ResidualStatusDl data={residual.data} />
           ) : (
             !residual.isLoading &&
             !residual.isError && (
@@ -511,6 +398,13 @@ export function OverviewPage() {
                   </dd>
                 </>
               ) : null}
+              <dt>sharedSubjectRateFile</dt>
+              <dd>
+                {vault.data.sharedSubjectRateFile ? "yes" : "no"}{" "}
+                <span className="muted">
+                  (HOST-008 same-host file rate lite; not multi-pod HA — path never shown)
+                </span>
+              </dd>
               <dt>vaultConfigured</dt>
               <dd>{vault.data.vaultConfigured ? "yes" : "no"}</dd>
               <dt>entryCount</dt>
@@ -573,13 +467,16 @@ export function OverviewPage() {
             <code>multiPodVaultResidual</code> (honest residual, not Done).
             When <code>kubernetesEnvDetected</code>, Overview shows the multi-pod
             residual checklist (sticky, shared vault, rate, Obtain cache). Never
-            multi-replica Done from k8s env alone.
+            multi-replica Done from k8s env alone.{" "}
+            <code>sharedSubjectRateFile</code> is same-host lite only.
           </li>
           <li>
             Gateway residual status (HOST-007):{" "}
             <code>GET /admin/v1/gateway/residual-status</code> matches CLI{" "}
             <code>gateway residual-status</code> (modes, multi_user, HA, consent,
-            rate, principal_cache count, oauth009_offline). See{" "}
+            rate, <code>shared_subject_rate_file</code>, principal_cache count +
+            optional max/ttl, oauth009_offline). Rate file is same-host lite only;
+            principal_cache_entries is this admin BFF process. See{" "}
             <code>docs/gateway/live-pin-blockers.md</code>. Never live production
             GO from admin JSON.
           </li>
@@ -590,5 +487,152 @@ export function OverviewPage() {
         </ul>
       </div>
     </>
+  );
+}
+
+/** HOST-007 residual-status card body (snake_case CLI/BFF fields). */
+function ResidualStatusDl({ data }: { data: GatewayResidualStatusResponse }) {
+  const rateCache = pickResidualRateCacheFields(data);
+  const hygiene = formatPrincipalCacheHygiene(
+    rateCache.principal_cache_max_entries,
+    rateCache.principal_cache_ttl_seconds,
+  );
+
+  return (
+    <dl className="dl">
+      <dt>mode_a / mode_b / mode_c enabled</dt>
+      <dd>
+        {data.mode_a_enabled ? "A" : "—"}
+        {" / "}
+        {data.mode_b_enabled ? "B" : "—"}
+        {" / "}
+        {data.mode_c_enabled ? "C" : "—"}{" "}
+        <span className="muted">(config enablement only; not live GO)</span>
+      </dd>
+      <dt>mode_matrix</dt>
+      <dd>
+        primary <code>{data.mode_matrix?.primary || "—"}</code>
+        {data.mode_matrix?.enabled?.length ? (
+          <>
+            {" "}
+            · enabled{" "}
+            {data.mode_matrix.enabled.map((m) => (
+              <code key={m} style={{ marginRight: "0.35rem" }}>
+                {m}
+              </code>
+            ))}
+          </>
+        ) : null}
+      </dd>
+      <dt>multi_user_enabled</dt>
+      <dd>
+        {data.multi_user_enabled ? "yes (foundation residual)" : "no"}
+      </dd>
+      <dt>ha_multi_replica</dt>
+      <dd>
+        {data.ha_multi_replica ? "yes" : "no"}{" "}
+        <span className="muted">(HOST-008 Tier A single-replica default)</span>
+      </dd>
+      <dt>session_affinity_recommended</dt>
+      <dd>
+        {data.session_affinity_recommended ? "yes" : "no"}{" "}
+        <span className="muted">(sticky scaffold honesty; not multi-replica Done)</span>
+      </dd>
+      <dt>multi_pod_vault_residual</dt>
+      <dd>
+        {data.multi_pod_vault_residual !== false ? "yes" : "no"}{" "}
+        <span className="muted">(always residual until multi-pod HA)</span>
+      </dd>
+      <dt>kubernetes_env_detected</dt>
+      <dd>
+        {data.kubernetes_env_detected ? "yes" : "no"}{" "}
+        <span className="muted">(in-cluster residual only)</span>
+      </dd>
+      {data.multi_pod_residual_checklist ? (
+        <>
+          <dt>multi_pod_residual_checklist</dt>
+          <dd className="muted">{data.multi_pod_residual_checklist}</dd>
+        </>
+      ) : null}
+      <dt>rateEnabled / ratePerMinute / rateBurst</dt>
+      <dd>
+        {data.rateEnabled ? "on" : "off"}
+        {" · "}
+        {typeof data.ratePerMinute === "number" ? data.ratePerMinute : "—"}
+        {" / "}
+        {typeof data.rateBurst === "number" ? data.rateBurst : "—"}{" "}
+        <span className="muted">(HOST-006 process-local; not multi-replica shared)</span>
+      </dd>
+      <dt>shared_subject_rate_file</dt>
+      <dd>
+        {rateCache.shared_subject_rate_file ? "yes" : "no"}{" "}
+        <span className="muted">({SHARED_SUBJECT_RATE_FILE_HONESTY})</span>
+      </dd>
+      <dt>principal_cache_entries</dt>
+      <dd>
+        {typeof rateCache.principal_cache_entries === "number"
+          ? rateCache.principal_cache_entries
+          : "—"}{" "}
+        <span className="muted">
+          (count only; never subjects; {PRINCIPAL_CACHE_PROCESS_HONESTY})
+        </span>
+      </dd>
+      {hygiene ? (
+        <>
+          <dt>principal_cache max / ttl</dt>
+          <dd>
+            {hygiene}{" "}
+            <span className="muted">({PRINCIPAL_CACHE_HYGIENE_HONESTY})</span>
+          </dd>
+        </>
+      ) : null}
+      <dt>residual_id (Mode B)</dt>
+      <dd>
+        <code>{data.residual_id || "oauth009_offline"}</code>{" "}
+        <span className="muted">
+          (oauth009_offline=
+          {data.oauth009_offline !== false ? "true" : "false"}; live RS residual)
+        </span>
+      </dd>
+      <dt>residual_ids</dt>
+      <dd>
+        {data.residual_ids?.length ? (
+          data.residual_ids.map((id) => (
+            <code key={id} style={{ marginRight: "0.35rem" }}>
+              {id}
+            </code>
+          ))
+        ) : (
+          <span className="muted">—</span>
+        )}
+      </dd>
+      {data.progressive_consent ? (
+        <>
+          <dt>progressive_consent (Mode C residual)</dt>
+          <dd>
+            metadata_done*
+            {data.progressive_consent.metadata_path_done_star ? "=yes" : "=no"}
+            {" · browser_3lo_automated="}
+            {data.progressive_consent.browser_3lo_automated ? "yes" : "no"}
+          </dd>
+        </>
+      ) : null}
+      {data.progressive_consent_residual ? (
+        <>
+          <dt>progressive_consent_residual</dt>
+          <dd className="muted">{data.progressive_consent_residual}</dd>
+        </>
+      ) : null}
+      {data.residual_note ? (
+        <>
+          <dt>residual_note</dt>
+          <dd className="muted">{data.residual_note}</dd>
+        </>
+      ) : null}
+      <dt>doc</dt>
+      <dd>
+        <code>{data.doc || "docs/gateway/live-pin-blockers.md"}</code>
+      </dd>
+    </dl>
   );
 }
