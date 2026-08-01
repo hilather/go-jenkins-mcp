@@ -23,13 +23,21 @@ type Caller struct {
 	ProfileID contracts.ProfileID
 }
 
-// CacheKey returns the token-cache key for this caller.
+// CacheKey returns the token-cache key for this caller (HOST-004: includes tenant).
 func (c Caller) CacheKey() CacheKey {
 	return CacheKey{
 		User:     strings.TrimSpace(c.Subject),
+		Tenant:   strings.TrimSpace(c.Tenant),
 		Workload: strings.TrimSpace(c.WorkloadID),
 		Profile:  strings.TrimSpace(string(c.ProfileID)),
 	}
+}
+
+// SubjectKey returns the stable multi-tenant namespace key for this caller
+// (tenant|subject|profile). Same as package SubjectKey(c); convenience for
+// cache / continuation / limiter isolation (HOST-004 / HOST-006).
+func (c Caller) SubjectKey() string {
+	return SubjectKey(c)
 }
 
 // Valid reports whether the caller has the minimum binding fields.

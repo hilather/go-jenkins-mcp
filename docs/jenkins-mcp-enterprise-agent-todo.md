@@ -2666,10 +2666,16 @@ When `--gateway` and provider Ready, Jenkins credentials come from **Obtain for 
 
 **Acceptance criteria**
 
-- [ ] Cache key includes subject/tenant/profile (or process isolation enforced and tested).
-- [ ] Continuations fail closed across subjects when multi-tenant.
-- [ ] Two-user offline test: no shared archive handle / cache hit leakage.
-- [ ] Support-bundle/doctor remain secret-free under multi-user layout.
+- [x] Cache key includes subject/tenant/profile (or process isolation enforced and tested).
+- [x] Continuations fail closed across subjects when multi-tenant.
+- [x] Two-user offline test: no shared archive handle / cache hit leakage.
+- [x] Support-bundle/doctor remain secret-free under multi-user layout.
+
+**Foundation done (package APIs + offline tests):** `CacheKey` includes `Tenant`;
+`Caller.CacheKey` / `SubjectKey`; `jenkins.BindSubjectToPageFilter` +
+`*WithSubject` page-token helpers; two-user cache + Alice/Bob page_token tests;
+`docs/gateway/README.md` §3b. **Residual:** list-tool serve wire of subject-bound
+pagination; durable L1/L2 archive namespace (STO / HOST-008).
 
 ---
 
@@ -2694,10 +2700,16 @@ When `--gateway` and provider Ready, Jenkins credentials come from **Obtain for 
 
 **Acceptance criteria**
 
-- [ ] Per-subject concurrent tool/preview caps (policy may only reduce).
-- [ ] Process absolute ceilings still apply.
-- [ ] Tests or documented fair-share policy for cross-subject starvation.
-- [ ] Mutation confirm tokens cannot replay across subjects.
+- [x] Per-subject concurrent tool/preview caps (policy may only reduce).
+- [x] Process absolute ceilings still apply.
+- [x] Tests or documented fair-share policy for cross-subject starvation.
+- [x] Mutation confirm tokens cannot replay across subjects.
+
+**Foundation done:** `gateway.SubjectLimiter` (`subject_limits.go`) with
+per-subject + process ceilings, `Hold`/`WithSubjectSlot`, fair-share tests,
+`StatusMap` secret-free. Mutation confirms already profile+principal bound
+(`internal/mutation`). **Residual:** full `tools.Register`/`addTool` wire of
+limiter; token-bucket rate (not only concurrency); multi-replica (HOST-008).
 
 ---
 

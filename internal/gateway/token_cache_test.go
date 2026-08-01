@@ -90,3 +90,93 @@ func TestCacheKeyStringNoSecrets(t *testing.T) {
 		t.Fatal("empty invalid")
 	}
 }
+
+// HOST-004: two-user offline isolation — no shared cache hit leakage.
+func TestMemoryTokenCache_HOST004_TwoUserNoCrossHit(t *testing.T) {
+	t.Parallel()
+	c := gateway.NewMemoryTokenCache(time.Hour)
+
+	aliceCaller := gateway.Caller{
+		Subject:    "alice-sub",
+		Tenant:     "tenant-a",
+		WorkloadID: "wl-1",
+		ProfileID:  "corp",
+	}
+	bobCaller := gateway.Caller{
+		Subject:    "bob-sub",
+		Tenant:     "tenant-a",
+		WorkloadID: "wl-1",
+		ProfileID:  "corp",
+	}
+	aliceKey := aliceCaller.CacheKey()
+	bobKey := bobCaller.CacheKey()
+
+	// Namespace keys are distinct SubjectKey shapes.
+	if aliceCaller.SubjectKey() == bobCaller.SubjectKey() {
+		t.Fatal("alice and bob subject keys must differ")
+	}
+	if aliceKey.NamespaceSubjectKey() != aliceCaller.SubjectKey() {
+		t.Fatalf("namespace: got %q want %q", aliceKey.NamespaceSubjectKey(), aliceCaller.SubjectKey())
+	}
+
+	aliceTok := canaryAccessToken + "-alice-host004"
+	bobTok := canaryAccessToken + "-bob-host004"
+	c.Set(aliceKey, gateway.CachedToken{
+		AccessToken:      aliceTok,
+		JenkinsPrincipal: "alice-j",
+		Mode:             gateway.ModeAuthorizationCode,
+		ExpiresAt:        time.Now().Add(time.Hour),
+	})
+	c.Set(bobKey, gateway.CachedToken{
+		AccessToken:      bobTok,
+		JenkinsPrincipal: "bob-j",
+		Mode:             gateway.ModeAuthorizationCode,
+		ExpiresAt:        time.Now().Add(time.Hour),
+	})
+
+	gotA, okA := c.Get(aliceKey)
+	gotB, okB := c.Get(bobKey)
+	if !okA || !okB {
+		t.Fatalf("miss: alice=%v bob=%v", okA, okB)
+	}
+	if gotA.AccessToken != aliceTok || gotB.AccessToken != bobTok {
+		t.Fatal("token mix-up across subjects")
+	}
+	if gotA.AccessToken == gotB.AccessToken {
+		t.Fatal("cross-user token collision")
+	}
+	// Bob's key must not return Alice's entry when Alice-only key used wrongly:
+	// already covered; also ensure SubjectKeyHash path never confuses entries.
+	if gateway.SubjectKeyHash(aliceCaller.SubjectKey()) == gateway.SubjectKeyHash(bobCaller.SubjectKey()) {
+		t.Fatal("subject key hashes collided")
+	}
+
+	// Cross-tenant same subject label: no shared hit (HOST-004 multi-tenant).
+	otherTenant := gateway.Caller{
+		Subject:    "alice-sub",
+		Tenant:     "tenant-b",
+		WorkloadID: "wl-1",
+		ProfileID:  "corp",
+	}
+	if _, ok := c.Get(otherTenant.CacheKey()); ok {
+		t.Fatal("cross-tenant cache hit leakage")
+	}
+
+	// Secret-free String()
+	if strings.Contains(aliceKey.String(), aliceTok) || strings.Contains(gotA.String(), aliceTok) {
+		t.Fatal("String leaked token")
+	}
+}
+
+// HOST-004: CacheKey from Caller includes tenant so multi-tenant keys diverge.
+func TestCallerCacheKey_IncludesTenant(t *testing.T) {
+	t.Parallel()
+	a := gateway.Caller{Subject: "u1", Tenant: "t1", WorkloadID: "w", ProfileID: "p"}
+	b := gateway.Caller{Subject: "u1", Tenant: "t2", WorkloadID: "w", ProfileID: "p"}
+	if a.CacheKey() == b.CacheKey() {
+		t.Fatal("different tenants must produce different cache keys")
+	}
+	if a.SubjectKey() == b.SubjectKey() {
+		t.Fatal("different tenants must produce different subject keys")
+	}
+}
