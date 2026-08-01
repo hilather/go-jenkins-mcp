@@ -1,6 +1,6 @@
 # Server Tier A critical path — JWT / OAuth (all modes)
 
-**Status:** Offline Tier A foundations **Done\*** (2026-08-01 consolidating `TestCriticalPath_*` + qualify A/B/C matrix + residual-smoke honesty). Production live pins for Mode B RS (jwt-auth-filter/proxy) and Mode C Entra remain residual — `mode_*_live_*_qualified=false` until evidence.  
+**Status:** Offline Tier A foundations **Done\***; Mode A disposable Jenkins vault Obtain lab **Done\*** (`TestLive_ModeAVaultObtain_WhoAmI` + `make live-jenkins-test`); Mode B mock RS + Mode C mock-token labs **Done\*** (`make live-oauth-test`). Production live pins for Mode B **jwt-auth-filter/proxy** and Mode C **Entra** remain residual — `mode_*_live_*_qualified=false` until real pin evidence (mock lab ≠ production GO).  
 **Audience:** implementers, security, platform  
 **Defer:** multi-node / multi-pod HA (**HOST-008** Tier B) — same-host flock lite already Done\*  
 **Related:** [server-team-hosted.md](server-team-hosted.md) · [live-pin-blockers.md](../gateway/live-pin-blockers.md) · [oauth-capability-matrix.md](../auth/oauth-capability-matrix.md) · [auth-architecture.md](../auth-architecture.md) · [jwt-auth-filter-qualification.md](../auth/jwt-auth-filter-qualification.md) · code `internal/gateway/critical_path_tier_a_test.go`
@@ -76,10 +76,10 @@ Estimated size: **S** days · **M** 1–2 weeks · **L** multi-week.
 | **S1.1** | **HOST-009** Vault lifecycle: put/list/status/delete/revoke CLI; Obtain returns **only** bound subject token | M | Offline Done\*; admin vault **write** residual |
 | **S1.2** | Obtain isolation canaries: cross-subject read fail closed; no process-wide default token | S | Done\* file vault + multi-user HTTP tools/call Alice/Bob |
 | **S1.3** | Secret-free: no token in logs, admin JSON, MCP, support bundle | S | Done\* canaries; keep green |
-| **S1.4** | Live lab: multi-user HTTP + vault subjects against real Jenkins Basic ACL | M | Offline multi-user HTTP+vault Done\*; **real Jenkins ACL** residual (`make live-jenkins-*`) |
+| **S1.4** | Live lab: multi-user HTTP + vault subjects against real Jenkins Basic ACL | M | Done\* lab: offline multi-user HTTP+vault + `TestLive_ModeAVaultObtain_WhoAmI` (`make live-jenkins-test`, `-tags=live_jenkins`). Production multi-user load residual |
 | **S1.5** | RO pilot + optional mutations still fail closed per subject | S | MUT already subject-bound offline Done\* |
 
-**Exit S1:** Offline Mode A complete. Production multi-user vault against real Jenkins ACL still residual until live lab evidence.
+**Exit S1:** Offline Mode A complete. **Disposable Jenkins vault Obtain lab Done\*** (`make live-jenkins-test`). Production multi-user load + pin flag flip still residual.
 
 ---
 
@@ -91,7 +91,7 @@ Design allows **either** plugin or edge RS — implement qualification for **bot
 |----|------|------|-------|
 | **S2.1** | **OAUTH-009** Live **jwt-auth-filter** pin checklist (live-pin-blockers §2) | L | LTS + plugin version, JCasC, iss/aud/JWKS, principal map |
 | **S2.2** | Required MCP route re-prove live (whoami, job/build API, progressive, artifact, wfapi, …) | M | `auth.RequiredMCPRoutes` |
-| **S2.3** | Invalid Bearer matrix live: wrong aud/iss/exp/alg/type → 401/403; **no** Basic/session/anonymous fallthrough | M | `oauth probe-rs` + curl pack |
+| **S2.3** | Invalid Bearer matrix live: wrong aud/iss/exp/alg/type → 401/403; **no** Basic/session/anonymous fallthrough | M | Offline matrix Done\*; mock RS lab Done\* (`make live-oauth-test` wrong aud/exp/Basic 401). Real jwt-auth-filter residual |
 | **S2.4** | JWKS outage + rotation under concurrent clients | M | Fail closed; document TTL/stale |
 | **S2.5** | Entra group overage fail-closed (no invent membership); Graph expansion residual noted | S | OAUTH-006 foundation Done\* |
 | **S2.6** | **Approved reverse-proxy RS path** (alternative to plugin): same fallthrough + route matrix | M | Document as first-class option in pin table |
@@ -112,7 +112,7 @@ Ship **both** user-delegated 3LO and OBO/token-exchange shapes; site enables one
 | **S3.1** | **OAUTH-010 / GWY-001** Entra app registration: exact Jenkins API resource, scopes, redirect | M | Org-owned |
 | **S3.2** | Authorization-code **3LO** Obtain: browser consent → auth URL + session_id only in metadata (never tokens in SPA/audit) | L | Progressive consent Done\* metadata; browser 3LO automation residual |
 | **S3.3** | **OBO / RFC 8693 / RFC 7523** exchange path → short-lived Jenkins-audience access token | L | Fail closed without exact aud |
-| **S3.4** | `HTTPTokenFetcher` Live=true only under explicit config; https-only; no redirects; body caps | M | Offline Done\* (mock AS + LIVE only Mode C); live Entra residual |
+| **S3.4** | `HTTPTokenFetcher` Live=true only under explicit config; https-only; no redirects; body caps | M | Offline Done\* (mock AS + LIVE only Mode C); mock-token lab Done\* (`make live-oauth-test` HOST-015). Live Entra residual |
 | **S3.5** | Consent session store: file-backed reload-before-persist lite; purge CLI/admin; CLEAR_ALL confirm | S | Offline Done\* |
 | **S3.6** | Force re-auth / revoke window: subject-invalidate + principal/token cache clear (not multi-pod fan-out) | M | Offline Done\*; live IdP revoke residual |
 | **S3.7** | Conditional Access / CA policies lab matrix (interactive vs OBO) | M | Site-specific |
@@ -192,8 +192,8 @@ Ship **both** user-delegated 3LO and OBO/token-exchange shapes; site enables one
 
 - [x] S0 exit met **offline** (HTTP subject + bind + Ready honesty; HOST-001…006/GWY-002 foundations + residual honesty). Live Entra/edge load residual.  
 - [x] **Each** of modes A, B, C has offline foundation **and** a lab plan (vault multi-user HTTP; `make live-oauth-*` mock RS/token; Mode C mock AS fetcher). Production claim only for modes with attached **live** evidence (not mock-only).  
-- [ ] Mode B: at least one RS implementation (filter **or** proxy) **production live-qualified**; offline Bearer matrix + mock RS Done\*; other path residual documented in jwt-auth-filter-qualification §2/§8.  
-- [ ] Mode C: 3LO and/or OBO **live against Entra**; offline mock AS + Jenkins-as-AS reject Done\*; AS endpoints never Jenkins.  
+- [ ] Mode B: at least one RS implementation (filter **or** proxy) **production live-qualified**; offline Bearer matrix + mock RS lab Done\* (`make live-oauth-test`); other path residual documented in jwt-auth-filter-qualification §2/§8.  
+- [ ] Mode C: 3LO and/or OBO **live against Entra**; offline mock AS + mock-token lab Done\* + Jenkins-as-AS reject; AS endpoints never Jenkins.  
 - [x] HOST-011: no silent cross-mode fallthrough **offline** (qualify + `TestCriticalPath_*` / mode matrix); live-load re-prove residual.  
 - [x] residual-smoke residual ids still present; no false `mode_*_live_*_qualified=true` (enforced by residual-smoke + `TestCriticalPath_ResidualStatusNeverLiveQualified`).  
 - [x] HOST-008 multi-pod **not** required for this DoD (Tier A `replicas: 1`).

@@ -253,14 +253,14 @@ func TestPrincipalCache_MaxEntries_ReplaceDoesNotGrow(t *testing.T) {
 
 func TestPrincipalCache_TTL_Expiry(t *testing.T) {
 	t.Parallel()
-	// Short TTL + manual clock via unexported path: use real short TTL.
-	c := gateway.NewPrincipalCacheWithLimits(0, 30*time.Millisecond)
+	// Short TTL with margin for -race / loaded CI (sleep can lag past wall clock).
+	c := gateway.NewPrincipalCacheWithLimits(0, 40*time.Millisecond)
 	k := gateway.SubjectKeyParts("t", "u", "p")
 	c.Set(k, "alice-j")
 	if p, ok := c.Get(k); !ok || p != "alice-j" {
 		t.Fatalf("before expiry: ok=%v p=%q", ok, p)
 	}
-	time.Sleep(45 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	if _, ok := c.Get(k); ok {
 		t.Fatal("after TTL Get must miss and delete")
 	}
@@ -276,13 +276,13 @@ func TestPrincipalCache_TTL_Expiry(t *testing.T) {
 
 func TestPrincipalCache_TTL_LenPurgesExpired(t *testing.T) {
 	t.Parallel()
-	c := gateway.NewPrincipalCacheWithLimits(0, 25*time.Millisecond)
+	c := gateway.NewPrincipalCacheWithLimits(0, 40*time.Millisecond)
 	c.Set(gateway.SubjectKeyParts("t", "u1", "p"), "a")
 	c.Set(gateway.SubjectKeyParts("t", "u2", "p"), "b")
 	if c.Len() != 2 {
 		t.Fatalf("before: %d", c.Len())
 	}
-	time.Sleep(40 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	if c.Len() != 0 {
 		t.Fatalf("Len must purge expired: %d", c.Len())
 	}
