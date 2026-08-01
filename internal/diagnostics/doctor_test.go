@@ -1247,6 +1247,16 @@ func TestRunDoctor_ModeB_RSAuthResidual(t *testing.T) {
 	if rs.Details["live_lab_still_required"] != true {
 		t.Fatalf("live_lab_still_required: %+v", rs.Details)
 	}
+	// residual_id oauth009_offline links REL lite / pilot checklist.
+	if rs.Details["residual_id"] != "oauth009_offline" {
+		t.Fatalf("Mode B rs_auth residual_id want oauth009_offline: %+v", rs.Details)
+	}
+	if rs.Details["oauth009_offline"] != true {
+		t.Fatalf("oauth009_offline flag: %+v", rs.Details)
+	}
+	if !strings.Contains(rs.Message, "oauth009_offline") && !strings.Contains(rs.Message, "OAUTH-009") {
+		t.Fatalf("message must link oauth009_offline / OAUTH-009: %s", rs.Message)
+	}
 	// Residual text secret-free.
 	if strings.Contains(rs.Message, doctorCanary) {
 		t.Fatal("canary in message")

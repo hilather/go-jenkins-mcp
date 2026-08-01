@@ -1434,11 +1434,11 @@ Inspect and measure invalid-token fallthrough, Basic/API-token/session/anonymous
 - [ ] Claim/group/overage, JWKS cache/outage/rotation, and scope behavior meet requirements.
 - [ ] Security review, performance evidence, rollback, and emergency disable plans exist for any fork/proxy.
 
-**Offline residual note (honest):** Offline classifier + Bearer claim matrix (wrong aud/exp/iss, ID-token reject, Mode B no Basic fallthrough) + doctor/self-check Mode B residual are **Done*** foundations (`docs/auth/jwt-auth-filter-qualification.md`, Wave 33 + OAUTH-009 expand; qualify case `oauth009_offline_bearer_matrix`; GWY-003 cross-link). Mock Docker lab path is HOST-012…014 (`make live-oauth-*`) — **not** a production pin. **Live Entra + real jwt-auth-filter version pin remain open — do not claim live Entra Done.**
+**Offline residual note (honest):** Offline classifier + Bearer claim matrix (wrong aud/exp/iss, ID-token reject, Mode B no Basic fallthrough, invalid Bearer never Basic/anonymous on OAuth-required routes) + doctor/self-check Mode B residual (`residual_id=oauth009_offline`) are **Done*** foundations (`docs/auth/jwt-auth-filter-qualification.md`, Wave 33 + OAUTH-009 expand; qualify case `oauth009_offline_bearer_matrix`; GWY-003 cross-link). Mock Docker lab path is HOST-012…014 (`make live-oauth-*`; `-tags=live_oauth` mock-rs health) — **not** a production pin. **Live Entra + real jwt-auth-filter version pin remain open — do not claim live Entra Done.**
 
 **Offline evidence (not live go):**
-- `go test ./internal/auth ./internal/gateway ./internal/gateway/qualify -count=1`
-- Doctor `rs_auth` / self-check `rs_qualification`: `live_lab_still_required=true`; Mode B → warn + `mode_b_live_rs_qualified=false`
+- `go test ./internal/auth/ ./internal/gateway/ ./internal/authlab/ ./internal/diagnostics/ -count=1`
+- Doctor `rs_auth` / self-check `rs_qualification`: `live_lab_still_required=true`; Mode B → **warn** + `mode_b_live_rs_qualified=false` + `residual_id=oauth009_offline`
 
 ---
 

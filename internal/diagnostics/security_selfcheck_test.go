@@ -956,7 +956,16 @@ func TestSecuritySelfCheck_ModeB_RSResidual(t *testing.T) {
 	if rs.Details["id_jwt_never_api_credential"] != true {
 		t.Fatalf("id_jwt note: %+v", rs.Details)
 	}
+	if rs.Details["residual_id"] != "oauth009_offline" {
+		t.Fatalf("Mode B residual_id want oauth009_offline: %+v", rs.Details)
+	}
+	if rs.Details["oauth009_offline"] != true {
+		t.Fatalf("oauth009_offline flag: %+v", rs.Details)
+	}
 	if !strings.Contains(rs.Message, "Mode B") && !strings.Contains(rs.Message, "jwt_rs_bearer") {
 		t.Fatalf("message: %s", rs.Message)
+	}
+	if !strings.Contains(rs.Message, "oauth009_offline") && !strings.Contains(rs.Message, "OAUTH-009") {
+		t.Fatalf("message must link residual_id oauth009_offline: %s", rs.Message)
 	}
 }
