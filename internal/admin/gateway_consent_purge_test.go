@@ -186,7 +186,7 @@ func TestGatewayConsentPurge_DeleteSession(t *testing.T) {
 	}
 }
 
-// HOST-007: clear_all requires explicit flag / action.
+// HOST-007: clear_all requires explicit flag / action + confirm:"CLEAR_ALL".
 func TestGatewayConsentPurge_ClearAll(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "clear.json")
@@ -214,9 +214,9 @@ func TestGatewayConsentPurge_ClearAll(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Explicit clear_all:true
+	// Explicit clear_all:true + confirm CLEAR_ALL (parity with cache EVICT).
 	req := httptest.NewRequest(http.MethodPost, "/admin/v1/gateway/consent-purge",
-		strings.NewReader(`{"clear_all":true}`))
+		strings.NewReader(`{"clear_all":true,"confirm":"CLEAR_ALL"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -269,7 +269,7 @@ func TestGatewayConsentPurge_ClearAllViaAction(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/admin/v1/gateway/consent-purge",
-		strings.NewReader(`{"action":"clear_all"}`))
+		strings.NewReader(`{"action":"clear_all","confirm":"CLEAR_ALL"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -282,6 +282,130 @@ func TestGatewayConsentPurge_ClearAllViaAction(t *testing.T) {
 	}
 	if payload["action"] != "clear_all" || payload["deleted_count"] != float64(1) {
 		t.Fatalf("action clear_all: %+v", payload)
+	}
+}
+
+// Regression: clear_all without confirm must 400 and not mutate the store
+// (HOST-007 confirm token residual lite; parity with cache confirm:"EVICT").
+func TestGatewayConsentPurge_ClearAllRequiresConfirm(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "need-confirm.json")
+	store, err := gateway.NewFileBackedConsentSessionStore(0, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(gateway.ConsentSessionRecord{
+		Info: gateway.ConsentInfo{
+			AuthorizationURL: "https://login.example/authorize?state=keep",
+			SessionID:        "sess-keep-confirm",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(gateway.EnvConsentSessionStorePath, path)
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleOperator
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "missing_confirm", body: `{"clear_all":true}`},
+		{name: "empty_confirm", body: `{"action":"clear_all","confirm":""}`},
+		{name: "wrong_confirm", body: `{"clear_all":true,"confirm":"clear_all"}`},
+		{name: "evict_token_not_accepted", body: `{"clear_all":true,"confirm":"EVICT"}`},
+		{name: "whitespace_not_exact", body: `{"clear_all":true,"confirm":" CLEAR_ALL "}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/admin/v1/gateway/consent-purge",
+				strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("want 400 missing/wrong confirm, got %d body %s", rr.Code, rr.Body.String())
+			}
+			var errBody map[string]any
+			if err := json.Unmarshal(rr.Body.Bytes(), &errBody); err != nil {
+				t.Fatal(err)
+			}
+			if errBody["code"] != "invalid_argument" {
+				t.Fatalf("code=%v body=%s", errBody["code"], rr.Body.String())
+			}
+			msg, _ := errBody["message"].(string)
+			if !strings.Contains(msg, "CLEAR_ALL") && !strings.Contains(msg, "confirm") {
+				t.Fatalf("want confirm/CLEAR_ALL in message: %q", msg)
+			}
+		})
+	}
+
+	// Store must be untouched after failed clear_all attempts.
+	reloaded, err := gateway.NewFileBackedConsentSessionStore(0, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reloaded.Get("sess-keep-confirm"); !ok {
+		t.Fatal("Regression: clear_all without confirm must not delete sessions")
+	}
+	if len(reloaded.List()) != 1 {
+		t.Fatalf("want 1 remaining entry, got %d", len(reloaded.List()))
+	}
+}
+
+// purge_expired and delete_session do not require confirm (destructive confirm is clear_all only).
+func TestGatewayConsentPurge_NonClearActionsIgnoreConfirm(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "no-confirm-needed.json")
+	now := time.Now().UTC()
+	seed := fmt.Sprintf(`{
+  "version": 1,
+  "entries": {
+    "sess-live": {
+      "authorization_url": "https://login.example/authorize?state=live",
+      "session_id": "sess-live",
+      "provider": "agentcore",
+      "stored_at": %q,
+      "expires_at": %q
+    },
+    "sess-exp": {
+      "authorization_url": "https://login.example/authorize?state=exp",
+      "session_id": "sess-exp",
+      "provider": "agentcore",
+      "stored_at": %q,
+      "expires_at": %q
+    }
+  }
+}
+`, now.Add(-time.Hour).Format(time.RFC3339Nano), now.Add(time.Hour).Format(time.RFC3339Nano),
+		now.Add(-2*time.Hour).Format(time.RFC3339Nano), now.Add(-time.Minute).Format(time.RFC3339Nano))
+	if err := os.WriteFile(path, []byte(seed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(gateway.EnvConsentSessionStorePath, path)
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleOperator
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// purge_expired with wrong confirm still succeeds (confirm ignored).
+	req := httptest.NewRequest(http.MethodPost, "/admin/v1/gateway/consent-purge",
+		strings.NewReader(`{"action":"purge_expired","confirm":"nope"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("purge_expired with stray confirm want 200, got %d %s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -355,7 +479,7 @@ func TestGatewayConsentPurge_PathOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := map[string]any{"clear_all": true, "path": path}
+	body := map[string]any{"clear_all": true, "confirm": admin.ConsentClearAllConfirmToken, "path": path}
 	rawBody, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, "/admin/v1/gateway/consent-purge", bytes.NewReader(rawBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -411,7 +535,8 @@ func TestGatewayConsentPurge_PathJailRejectsOutsideStoreDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := map[string]any{"clear_all": true, "path": outside}
+	// Include valid confirm so rejection is path-jail (not missing confirm).
+	body := map[string]any{"clear_all": true, "confirm": admin.ConsentClearAllConfirmToken, "path": outside}
 	rawBody, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, "/admin/v1/gateway/consent-purge", bytes.NewReader(rawBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -661,7 +786,7 @@ func TestGatewayConsentPurge_PersistFailClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/admin/v1/gateway/consent-purge",
-		strings.NewReader(`{"clear_all":true}`))
+		strings.NewReader(`{"clear_all":true,"confirm":"CLEAR_ALL"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -686,7 +811,7 @@ func TestGatewayConsentPurge_PersistFailClosed(t *testing.T) {
 	}
 	rr2 := httptest.NewRecorder()
 	req2 := httptest.NewRequest(http.MethodPost, "/admin/v1/gateway/consent-purge",
-		strings.NewReader(`{"clear_all":true}`))
+		strings.NewReader(`{"clear_all":true,"confirm":"CLEAR_ALL"}`))
 	req2.Header.Set("Content-Type", "application/json")
 	h.ServeHTTP(rr2, req2)
 	if rr2.Code != http.StatusOK {

@@ -221,7 +221,7 @@ Usage:
   jenkins-mcp gateway qualify --offline
   jenkins-mcp gateway residual-status
   jenkins-mcp gateway consent-residual
-  jenkins-mcp gateway consent-purge [--all | --session-id ID] [--path PATH]
+  jenkins-mcp gateway consent-purge [--all --confirm=CLEAR_ALL | --session-id ID] [--path PATH]
   jenkins-mcp gateway consent-expire   # alias of consent-purge
   jenkins-mcp gateway subject-invalidate (--subject-key KEY | --tenant T --subject-id S [--profile P])
   jenkins-mcp gateway vault put|set (--subject KEY | --tenant T --subject-id S [--profile P]) --user U [--token-env VAR] [--vault-path PATH]

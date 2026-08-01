@@ -532,6 +532,12 @@ export interface GatewayConsentPurgeRequest {
   session_id?: string;
   /** Explicit flag required for clear_all (mirrors CLI --all). */
   clear_all?: boolean;
+  /**
+   * Exact confirm token required for clear_all (must be "CLEAR_ALL").
+   * Parity with cache confirm:"EVICT" and CLI --confirm=CLEAR_ALL.
+   * Not required for purge_expired / delete_session.
+   */
+  confirm?: string;
   /** Optional path override (never returned in full; basename residual only). */
   path?: string;
 }

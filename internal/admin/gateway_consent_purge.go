@@ -14,6 +14,11 @@ import (
 // (same pointer as CLI gateway consent-purge).
 const consentPurgeDoc = "docs/gateway/README.md § progressive consent residual"
 
+// ConsentClearAllConfirmToken is the exact body.confirm string required for
+// destructive clear_all (HOST-007 residual lite; parity with cache EVICT).
+// SPA and operators must type this token; purge_expired / delete_session do not.
+const ConsentClearAllConfirmToken = "CLEAR_ALL"
+
 // consentPurgeRequest is POST /admin/v1/gateway/consent-purge body.
 // Metadata-only identity for purge actions — never tokens. Unknown fields
 // (e.g. token) are ignored by the decoder and never treated as credentials.
@@ -23,8 +28,11 @@ type consentPurgeRequest struct {
 	// SessionID is required for delete_session (metadata correlation id only).
 	SessionID string `json:"session_id"`
 	// ClearAll is the explicit flag required for clear_all (mirrors CLI --all).
-	// Also accepted when Action is "clear_all".
+	// Also accepted when Action is "clear_all". clear_all also requires Confirm.
 	ClearAll bool `json:"clear_all"`
+	// Confirm must be exactly ConsentClearAllConfirmToken for clear_all
+	// (parity with cache confirm:"EVICT"). Ignored for other actions.
+	Confirm string `json:"confirm"`
 	// Path optionally overrides the basename under the configured consent store
 	// directory (JENKINS_MCP_CONSENT_STORE_PATH / XDG default). Absolute only;
 	// must stay under that directory (admin BFF path jail — fail closed). Never
@@ -38,6 +46,7 @@ type consentPurgeRequest struct {
 // Mirrors CLI `jenkins-mcp gateway consent-purge` / `consent-expire` semantics:
 //   - OpenConsentSessionStoreForPurge(path | env | XDG)
 //   - purge_expired (default) | delete_session + session_id | clear_all (explicit)
+//   - clear_all requires confirm exactly "CLEAR_ALL" (parity with cache EVICT)
 //   - Secret-free summary: deleted_count, remaining_count, residual notes
 //   - Never tokens; never echo session_id; never full path values
 //
@@ -65,6 +74,13 @@ func (s *server) handleGatewayConsentPurge(w http.ResponseWriter, r *http.Reques
 	action, sessionID, err := resolveConsentPurgeAction(req)
 	if err != nil {
 		writeAppErr(w, err)
+		return
+	}
+	// Destructive clear_all: require exact confirm token (fail closed).
+	// purge_expired / delete_session are unchanged (no confirm).
+	if action == "clear_all" && req.Confirm != ConsentClearAllConfirmToken {
+		writeAppErr(w, apperr.New(apperr.CodeInvalidArgument,
+			`consent-purge: clear_all requires confirm exactly "CLEAR_ALL"`))
 		return
 	}
 
@@ -198,7 +214,8 @@ func validateConsentPurgePathOverride(pathOverride string, getenv func(string) s
 }
 
 // resolveConsentPurgeAction maps body fields to a purge action.
-// clear_all requires explicit clear_all:true or action:"clear_all".
+// clear_all requires explicit clear_all:true or action:"clear_all" (and, in the
+// handler, confirm exactly ConsentClearAllConfirmToken).
 // clear_all and session_id are mutually exclusive (CLI --all vs --session-id).
 func resolveConsentPurgeAction(req consentPurgeRequest) (action, sessionID string, err error) {
 	sid := strings.TrimSpace(req.SessionID)

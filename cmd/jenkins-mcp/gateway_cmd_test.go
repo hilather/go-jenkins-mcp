@@ -957,7 +957,7 @@ func TestGatewayConsentPurge_ExpiredAndSessionAndAll(t *testing.T) {
 		t.Fatal(err)
 	}
 	out = captureStdout(t, func() {
-		errRun = runGatewayConsentPurge([]string{"--all"})
+		errRun = runGatewayConsentPurge([]string{"--all", "--confirm=CLEAR_ALL"})
 	})
 	if errRun != nil {
 		t.Fatalf("clear all: %v\n%s", errRun, out)
@@ -975,12 +975,81 @@ func TestGatewayConsentPurge_ExpiredAndSessionAndAll(t *testing.T) {
 }
 
 func TestGatewayConsentPurge_AllAndSessionExclusive(t *testing.T) {
-	err := runGatewayConsentPurge([]string{"--all", "--session-id", "x"})
+	err := runGatewayConsentPurge([]string{"--all", "--confirm=CLEAR_ALL", "--session-id", "x"})
 	if err == nil {
 		t.Fatal("want mutual exclusion error")
 	}
 	if apperr.CodeOf(err) != apperr.CodeInvalidArgument {
 		t.Fatalf("code: %v", err)
+	}
+}
+
+// Regression: --all without --confirm=CLEAR_ALL must fail closed (HOST-007).
+func TestGatewayConsentPurge_AllRequiresConfirm(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "need-confirm.json")
+	store, err := gateway.NewFileBackedConsentSessionStore(0, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(gateway.ConsentSessionRecord{
+		Info: gateway.ConsentInfo{
+			AuthorizationURL: "https://login.example/authorize?state=keep",
+			SessionID:        "sess-cli-keep",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(gateway.EnvConsentSessionStorePath, path)
+
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "missing_confirm", args: []string{"--all"}},
+		{name: "empty_confirm", args: []string{"--all", "--confirm="}},
+		{name: "wrong_confirm", args: []string{"--all", "--confirm=clear_all"}},
+		{name: "evict_not_accepted", args: []string{"--all", "--confirm=EVICT"}},
+		{name: "whitespace_not_exact", args: []string{"--all", "--confirm= CLEAR_ALL "}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := runGatewayConsentPurge(tc.args)
+			if err == nil {
+				t.Fatal("want error for --all without exact --confirm=CLEAR_ALL")
+			}
+			if apperr.CodeOf(err) != apperr.CodeInvalidArgument {
+				t.Fatalf("code: %v", err)
+			}
+			if !strings.Contains(err.Error(), "CLEAR_ALL") && !strings.Contains(err.Error(), "confirm") {
+				t.Fatalf("want confirm/CLEAR_ALL in error: %v", err)
+			}
+		})
+	}
+
+	reloaded, err := gateway.NewFileBackedConsentSessionStore(0, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reloaded.Get("sess-cli-keep"); !ok {
+		t.Fatal("Regression: --all without confirm must not clear store")
+	}
+}
+
+// purge_expired / --session-id do not require --confirm.
+func TestGatewayConsentPurge_NonAllNoConfirmRequired(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "no-confirm.json")
+	t.Setenv(gateway.EnvConsentSessionStorePath, path)
+	var errRun error
+	out := captureStdout(t, func() {
+		errRun = runGatewayConsentPurge(nil)
+	})
+	if errRun != nil {
+		t.Fatalf("purge_expired: %v\n%s", errRun, out)
+	}
+	if !strings.Contains(out, "purge_expired") {
+		t.Fatalf("stdout: %s", out)
 	}
 }
 
@@ -1023,7 +1092,7 @@ func TestGatewayConsentPurge_PathFlag(t *testing.T) {
 	t.Setenv(gateway.EnvConsentSessionStorePath, filepath.Join(dir, "other.json"))
 	var errRun error
 	out := captureStdout(t, func() {
-		errRun = runGatewayConsentPurge([]string{"--path", path, "--all"})
+		errRun = runGatewayConsentPurge([]string{"--path", path, "--all", "--confirm=CLEAR_ALL"})
 	})
 	if errRun != nil {
 		t.Fatalf("path all: %v\n%s", errRun, out)
@@ -1089,7 +1158,7 @@ func TestGatewayConsentPurge_PersistFailClosed(t *testing.T) {
 		}
 	}
 
-	errRun := runGatewayConsentPurge([]string{"--all"})
+	errRun := runGatewayConsentPurge([]string{"--all", "--confirm=CLEAR_ALL"})
 	if errRun == nil {
 		t.Fatal("Regression: consent-purge --all must return error when file persist fails")
 	}
@@ -1109,7 +1178,7 @@ func TestGatewayConsentPurge_PersistFailClosed(t *testing.T) {
 	}
 	var out string
 	out = captureStdout(t, func() {
-		errRun = runGatewayConsentPurge([]string{"--all"})
+		errRun = runGatewayConsentPurge([]string{"--all", "--confirm=CLEAR_ALL"})
 	})
 	if errRun != nil {
 		t.Fatalf("success after restore: %v\n%s", errRun, out)
