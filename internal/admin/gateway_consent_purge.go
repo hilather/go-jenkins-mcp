@@ -85,13 +85,27 @@ func (s *server) handleGatewayConsentPurge(w http.ResponseWriter, r *http.Reques
 	case "clear_all":
 		// Honest deleted_count includes expired + live entries present before clear.
 		deleted = store.EntryCount()
-		store.Clear()
+		// Fail closed: 500 with secret-free message when file-backed persist fails.
+		if err := store.Clear(); err != nil {
+			writeAppErr(w, err)
+			return
+		}
 	case "delete_session":
-		if store.DeleteSession(sessionID) {
+		ok, err := store.DeleteSession(sessionID)
+		if err != nil {
+			writeAppErr(w, err)
+			return
+		}
+		if ok {
 			deleted = 1
 		}
 	default: // purge_expired
-		deleted = store.PurgeExpired()
+		n, err := store.PurgeExpired()
+		if err != nil {
+			writeAppErr(w, err)
+			return
+		}
+		deleted = n
 	}
 
 	remaining := len(store.List())

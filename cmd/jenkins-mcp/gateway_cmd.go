@@ -334,15 +334,26 @@ func runGatewayConsentPurge(args []string) error {
 		action = "clear_all"
 		// Honest deleted_count includes expired + live entries present before clear.
 		deleted = store.EntryCount()
-		store.Clear()
+		// Fail closed: do not report success when file-backed persist fails.
+		if err := store.Clear(); err != nil {
+			return err
+		}
 	case sid != "":
 		action = "delete_session"
-		if store.DeleteSession(sid) {
+		ok, err := store.DeleteSession(sid)
+		if err != nil {
+			return err
+		}
+		if ok {
 			deleted = 1
 		}
 	default:
 		action = "purge_expired"
-		deleted = store.PurgeExpired()
+		n, err := store.PurgeExpired()
+		if err != nil {
+			return err
+		}
+		deleted = n
 	}
 
 	remaining := len(store.List())

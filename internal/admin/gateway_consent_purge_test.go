@@ -616,6 +616,85 @@ func TestGatewayConsentPurge_UnknownAction(t *testing.T) {
 	}
 }
 
+// OAUTH-010 residual lite: admin consent-purge returns 500 (not 200) when
+// file-backed persist fails; body stays secret-free.
+func TestGatewayConsentPurge_PersistFailClosed(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "consent_sessions.json")
+	store, err := gateway.NewFileBackedConsentSessionStore(0, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(gateway.ConsentSessionRecord{
+		Info: gateway.ConsentInfo{
+			AuthorizationURL: "https://login.example/authorize?state=admin-fail",
+			SessionID:        "sess-admin-fail",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(gateway.EnvConsentSessionStorePath, path)
+	t.Setenv("HOST007_CONSENT_FAKE_TOKEN", consentPurgeCanary)
+
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	// Probe writeability; skip if FS ignores chmod.
+	if probe, err := gateway.NewFileBackedConsentSessionStore(0, path); err == nil {
+		if putErr := probe.Put(gateway.ConsentSessionRecord{
+			Info: gateway.ConsentInfo{
+				AuthorizationURL: "https://login.example/authorize?state=probe",
+				SessionID:        "sess-probe-admin",
+			},
+		}); putErr == nil {
+			t.Skip("parent chmod did not block consent store save; residual untested on this FS")
+		}
+	}
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleOperator
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/admin/v1/gateway/consent-purge",
+		strings.NewReader(`{"clear_all":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("Regression: want 500 on persist fail, got %d body %s", rr.Code, rr.Body.String())
+	}
+	raw := rr.Body.String()
+	assertConsentPurgeAdminSecretFree(t, raw, path)
+	if strings.Contains(raw, "sess-admin-fail") || strings.Contains(raw, consentPurgeCanary) {
+		t.Fatalf("error body must not echo session_id or canary: %s", raw)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json: %v body=%s", err, raw)
+	}
+	if payload["code"] == nil || payload["message"] == nil {
+		t.Fatalf("want code+message error shape: %+v", payload)
+	}
+	// Success path after restore.
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	rr2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodPost, "/admin/v1/gateway/consent-purge",
+		strings.NewReader(`{"clear_all":true}`))
+	req2.Header.Set("Content-Type", "application/json")
+	h.ServeHTTP(rr2, req2)
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("success after restore: %d %s", rr2.Code, rr2.Body.String())
+	}
+	assertConsentPurgeAdminSecretFree(t, rr2.Body.String(), path)
+}
+
 func assertConsentPurgeAdminSecretFree(t *testing.T, out, fullPath string) {
 	t.Helper()
 	for _, bad := range []string{

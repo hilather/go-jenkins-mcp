@@ -110,7 +110,7 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 | Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway residual-status`, admin `GET /admin/v1/gateway/residual-status`, `gateway consent-residual`, `gateway consent-purge`, `gateway subject-invalidate`) | **Done\*** (env/static honesty; subject-invalidate is force re-auth residual lite) |
 | Process-local consent metadata store (TTL; optional file under XDG data) | **Done\*** — auth URL + session id + timestamps only; never tokens |
 | Same-host multi-process file honesty (reload-under-flock before mutate/write) | **Done\* lite** — CLI `consent-purge` not resurrected by live serve `Put` of stale memory; reads resync for freshness |
-| Consent metadata purge/expire CLI (`gateway consent-purge` / `consent-expire`) | **Done\*** — TTL purge / `--session-id` / `--all`; secret-free summary; never tokens; same-host file lite |
+| Consent metadata purge/expire CLI (`gateway consent-purge` / `consent-expire`) | **Done\*** — TTL purge / `--session-id` / `--all`; secret-free summary; never tokens; same-host file lite; **persist fail closed** (CLI non-zero / admin 500 when file write fails — never silent success) |
 | Browser 3LO interactive UX automation | **Residual** — not automated; operator/agent opens `authorization_url` out-of-band |
 | AgentCore durable consent / token vault | **Residual** (not this process-local metadata store) |
 | Multi-replica / multi-pod consent correlation | **Residual** (HOST-008) — same-host file flock only; not multi-pod shared store |
@@ -129,7 +129,12 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
   purge is visible without waiting for a Put. Prevents the prior last-writer-wins
   resurrection of purged sessions when serve rewrote full memory to the file.
   StatusMap exposes `same_host_reload_before_persist: true` when file-backed.
-- API: `Get` / `GetBySubjectKey` / `List` / `Delete` / `Clear` / `PurgeExpired`;
+- **Persist fail closed (OAUTH-010 residual lite):** mutators return `error` when
+  file-backed reload/write fails (memory-only still nil). CLI `consent-purge` and
+  admin `POST …/consent-purge` surface that error (non-zero exit / HTTP 500 with
+  secret-free message) — never report success while disk write failed. Not multi-pod.
+- API: `Get` / `GetBySubjectKey` / `List` / `Delete` / `Clear` / `PurgeExpired`
+  (mutators return error on durable persist fail);
   `StatusMap` / `String` are secret-free (host + truncated session; never full
   authorize query dump in status maps).
 - Operator purge CLI: `jenkins-mcp gateway consent-purge` (alias `consent-expire`)

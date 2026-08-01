@@ -49,7 +49,9 @@ func TestMemoryConsentSessionStore_PutGetListDelete(t *testing.T) {
 	if len(list) != 1 {
 		t.Fatalf("List: %d", len(list))
 	}
-	s.Delete("sess-mem-1")
+	if err := s.Delete("sess-mem-1"); err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := s.Get("sess-mem-1"); ok {
 		t.Fatal("expected delete")
 	}
@@ -118,11 +120,18 @@ func TestMemoryConsentSessionStore_PurgeExpired(t *testing.T) {
 	if n := s.EntryCount(); n != 2 {
 		t.Fatalf("EntryCount before purge: %d want 2 (live+expired)", n)
 	}
-	deleted := s.PurgeExpired()
+	deleted, err := s.PurgeExpired()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if deleted != 1 {
 		t.Fatalf("PurgeExpired deleted=%d want 1", deleted)
 	}
-	if deleted2 := s.PurgeExpired(); deleted2 != 0 {
+	deleted2, err := s.PurgeExpired()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted2 != 0 {
 		t.Fatalf("second PurgeExpired: %d", deleted2)
 	}
 	if s.EntryCount() != 1 {
@@ -152,19 +161,33 @@ func TestMemoryConsentSessionStore_DeleteSessionAndClear(t *testing.T) {
 	if err := s.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-del-2")}); err != nil {
 		t.Fatal(err)
 	}
-	if !s.DeleteSession("sess-del-1") {
+	ok, err := s.DeleteSession("sess-del-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
 		t.Fatal("want DeleteSession true")
 	}
-	if s.DeleteSession("sess-del-1") {
+	ok, err = s.DeleteSession("sess-del-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
 		t.Fatal("second DeleteSession must be false")
 	}
-	if s.DeleteSession("") {
+	ok, err = s.DeleteSession("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
 		t.Fatal("empty id must be false")
 	}
 	if s.EntryCount() != 1 {
 		t.Fatalf("count: %d", s.EntryCount())
 	}
-	s.Clear()
+	if err := s.Clear(); err != nil {
+		t.Fatal(err)
+	}
 	if s.EntryCount() != 0 || len(s.List()) != 0 {
 		t.Fatal("Clear must empty store")
 	}
@@ -203,7 +226,9 @@ func TestMemoryConsentSessionStore_PurgeExpired_FileBacked(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := s.PurgeExpired(); n != 1 {
+	if n, err := s.PurgeExpired(); err != nil {
+		t.Fatal(err)
+	} else if n != 1 {
 		t.Fatalf("purge: %d", n)
 	}
 	// Reload: only live remains; expired must not resurrect.
@@ -503,7 +528,11 @@ func TestConsentSessionStore_NoResurrectionAfterPurge(t *testing.T) {
 	}
 
 	// B (CLI) deletes the purge target from disk.
-	if !cli.DeleteSession("sess-purge-target") {
+	okDel, err := cli.DeleteSession("sess-purge-target")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !okDel {
 		t.Fatal("CLI DeleteSession must find sess-purge-target")
 	}
 	// Serve still has stale memory until next mutate/read — but Put of a third
@@ -542,7 +571,9 @@ func TestConsentSessionStore_NoResurrectionAfterPurge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cli2.Clear()
+	if err := cli2.Clear(); err != nil {
+		t.Fatal(err)
+	}
 	if err := serve.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-post-clear")}); err != nil {
 		t.Fatal(err)
 	}
@@ -583,7 +614,9 @@ func TestConsentSessionStore_NoResurrectionAfterPurge(t *testing.T) {
 		t.Fatal(err)
 	}
 	// EntryCount may include expired after Put; PurgeExpired on CLI.
-	if n := cli3.PurgeExpired(); n < 1 {
+	if n, err := cli3.PurgeExpired(); err != nil {
+		t.Fatal(err)
+	} else if n < 1 {
 		// Put of expired may already drop on write (writeMemory skips expired).
 		// Ensure file has no expired either way, then prove serve Put does not invent it.
 		t.Logf("PurgeExpired deleted=%d (expired may never have been durable)", n)
@@ -669,8 +702,14 @@ func TestConsentSessionStore_ConcurrentPutPurgeNoCorrupt(t *testing.T) {
 			}
 			for i := 0; i < rounds; i++ {
 				// Delete a writer session id that may or may not exist yet.
-				_ = s.DeleteSession(fmt.Sprintf("sess-w%d-r%d", w, i))
-				_ = s.PurgeExpired()
+				if _, err := s.DeleteSession(fmt.Sprintf("sess-w%d-r%d", w, i)); err != nil {
+					errCh <- err
+					return
+				}
+				if _, err := s.PurgeExpired(); err != nil {
+					errCh <- err
+					return
+				}
 			}
 			errCh <- nil
 		}()
@@ -712,7 +751,9 @@ func TestConsentSessionStore_ConcurrentPutPurgeNoCorrupt(t *testing.T) {
 		}
 	}
 	// Delete all remaining then Put one — no resurrection of prior ids from stale memory.
-	final.Clear()
+	if err := final.Clear(); err != nil {
+		t.Fatal(err)
+	}
 	serve, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
 	if err != nil {
 		t.Fatal(err)
@@ -734,7 +775,9 @@ func TestConsentSessionStore_ConcurrentPutPurgeNoCorrupt(t *testing.T) {
 		t.Fatal(err)
 	}
 	// stale2 has sess-stale-seed in memory+disk. Clear via serve handle.
-	serve.Clear()
+	if err := serve.Clear(); err != nil {
+		t.Fatal(err)
+	}
 	if err := stale2.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-after-concurrent-clear")}); err != nil {
 		t.Fatal(err)
 	}
@@ -787,5 +830,149 @@ func TestOpenConsentSessionStoreForPurge_MissingAndPathOverride(t *testing.T) {
 	}
 	if len(opened.List()) != 1 || opened.List()[0].SessionID() != "sess-env-1" {
 		t.Fatalf("env open: %+v", opened.List())
+	}
+}
+
+// OAUTH-010 residual lite: file-backed mutators must surface persist errors
+// (fail closed). Parent dir not writable → Clear/PurgeExpired/DeleteSession/Put
+// return error; memory-only still nil; error messages never embed tokens.
+func TestMemoryConsentSessionStore_MutatePersistFailClosed(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "consent_sessions.json")
+	s, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-persist-live")}); err != nil {
+		t.Fatal(err)
+	}
+	// Seed an expired entry on disk so PurgeExpired has work when persist fails.
+	now := time.Now().UTC()
+	seed := fmt.Sprintf(`{
+  "version": 1,
+  "entries": {
+    "sess-persist-live": {
+      "authorization_url": "https://login.example/authorize?state=live",
+      "session_id": "sess-persist-live",
+      "stored_at": %q,
+      "expires_at": %q
+    },
+    "sess-persist-exp": {
+      "authorization_url": "https://login.example/authorize?state=exp",
+      "session_id": "sess-persist-exp",
+      "stored_at": %q,
+      "expires_at": %q
+    }
+  }
+}
+`, now.Add(-time.Hour).Format(time.RFC3339Nano), now.Add(time.Hour).Format(time.RFC3339Nano),
+		now.Add(-2*time.Hour).Format(time.RFC3339Nano), now.Add(-time.Minute).Format(time.RFC3339Nano))
+	if err := os.WriteFile(path, []byte(seed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Reopen so memory matches seed.
+	s, err = gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Drop write on parent so atomic .tmp write / rename fails.
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	// Put must fail closed on file-backed persist.
+	putErr := s.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-persist-put")})
+	if putErr == nil {
+		// Some filesystems may still allow owner write; skip only if all mutators succeed.
+		t.Skip("parent chmod did not block consent store save; residual untested on this FS")
+	}
+	assertConsentMutateErrSecretFree(t, putErr)
+
+	// Clear / DeleteSession / PurgeExpired / Delete must return error (not silent success).
+	if err := s.Clear(); err == nil {
+		t.Fatal("Regression: Clear must return error when file-backed persist fails")
+	} else {
+		assertConsentMutateErrSecretFree(t, err)
+	}
+	if _, err := s.DeleteSession("sess-persist-live"); err == nil {
+		t.Fatal("Regression: DeleteSession must return error when file-backed persist fails")
+	} else {
+		assertConsentMutateErrSecretFree(t, err)
+	}
+	n, err := s.PurgeExpired()
+	if err == nil {
+		t.Fatal("Regression: PurgeExpired must return error when file-backed persist fails")
+	}
+	if n != 0 {
+		t.Fatalf("PurgeExpired on fail must return count 0, got %d", n)
+	}
+	assertConsentMutateErrSecretFree(t, err)
+	if err := s.Delete("sess-persist-live"); err == nil {
+		t.Fatal("Regression: Delete must return error when file-backed persist fails")
+	} else {
+		assertConsentMutateErrSecretFree(t, err)
+	}
+
+	// Restore write; success path unchanged.
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sOK, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sOK.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-persist-ok")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := sOK.Get("sess-persist-ok"); !ok {
+		t.Fatal("success Put must be durable after chmod restore")
+	}
+	ok, err := sOK.DeleteSession("sess-persist-ok")
+	if err != nil || !ok {
+		t.Fatalf("success DeleteSession: ok=%v err=%v", ok, err)
+	}
+	if err := sOK.Clear(); err != nil {
+		t.Fatal(err)
+	}
+	// Memory-only mutators still return nil (no file path).
+	mem := gateway.NewMemoryConsentSessionStore(time.Hour, "")
+	if err := mem.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-mem-ok")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := mem.Clear(); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := mem.PurgeExpired(); err != nil || n != 0 {
+		t.Fatalf("memory PurgeExpired: n=%d err=%v", n, err)
+	}
+	if ok, err := mem.DeleteSession("missing"); err != nil || ok {
+		t.Fatalf("memory DeleteSession: ok=%v err=%v", ok, err)
+	}
+}
+
+func assertConsentMutateErrSecretFree(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("want non-nil error")
+	}
+	msg := err.Error()
+	for _, bad := range []string{
+		consentStoreCanary,
+		"access_token=",
+		"refresh_token=",
+		"client_secret=",
+		"Authorization: Bearer",
+		"eyJ", // JWT-shaped
+	} {
+		if strings.Contains(msg, bad) {
+			t.Fatalf("mutate error leaked %q: %s", bad, msg)
+		}
+	}
+	// Model-visible path must stay secret-free generic (apperr.Wrap hides cause).
+	if !strings.Contains(strings.ToLower(msg), "consent") {
+		t.Fatalf("want consent-related secret-free message: %s", msg)
 	}
 }
