@@ -10,6 +10,10 @@ import type { GatewayResidualStatusResponse } from "../api/types";
 export const SHARED_SUBJECT_RATE_FILE_HONESTY =
   "same-host FileSubjectRateLimiter lite when true (JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH); not multi-pod HA — path never shown";
 
+/** Same-host FileJWKS lite honesty (HOST-001/HOST-008); not multi-pod external JWKS. */
+export const SHARED_JWKS_FILE_HONESTY =
+  "same-host FileJWKS lite when true (JENKINS_MCP_HTTP_JWKS_CACHE_PATH); not multi-pod external JWKS HA — path never shown; public keys only";
+
 /**
  * Principal cache entry count is the process that served residual-status
  * (admin BFF), not necessarily the MCP gateway serve process.
@@ -26,6 +30,8 @@ export interface ResidualRateCacheFields {
   shared_subject_rate_file: boolean;
   /** HOST-008 FilePrincipalCache path configured (bool only; never path). */
   shared_principal_cache_file: boolean;
+  /** HOST-001/HOST-008 FileJWKS path configured (bool only; never path). */
+  shared_jwks_file: boolean;
   /** Present when MaxSubjects env > 0. */
   subject_rate_max_subjects?: number;
   /** Process-local or file Len() count. */
@@ -46,11 +52,16 @@ export function pickResidualRateCacheFields(
   data: GatewayResidualStatusResponse | null | undefined,
 ): ResidualRateCacheFields {
   if (!data) {
-    return { shared_subject_rate_file: false, shared_principal_cache_file: false };
+    return {
+      shared_subject_rate_file: false,
+      shared_principal_cache_file: false,
+      shared_jwks_file: false,
+    };
   }
   const out: ResidualRateCacheFields = {
     shared_subject_rate_file: Boolean(data.shared_subject_rate_file),
     shared_principal_cache_file: Boolean(data.shared_principal_cache_file),
+    shared_jwks_file: Boolean(data.shared_jwks_file),
   };
   if (typeof data.subject_rate_max_subjects === "number") {
     out.subject_rate_max_subjects = data.subject_rate_max_subjects;

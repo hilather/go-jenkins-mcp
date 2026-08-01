@@ -22,6 +22,7 @@ import {
   pickResidualRateCacheFields,
   PRINCIPAL_CACHE_HYGIENE_HONESTY,
   PRINCIPAL_CACHE_PROCESS_HONESTY,
+  SHARED_JWKS_FILE_HONESTY,
   SHARED_SUBJECT_RATE_FILE_HONESTY,
 } from "../lib/residualStatus";
 
@@ -508,9 +509,12 @@ export function OverviewPage() {
             Gateway residual status (HOST-007):{" "}
             <code>GET /admin/v1/gateway/residual-status</code> matches CLI{" "}
             <code>gateway residual-status</code> (modes, multi_user, HA, consent,
-            rate, <code>shared_subject_rate_file</code>, principal_cache count +
-            optional max/ttl, oauth009_offline). Rate file is same-host lite only;
-            principal_cache_entries is this admin BFF process. See{" "}
+            rate, <code>shared_subject_rate_file</code>,{" "}
+            <code>shared_principal_cache_file</code>,{" "}
+            <code>shared_jwks_file</code>, principal_cache count + optional
+            max/ttl, oauth009_offline). Rate / principal / JWKS file flags are
+            same-host lite only (path never shown); principal_cache_entries is
+            this admin BFF process. See{" "}
             <code>docs/gateway/live-pin-blockers.md</code>. Never live production
             GO from admin JSON.
           </li>
@@ -792,6 +796,11 @@ function ResidualStatusDl({ data }: { data: GatewayResidualStatusResponse }) {
         <span className="muted">
           (same-host FilePrincipalCache lite when true; path never shown; not multi-pod)
         </span>
+      </dd>
+      <dt>shared_jwks_file</dt>
+      <dd>
+        {rateCache.shared_jwks_file ? "yes" : "no"}{" "}
+        <span className="muted">({SHARED_JWKS_FILE_HONESTY})</span>
       </dd>
       <dt>principal_cache_entries</dt>
       <dd>
