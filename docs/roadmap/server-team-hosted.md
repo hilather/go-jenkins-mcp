@@ -152,7 +152,7 @@ Legend: **Done** / **Partial** / **Not started** relative to Tier A needs.
 | Token acquisition **mode B** JWT RS bearer | OIDC offline **Partial**; RS live residual | Live jwt-auth-filter + claim matrix + bearer wire | **OAUTH-009**, OAUTH-003/005, **HOST-010** | P0 | JWT = Jenkins half |
 | Token acquisition **mode C** 3LO/OBO Obtain | Gateway Obtain **stub** | Live Entra 3LO + OBO + vault | **OAUTH-010**, **GWY-001**, HOST-003 | P0 | AS = Entra, not Jenkins |
 | Mode matrix / fail-closed switch | N/A | Config selects modes; no silent cross-mode fallthrough | **HOST-011**, GWY-003 | P0 | Qualify all three |
-| Session/subject binding | Local re-verify **Done***; HTTP `Mcp-Session-Id` fingerprint **Done*** offline | Continuous JWKS rotation; durable multi-replica session store | AUTH-004, GWY-002, **HOST-001**, **HOST-003** | P0 | Mid-session subject swap → 401 offline; live Entra residual |
+| Session/subject binding | Local re-verify **Done***; HTTP `Mcp-Session-Id` fingerprint **Done*** offline (+ rebind expand: PathPrefix, groups, lab JWT Alice/Bob) | Continuous JWKS rotation; durable multi-replica session store; **live Entra** | AUTH-004, GWY-002, **HOST-001**, **HOST-003** | P0 | Mid-session subject/group swap → 401 offline; live Entra residual (not Done) |
 | Cache isolation by user/tenant/profile | Local XDG per OS user **Partial** | Namespace + ACL on multi-user host | GWY-004, STO-*, **HOST-004** | P0 | MVP: one process per subject OK |
 | Audit isolation + correlation | Local audit **Done*** | Per-subject + correlation ID across hops | AUD-001, GWY-004, OBS-* | P1 | No secrets in events |
 | Network placement near Jenkins | N/A (local) | Deploy next to controller; measure bytes | GWY-004, PERF-* | P1 | Prove near-source benefit |

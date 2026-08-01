@@ -4613,16 +4613,21 @@
       "dependency_text": "GWY-002, MCP-001",
       "parallel_safe": null,
       "objective": "Authenticated individual subjects on MCP HTTP in gateway mode.",
-      "implementation": "Per-user authn on Streamable HTTP; shared secret not multi-user identity; bind to policy.Subject.",
+      "implementation": "Per-user authn on Streamable HTTP; shared secret not multi-user identity; bind to policy.Subject. Mid-session IdentityFingerprint (subject+groups) fail-closed offline expand; live Entra residual.",
       "acceptance_criteria": [
         "Non-local bind requires authenticated subject.",
         "Shared-secret alone is not multi-user identity.",
         "Session binds to policy.Subject; subject change fails closed.",
+        "Mid-session rebind residual offline expand: PathPrefix, multi-user, lab JWT Alice/Bob, group claim change, order-stable groups, health exempt, secret-free 401.",
         "Tokens never in logs/errors/metrics/support bundles.",
         "Gateway mode cannot enable anonymous multi-user."
       ],
-      "acceptance_criteria_count": 5,
-      "evidence_tests": [],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [
+        "internal/mcpserver/http_host001_rebind_expand_test.go",
+        "TestMultiUserHTTP_PathPrefix_MidSessionSubjectSwap_401Canary",
+        "TestHTTPHandler_LabJWT_MidSessionAliceBobSwapAndGroups"
+      ],
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": [

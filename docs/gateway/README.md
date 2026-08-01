@@ -496,7 +496,9 @@ env labels + whoAmI principal.
 | Single group name > 256 bytes | Fail closed (never truncated short form) |
 | Tool args supply `subject` / `jenkins_user` / `tenant` / `as_user` / … | `RejectIdentityToolArgs` → `policy_denial` |
 | Mid-session claim fingerprint change | `Binding.Revalidate` fail closed |
-| Mid-session HTTP subject swap (same `Mcp-Session-Id`) | `mcpserver` session fingerprint table → 401 (HOST-001; no tokens in body) |
+| Mid-session HTTP subject swap (same `Mcp-Session-Id`) | `mcpserver` session fingerprint table → 401 (HOST-001; no tokens/subjects in body) |
+| Mid-session group claim change (same subject) | `IdentityFingerprint` includes sorted Groups → 401 offline (lab header + lab JWT); order-only change still OK |
+| PathPrefix + mid-session swap | Strip does not weaken bind; Alice→Bob under `/mcp` still 401; health root + `{prefix}` exempt |
 | Binding TTL exceeded | Re-bind from claims; still fail closed on bind errors |
 
 **API shape:** `BindSubject(claims InboundClaims, opts)` — there is **no** tool-args
@@ -605,7 +607,7 @@ Done. Live Entra JWKS under load / multi-replica session store (HOST-008).
 | Custom Jenkins authorization-server plugin | ADR 0011 / OAUTH-011 **default no-go** |
 | Shared Jenkins service account for interactive users | **Never** |
 | Real client secret storage | keyring / vault (not profile JSON) |
-| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT, session fingerprint, JWKS TTL refresh + MaxStaleAge, multi-user Obtain + **policy.Subject rebind foundation** + **protect→inner Alice/Bob** (`multi_user_http_test.go`) + **tools/call JSON-RPC Alice/Bob AuthProviderCtx e2e** (`multi_user_tools_call_test.go`, session-scoped Connect ctx); residual: multi-instance JWKS HA, live Entra groups claim completeness, per-POST (intra-session) handler-ctx rebind if SDK adds it |
+| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT, session fingerprint, JWKS TTL refresh + MaxStaleAge, multi-user Obtain + **policy.Subject rebind foundation** + **protect→inner Alice/Bob** (`multi_user_http_test.go`) + **tools/call JSON-RPC Alice/Bob AuthProviderCtx e2e** (`multi_user_tools_call_test.go`, session-scoped Connect ctx) + **mid-session rebind residual expand** (`http_host001_rebind_expand_test.go`: PathPrefix strip + group claim change fail-closed + order-stable groups OK + health exempt; multi-user PathPrefix Alice/Bob swap; lab JWT Alice/Bob + group change in `TestHTTPHandler_LabJWT_MidSessionAliceBobSwapAndGroups`); residual: multi-instance JWKS HA, **live Entra / jwt-auth-filter (not offline expand Done)**, live Entra groups claim completeness, durable multi-replica session store, per-POST (intra-session) handler-ctx rebind if SDK adds it |
 | Reverse-proxy non-local matrix | HOST-002 **Partial Done***: docs + `PathPrefix` strip + dual health + offline origin pin + expanded Host/Origin matrix residual lite (`TestHOST002_StreamableHTTPOriginHostMatrix`: missing Origin, wrong/exact Origin, Host allow-list, X-Forwarded-Host/Origin ignore, TrustedProxy true no-op, PathPrefix does not weaken Origin) + `TrustedProxy` default false; **live edge residual** (no live edge claim); no CORS wildcards |
 | Health/readiness envelope | HOST-005 **partial** — `/healthz` + `/readyz` + compose/k8s limits; Obtain Ready on `/readyz` when `--gateway` |
 | Multi-replica HA | HOST-008 Tier B residual (single-replica Tier A; sticky Service Done* scaffold; multi-pod vault residual) — checklist: [live-pin-blockers.md](live-pin-blockers.md) §4 |
@@ -635,8 +637,12 @@ errors/Status/String; cancelled context; HTTPS-only HTTPTokenFetcher + mock AS;
 `oauth010_mode_c_offline_matrix` — not live Entra Done); offline qualify vault
 hit/miss, IdP outage chaos, JWKS kid-lite (see [qualification.md](qualification.md));
 HOST-001 `RequireSubject` + shared-secret not identity; mid-session
-`Mcp-Session-Id` subject swap 401; multi-user tools/call JSON-RPC Alice/Bob
+`Mcp-Session-Id` subject swap 401 (PathPrefix + multi-user + lab JWT Alice/Bob
++ group claim change fail-closed; order-stable groups OK; health exempt;
+secret-free 401 bodies — `TestHOST001_*` / `TestHTTPHandler_LabJWT_MidSession*`);
+multi-user tools/call JSON-RPC Alice/Bob
 AuthProviderCtx isolation (`TestMultiUserHTTP_ToolsCall_JSONRPC_*`, session-scoped);
+**not live Entra Done**;
 HOST-004 two-user token-cache + page_token subject isolation; HOST-006
 SubjectLimiter + SubjectRateLimiter fair-share. Opt-in Mode C mock peer:
 `make live-oauth-*` + `go test -tags=live_oauth ./internal/gateway/qualify/`
