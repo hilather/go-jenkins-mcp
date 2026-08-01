@@ -165,11 +165,24 @@ func NewMemoryConsentSessionStore(ttl time.Duration, filePath string) *MemoryCon
 
 // processConsentSessionStore is the serve-wide default used when
 // AgentCoreProvider.ConsentStore is nil. Tests may inject a private store.
-var processConsentSessionStore ConsentSessionStore = NewMemoryConsentSessionStore(0, "")
+// Guarded by processConsentSessionMu so parallel tests / setup do not race
+// (go test -race).
+var (
+	processConsentSessionMu    sync.RWMutex
+	processConsentSessionStore ConsentSessionStore = NewMemoryConsentSessionStore(0, "")
+)
 
 // ProcessConsentSessionStore returns the process-local default consent metadata
 // store. Never nil after package init. Metadata only — never tokens.
 func ProcessConsentSessionStore() ConsentSessionStore {
+	processConsentSessionMu.RLock()
+	s := processConsentSessionStore
+	processConsentSessionMu.RUnlock()
+	if s != nil {
+		return s
+	}
+	processConsentSessionMu.Lock()
+	defer processConsentSessionMu.Unlock()
 	if processConsentSessionStore == nil {
 		processConsentSessionStore = NewMemoryConsentSessionStore(0, "")
 	}
@@ -177,8 +190,10 @@ func ProcessConsentSessionStore() ConsentSessionStore {
 }
 
 // SetProcessConsentSessionStore replaces the process default (tests / serve wire).
-// nil resets to a fresh memory-only store.
+// nil resets to a fresh memory-only store. Safe for concurrent use.
 func SetProcessConsentSessionStore(s ConsentSessionStore) {
+	processConsentSessionMu.Lock()
+	defer processConsentSessionMu.Unlock()
 	if s == nil {
 		processConsentSessionStore = NewMemoryConsentSessionStore(0, "")
 		return

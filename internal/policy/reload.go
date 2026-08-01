@@ -82,19 +82,19 @@ type ReloadableConfig struct {
 
 // reloadSnapshot is an immutable generation of the deny-only evaluator.
 type reloadSnapshot struct {
-	eval           *DenyOnlyEvaluator
-	mtime          time.Time
-	size           int64
-	hasFileMeta    bool
-	bundleSeq      int64
-	contentHash    string
-	signatureState string
-	denyTools      int
-	denyJobPrefs   int
-	denyNodeNames  int
-	denyViewNames  int
-	denyArtPaths   int
-	denyBranchNms  int
+	eval                   *DenyOnlyEvaluator
+	mtime                  time.Time
+	size                   int64
+	hasFileMeta            bool
+	bundleSeq              int64
+	contentHash            string
+	signatureState         string
+	denyTools              int
+	denyJobPrefs           int
+	denyNodeNames          int
+	denyViewNames          int
+	denyArtPaths           int
+	denyBranchNms          int
 	mode                   PolicyMode
 	forceRO                bool
 	fleetTelemetryForceOff bool

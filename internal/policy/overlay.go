@@ -92,6 +92,16 @@ type Overlay struct {
 	// Matching is exact on the registered tool name (case-sensitive).
 	DenyTools []string `json:"deny_tools,omitempty"`
 
+	// AllowMutationTools (MUT-017): when non-empty and mutations are enabled,
+	// only these mutation tools register. Empty = all classified mutations.
+	AllowMutationTools []string `json:"allow_mutation_tools,omitempty"`
+	// AllowInterruptModes (MUT-017): when non-empty, only these interrupt modes
+	// (stop|term|kill) are allowed for jenkins_interrupt_build.
+	AllowInterruptModes []string `json:"allow_interrupt_modes,omitempty"`
+	// AllowMutationJobPrefixes (MUT-017): when non-empty, mutation targets must
+	// match at least one job full-name prefix.
+	AllowMutationJobPrefixes []string `json:"allow_mutation_job_prefixes,omitempty"`
+
 	// DenyJobPrefixes is an optional list of job full names / folder patterns
 	// denied at call time when tool args include job_name (POL-004 lite).
 	// Match: exact full name or folder children (prefix + "/"); optional trailing
@@ -694,10 +704,10 @@ func (r LoadResult) StatusMap() map[string]any {
 // EffectivePolicyExplain is a secret-free explanation of loaded policy for CLI
 // show-effective (MGR-001). Never includes signature bytes or key material.
 type EffectivePolicyExplain struct {
-	ProfileID         string         `json:"profile_id,omitempty"`
-	PolicyPresent     bool           `json:"policy_present"`
-	PolicyPathBase    string         `json:"policy_path_base,omitempty"`
-	SignatureState    string         `json:"signature_state"`
+	ProfileID              string         `json:"profile_id,omitempty"`
+	PolicyPresent          bool           `json:"policy_present"`
+	PolicyPathBase         string         `json:"policy_path_base,omitempty"`
+	SignatureState         string         `json:"signature_state"`
 	ForceReadOnly          bool           `json:"force_read_only"`
 	FleetTelemetryForceOff bool           `json:"fleet_telemetry_force_off"`
 	Mode                   string         `json:"mode,omitempty"`

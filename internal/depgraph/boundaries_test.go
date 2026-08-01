@@ -225,9 +225,11 @@ func TestDependencyDirection(t *testing.T) {
 		// Wave 28: IdentityReverifyGate optional audit sink (privacy-preserving).
 		"internal/auth": {"internal/contracts", "internal/keyring", "internal/apperr", "internal/profile", "internal/jenkins", "internal/audit"},
 		// GWY-001/002: AgentCore credential provider + identity → policy.Subject.
-		"internal/gateway": {"internal/apperr", "internal/contracts", "internal/policy", "internal/auth"},
+		// HOST-007 subject-invalidate residual: optional privacy-preserving audit emit.
+		"internal/gateway": {"internal/apperr", "internal/contracts", "internal/policy", "internal/auth", "internal/audit"},
 		// GWY-003 lite: offline security/performance qualification harness.
-		"internal/gateway/qualify": {"internal/gateway", "internal/apperr", "internal/contracts", "internal/auth"},
+		// Residual-status offline honesty embeds diagnostics.BuildGatewayResidualStatus.
+		"internal/gateway/qualify": {"internal/gateway", "internal/apperr", "internal/contracts", "internal/auth", "internal/diagnostics"},
 		// INT-001: optional adapters; no Jenkins client by default.
 		// INT-003: may use net/http for optional HTTPS JSON backend (stdlib only + apperr).
 		"internal/adapter": {"internal/apperr"},

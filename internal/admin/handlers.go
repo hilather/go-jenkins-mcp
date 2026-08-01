@@ -232,8 +232,8 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		SharedTokenCacheFile:                  sharedTokenCacheFile,
 		ProgressiveConsentFileBacked:          progressiveConsentFileBacked,
 		ProgressiveConsentSameHostReload:      progressiveConsentFileBacked, // same as residual-status
-		ProgressiveConsentStoresTokens:        false,                         // always; never tokens
-		ProgressiveConsentMultiReplicaShared:  false,                         // not multi-pod HA
+		ProgressiveConsentStoresTokens:        false,                        // always; never tokens
+		ProgressiveConsentMultiReplicaShared:  false,                        // not multi-pod HA
 		ProgressiveConsentMetadataDoneStar:    pc.MetadataPathDoneStar,
 		ProgressiveConsentBrowser3loAutomated: pc.Browser3LOAutomated,
 		ProgressiveConsentResidual:            pcResidual,

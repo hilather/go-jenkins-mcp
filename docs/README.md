@@ -22,6 +22,7 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [admin/README.md](admin/README.md) | Packages, policy CLI, gateway, telemetry, HTTP loopback; admin SPA (UI-000–UI-009) |
 | [`../deploy/local/README.md`](../deploy/local/README.md) | **First-class** disposable admin BFF/SPA + optional lab Jenkins (Docker; not Cursor stdio) |
 | [agent-usage.md](agent-usage.md) | Triage flow; Wave 18–19 tools (queue cancel, ext-logs ACL, change correlation, search re-eval, start_job params) |
+| [mutations/power-user-backlog.md](mutations/power-user-backlog.md) | Remaining write / power-user mutations (opt-in; MUT-001 gate; admin out of scope) |
 | [tool-contracts.md](tool-contracts.md) | MCP tool inventory, budgets, error codes, side effects |
 | [packaging.md](packaging.md) | RPM/DEB/tar, XDG paths, update-check, HTTP mode notes, local Docker pointer |
 | [policy-rbac.md](policy-rbac.md) | Deny-only RBAC + overlay schema |

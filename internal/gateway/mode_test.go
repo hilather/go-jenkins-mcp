@@ -541,8 +541,8 @@ func TestHOST011_ObtainAuthMatrixOffline(t *testing.T) {
 		p.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, c gateway.Caller, _ gateway.AgentCoreConfig) (gateway.Credential, error) {
 			_ = ctx
 			return gateway.Credential{
-				AccessToken: canaryC,
-				Mode:        gateway.ModeTokenExchange,
+				AccessToken:      canaryC,
+				Mode:             gateway.ModeTokenExchange,
 				JenkinsPrincipal: c.Subject,
 			}, nil
 		})

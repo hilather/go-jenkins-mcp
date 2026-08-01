@@ -187,16 +187,18 @@ Prefer **high-level triage** tools over dumping full console logs.
 
 ## 7. Mutations (usually disabled)
 
-By default, mutation tools (`jenkins_start_job`, `jenkins_stop_build`, `jenkins_cancel_queue_item`) are **not registered**.
+By default, **no** mutation tools are registered (including power-user tools).
 
 Mutations are allowed **only** when a deliberate host uses `--allow-mutations` **and** no stronger read-only source is set (CLI `--read-only`, `JENKINS_MCP_READ_ONLY`, enterprise `force_read_only`, profile RO). Even then:
 
 1. Call **without** `confirmation_token` → receive a **preview** + short-lived token.
-2. Show the user the preview (job / build / queue id, redacted params).
+2. Show the user the preview (job / build / queue id, redacted params, mode).
 3. Only after **explicit user confirm**, call again with the token **once**.
 4. Agents must never invent confirmation tokens.
 
-`jenkins_start_job` validates parameters against job definitions (MUT-002): secret types and secret-named keys are rejected; choice/boolean must match definitions. Queue cancel and build stop are separate actions; wrong-state targets return errors, not success. Details: [agent-usage.md § Mutations](../agent-usage.md#5-mutations-and-confirmation).
+**Seed + power-user mutate tools (opt-in):** `jenkins_start_job`, `jenkins_stop_build`, `jenkins_cancel_queue_item`, `jenkins_interrupt_build` (`mode=stop|term|kill`), `jenkins_rebuild_build`, `jenkins_replay_pipeline` (same definition only), `jenkins_set_job_buildable`, `jenkins_set_build_keep_forever`, `jenkins_set_build_description`, `jenkins_cancel_queue_items_for_job` (cap 20). Optional policy allowlists: `allow_mutation_tools`, `allow_interrupt_modes`, `allow_mutation_job_prefixes`.
+
+`jenkins_start_job` validates parameters against job definitions (MUT-002): secret types and secret-named keys are rejected; choice/boolean must match definitions. Wrong-state targets (finished builds, left queue) return errors, not success. **Not** exposed: script console, config.xml write, credentials, nodes, plugins, quiet-down. Details: [agent-usage.md § Mutations](../agent-usage.md#5-mutations-and-confirmation) · [power-user backlog](../mutations/power-user-backlog.md).
 
 ---
 

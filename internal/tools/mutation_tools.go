@@ -22,6 +22,18 @@ func startJobHandler(client *jenkins.Client, st regState) func(context.Context, 
 		if err != nil {
 			return nil, nil, err
 		}
+		if err := policy.CheckMutationJobAllowed(st.mutationPolicy, name); err != nil {
+			return nil, nil, err
+		}
+		// MUT-015: refuse preview when job is not buildable.
+		jobMeta, err := client.GetJenkinsJob(ctx, name, 0)
+		if err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		if jobMeta != nil && !jobMeta.Buildable {
+			return nil, nil, apperr.New(apperr.CodeInvalidArgument, fmt.Sprintf(
+				"job %q is not buildable (disabled); start refused", name))
+		}
 		// Normalize then validate against fresh definitions before preview or confirm.
 		// Sensitive-name heuristic runs in NormalizeParams; type/choice/unknown in ValidateAgainstDefinitions.
 		norm, err := mutation.NormalizeParams(args.Parameters)
@@ -32,7 +44,11 @@ func startJobHandler(client *jenkins.Client, st regState) func(context.Context, 
 		if err != nil {
 			return nil, nil, mapToolErr(err)
 		}
-		if err := mutation.ValidateAgainstDefinitions(norm, toMutationParamDefs(defs)); err != nil {
+		mdefs := toMutationParamDefs(defs)
+		if err := mutation.ValidateAgainstDefinitions(norm, mdefs); err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		if err := mutation.ValidateRequiredParams(norm, mdefs); err != nil {
 			return nil, nil, mapToolErr(err)
 		}
 
@@ -76,9 +92,10 @@ func toMutationParamDefs(defs []jenkins.BuildParameter) []mutation.ParamDefiniti
 	out := make([]mutation.ParamDefinition, 0, len(defs))
 	for _, d := range defs {
 		out = append(out, mutation.ParamDefinition{
-			Name:    d.Name,
-			Type:    d.Type,
-			Choices: d.Choices,
+			Name:     d.Name,
+			Type:     d.Type,
+			Choices:  d.Choices,
+			Required: d.Required,
 		})
 	}
 	return out

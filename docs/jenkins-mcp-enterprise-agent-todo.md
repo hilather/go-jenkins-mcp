@@ -2331,8 +2331,25 @@ Add shared request plans, deduplicated fetches, compact cached summaries, priori
 
 > **Server / team-hosted roadmap (planning SoT):** [`docs/roadmap/server-team-hosted.md`](roadmap/server-team-hosted.md)  
 > Prioritize existing **GWY-001–004**, **OAUTH-009/010**, **MGR-001**, and proposed **HOST-001…** gap tasks there. Local stdio remains default (ADR 0002). Do not invent a parallel product epic.
+>
+> **Mutations / power-user backlog (planning SoT):** [`docs/mutations/power-user-backlog.md`](mutations/power-user-backlog.md)  
+> Remaining write tools stay **off by default** (`--allow-mutations` + no stronger RO). Expand only under MUT-001 (preview/confirm). Admin surfaces (config.xml, credentials, script console, nodes, plugins) remain out of scope without a separate security go.
 
-, and optional integrations
+## MUT power-user expansion (backlog index)
+
+See full ACs in [`docs/mutations/power-user-backlog.md`](mutations/power-user-backlog.md). Summary:
+
+- [x] **MUT-001F** — Formal MUT-001 AC closure (evidence for existing framework) — RO omit, force RO, token bind, secret params, cooldown/rate tests; agent-todo ACs below
+- [x] **MUT-001C** — Classifier + route-matrix for planned write paths — term/kill/enable/disable/keep/description/replay + scriptText/config.xml unclassified
+- [x] **MUT-010** — Interrupt escalation (`jenkins_interrupt_build` mode stop|term|kill)
+- [x] **MUT-011** — Rebuild from prior build parameters (`jenkins_rebuild_build`)
+- [x] **MUT-012** — Pipeline replay same definition (`jenkins_replay_pipeline`; no script-edit)
+- [x] **MUT-013** — Enable/disable job (`jenkins_set_job_buildable`)
+- [x] **MUT-014** — Keep-forever + description (length-capped)
+- [x] **MUT-015** — `jenkins_start_job` residual hardening (required when flagged; non-buildable refuse)
+- [x] **MUT-016** — Queue cancel-by-job / stuck (cap 20)
+- [x] **MUT-017** — Mutation tool/job/mode allowlists (overlay fields + RegisterOptions.MutationPolicy)
+- [ ] **MUT-ADMIN** — Explicitly **not scheduled** (config, credentials, script, plugins, quiet-down, …)
 
 ## MUT-001 - Implement mutation policy, preview, and confirmation framework
 
@@ -2349,11 +2366,11 @@ Define disabled/allowlisted modes, per-profile/job/action policy, parameter rest
 
 **Acceptance criteria**
 
-- [ ] Default/global read-only policy registers no mutation tools and the request classifier blocks mutation endpoints.
-- [ ] Confirmation for one target/parameter set cannot authorize another.
-- [ ] Secret parameters are blocked or handled through an approved non-model path.
-- [ ] Denial, expiry, replay, and race tests pass.
-- [ ] Mutation policy cannot be weakened by user settings against enterprise policy.
+- [x] Default/global read-only policy registers no mutation tools and the request classifier blocks mutation endpoints. *(RO omit; unclassified POST fail closed; power-user paths classified only when allowlisted)*
+- [x] Confirmation for one target/parameter set cannot authorize another. *(TargetHash + mode/extra bind; cross-target/cross-mode tests)*
+- [x] Secret parameters are blocked or handled through an approved non-model path. *(NormalizeParams + secret types; rebuild rejects secret-named prior params)*
+- [x] Denial, expiry, replay, and race tests pass. *(manager_test + power_user_test)*
+- [x] Mutation policy cannot be weakened by user settings against enterprise policy. *(force_read_only + allow-mutations conformance)*
 
 ---
 

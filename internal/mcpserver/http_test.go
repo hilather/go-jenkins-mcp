@@ -695,14 +695,14 @@ func TestValidateHTTPPathPrefix(t *testing.T) {
 	}
 	// Fail closed.
 	for _, bad := range []string{
-		"mcp",         // missing leading /
-		"//mcp",       // double slash
-		"/mcp//v1",    // internal //
-		"/../mcp",     // parent segment
-		"/mcp/..",     // parent segment
-		"/mcp/../x",   // parent segment
-		"/mcp/./x",    // dot segment
-		"/mcp\\x",     // backslash
+		"mcp",          // missing leading /
+		"//mcp",        // double slash
+		"/mcp//v1",     // internal //
+		"/../mcp",      // parent segment
+		"/mcp/..",      // parent segment
+		"/mcp/../x",    // parent segment
+		"/mcp/./x",     // dot segment
+		"/mcp\\x",      // backslash
 		"http://x/mcp", // not a path
 	} {
 		_, err := mcpserver.ValidateHTTPPathPrefix(bad)

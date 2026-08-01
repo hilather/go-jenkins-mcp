@@ -69,15 +69,24 @@ Optional registration (needs `RegisterOptions`):
 | `jenkins_search_builds` | Search by result/params | `job_name`, filters, `limit` (5), `max_lookback` (100) | lookback/limit; secret params never returned | read |
 | `jenkins_wait_for_running_build` | Poll until complete | `job_name`, `build_number`, `timeout_seconds` (600) | wall timeout | read |
 
-### Mutations (omit under RO)
+### Mutations (omit under RO; opt-in `--allow-mutations`)
 
 | Tool | Purpose | Key args | Class |
 |------|---------|----------|-------|
 | `jenkins_start_job` | Preview or trigger parameterized build | `job_name`, optional `parameters`, `confirmation_token` | **mutate** |
 | `jenkins_stop_build` | Preview or stop running build | `job_name`, `build_number`, `confirmation_token` | **mutate** |
 | `jenkins_cancel_queue_item` | Preview or cancel a queue item | `queue_id`, `confirmation_token` | **mutate** |
+| `jenkins_interrupt_build` | Preview or interrupt running build (MUT-010) | `job_name`, `build_number`, `mode` (`stop`\|`term`\|`kill`), `confirmation_token` | **mutate** |
+| `jenkins_rebuild_build` | Rebuild using parameters from a prior build (MUT-011) | `job_name`, `build_number` (source), `confirmation_token` | **mutate** |
+| `jenkins_replay_pipeline` | Replay Pipeline same definition (MUT-012; no script-edit) | `job_name`, `build_number`, `confirmation_token` | **mutate** |
+| `jenkins_set_job_buildable` | Enable or disable a job (MUT-013) | `job_name`, `buildable`, `confirmation_token` | **mutate** |
+| `jenkins_set_build_keep_forever` | Toggle keep-forever on a build (MUT-014) | `job_name`, `build_number`, `keep_forever`, `confirmation_token` | **mutate** |
+| `jenkins_set_build_description` | Set build description (MUT-014; max 4096) | `job_name`, `build_number`, `description`, `confirmation_token` | **mutate** |
+| `jenkins_cancel_queue_items_for_job` | Cancel waiting queue items for one job (MUT-016; cap 20) | `job_name`, optional `stuck_only`, `confirmation_token` | **mutate** |
 
-Without `confirmation_token` → preview token only. With valid token → single execute.
+Without `confirmation_token` → preview token only. With valid token → single execute.  
+**MUT-017:** optional overlay `allow_mutation_tools` / `allow_interrupt_modes` / `allow_mutation_job_prefixes` further restrict registration and targets.  
+**Not tools:** `/scriptText`, `config.xml` POST, pluginManager write, quietDown — classifier **unclassified**, fail closed.
 
 **MUT-001 rate limit and confirm cooldown** (process-local `mutation.Manager`)
 
@@ -103,9 +112,9 @@ Successful execute remains single-use (token discarded). Cooldown does not re-au
 | Preview == execute | Normalized params in the preview are the same map bound for the single non-retried POST |
 | No auto-retry | Enqueue POST is never auto-retried (NET-003) |
 
-**Residuals (start_job):** Jenkins does not reliably expose a required-without-default flag on all definition types — omitted optional params are allowed so Jenkins can apply defaults. Active Choices / dynamic choice plugins are not fully modeled (treated as unsupported when the type is not String/Choice/Boolean). Client-generated correlation parameters are not injected unless a future job policy explicitly enables them.
+**Residuals (start_job / MUT-015):** When a definition is marked `Required` (rare; residual honesty only when Jenkins exposes it), missing params fail closed. Most definitions leave Required false — omitted optional params are allowed so Jenkins can apply defaults. Active Choices / dynamic choice plugins are not fully modeled (unsupported types rejected when supplied). Client-generated correlation parameters are not injected. Non-buildable jobs refuse start before minting a preview token.
 
-Queue cancel and build stop are **separate** actions (MUT-003). Missing, already-cancelled, or already-assigned queue items return a clear error (not success). Finished builds refuse stop the same way.
+Queue cancel and build stop are **separate** actions (MUT-003). Missing, already-cancelled, or already-assigned queue items return a clear error (not success). Finished builds refuse stop/term/kill the same way. Bulk queue cancel (MUT-016) is capped at 20 ids per confirm and never cancels the whole controller queue.
 
 ### Discovery / pipeline / test / artifact / SCM (`registerJenPipeTestTools`)
 

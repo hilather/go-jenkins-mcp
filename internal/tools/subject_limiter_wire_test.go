@@ -432,12 +432,12 @@ func assertSubjectQuotaMetricsSecretFree(t *testing.T, metrics *telemetry.Metric
 	t.Helper()
 	snap := metrics.Snapshot()
 	allowed := map[string]struct{}{
-		telemetry.MetricToolCalls:             {},
-		telemetry.MetricMCPToolOK:             {},
-		telemetry.MetricMCPToolError:          {},
-		telemetry.MetricMCPToolDeny:           {},
-		telemetry.MetricMCPSubjectRateQuota:   {},
-		telemetry.MetricMCPSubjectSlotQuota:   {},
+		telemetry.MetricToolCalls:           {},
+		telemetry.MetricMCPToolOK:           {},
+		telemetry.MetricMCPToolError:        {},
+		telemetry.MetricMCPToolDeny:         {},
+		telemetry.MetricMCPSubjectRateQuota: {},
+		telemetry.MetricMCPSubjectSlotQuota: {},
 	}
 	for name := range snap.Counters {
 		if _, ok := allowed[name]; !ok {

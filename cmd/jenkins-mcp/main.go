@@ -2118,6 +2118,11 @@ func runServe(args []string) error {
 			}
 		}
 	}
+	// MUT-017: wire overlay mutation allowlists into tool registration.
+	var serveMutationPolicy *policy.MutationPolicy
+	if polRes.Overlay != nil {
+		serveMutationPolicy = policy.MutationPolicyFromOverlay(polRes.Overlay)
+	}
 	tools.Register(server, client, &tools.RegisterOptions{
 		Gate:                       gate,
 		Budgets:                    budgets,
@@ -2145,6 +2150,7 @@ func runServe(args []string) error {
 		SubjectLimiter:             serveSubjectLimiter,
 		SubjectRateLimiter:         serveSubjectRateLimiter,
 		MutationBindingFromContext: serveMutationBindingFromCtx,
+		MutationPolicy:             serveMutationPolicy,
 	})
 	if *httpAddr != "" {
 		cfg := mcpserver.DefaultHTTPConfig()

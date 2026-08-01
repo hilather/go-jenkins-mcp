@@ -14,23 +14,44 @@ const (
 	EffectAuth EffectClass = "auth"
 )
 
-// Known mutation tool names for the seed registry (POL-001).
-// Waits (queue/build) are read; only start/stop/cancel-queue mutate.
+// Known mutation tool names for the seed registry (POL-001 / power-user backlog).
+// Waits (queue/build) are read; only listed tools mutate.
 const (
-	ToolStartJob        = "jenkins_start_job"
-	ToolStopBuild       = "jenkins_stop_build"
-	ToolCancelQueueItem = "jenkins_cancel_queue_item"
+	ToolStartJob               = "jenkins_start_job"
+	ToolStopBuild              = "jenkins_stop_build"
+	ToolCancelQueueItem        = "jenkins_cancel_queue_item"
+	ToolInterruptBuild         = "jenkins_interrupt_build"
+	ToolRebuildBuild           = "jenkins_rebuild_build"
+	ToolReplayPipeline         = "jenkins_replay_pipeline"
+	ToolSetJobBuildable        = "jenkins_set_job_buildable"
+	ToolSetBuildKeepForever    = "jenkins_set_build_keep_forever"
+	ToolSetBuildDescription    = "jenkins_set_build_description"
+	ToolCancelQueueItemsForJob = "jenkins_cancel_queue_items_for_job"
 )
 
-// MutationToolNames is the closed set of seed tools omitted under read-only.
+// MutationToolNames is the closed set of mutation tools omitted under read-only.
 func MutationToolNames() []string {
-	return []string{ToolStartJob, ToolStopBuild, ToolCancelQueueItem}
+	return []string{
+		ToolStartJob,
+		ToolStopBuild,
+		ToolCancelQueueItem,
+		ToolInterruptBuild,
+		ToolRebuildBuild,
+		ToolReplayPipeline,
+		ToolSetJobBuildable,
+		ToolSetBuildKeepForever,
+		ToolSetBuildDescription,
+		ToolCancelQueueItemsForJob,
+	}
 }
 
 // IsMutationTool reports whether name is a classified mutation tool.
 func IsMutationTool(name string) bool {
 	switch name {
-	case ToolStartJob, ToolStopBuild, ToolCancelQueueItem:
+	case ToolStartJob, ToolStopBuild, ToolCancelQueueItem,
+		ToolInterruptBuild, ToolRebuildBuild, ToolReplayPipeline,
+		ToolSetJobBuildable, ToolSetBuildKeepForever, ToolSetBuildDescription,
+		ToolCancelQueueItemsForJob:
 		return true
 	default:
 		return false

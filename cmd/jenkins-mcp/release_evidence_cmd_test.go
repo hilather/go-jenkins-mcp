@@ -749,18 +749,18 @@ func TestScrubResidualStatusMapDropsSecretKeys(t *testing.T) {
 	// Wave 15: shared_token_cache_file residual honesty bool must survive scrub
 	// (naive "token" substring must not drop it).
 	in := map[string]any{
-		"residual_id":              "oauth009_offline",
-		"ha_multi_replica":         false,
-		"shared_token_cache_file":       true,
-		"shared_api_token_vault_file":   true,
-		"shared_jwt_vault_file":         false,
-		"shared_jwks_file":              false,
-		"access_token":             "should-drop",
-		"client_secret":            "should-drop",
-		"authorization":            "Bearer drop-me",
-		"token_cache_path":         "/secret/path/token.json",
-		"residual_note":            "see docs/gateway/live-pin-blockers.md",
-		"nested":                   map[string]any{"password": "nope", "ok": "live-pin-blockers"},
+		"residual_id":                 "oauth009_offline",
+		"ha_multi_replica":            false,
+		"shared_token_cache_file":     true,
+		"shared_api_token_vault_file": true,
+		"shared_jwt_vault_file":       false,
+		"shared_jwks_file":            false,
+		"access_token":                "should-drop",
+		"client_secret":               "should-drop",
+		"authorization":               "Bearer drop-me",
+		"token_cache_path":            "/secret/path/token.json",
+		"residual_note":               "see docs/gateway/live-pin-blockers.md",
+		"nested":                      map[string]any{"password": "nope", "ok": "live-pin-blockers"},
 	}
 	out := scrubResidualStatusMap(in)
 	if _, ok := out["access_token"]; ok {

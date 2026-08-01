@@ -593,10 +593,17 @@ var knownSeedTools = map[string]struct{}{
 	"jenkins_get_pipeline_stages":    {},
 	"jenkins_get_capabilities":       {},
 
-	ToolStartJob:        {},
-	ToolStopBuild:       {},
-	ToolCancelQueueItem: {},
-	StoreReadAction:     {},
+	ToolStartJob:               {},
+	ToolStopBuild:              {},
+	ToolCancelQueueItem:        {},
+	ToolInterruptBuild:         {},
+	ToolRebuildBuild:           {},
+	ToolReplayPipeline:         {},
+	ToolSetJobBuildable:        {},
+	ToolSetBuildKeepForever:    {},
+	ToolSetBuildDescription:    {},
+	ToolCancelQueueItemsForJob: {},
+	StoreReadAction:            {},
 }
 
 // IsKnownSeedTool reports whether name is in the pilot seed tool inventory.

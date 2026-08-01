@@ -141,5 +141,29 @@ func isKnownMutationPath(p string) bool {
 	if strings.HasSuffix(p, "/dodelete") || strings.HasSuffix(p, "/dodelete/") {
 		return true
 	}
+	// Job enable/disable (power-user, not config.xml).
+	if strings.HasSuffix(p, "/enable") || strings.HasSuffix(p, "/enable/") {
+		return true
+	}
+	if strings.HasSuffix(p, "/disable") || strings.HasSuffix(p, "/disable/") {
+		return true
+	}
+	// Build keep-forever / description.
+	if strings.Contains(p, "/togglelogkeepforever") {
+		return true
+	}
+	if strings.Contains(p, "/submitdescription") {
+		return true
+	}
+	// Rebuild plugin / rebuild endpoint.
+	if strings.Contains(p, "/rebuild") {
+		return true
+	}
+	// Pipeline replay.
+	if strings.Contains(p, "/replay") {
+		return true
+	}
+	// NOTE: scriptText, config.xml POST, pluginManager write intentionally NOT listed
+	// so they remain RequestUnclassified (fail closed under RO / mutation guard).
 	return false
 }

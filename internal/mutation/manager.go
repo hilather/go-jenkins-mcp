@@ -18,9 +18,16 @@ import (
 type Action string
 
 const (
-	ActionStartJob    Action = "start_job"
-	ActionStopBuild   Action = "stop_build"
-	ActionCancelQueue Action = "cancel_queue"
+	ActionStartJob               Action = "start_job"
+	ActionStopBuild              Action = "stop_build"
+	ActionCancelQueue            Action = "cancel_queue"
+	ActionInterruptBuild         Action = "interrupt_build"
+	ActionRebuildBuild           Action = "rebuild_build"
+	ActionReplayPipeline         Action = "replay_pipeline"
+	ActionSetJobBuildable        Action = "set_job_buildable"
+	ActionSetBuildKeepForever    Action = "set_build_keep_forever"
+	ActionSetBuildDescription    Action = "set_build_description"
+	ActionCancelQueueItemsForJob Action = "cancel_queue_items_for_job"
 )
 
 // DefaultTokenTTL is the confirmation window (MUT-001: expire quickly).
@@ -71,9 +78,15 @@ type Intent struct {
 	ToolName      string
 	JobName       string
 	BuildNumber   int
-	QueueID       int            // cancel_queue only
-	Parameters    map[string]any // nil for stop/cancel
+	QueueID       int            // cancel_queue single-item
+	Parameters    map[string]any // nil for stop/cancel; rebuild may carry redacted params
 	EndpointClass string
+	// Mode is action-specific (interrupt: stop|term|kill; set_job_buildable: enable|disable).
+	Mode string
+	// Extra is non-secret bind material (description text, keep true/false, bulk queue id list).
+	Extra string
+	// QueueIDs is for bulk cancel (sorted unique positive ids); bound via Extra + Mode.
+	QueueIDs []int
 	// CurrentState is optional state shown in preview (e.g. "building", "queued").
 	CurrentState string
 }
@@ -86,6 +99,8 @@ type PreviewResult struct {
 	JobName           string         `json:"jobName,omitempty"`
 	BuildNumber       int            `json:"buildNumber,omitempty"`
 	QueueID           int            `json:"queueId,omitempty"`
+	QueueIDs          []int          `json:"queueIds,omitempty"`
+	Mode              string         `json:"mode,omitempty"`
 	Parameters        map[string]any `json:"parameters,omitempty"` // redacted
 	EndpointClass     string         `json:"endpointClass"`
 	ConfirmationToken string         `json:"confirmationToken"`
@@ -233,8 +248,11 @@ type tokenRecord struct {
 	jobName    string
 	buildNum   int
 	queueID    int
+	queueIDs   []int
 	params     map[string]any
 	endpoint   string
+	mode       string
+	extra      string
 	targetHash string
 	expiresAt  time.Time
 	used       bool
@@ -350,7 +368,7 @@ func (m *Manager) Preview(ctx context.Context, intent Intent) (*PreviewResult, e
 		return nil, err
 	}
 	paramFP := ParamFingerprint(norm.Parameters)
-	th := TargetHash(norm.Action, norm.JobName, norm.BuildNumber, norm.QueueID, paramFP)
+	th := TargetHash(norm.Action, norm.JobName, norm.BuildNumber, norm.QueueID, paramFP, norm.Mode, norm.Extra)
 	if err := m.reservePreview(start); err != nil {
 		m.emitDeny(ctx, tool, string(norm.Action), ReasonPreviewRateLimited, th, start)
 		return nil, err
@@ -387,6 +405,8 @@ func (m *Manager) Preview(ctx context.Context, intent Intent) (*PreviewResult, e
 		JobName:           norm.JobName,
 		BuildNumber:       norm.BuildNumber,
 		QueueID:           norm.QueueID,
+		QueueIDs:          append([]int(nil), norm.QueueIDs...),
+		Mode:              norm.Mode,
 		Parameters:        RedactParams(norm.Parameters),
 		EndpointClass:     norm.EndpointClass,
 		ConfirmationToken: tok,
@@ -427,7 +447,7 @@ func (m *Manager) Confirm(ctx context.Context, token string, expected Intent) (*
 		return nil, err
 	}
 	paramFP := ParamFingerprint(norm.Parameters)
-	wantHash := TargetHash(norm.Action, norm.JobName, norm.BuildNumber, norm.QueueID, paramFP)
+	wantHash := TargetHash(norm.Action, norm.JobName, norm.BuildNumber, norm.QueueID, paramFP, norm.Mode, norm.Extra)
 	bind := m.effectiveBinding(ctx)
 
 	m.mu.Lock()
@@ -484,8 +504,11 @@ func (m *Manager) Confirm(ctx context.Context, token string, expected Intent) (*
 			JobName:       rec.jobName,
 			BuildNumber:   rec.buildNum,
 			QueueID:       rec.queueID,
+			QueueIDs:      append([]int(nil), rec.queueIDs...),
 			Parameters:    params,
 			EndpointClass: rec.endpoint,
+			Mode:          rec.mode,
+			Extra:         rec.extra,
 		},
 		TokenID:    rec.id,
 		TargetHash: rec.targetHash,
@@ -609,8 +632,11 @@ func (m *Manager) issueToken(norm Intent, targetHash string, now time.Time, bind
 		jobName:    norm.JobName,
 		buildNum:   norm.BuildNumber,
 		queueID:    norm.QueueID,
+		queueIDs:   append([]int(nil), norm.QueueIDs...),
 		params:     cloneParams(norm.Parameters),
 		endpoint:   norm.EndpointClass,
+		mode:       norm.Mode,
+		extra:      norm.Extra,
 		targetHash: targetHash,
 		expiresAt:  exp,
 	}
@@ -690,6 +716,9 @@ func normalizeIntent(in Intent) (Intent, error) {
 	endpoint := strings.TrimSpace(in.EndpointClass)
 	queueID := in.QueueID
 	buildNum := in.BuildNumber
+	mode := strings.ToLower(strings.TrimSpace(in.Mode))
+	extra := strings.TrimSpace(in.Extra)
+	queueIDs := normalizeQueueIDs(in.QueueIDs)
 	switch action {
 	case ActionStartJob:
 		if job == "" {
@@ -704,6 +733,7 @@ func normalizeIntent(in Intent) (Intent, error) {
 		if queueID != 0 {
 			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_id is not valid for start_job")
 		}
+		mode, extra = "", ""
 	case ActionStopBuild:
 		if job == "" {
 			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
@@ -720,6 +750,7 @@ func normalizeIntent(in Intent) (Intent, error) {
 		if queueID != 0 {
 			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_id is not valid for stop_build")
 		}
+		mode, extra = "", ""
 	case ActionCancelQueue:
 		if queueID <= 0 {
 			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_id must be positive for cancel_queue")
@@ -733,7 +764,148 @@ func normalizeIntent(in Intent) (Intent, error) {
 		if len(params) > 0 {
 			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "parameters are not valid for cancel_queue")
 		}
-		// JobName is optional display context from GetQueueItem; not required for binding.
+		mode, extra = "", ""
+	case ActionInterruptBuild:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		if buildNum <= 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number must be positive for interrupt_build")
+		}
+		switch mode {
+		case "stop", "term", "kill":
+		default:
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "mode must be stop, term, or kill for interrupt_build")
+		}
+		if endpoint == "" {
+			switch mode {
+			case "term":
+				endpoint = EndpointTerm
+			case "kill":
+				endpoint = EndpointKill
+			default:
+				endpoint = EndpointStop
+			}
+		}
+		if len(params) > 0 || queueID != 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "parameters/queue_id are not valid for interrupt_build")
+		}
+		extra = ""
+	case ActionRebuildBuild:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		if buildNum <= 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number (source build) must be positive for rebuild_build")
+		}
+		if endpoint == "" {
+			endpoint = EndpointRebuild
+		}
+		if queueID != 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_id is not valid for rebuild_build")
+		}
+		mode = ""
+		// Extra may hold source-build note; parameters are the rebuilt params.
+	case ActionReplayPipeline:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		if buildNum <= 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number must be positive for replay_pipeline")
+		}
+		// mode must be empty or "same" — script edit is never default and not accepted.
+		if mode != "" && mode != "same" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "pipeline replay script-edit is not enabled; mode must be empty or same")
+		}
+		mode = "same"
+		if endpoint == "" {
+			endpoint = EndpointReplay
+		}
+		if len(params) > 0 || queueID != 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "parameters/queue_id are not valid for replay_pipeline")
+		}
+		extra = ""
+	case ActionSetJobBuildable:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		switch mode {
+		case "enable", "disable":
+		default:
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "mode must be enable or disable for set_job_buildable")
+		}
+		if endpoint == "" {
+			if mode == "enable" {
+				endpoint = EndpointEnable
+			} else {
+				endpoint = EndpointDisable
+			}
+		}
+		if buildNum != 0 || queueID != 0 || len(params) > 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number/queue_id/parameters are not valid for set_job_buildable")
+		}
+		extra = ""
+	case ActionSetBuildKeepForever:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		if buildNum <= 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number must be positive for set_build_keep_forever")
+		}
+		switch mode {
+		case "true", "false":
+		default:
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "mode must be true or false for set_build_keep_forever")
+		}
+		if endpoint == "" {
+			endpoint = EndpointToggleKeepForever
+		}
+		if queueID != 0 || len(params) > 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_id/parameters are not valid for set_build_keep_forever")
+		}
+		extra = mode
+	case ActionSetBuildDescription:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		if buildNum <= 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number must be positive for set_build_description")
+		}
+		if extra == "" && strings.TrimSpace(in.Extra) == "" {
+			// Allow empty description (clear); bind empty string.
+			extra = ""
+		}
+		if len(extra) > MaxBuildDescriptionLen {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, fmt.Sprintf("description exceeds max length %d", MaxBuildDescriptionLen))
+		}
+		if endpoint == "" {
+			endpoint = EndpointSubmitDescription
+		}
+		if queueID != 0 || len(params) > 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_id/parameters are not valid for set_build_description")
+		}
+		mode = ""
+	case ActionCancelQueueItemsForJob:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		if len(queueIDs) == 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_ids must be non-empty for cancel_queue_items_for_job")
+		}
+		if len(queueIDs) > MaxBulkQueueCancel {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, fmt.Sprintf("queue_ids exceeds cap %d", MaxBulkQueueCancel))
+		}
+		// Stickiness filter is optional mode: "" | "stuck".
+		if mode != "" && mode != "stuck" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "mode must be empty or stuck for cancel_queue_items_for_job")
+		}
+		if endpoint == "" {
+			endpoint = EndpointCancelItemBulk
+		}
+		if buildNum != 0 || queueID != 0 || len(params) > 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number/queue_id/parameters are not valid for cancel_queue_items_for_job")
+		}
+		extra = formatQueueIDsExtra(queueIDs)
 	default:
 		return Intent{}, apperr.New(apperr.CodeInvalidArgument, fmt.Sprintf("unknown mutation action %q", action))
 	}
@@ -747,10 +919,54 @@ func normalizeIntent(in Intent) (Intent, error) {
 		JobName:       job,
 		BuildNumber:   buildNum,
 		QueueID:       queueID,
+		QueueIDs:      queueIDs,
 		Parameters:    params,
 		EndpointClass: endpoint,
+		Mode:          mode,
+		Extra:         extra,
 		CurrentState:  strings.TrimSpace(in.CurrentState),
 	}, nil
+}
+
+// MaxBuildDescriptionLen is the hard cap for set_build_description (MUT-014).
+const MaxBuildDescriptionLen = 4096
+
+// MaxBulkQueueCancel is the hard cap for bulk queue cancel (MUT-016).
+const MaxBulkQueueCancel = 20
+
+func normalizeQueueIDs(in []int) []int {
+	if len(in) == 0 {
+		return nil
+	}
+	seen := make(map[int]struct{}, len(in))
+	out := make([]int, 0, len(in))
+	for _, id := range in {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	// Sort for stable Extra / fingerprint.
+	for i := 0; i < len(out); i++ {
+		for j := i + 1; j < len(out); j++ {
+			if out[j] < out[i] {
+				out[i], out[j] = out[j], out[i]
+			}
+		}
+	}
+	return out
+}
+
+func formatQueueIDsExtra(ids []int) string {
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = fmt.Sprintf("%d", id)
+	}
+	return strings.Join(parts, ",")
 }
 
 func toolForAction(a Action) string {
@@ -761,6 +977,20 @@ func toolForAction(a Action) string {
 		return policy.ToolStopBuild
 	case ActionCancelQueue:
 		return policy.ToolCancelQueueItem
+	case ActionInterruptBuild:
+		return policy.ToolInterruptBuild
+	case ActionRebuildBuild:
+		return policy.ToolRebuildBuild
+	case ActionReplayPipeline:
+		return policy.ToolReplayPipeline
+	case ActionSetJobBuildable:
+		return policy.ToolSetJobBuildable
+	case ActionSetBuildKeepForever:
+		return policy.ToolSetBuildKeepForever
+	case ActionSetBuildDescription:
+		return policy.ToolSetBuildDescription
+	case ActionCancelQueueItemsForJob:
+		return policy.ToolCancelQueueItemsForJob
 	default:
 		return string(a)
 	}

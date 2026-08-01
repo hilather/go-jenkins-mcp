@@ -122,6 +122,9 @@ type RegisterOptions struct {
 	// registered, handlers create a default manager bound to Gate/Audit/identity
 	// (including ExternalSubject/Tenant from Subject and MutationBindingFromContext).
 	Mutations *mutation.Manager
+	// MutationPolicy is optional MUT-017 allowlisting (tools/jobs/interrupt modes).
+	// Nil or empty fields mean no extra restriction beyond RO / deny_tools.
+	MutationPolicy *policy.MutationPolicy
 	// MutationBindingFromContext optionally supplies per-request mutation confirm
 	// binding (multi-user: gateway.CallerFromContext → mutation.Binding). When
 	// nil, the Manager uses process ProfileID/PrincipalID/Subject external+tenant.
@@ -206,6 +209,8 @@ type regState struct {
 	diagnose    DiagnoseHelpers
 	doctor      DoctorFunc
 	mutations   *mutation.Manager
+	// mutationPolicy is optional MUT-017 allowlist (tools/jobs/interrupt modes).
+	mutationPolicy *policy.MutationPolicy
 
 	// PERF-003
 	fetchCache *FetchCache
@@ -287,6 +292,7 @@ func resolveRegisterOptions(opts *RegisterOptions) regState {
 	st.profileID = opts.ProfileID
 	st.principalID = opts.PrincipalID
 	st.mutations = opts.Mutations
+	st.mutationPolicy = opts.MutationPolicy
 	if opts.DiagCache != nil {
 		st.fetchCache = opts.DiagCache
 	}
@@ -580,6 +586,36 @@ func Register(s *mcp.Server, client *jenkins.Client, opts *RegisterOptions) {
 		Description: "Preview or cancel a Jenkins queue item (MUT-003). Without confirmation_token returns a short-lived preview token; with a valid token cancels once via /queue/cancelItem. Missing/already-left/already-cancelled items return a clear error (not success). Pilot only when --allow-mutations and not forced RO."},
 		cancelQueueItemHandler(client, st))
 
+	// Power-user mutations (MUT-010…016): still require --allow-mutations and no stronger RO.
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolInterruptBuild,
+		Description: "Preview or interrupt a running build (MUT-010). mode=stop|term|kill. Without confirmation_token returns preview token; finished builds refused. Opt-in only."},
+		interruptBuildHandler(client, st))
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolRebuildBuild,
+		Description: "Preview or rebuild a job using parameters from a prior build (MUT-011). Secret-typed params cannot be replayed via the model path. Opt-in only."},
+		rebuildBuildHandler(client, st))
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolReplayPipeline,
+		Description: "Preview or replay a Pipeline build with the same definition (MUT-012). Script-edit is not enabled. Opt-in only."},
+		replayPipelineHandler(client, st))
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolSetJobBuildable,
+		Description: "Preview or enable/disable a job (MUT-013). buildable=true enables; false disables. Opt-in only."},
+		setJobBuildableHandler(client, st))
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolSetBuildKeepForever,
+		Description: "Preview or toggle keep-forever on a build (MUT-014). Opt-in only."},
+		setBuildKeepForeverHandler(client, st))
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolSetBuildDescription,
+		Description: "Preview or set a build description (MUT-014, max 4096 chars). Opt-in only."},
+		setBuildDescriptionHandler(client, st))
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolCancelQueueItemsForJob,
+		Description: "Preview or cancel waiting queue items for one job (MUT-016, cap 20). Optional stuck_only. Opt-in only."},
+		cancelQueueItemsForJobHandler(client, st))
+
 	addReadTool(s, st, &mcp.Tool{
 		Name:        "jenkins_wait_for_running_build",
 		Description: "Wait for a running Jenkins build to complete or timeout"},
@@ -630,12 +666,17 @@ func addReadTool[In, Out any](s *mcp.Server, st regState, t *mcp.Tool, h func(co
 // Effective RO), so force_read_only clear can re-list without restart.
 // Handlers always re-check DenyMutation so dispatch fails closed under RO.
 // deny_tools does not skip registration (ListTools filter + dispatch handle it).
-// Nil gate ⇒ fail-closed omit (default RO; no surprise mutations).
+// MUT-017: MutationPolicy.AllowTools (when non-empty) further restricts which
+// mutation tools register. Nil gate ⇒ fail-closed omit (default RO).
 func addMutationTool[In, Out any](s *mcp.Server, st regState, t *mcp.Tool, h func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, Out, error)) {
 	if st.gate == nil || !st.gate.ShouldRegisterMutations() {
 		// POL-001: omit when no write opt-in and Effective RO (or nil gate).
 		// Without AllowMutations, force clear cannot invent unregistered tools.
 		emitToolDeny(context.Background(), st, t.Name, string(policy.EffectMutate), "read_only", time.Now())
+		return
+	}
+	if !policy.MutationToolAllowed(st.mutationPolicy, t.Name) {
+		emitToolDeny(context.Background(), st, t.Name, string(policy.EffectMutate), "mutation_allowlist", time.Now())
 		return
 	}
 	addTool(s, st, t, policy.EffectMutate, h)
