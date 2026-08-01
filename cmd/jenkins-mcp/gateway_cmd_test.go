@@ -269,12 +269,83 @@ func TestGatewaySubjectInvalidate(t *testing.T) {
 	if payload["token_cache_path_configured"] != false {
 		t.Fatalf("path configured: %+v", payload)
 	}
+	if payload["principal_cache_path_configured"] != false {
+		t.Fatalf("principal path configured: %+v", payload)
+	}
 	note, _ := payload["residual_note"].(string)
 	if !strings.Contains(note, "multi-pod") || !strings.Contains(strings.ToLower(note), "not live") {
 		t.Fatalf("residual honesty: %q", note)
 	}
 	if _, ok := gateway.ProcessPrincipalCache().Get(sk); ok {
 		t.Fatal("principal must be cleared in process cache")
+	}
+}
+
+// HOST-008 lite: subject-invalidate with PRINCIPAL_CACHE_PATH deletes shared file entry.
+func TestGatewaySubjectInvalidate_WithFilePrincipalCache(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "principal_cache.json")
+	fpc, err := gateway.NewFilePrincipalCache(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alice := gateway.SubjectKeyParts("tid-fpc", "alice-fpc", "corp")
+	bob := gateway.SubjectKeyParts("tid-fpc", "bob-fpc", "corp")
+	fpc.Set(alice, "alice-j")
+	fpc.Set(bob, "bob-j")
+
+	t.Setenv(gateway.EnvGatewayPrincipalCachePath, path)
+	t.Setenv(gateway.EnvGatewayTokenCachePath, "")
+	t.Cleanup(func() {
+		t.Setenv(gateway.EnvGatewayPrincipalCachePath, "")
+	})
+
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	errRun := runGateway([]string{"subject-invalidate", "--subject-key", alice})
+	_ = w.Close()
+	os.Stdout = old
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	_ = r.Close()
+	if errRun != nil {
+		t.Fatalf("run: %v\n%s", errRun, buf.String())
+	}
+	out := buf.String()
+	if strings.Contains(out, canaryCLIToken) || strings.Contains(out, path) {
+		// Residual honesty: never print path value (may be long host path).
+		if strings.Contains(out, canaryCLIToken) {
+			t.Fatal("canary in subject-invalidate output")
+		}
+		// path may appear only if operator subject_key equals path — not here.
+		if strings.Contains(out, path) {
+			t.Fatal("principal cache path value must not appear in CLI JSON")
+		}
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &payload); err != nil {
+		t.Fatalf("json: %v body=%s", err, out)
+	}
+	if payload["principal_cleared"] != true {
+		t.Fatalf("principal_cleared: %+v", payload)
+	}
+	if payload["principal_cache_path_configured"] != true {
+		t.Fatalf("principal_cache_path_configured: %+v", payload)
+	}
+	// Re-open file: alice gone, bob remains.
+	fpc2, err := gateway.NewFilePrincipalCache(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fpc2.Get(alice); ok {
+		t.Fatal("alice principal must be deleted from file cache")
+	}
+	if p, ok := fpc2.Get(bob); !ok || p != "bob-j" {
+		t.Fatalf("bob must remain: ok=%v p=%q", ok, p)
 	}
 }
 
@@ -480,9 +551,13 @@ func TestGatewayResidualStatus(t *testing.T) {
 	if _, ok := payload["rateEnabled"].(bool); !ok {
 		t.Fatalf("rateEnabled: %+v", payload["rateEnabled"])
 	}
-	// shared_subject_rate_file is env path residual (false when unset; HOST-008 lite).
+	// shared_subject_rate_file / shared_principal_cache_file are env path residual
+	// (false when unset; HOST-008 lite). Never path values.
 	if payload["shared_subject_rate_file"] != false {
 		t.Fatalf("shared_subject_rate_file default false: %+v", payload["shared_subject_rate_file"])
+	}
+	if payload["shared_principal_cache_file"] != false {
+		t.Fatalf("shared_principal_cache_file default false: %+v", payload["shared_principal_cache_file"])
 	}
 	if _, ok := payload["ratePerMinute"].(float64); !ok {
 		// json numbers → float64

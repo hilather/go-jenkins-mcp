@@ -196,7 +196,7 @@ Fill during live lab; keep secrets out of git, tickets, and support bundles.
 | Per-user vault binding | Process memory cache / mock | **Durable AgentCore Identity vault** |
 | Wrong audience fail-closed | Unit + qualify | Live canary tokens (redacted evidence) |
 | Progressive consent tool path | `authorization_url` + `session_id` only | Operator runbook for reauth storms |
-| Force re-auth / revocation foundation | **Done\* lite:** `InvalidateSubjectLocal` + `gateway subject-invalidate` (process-local principal + optional same-host `FileTokenCache`); provider `Invalidate` drops principal companion | **Live IdP/AgentCore revocation window** still residual (OAUTH-010); multi-pod fan-out residual (HOST-008); CLI does not clear remote serve `MemoryTokenCache` / other-process principal |
+| Force re-auth / revocation foundation | **Done\* lite:** `InvalidateSubjectLocal` + `gateway subject-invalidate` (process-local principal **or** same-host `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` + optional same-host `FileTokenCache`); provider `Invalidate` drops principal companion | **Live IdP/AgentCore revocation window** still residual (OAUTH-010); multi-pod fan-out residual (HOST-008); CLI does not clear remote serve memory-only caches without shared file paths |
 | Graph group expansion | Fail-closed incomplete overage | Optional funded residual — not invented membership |
 | AgentCore sidecar / binary pin | None in-repo | Org AgentCore release + GWY-003/004 |
 
@@ -351,7 +351,7 @@ live pin complete without lab evidence.
 | Admin `GET /admin/v1/gateway/residual-status` | Same secret-free map as CLI (HOST-007 SPA Overview card) | Viewer read; 404 hides card on older BFF; never tokens |
 | `gateway consent-residual` | Progressive consent residual snapshot | Browser 3LO not automated; residual-smoke optional |
 | `gateway consent-purge` / `consent-expire` | Purge TTL-expired consent metadata (or `--session-id` / `--all`) | Metadata only; secret-free counts; not multi-replica HA |
-| `gateway subject-invalidate` | Force re-auth residual lite: process-local principal + optional FileTokenCache | Not live Entra revocation; multi-pod residual; CLI ≠ remote serve MemoryTokenCache |
+| `gateway subject-invalidate` | Force re-auth residual lite: process-local principal **or** FilePrincipalCache + optional FileTokenCache | Not live Entra revocation; multi-pod residual; share file paths for same-host CLI↔serve |
 | `gateway qualify --offline` | Residual notes in JSON summary | Live residuals always listed |
 
 ```bash

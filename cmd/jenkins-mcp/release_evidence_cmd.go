@@ -176,7 +176,7 @@ func knownReleaseResiduals() []releaseResidual {
 			// HOST-008 Tier A single-replica honesty (scaffold replicas:1).
 			ID:      "host008_single_replica",
 			GateIDs: []string{"REL-002.compat.gateway", "REL-002.ops.doctor"},
-			Message: "HOST-008 Tier A: single-replica default (deploy/gateway kustomize replicas:1; doctor/admin ha_multi_replica=false); Service sessionAffinity ClientIP Done* scaffold (residual runtime); session_affinity_recommended when multi_user; file vault flock + optional FileTokenCache + optional FileSubjectRateLimiter (JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH) multi-process Done* lite (same host/shared FS only — multi-pod needs shared FS/external vault/rate/cache); multi-replica HA residual until multi-pod durable vault + multi-pod shared rate/cache",
+			Message: "HOST-008 Tier A: single-replica default (deploy/gateway kustomize replicas:1; doctor/admin ha_multi_replica=false); Service sessionAffinity ClientIP Done* scaffold (residual runtime); session_affinity_recommended when multi_user; file vault flock + optional FileTokenCache + optional FilePrincipalCache (JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH) + optional FileSubjectRateLimiter (JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH) multi-process Done* lite (same host/shared FS only — multi-pod needs shared FS/external vault/rate/cache/principal); multi-replica HA residual until multi-pod durable vault + multi-pod shared rate/cache",
 		},
 		{
 			// Done* inventory: offline binary smoke exists (Wave 25 make + Wave 26 optional CI job).

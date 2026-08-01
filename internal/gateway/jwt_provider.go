@@ -27,7 +27,7 @@ type JWTRSBearerProvider struct {
 	// Principals is the optional companion PrincipalCache cleared on Invalidate
 	// (GWY-002 / HOST-003 force re-auth residual lite). When nil, Invalidate
 	// uses ProcessPrincipalCache. Does not delete durable JWT vault entries.
-	Principals *PrincipalCache
+	Principals PrincipalStore
 }
 
 // NewJWTRSBearerProvider constructs a fail-closed Mode B provider (Live=false).

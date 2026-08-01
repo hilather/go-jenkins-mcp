@@ -173,7 +173,7 @@ type APITokenVaultProvider struct {
 	// Principals is the optional companion PrincipalCache cleared on Invalidate
 	// (GWY-002 / HOST-003 force re-auth residual lite). When nil, Invalidate
 	// uses ProcessPrincipalCache. Does not delete durable vault entries.
-	Principals *PrincipalCache
+	Principals PrincipalStore
 }
 
 // NewAPITokenVaultProvider constructs a fail-closed Mode A provider (Live=false).

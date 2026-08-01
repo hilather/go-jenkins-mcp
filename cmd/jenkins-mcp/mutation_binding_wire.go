@@ -29,7 +29,7 @@ func mutationBindingFromGatewayCtx(ctx context.Context, processPrincipal string)
 }
 
 // mutationBindingFromGatewayCtxWithCache is the injectable variant for tests.
-func mutationBindingFromGatewayCtxWithCache(ctx context.Context, processPrincipal string, cache *gateway.PrincipalCache) (mutation.Binding, bool) {
+func mutationBindingFromGatewayCtxWithCache(ctx context.Context, processPrincipal string, cache gateway.PrincipalStore) (mutation.Binding, bool) {
 	processPrincipal = strings.TrimSpace(processPrincipal)
 	if s, ok := gateway.PolicySubjectFromContext(ctx); ok && s.Valid() {
 		return mutation.Binding{

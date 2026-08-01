@@ -151,18 +151,19 @@ multi-pod fan-out.
 
 | Path | Status |
 |------|--------|
-| `gateway.InvalidateSubjectLocal(caller, principalCache, tokenCache?)` | **Done\*** — secret-free; drops `PrincipalCache` + optional `TokenCache` (subject-namespace purge when `DeleteBySubjectKey` available) |
+| `gateway.InvalidateSubjectLocal(caller, principalCache, tokenCache?)` | **Done\*** — secret-free; drops `PrincipalStore` + optional `TokenCache` (subject-namespace purge when `DeleteBySubjectKey` available) |
 | `CredentialProvider.Invalidate` companion principal drop (AgentCore / Mode A / Mode B) | **Done\*** — token cache (Mode C) + `PrincipalCache`; durable vault entries **not** deleted (use `gateway vault delete`) |
-| CLI `jenkins-mcp gateway subject-invalidate` (alias `invalidate-subject`) | **Done\*** — process-local principal clear + optional `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` |
+| CLI `jenkins-mcp gateway subject-invalidate` (alias `invalidate-subject`) | **Done\*** — process-local principal clear **or** same-host `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` + optional `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` |
 | Live IdP / AgentCore token revocation | **Residual** (OAUTH-010 / GWY-003) |
 | Multi-pod / multi-replica invalidate fan-out | **Residual** (HOST-008) |
-| CLI clear of a remote serve process `PrincipalCache` / `MemoryTokenCache` | **Residual** — CLI is another process; use shared `FileTokenCache` path for same-host token purge, or call `Invalidate` in-process (future admin path) |
+| CLI clear of a remote serve process memory-only caches | **Residual** — CLI is another process; share `FilePrincipalCache` / `FileTokenCache` paths for same-host purge, or call `Invalidate` in-process (future admin path) |
 
 ```bash
 # Compose subject key or pass --subject-key:
 jenkins-mcp gateway subject-invalidate --subject-key 'tenant|alice-sub|corp'
 jenkins-mcp gateway subject-invalidate --tenant tenant --subject-id alice-sub --profile corp
-# Optional same-host FileTokenCache purge (shared with serve when path matches):
+# Optional same-host FilePrincipalCache + FileTokenCache purge (shared with serve when paths match):
+export JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH=/var/lib/jenkins-mcp/gateway/principal_cache.json
 export JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH=/var/lib/jenkins-mcp/gateway/token_cache.json
 jenkins-mcp gateway subject-invalidate --subject-key 'tenant|alice-sub|corp'
 ```
@@ -179,7 +180,9 @@ JenkinsUserID / mutation Binding re-resolve on the next tool call.
 combine mode-matrix residual, `multi_user_enabled`,
 `ha_multi_replica=false`, `session_affinity_recommended`, multi-pod residual fields,
 progressive consent residual, `rateEnabled` / `ratePerMinute` / `rateBurst`,
-`shared_subject_rate_file`, and `principal_cache_entries` (count only) plus optional
+`shared_subject_rate_file`, `shared_principal_cache_file` (true when
+`JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` set — never the path value), and
+`principal_cache_entries` (count only) plus optional
 `principal_cache_max_entries` / `principal_cache_ttl_seconds` when hygiene env is set.
 Always advertises Mode B residual id `oauth009_offline` and points at
 [live-pin-blockers.md](live-pin-blockers.md). Shared assembly:
@@ -241,7 +244,7 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 | Obtain | `CallerFromContext` when Valid → Obtain for that caller; else process defaultCaller |
 | Policy RBAC | `tools.RegisterOptions.SubjectFromContext` = `policySubjectFromGatewayCtx` (cmd adapter; tools does not import gateway). JenkinsUserID preference: (1) **PrincipalCache** after Obtain, (2) HTTP/lab `PolicySubject.JenkinsUserID`, (3) empty fail-closed. `addTool` / `listToolsAllows` use `effectiveSubject` |
 | Mutation Binding | `MutationBindingFromContext` = `mutationBindingFromGatewayCtx`: Valid `PolicySubject` → PrincipalID=`JenkinsUserID` (HTTP/lab JenkinsPrincipal); else Caller + **PrincipalCache** (SubjectKey→Obtain/Mode A vault username) when set, else process principal |
-| Principal cache | Process-local `gateway.PrincipalCache` (`SubjectKey` → non-secret Jenkins principal). Multi-user `AuthProviderCtx` **Set**s after successful Obtain (Credential.JenkinsPrincipal or Basic username). **Never** tokens. Used by **policy SubjectFromContext** (JenkinsUserID rewrite after Obtain) and mutation Binding. Optional **MaxEntries** (LRU eviction) + **TTL** hygiene for long-running multi-user serve (empty env = unlimited / no expiry; process-local only — multi-pod residual) |
+| Principal cache | Default process-local `gateway.PrincipalCache` (`SubjectKey` → non-secret Jenkins principal). Optional same-host **`FilePrincipalCache`** via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` (flock + 0600; CLI subject-invalidate shares with serve). Multi-user `AuthProviderCtx` **Set**s after successful Obtain (Credential.JenkinsPrincipal or Basic username). **Never** tokens. Used by **policy SubjectFromContext** (JenkinsUserID rewrite after Obtain) and mutation Binding. Optional **MaxEntries** (LRU) + **TTL** hygiene (empty env = unlimited / no expiry). Multi-pod shared principal map residual |
 | Subject pin | `ExpectedExternalSubject` is **not** set (distinct lab/JWT subjects allowed) |
 | Fail closed | empty subject / Obtain miss → error; never other subject's token; never shared SA; tool args never rebind identity |
 | Static fields | AuthProviderCtx does **not** write User/Token on the Client (race residual); AuthProviderCtx cannot store Obtain principal **on request context** — mid-call rewrite is via process-local **PrincipalCache** (SubjectFromContext + Binding), not ctx value mutation |
@@ -251,6 +254,7 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 | `JENKINS_MCP_GATEWAY_MULTI_USER` | Opt-in multi-user Obtain + policy.Subject rebind path (default off = single-subject pin) |
 | `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_MAX` | Optional PrincipalCache max entries (non-negative int; empty/`0` = unlimited). When full, LRU (oldest `lastAccess`) is evicted on Set. Wired at gateway serve start via `ConfigureProcessPrincipalCacheFromEnviron` |
 | `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_TTL` | Optional PrincipalCache entry TTL (Go duration, e.g. `1h`, `30m`; empty = no expiry). Expired keys miss on Get and are deleted. Fixed TTL from Set (not sliding) |
+| `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` | Optional same-host multi-process principal map file (`FilePrincipalCache`, flock + secret-free JSON 0600; SubjectKey → Jenkins principal only). Empty → process-local memory. HOST-008 lite only — **not** multi-pod HA. Invalid path fails start. residual-status `shared_principal_cache_file: true` (path never returned). Never tokens |
 
 **Residuals (honest):**
 
@@ -319,7 +323,7 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 | Resource | Isolation key | Behavior |
 |----------|---------------|----------|
 | Token cache (`MemoryTokenCache` default; optional `FileTokenCache`) | `CacheKey{Tenant,User,Workload,Profile}` via `Caller.CacheKey()` | Cross-user / cross-tenant Get is a miss; file lite via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` (HOST-008 same-host flock; multi-pod external residual) |
-| Principal cache (`PrincipalCache`) | `SubjectKey` = `tenant\|subject\|profile` | Non-secret Jenkins principal only; Binding + policy RBAC fallback; never tokens. Optional `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_MAX` / `_TTL` (LRU + TTL hygiene; empty = unlimited / no expiry). Process-local only — multi-pod residual |
+| Principal cache (`PrincipalCache` default; optional `FilePrincipalCache`) | `SubjectKey` = `tenant\|subject\|profile` | Non-secret Jenkins principal only; Binding + policy RBAC fallback; never tokens. Optional `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_MAX` / `_TTL` (LRU + TTL hygiene; empty = unlimited / no expiry). Optional same-host file via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` (HOST-008 flock lite; multi-pod residual) |
 | Vault (`APITokenVault` / JWT vault) | `SubjectKey` = `tenant\|subject\|profile` | Cross-subject Get → not found |
 | List `page_token` | Filter fingerprint **bound** with subject via `jenkins.BindSubjectToPageFilter` / `*WithSubject` helpers | Alice's token rejected for Bob (`invalid_argument`) |
 | Mutation `confirmation_token` | `mutation.Binding` = profile + principal + ExternalSubject + tenant | Alice preview rejected for Bob confirm (`binding_mismatch`) |
@@ -510,6 +514,7 @@ Enable gateway mode with any of:
 | `JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT` | Optional token URL; **required** when `JENKINS_MCP_GATEWAY_LIVE=1` |
 | `JENKINS_MCP_GATEWAY_LIVE` | Mode C only: `1`/`true` enables `HTTPTokenFetcher` Live wire (default off) |
 | `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` | Optional Mode C Obtain cache file (`FileTokenCache`, flock + 0600). Empty → `MemoryTokenCache`. HOST-008 same-host lite only — **not** multi-pod Redis/HA. Invalid path fails start |
+| `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` | Optional principal map file (`FilePrincipalCache`, flock + secret-free JSON 0600; SubjectKey → Jenkins principal only — **never tokens**). Empty → process-local memory. HOST-008 same-host lite only — **not** multi-pod HA. Invalid path fails start |
 | `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` | Optional gateway subject rate state file (`FileSubjectRateLimiter`, flock + secret-free JSON 0600). Empty → process-local `SubjectRateLimiter`. HOST-008 same-host lite only — **not** multi-pod shared rate. Invalid path fails start |
 
 **Identity env (non-secret labels for foundation binding):**

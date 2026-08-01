@@ -1256,19 +1256,20 @@ func runServe(args []string) error {
 	var gatewayObtainWired bool
 	gatewayMultiUser := useGateway && gateway.MultiUserEnabled(os.Getenv)
 	if useGateway {
-		// PrincipalCache hygiene residual lite (MaxEntries + optional TTL). Empty env =
-		// unlimited / no expiry (backward compatible). Fail closed on invalid env.
-		// Process-local only — multi-pod shared principal map remains residual.
-		// ConfigureProcessPrincipalCache mutates the process singleton in place
-		// (does not replace the pointer; private caches in tests stay isolated).
-		pcMax, pcTTL, pcErr := gateway.PrincipalCacheConfigFromEnviron(os.Getenv)
-		if pcErr != nil {
+		// PrincipalCache hygiene + optional same-host FilePrincipalCache (HOST-008 lite).
+		// Empty MAX/TTL → unlimited / no expiry. Empty PRINCIPAL_CACHE_PATH → memory.
+		// Path set → install FilePrincipalCache as process store (CLI subject-invalidate
+		// can Delete on the same path). Fail closed on invalid env/path.
+		// Multi-pod shared principal map remains residual.
+		if pcErr := gateway.ConfigureProcessPrincipalCacheFromEnviron(os.Getenv); pcErr != nil {
 			return pcErr
 		}
-		gateway.ConfigureProcessPrincipalCache(pcMax, pcTTL)
-		if pcMax > 0 || pcTTL > 0 {
-			// Secret-free operator log (counts/durations only; never principals/tokens).
-			log.Printf("principal_cache max_entries=%d ttl=%s (process-local; multi-pod residual)", pcMax, pcTTL)
+		pcMax, pcTTL, _ := gateway.PrincipalCacheConfigFromEnviron(os.Getenv)
+		pcFile := gateway.PrincipalCachePathConfiguredFromEnviron(os.Getenv)
+		if pcMax > 0 || pcTTL > 0 || pcFile {
+			// Secret-free operator log (counts/durations/bool only; never path value or principals/tokens).
+			log.Printf("principal_cache max_entries=%d ttl=%s shared_principal_cache_file=%v (multi-pod residual)",
+				pcMax, pcTTL, pcFile)
 		}
 		gwSubject, err := bindGatewaySubject(profileID, principal.ID)
 		if err != nil {

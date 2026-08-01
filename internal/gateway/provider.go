@@ -126,11 +126,11 @@ type AgentCoreProvider struct {
 	// default (ProcessConsentSessionStore). Optional file-backed path is residual
 	// crash recovery of metadata only — not multi-replica shared store.
 	ConsentStore ConsentSessionStore
-	// Principals is the optional companion PrincipalCache cleared on Invalidate
+	// Principals is the optional companion PrincipalStore cleared on Invalidate
 	// (GWY-002 / HOST-003 force re-auth residual lite). When nil, Invalidate
 	// uses ProcessPrincipalCache so multi-user Binding/policy principals drop
 	// with the token cache. Tests may inject a private *PrincipalCache.
-	Principals *PrincipalCache
+	Principals PrincipalStore
 }
 
 // NewAgentCoreProvider constructs a provider after validating cfg.

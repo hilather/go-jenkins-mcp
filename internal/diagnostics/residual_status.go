@@ -10,7 +10,7 @@ import (
 // ResidualStatusHonestyNote is the unified operator residual honesty sentence
 // (never tokens/subjects). Points operators at the live pin runbook.
 // Shared by CLI `gateway residual-status` and admin GET /admin/v1/gateway/residual-status.
-const ResidualStatusHonestyNote = "unified gateway residual snapshot (env/static honesty only): offline Mode A/B/C foundations Done*; optional same-host FileSubjectRateLimiter / FileTokenCache / vault flock lite when paths set; live Entra / jwt-auth-filter / AgentCore / multi-pod shared rate+vault HA residual — never production GO from this surface; see docs/gateway/live-pin-blockers.md"
+const ResidualStatusHonestyNote = "unified gateway residual snapshot (env/static honesty only): offline Mode A/B/C foundations Done*; optional same-host FileSubjectRateLimiter / FileTokenCache / FilePrincipalCache / vault flock lite when paths set; live Entra / jwt-auth-filter / AgentCore / multi-pod shared rate+vault+principal HA residual — never production GO from this surface; see docs/gateway/live-pin-blockers.md"
 
 // ResidualStatusDoc is the primary operator pointer for residual honesty.
 const ResidualStatusDoc = "docs/gateway/live-pin-blockers.md"
@@ -129,11 +129,13 @@ func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 		"ratePerMinute":            ratePerMinute,
 		"rateBurst":                rateBurst,
 		"shared_subject_rate_file": gateway.SubjectRatePathConfiguredFromEnviron(getenv),
-		// Process-local principal cache: entry count + optional hygiene knobs from env
-		// (never subjects/tokens/principal inventory). Multi-pod shared residual.
-		"principal_cache_entries": gateway.ProcessPrincipalCache().Len(),
-		"residual_note":           ResidualStatusHonestyNote,
-		"doc":                     ResidualStatusDoc,
+		// Principal cache: entry count + optional hygiene knobs from env
+		// (never subjects/tokens/principal inventory/path value). Multi-pod residual.
+		// shared_principal_cache_file=true only when PRINCIPAL_CACHE_PATH set (HOST-008 lite).
+		"principal_cache_entries":         gateway.ProcessPrincipalCache().Len(),
+		"shared_principal_cache_file":     gateway.PrincipalCachePathConfiguredFromEnviron(getenv),
+		"residual_note":                   ResidualStatusHonestyNote,
+		"doc":                             ResidualStatusDoc,
 	}
 	// Optional PrincipalCache hygiene residual lite (env/static; empty = unlimited / no TTL).
 	if pcMax, pcTTL, err := gateway.PrincipalCacheConfigFromEnviron(getenv); err == nil {

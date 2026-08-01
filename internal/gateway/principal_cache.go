@@ -42,7 +42,9 @@ type principalEntry struct {
 //   - MaxEntries (0 = unlimited default): on Set when full, evict LRU (oldest lastAccess).
 //   - TTL (0 = no expiry default): on Get, expired entries are deleted (miss).
 //
-// Process-local only — multi-pod shared principal map is HOST-008 residual.
+// Process-local only by default. Optional same-host multi-process share via
+// FilePrincipalCache (JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH) — multi-pod
+// shared principal map remains HOST-008 residual.
 type PrincipalCache struct {
 	mu      sync.Mutex
 	entries map[string]principalEntry // subjectKey → entry
@@ -53,6 +55,26 @@ type PrincipalCache struct {
 	// now is optional clock override for tests.
 	now func() time.Time
 }
+
+// PrincipalStore is the non-secret SubjectKey → Jenkins principal map surface.
+// Implemented by *PrincipalCache (memory) and *FilePrincipalCache (same-host file).
+// Never stores tokens. Used by AuthProviderCtx Obtain remember, policy/mutation
+// rebind, InvalidateSubjectLocal, and process singleton ProcessPrincipalCache.
+type PrincipalStore interface {
+	Get(subjectKey string) (principal string, ok bool)
+	Set(subjectKey, jenkinsPrincipal string)
+	Delete(subjectKey string)
+	Clear()
+	Len() int
+	String() string
+	StatusMap() map[string]any
+}
+
+// Compile-time checks: memory + file implement PrincipalStore.
+var (
+	_ PrincipalStore = (*PrincipalCache)(nil)
+	_ PrincipalStore = (*FilePrincipalCache)(nil)
+)
 
 // NewPrincipalCache builds an empty process-local principal cache
 // (unlimited entries, no TTL — backward-compatible residual default).
@@ -78,59 +100,120 @@ func NewPrincipalCacheWithLimits(maxEntries int, ttl time.Duration) *PrincipalCa
 }
 
 // processPrincipalCache is the serve-wide default used by AuthProviderCtx and
-// mutationBindingFromGatewayCtx. Tests may inject a private *PrincipalCache
-// instead of mutating this global.
-var processPrincipalCache = NewPrincipalCache()
+// mutationBindingFromGatewayCtx. Default is in-memory *PrincipalCache.
+// When JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH is set, serve installs
+// *FilePrincipalCache so CLI subject-invalidate can Delete on the same path.
+// Tests may inject a private *PrincipalCache instead of mutating this global.
+var (
+	processPrincipalMu    sync.Mutex
+	processPrincipalCache PrincipalStore = NewPrincipalCache()
+)
 
-// ProcessPrincipalCache returns the process-local default principal cache.
-// Never nil after package init.
-func ProcessPrincipalCache() *PrincipalCache {
+// ProcessPrincipalCache returns the process default principal store.
+// Never nil after package init. May be *PrincipalCache or *FilePrincipalCache.
+func ProcessPrincipalCache() PrincipalStore {
+	processPrincipalMu.Lock()
+	defer processPrincipalMu.Unlock()
 	if processPrincipalCache == nil {
 		processPrincipalCache = NewPrincipalCache()
 	}
 	return processPrincipalCache
 }
 
+// setProcessPrincipalStore installs s as the process principal store.
+// nil → reset to empty in-memory PrincipalCache. Used by serve path install
+// and tests that need a private file-backed process cache.
+func setProcessPrincipalStore(s PrincipalStore) {
+	processPrincipalMu.Lock()
+	defer processPrincipalMu.Unlock()
+	if s == nil {
+		processPrincipalCache = NewPrincipalCache()
+		return
+	}
+	processPrincipalCache = s
+}
+
 // ConfigureProcessPrincipalCache sets MaxEntries and TTL on the process-local
-// singleton (serve start). Does not replace the pointer — existing callers of
-// ProcessPrincipalCache keep the same instance. maxEntries < 0 → 0; ttl < 0 → 0.
-// When maxEntries > 0, enforces eviction on any already-present entries.
-// Tests should prefer private NewPrincipalCache / NewPrincipalCacheWithLimits
-// rather than reconfiguring the process singleton.
+// singleton (serve start). When the process store is *PrincipalCache, mutates
+// in place (existing callers keep the same instance). When it is
+// *FilePrincipalCache, updates file hygiene knobs only. maxEntries < 0 → 0;
+// ttl < 0 → 0. When maxEntries > 0 on memory cache, enforces eviction on any
+// already-present entries. Tests should prefer private NewPrincipalCache /
+// NewPrincipalCacheWithLimits rather than reconfiguring the process singleton.
 func ConfigureProcessPrincipalCache(maxEntries int, ttl time.Duration) {
-	c := ProcessPrincipalCache()
 	if maxEntries < 0 {
 		maxEntries = 0
 	}
 	if ttl < 0 {
 		ttl = 0
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.MaxEntries = maxEntries
-	c.TTL = ttl
-	if c.now == nil {
-		c.now = time.Now
+	processPrincipalMu.Lock()
+	store := processPrincipalCache
+	if store == nil {
+		store = NewPrincipalCache()
+		processPrincipalCache = store
 	}
-	now := c.clockLocked()
-	if c.TTL > 0 {
-		c.purgeExpiredLocked(now)
-	}
-	if c.MaxEntries > 0 {
-		c.enforceMaxLocked(now)
+	processPrincipalMu.Unlock()
+
+	switch c := store.(type) {
+	case *FilePrincipalCache:
+		c.Configure(maxEntries, ttl)
+	case *PrincipalCache:
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.MaxEntries = maxEntries
+		c.TTL = ttl
+		if c.now == nil {
+			c.now = time.Now
+		}
+		now := c.clockLocked()
+		if c.TTL > 0 {
+			c.purgeExpiredLocked(now)
+		}
+		if c.MaxEntries > 0 {
+			c.enforceMaxLocked(now)
+		}
+	default:
+		// Unknown implementation: replace with memory limits.
+		setProcessPrincipalStore(NewPrincipalCacheWithLimits(maxEntries, ttl))
 	}
 }
 
 // ConfigureProcessPrincipalCacheFromEnviron applies
-// JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_MAX / _TTL to the process singleton.
-// Empty env → unlimited / no expiry (no-op on defaults). Invalid values return
-// an error without mutating the cache (fail closed at serve start).
+// JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_MAX / _TTL and optional
+// JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH to the process singleton.
+//
+// Empty path → in-memory PrincipalCache with hygiene knobs (mutates in place
+// when already *PrincipalCache). Path set → install FilePrincipalCache (same-host
+// flock lite; fail closed on invalid path). Empty max/ttl → unlimited / no expiry.
+// Invalid values return an error without mutating the cache (fail closed at serve start).
 func ConfigureProcessPrincipalCacheFromEnviron(getenv func(string) string) error {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
 	maxEntries, ttl, err := PrincipalCacheConfigFromEnviron(getenv)
 	if err != nil {
 		return err
 	}
-	ConfigureProcessPrincipalCache(maxEntries, ttl)
+	path := strings.TrimSpace(getenv(EnvGatewayPrincipalCachePath))
+	if path == "" {
+		// Ensure memory store when path unset (replace file store if a prior
+		// test left one installed; production serve starts with memory default).
+		processPrincipalMu.Lock()
+		cur := processPrincipalCache
+		processPrincipalMu.Unlock()
+		if _, ok := cur.(*PrincipalCache); !ok {
+			setProcessPrincipalStore(NewPrincipalCacheWithLimits(maxEntries, ttl))
+			return nil
+		}
+		ConfigureProcessPrincipalCache(maxEntries, ttl)
+		return nil
+	}
+	fpc, err := NewFilePrincipalCacheWithLimits(path, maxEntries, ttl)
+	if err != nil {
+		return err
+	}
+	setProcessPrincipalStore(fpc)
 	return nil
 }
 
@@ -287,10 +370,12 @@ func (c *PrincipalCache) String() string {
 
 // StatusMap is safe for doctor/status (no tokens, no subject inventory dump).
 // Includes max_entries / ttl_seconds only when configured (> 0).
+// shared_principal_cache_file is false for memory (file lite uses FilePrincipalCache).
 func (c *PrincipalCache) StatusMap() map[string]any {
 	out := map[string]any{
 		"entries": c.Len(),
 	}
+	principalCacheMemorySharedFlags(out)
 	if c == nil {
 		return out
 	}
@@ -360,7 +445,7 @@ func (c *PrincipalCache) evictOneLRULocked() bool {
 // Obtain for caller. Prefers Credential.JenkinsPrincipal; falls back to Mode A
 // Basic HTTPAuth.Username. No-op when principal empty or caller SubjectKey invalid.
 // Never stores AccessToken or other secrets.
-func RememberObtainPrincipal(cache *PrincipalCache, caller Caller, cred Credential, ha HTTPAuth) {
+func RememberObtainPrincipal(cache PrincipalStore, caller Caller, cred Credential, ha HTTPAuth) {
 	if cache == nil || !caller.Valid() {
 		return
 	}
@@ -372,4 +457,14 @@ func RememberObtainPrincipal(cache *PrincipalCache, caller Caller, cred Credenti
 		return
 	}
 	cache.Set(SubjectKey(caller), principal)
+}
+
+// StatusMap for memory PrincipalCache includes shared_principal_cache_file=false
+// so residual-status consumers can distinguish file lite without path values.
+// (Primary residual bool still comes from PrincipalCachePathConfiguredFromEnviron.)
+func principalCacheMemorySharedFlags(out map[string]any) {
+	out["kind"] = "memory"
+	out["shared_principal_cache_file"] = false
+	out["shared_principal_cache"] = false
+	out["ha_multi_replica"] = false
 }
