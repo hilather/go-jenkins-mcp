@@ -8,8 +8,10 @@
 # Always captures gateway residual-status (Wave 8 residual honesty) when the
 # binary has the subcommand, so pilot kits include residual honesty without a
 # separate residual-smoke run. Optional consent-residual when present.
-# Residual honesty canaries hard-fail (missing residual_ids / ha_multi_replica)
-# matching residual-smoke residual-lite style — offline only, not live GO.
+# Residual honesty canaries hard-fail (missing residual_ids / ha_multi_replica /
+# shared_*_file default false) matching residual-smoke residual-lite style —
+# offline only, not live GO. Lightweight path canaries (path set → bool true,
+# path never dumped) also hard-fail when python3 is available.
 #
 # Usage:
 #   scripts/pilot-evidence.sh
@@ -68,8 +70,9 @@ Writes dist/pilot-evidence/<timestamp>/ with MANIFEST.json.
   -h, --help       Show this help
 
 Always captures gateway residual-status (honesty canaries hard-fail) when the
-subcommand exists; optional consent-residual. Offline residual honesty only —
-not live multi-user GO (see make residual-smoke for deeper path canaries).
+subcommand exists; optional consent-residual. shared_*_file default-false +
+lightweight path-not-dumped canaries align with residual-smoke residual lite.
+Offline residual honesty only — not live multi-user GO.
 EOF
 }
 
@@ -228,7 +231,8 @@ fi
 # --- gateway residual-status (always when binary available; residual honesty) ---
 # Captures gateway-residual-status.json into the pilot pack so residual honesty
 # is present without a separate residual-smoke run. Hard-fail on missing
-# residual_ids / ha_multi_replica honesty (residual lite; offline only).
+# residual_ids / ha_multi_replica / shared_*_file default-false honesty
+# (residual lite; offline only). Optional path canaries when python3 available.
 assert_secret_free_file() {
   local file="$1"
   local label="$2"
@@ -331,6 +335,28 @@ if isinstance(pc, dict):
 else:
     errors.append("progressive_consent object missing")
 
+# HOST-008 lite: shared_subject_rate_file default false (or absent-as-false).
+# Path value never appears; only boolean residual. Aligns with residual-smoke.
+ssrf = data.get("shared_subject_rate_file")
+if ssrf is True:
+    errors.append("shared_subject_rate_file=true without SUBJECT_RATE_PATH (default must be false)")
+elif ssrf is not False and ssrf is not None:
+    errors.append(f"shared_subject_rate_file={ssrf!r} want false|absent")
+
+# HOST-008 lite: shared_principal_cache_file default false (or absent-as-false).
+spcf = data.get("shared_principal_cache_file")
+if spcf is True:
+    errors.append("shared_principal_cache_file=true without PRINCIPAL_CACHE_PATH (default must be false)")
+elif spcf is not False and spcf is not None:
+    errors.append(f"shared_principal_cache_file={spcf!r} want false|absent")
+
+# HOST-001 / HOST-008 lite: shared_jwks_file default false (or absent-as-false).
+sjwks = data.get("shared_jwks_file")
+if sjwks is True:
+    errors.append("shared_jwks_file=true without JWKS_CACHE_PATH (default must be false)")
+elif sjwks is not False and sjwks is not None:
+    errors.append(f"shared_jwks_file={sjwks!r} want false|absent")
+
 blob = json.dumps(data).lower()
 if "production go complete" in blob:
     errors.append("residual-status overclaims production GO complete")
@@ -348,7 +374,9 @@ if errors:
     sys.exit(1)
 print(
     "PASS: gateway residual-status honesty "
-    f"(oauth009_offline + ha_multi_replica=false + residual_ids={len(required)})"
+    f"(oauth009_offline + ha_multi_replica=false + residual_ids={len(required)} + "
+    "shared_subject_rate_file=false default + shared_principal_cache_file=false default + "
+    "shared_jwks_file=false default)"
 )
 sys.exit(0)
 PY
@@ -362,7 +390,10 @@ PY
       # grep fallback when python3 unavailable
       if grep -q 'oauth009_offline' "$RESIDUAL_STATUS_JSON" \
         && grep -q '"ha_multi_replica": false' "$RESIDUAL_STATUS_JSON" \
-        && grep -q 'progressive_consent' "$RESIDUAL_STATUS_JSON"; then
+        && grep -q 'progressive_consent' "$RESIDUAL_STATUS_JSON" \
+        && grep -qE '"shared_subject_rate_file":\s*false' "$RESIDUAL_STATUS_JSON" \
+        && grep -qE '"shared_principal_cache_file":\s*false' "$RESIDUAL_STATUS_JSON" \
+        && grep -qE '"shared_jwks_file":\s*false' "$RESIDUAL_STATUS_JSON"; then
         echo "  [pass] gateway residual-status greppable honesty markers (no python3)"
       else
         residual_status_ok=0
@@ -370,6 +401,178 @@ PY
         echo "  [fail] gateway residual-status missing honesty markers (install python3 for deep assert)" >&2
       fi
     fi
+
+    # Lightweight path canaries (align residual-smoke): path set → shared_*_file=true,
+    # path marker never dumped. Hard-fail when python3 available; residual lite only.
+    if [[ $residual_status_ok -eq 1 && -f "$RESIDUAL_STATUS_JSON" ]] \
+      && command -v python3 >/dev/null 2>&1; then
+      echo "  [=] residual-status shared_*_file path canaries (path never dumped)"
+      RATE_PATH_MARKER="subject-rate-path-CANARY-never-in-json-$$"
+      RATE_TMP_MARKED="$OUT_DIR/${RATE_PATH_MARKER}.dat"
+      : >"$RATE_TMP_MARKED"
+      RESIDUAL_STATUS_RATE_JSON="$OUT_DIR/gateway-residual-status-rate-path.json"
+      set +e
+      env JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH="$RATE_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_RATE_JSON" 2>"$OUT_DIR/gateway-residual-status-rate-path.stderr"
+      rrc=$?
+      set -e
+      if [[ $rrc -ne 0 ]]; then
+        residual_status_ok=0
+        HARD_FAIL=1
+        echo "  [fail] gateway residual-status with SUBJECT_RATE_PATH exit $rrc" >&2
+      else
+        assert_secret_free_file "$RESIDUAL_STATUS_RATE_JSON" "gateway-residual-status-rate-path.json" || {
+          residual_status_ok=0
+          HARD_FAIL=1
+        }
+        export PE_RATE_JSON="$RESIDUAL_STATUS_RATE_JSON"
+        export PE_RATE_MARKER="$RATE_PATH_MARKER"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["PE_RATE_JSON"]
+marker = os.environ["PE_RATE_MARKER"]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_subject_rate_file") is not True:
+    errors.append(
+        f"shared_subject_rate_file={data.get('shared_subject_rate_file')!r} want true when SUBJECT_RATE_PATH set"
+    )
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("SUBJECT_RATE_PATH / marker leaked into residual-status JSON (path must never dump)")
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status SUBJECT_RATE_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print("PASS: residual-status shared_subject_rate_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          residual_status_ok=0
+          HARD_FAIL=1
+        fi
+      fi
+
+      PRINCIPAL_PATH_MARKER="principal-cache-path-CANARY-never-in-json-$$"
+      PRINCIPAL_TMP_MARKED="$OUT_DIR/${PRINCIPAL_PATH_MARKER}.json"
+      : >"$PRINCIPAL_TMP_MARKED"
+      RESIDUAL_STATUS_PC_JSON="$OUT_DIR/gateway-residual-status-principal-path.json"
+      set +e
+      env JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH="$PRINCIPAL_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_PC_JSON" 2>"$OUT_DIR/gateway-residual-status-principal-path.stderr"
+      prc=$?
+      set -e
+      if [[ $prc -ne 0 ]]; then
+        residual_status_ok=0
+        HARD_FAIL=1
+        echo "  [fail] gateway residual-status with PRINCIPAL_CACHE_PATH exit $prc" >&2
+      else
+        assert_secret_free_file "$RESIDUAL_STATUS_PC_JSON" "gateway-residual-status-principal-path.json" || {
+          residual_status_ok=0
+          HARD_FAIL=1
+        }
+        export PE_PC_JSON="$RESIDUAL_STATUS_PC_JSON"
+        export PE_PC_MARKER="$PRINCIPAL_PATH_MARKER"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["PE_PC_JSON"]
+marker = os.environ["PE_PC_MARKER"]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_principal_cache_file") is not True:
+    errors.append(
+        f"shared_principal_cache_file={data.get('shared_principal_cache_file')!r} want true when PRINCIPAL_CACHE_PATH set"
+    )
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("PRINCIPAL_CACHE_PATH / marker leaked into residual-status JSON (path must never dump)")
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status PRINCIPAL_CACHE_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print("PASS: residual-status shared_principal_cache_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          residual_status_ok=0
+          HARD_FAIL=1
+        fi
+      fi
+
+      JWKS_PATH_MARKER="jwks-cache-path-CANARY-never-in-json-$$"
+      JWKS_TMP_MARKED="$OUT_DIR/${JWKS_PATH_MARKER}.json"
+      : >"$JWKS_TMP_MARKED"
+      RESIDUAL_STATUS_JWKS_JSON="$OUT_DIR/gateway-residual-status-jwks-path.json"
+      set +e
+      env JENKINS_MCP_HTTP_JWKS_CACHE_PATH="$JWKS_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_JWKS_JSON" 2>"$OUT_DIR/gateway-residual-status-jwks-path.stderr"
+      jrc=$?
+      set -e
+      if [[ $jrc -ne 0 ]]; then
+        residual_status_ok=0
+        HARD_FAIL=1
+        echo "  [fail] gateway residual-status with JWKS_CACHE_PATH exit $jrc" >&2
+      else
+        assert_secret_free_file "$RESIDUAL_STATUS_JWKS_JSON" "gateway-residual-status-jwks-path.json" || {
+          residual_status_ok=0
+          HARD_FAIL=1
+        }
+        export PE_JWKS_JSON="$RESIDUAL_STATUS_JWKS_JSON"
+        export PE_JWKS_MARKER="$JWKS_PATH_MARKER"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["PE_JWKS_JSON"]
+marker = os.environ["PE_JWKS_MARKER"]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_jwks_file") is not True:
+    errors.append(
+        f"shared_jwks_file={data.get('shared_jwks_file')!r} want true when JWKS_CACHE_PATH set"
+    )
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("JWKS_CACHE_PATH / marker leaked into residual-status JSON (path must never dump)")
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status JWKS_CACHE_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print("PASS: residual-status shared_jwks_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          residual_status_ok=0
+          HARD_FAIL=1
+        fi
+      fi
+    fi
+
     if [[ $residual_status_ok -eq 1 ]]; then
       ARTIFACT_LINES+=("gateway_residual_status|gateway-residual-status.json|pass|0|")
       echo "  [pass] gateway_residual_status (exit 0) -> gateway-residual-status.json"
@@ -555,7 +758,7 @@ manifest = {
         "Full REL-002 make test / package / signing gates not included (see docs/release/gates.md)",
         "Live Rocky/Ubuntu install evidence remains operator-owned",
         "gateway residual-status / consent-residual in this pack are offline honesty — not live Mode B/C pin or multi-pod HA (see docs/gateway/live-pin-blockers.md)",
-        "Deeper residual path canaries (SUBJECT_RATE_PATH / PRINCIPAL_CACHE_PATH / JWKS) remain on make residual-smoke",
+        "shared_*_file default-false + lightweight path-not-dumped canaries in this pack; residual-smoke still has fuller residual suite (seeded principal Len, etc.)",
     ],
 }
 if not profile:

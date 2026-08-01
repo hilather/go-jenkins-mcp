@@ -147,7 +147,8 @@ copy live tokens into the evidence directory. Exit code is non-zero when overall
 is `fail` (including residual-status honesty canary failure). Without `PROFILE`,
 overall is **`incomplete`** (doctor/pilot-check skipped) when the offline
 generators pass. Residual-status in this pack is **offline honesty only** — not
-live multi-user GO; deeper path canaries remain on `make residual-smoke`.
+live multi-user GO. Honesty canaries include `shared_*_file` default-false and
+lightweight path-not-dumped checks (align residual-smoke residual lite).
 
 See also REL-002 gates: [`../release/gates.md`](../release/gates.md).
 
