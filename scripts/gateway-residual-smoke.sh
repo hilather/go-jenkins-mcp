@@ -24,8 +24,12 @@
 #      - principal_cache_process_note: principal_cache_entries is this-process / file Len only
 #      - subject_limiter_max_subjects omit/absent by default; ==N when
 #        JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS=N (path never involved; HOST-006 residual lite)
-#   5. Optional: gateway consent-residual when subcommand exists (progressive consent residual)
-#   6. Optional: doctor --offline --json gateway_residual_status when PROFILE= is set
+#   5. jenkins-mcp security self-check --json (offline; no --profile required)
+#      - assert item gateway_residual_status_honesty present; status ok|warn (never fail for
+#        empty-env honesty / GWY-003 residual lite)
+#      - secret-free canary on self-check JSON; soft-skip if security self-check missing
+#   6. Optional: gateway consent-residual when subcommand exists (progressive consent residual)
+#   7. Optional: doctor --offline --json gateway_residual_status when PROFILE= is set
 #      (doctor requires --profile; when PROFILE empty, doctor residual is skipped —
 #       doctor offline does not run without a profile)
 #
@@ -45,8 +49,9 @@
 #   SKIP_RESIDUAL_STATUS=1 — skip residual-status (not recommended; Wave 8 honesty)
 #   KEEP_ARTIFACTS=1 — keep OUT_DIR on success (default: keep always for evidence)
 #
-# Exit: 0 on pass; non-zero if qualify fails, residual honesty missing, or residual-status
-# honesty fields fail. Secret-free: never prints tokens/cookies/Authorization; fail closed.
+# Exit: 0 on pass; non-zero if qualify fails, residual honesty missing, residual-status
+# honesty fields fail, or security self-check gateway_residual_status_honesty is missing/fail.
+# Secret-free: never prints tokens/cookies/Authorization; fail closed.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -1069,7 +1074,143 @@ PY
   fi
 fi
 
-# --- 4) optional gateway consent-residual (progressive consent residual snapshot) ---
+# --- 4) security self-check --json (offline residual honesty; no profile) ---
+# GWY-003 residual lite: item gateway_residual_status_honesty must be present with
+# status ok|warn (never fail for empty-env honesty). Soft-skip if subcommand missing.
+SELFCHECK_JSON="$OUT_DIR/security-self-check.json"
+SELFCHECK_SKIPPED=0
+echo "== security self-check --json (offline; no profile) =="
+set +e
+"$MCP_BIN" security self-check --json >"$SELFCHECK_JSON" 2>"$OUT_DIR/security-self-check.stderr"
+scrc=$?
+set -e
+if [[ $scrc -ne 0 ]]; then
+  # Unknown / missing subcommand → soft skip; other failures still parse JSON when present
+  # (self-check writes JSON before overall fail exit).
+  _sc_unknown=0
+  if grep -qiE 'unknown security subcommand|security subcommand required|unknown command|not found' \
+      "$OUT_DIR/security-self-check.stderr" 2>/dev/null; then
+    _sc_unknown=1
+  fi
+  _sc_has_items=0
+  if [[ -s "$SELFCHECK_JSON" ]] && grep -qE 'gateway_residual_status_honesty|"items"' "$SELFCHECK_JSON" 2>/dev/null; then
+    _sc_has_items=1
+  fi
+  if [[ "$_sc_unknown" -eq 1 && "$_sc_has_items" -eq 0 ]]; then
+    echo "  [skip] security self-check not present on this binary"
+    SELFCHECK_SKIPPED=1
+    rm -f "$SELFCHECK_JSON" 2>/dev/null || true
+  else
+    # Non-zero overall (other items fail) is ok if honesty item is ok|warn — still require JSON.
+    echo "  [warn] security self-check exit $scrc (scanning gateway_residual_status_honesty if JSON present)"
+    if [[ -s "$OUT_DIR/security-self-check.stderr" ]]; then
+      head -n 20 "$OUT_DIR/security-self-check.stderr" >&2 || true
+    fi
+  fi
+  unset _sc_unknown _sc_has_items
+else
+  pass "security self-check --json exit 0"
+  rm -f "$OUT_DIR/security-self-check.stderr"
+fi
+if [[ "$SELFCHECK_SKIPPED" == "1" ]]; then
+  :
+elif [[ -f "$SELFCHECK_JSON" && -s "$SELFCHECK_JSON" ]]; then
+  assert_secret_free "$SELFCHECK_JSON" "security-self-check.json" || true
+  if command -v python3 >/dev/null 2>&1; then
+    export GRS_SELFCHECK_JSON="$SELFCHECK_JSON"
+    if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["GRS_SELFCHECK_JSON"]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+
+errors = []
+items = data.get("items") or []
+if not isinstance(items, list):
+    errors.append("items is not a list")
+    items = []
+
+by_name = {}
+for it in items:
+    if isinstance(it, dict) and it.get("name"):
+        by_name[str(it["name"])] = it
+
+item = by_name.get("gateway_residual_status_honesty")
+if item is None:
+    errors.append("item gateway_residual_status_honesty missing from security self-check")
+else:
+    st = (item.get("status") or "").strip().lower()
+    # Empty-env honesty must be ok or warn (multi_user env elevates to warn).
+    # Never fail for residual honesty when the binary includes the item.
+    if st not in ("ok", "warn"):
+        errors.append(
+            f"gateway_residual_status_honesty status={item.get('status')!r} want ok|warn "
+            "(never fail for empty-env residual honesty)"
+        )
+    # Control id when present.
+    ctrl = (item.get("control") or "").strip()
+    if ctrl and ctrl != "GWY-003":
+        errors.append(f"gateway_residual_status_honesty control={ctrl!r} want GWY-003")
+    details = item.get("details") or {}
+    if isinstance(details, dict) and details:
+        if details.get("residual_live_go") is True:
+            errors.append("details.residual_live_go=true (must stay residual offline)")
+        if details.get("ha_multi_replica") is True:
+            errors.append("details.ha_multi_replica=true (HOST-008 residual)")
+        if details.get("oauth009_offline") is False:
+            errors.append("details.oauth009_offline=false")
+        if details.get("secret_free") is False:
+            errors.append("details.secret_free=false")
+
+blob = json.dumps(data).lower()
+if "production go complete" in blob:
+    errors.append("security self-check overclaims production GO complete")
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in blob:
+        errors.append(f"secret-shaped material {needle!r}")
+# Extra canary markers that must never appear in self-check JSON.
+for needle in (
+    "gwy003_selfcheck_residual_canary",
+    "-----begin ",
+):
+    if needle in blob:
+        errors.append(f"secret/canary-shaped material {needle!r}")
+
+if errors:
+    print("FAIL: security self-check residual honesty:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    present = sorted(by_name.keys())
+    print(f"  present items ({len(present)}): {', '.join(present[:40])}", file=sys.stderr)
+    sys.exit(1)
+
+st = (item.get("status") if item else "") or ""
+print(
+    "PASS: security self-check item gateway_residual_status_honesty "
+    f"present status={st!r} (ok|warn; GWY-003 residual lite; not live GO)"
+)
+sys.exit(0)
+PY
+    then
+      :
+    else
+      fail=1
+    fi
+  else
+    # grep fallback when python3 unavailable
+    if grep -q 'gateway_residual_status_honesty' "$SELFCHECK_JSON" \
+      && (grep -q '"status": "ok"' "$SELFCHECK_JSON" || grep -q '"status": "warn"' "$SELFCHECK_JSON"); then
+      pass "security self-check greppable gateway_residual_status_honesty (no python3)"
+    else
+      fail_msg "security self-check missing gateway_residual_status_honesty (install python3 for deep assert)"
+    fi
+  fi
+else
+  fail_msg "security-self-check.json missing after security self-check (subcommand present)"
+fi
+
+# --- 5) optional gateway consent-residual (progressive consent residual snapshot) ---
 CONSENT_RESIDUAL_JSON="$OUT_DIR/gateway-consent-residual.json"
 echo "== gateway consent-residual (optional if subcommand exists) =="
 set +e
@@ -1120,7 +1261,7 @@ PY
   fi
 fi
 
-# --- 5) optional doctor --offline residual embed (requires PROFILE; doctor needs --profile) ---
+# --- 6) optional doctor --offline residual embed (requires PROFILE; doctor needs --profile) ---
 # Doctor offline does not run without a profile — skip when PROFILE empty.
 if [[ -n "$PROFILE" ]]; then
   echo "== doctor --offline --json gateway_residual_status (PROFILE=$PROFILE) =="
@@ -1258,6 +1399,7 @@ SUMMARY="$OUT_DIR/SUMMARY.txt"
   echo "profile=${PROFILE:-}"
   echo "required_residual_ids=${REQUIRED_RESIDUAL_IDS[*]}"
   echo "residual_status=required_unless_skip"
+  echo "security_self_check=gateway_residual_status_honesty ok|warn"
   echo "consent_residual=optional"
   if [[ $fail -eq 0 ]]; then
     echo "result=pass"
@@ -1269,7 +1411,7 @@ SUMMARY="$OUT_DIR/SUMMARY.txt"
 echo ""
 if [[ $fail -eq 0 ]]; then
   echo "gateway-residual-smoke complete: PASS (artifacts: $OUT_DIR)"
-  echo "Honest residual: offline qualify + residual-status + residual ids ≠ live multi-user / Entra / AgentCore / multi-replica GO"
+  echo "Honest residual: offline qualify + residual-status + security self-check residual lite + residual ids ≠ live multi-user / Entra / AgentCore / multi-replica GO"
   echo "See docs/release/gates.md and docs/pilot/checklist.md §0"
   exit 0
 fi
