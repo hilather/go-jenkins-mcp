@@ -9,9 +9,11 @@
 # binary has the subcommand, so pilot kits include residual honesty without a
 # separate residual-smoke run. Optional consent-residual when present.
 # Residual honesty canaries hard-fail (missing residual_ids / ha_multi_replica /
-# shared_*_file default false) matching residual-smoke residual-lite style —
-# offline only, not live GO. Lightweight path canaries (path set → bool true,
-# path never dumped) also hard-fail when python3 is available.
+# shared_*_file default false / subject_limiter_max_subjects omit default)
+# matching residual-smoke residual-lite style — offline only, not live GO.
+# Lightweight path canaries (path set → bool true, path never dumped) and
+# SUBJECT_LIMITER_MAX_SUBJECTS canary (env=64 → field 64) also hard-fail when
+# python3 is available.
 #
 # Usage:
 #   scripts/pilot-evidence.sh
@@ -71,7 +73,8 @@ Writes dist/pilot-evidence/<timestamp>/ with MANIFEST.json.
 
 Always captures gateway residual-status (honesty canaries hard-fail) when the
 subcommand exists; optional consent-residual. shared_*_file default-false +
-lightweight path-not-dumped canaries align with residual-smoke residual lite.
+subject_limiter_max_subjects omit default + lightweight path-not-dumped /
+SUBJECT_LIMITER_MAX_SUBJECTS canaries align with residual-smoke residual lite.
 Offline residual honesty only — not live multi-user GO.
 EOF
 }
@@ -231,8 +234,9 @@ fi
 # --- gateway residual-status (always when binary available; residual honesty) ---
 # Captures gateway-residual-status.json into the pilot pack so residual honesty
 # is present without a separate residual-smoke run. Hard-fail on missing
-# residual_ids / ha_multi_replica / shared_*_file default-false honesty
-# (residual lite; offline only). Optional path canaries when python3 available.
+# residual_ids / ha_multi_replica / shared_*_file default-false /
+# subject_limiter_max_subjects omit-default honesty (residual lite; offline only).
+# Optional path + SUBJECT_LIMITER_MAX_SUBJECTS canaries when python3 available.
 assert_secret_free_file() {
   local file="$1"
   local label="$2"
@@ -364,6 +368,15 @@ if stcf is True:
 elif stcf is not False and stcf is not None:
     errors.append(f"shared_token_cache_file={stcf!r} want false|absent")
 
+# HOST-006 residual lite: subject_limiter_max_subjects omit when env unset (unlimited).
+# Path never involved — integer hygiene residual only. Aligns with residual-smoke.
+slms = data.get("subject_limiter_max_subjects")
+if slms is not None and slms is not False and slms != 0 and slms != "":
+    errors.append(
+        f"subject_limiter_max_subjects={slms!r} want absent|falsey when "
+        "JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS unset (default unlimited)"
+    )
+
 blob = json.dumps(data).lower()
 if "production go complete" in blob:
     errors.append("residual-status overclaims production GO complete")
@@ -383,7 +396,8 @@ print(
     "PASS: gateway residual-status honesty "
     f"(oauth009_offline + ha_multi_replica=false + residual_ids={len(required)} + "
     "shared_subject_rate_file=false default + shared_principal_cache_file=false default + "
-    "shared_jwks_file=false default + shared_token_cache_file=false default)"
+    "shared_jwks_file=false default + shared_token_cache_file=false default + "
+    "subject_limiter_max_subjects omit default)"
 )
 sys.exit(0)
 PY
@@ -410,11 +424,12 @@ PY
       fi
     fi
 
-    # Lightweight path canaries (align residual-smoke): path set → shared_*_file=true,
-    # path marker never dumped. Hard-fail when python3 available; residual lite only.
+    # Lightweight path + limiter-max canaries (align residual-smoke): path set →
+    # shared_*_file=true (path never dumped); SUBJECT_LIMITER_MAX_SUBJECTS=N →
+    # subject_limiter_max_subjects==N. Hard-fail when python3 available; residual lite only.
     if [[ $residual_status_ok -eq 1 && -f "$RESIDUAL_STATUS_JSON" ]] \
       && command -v python3 >/dev/null 2>&1; then
-      echo "  [=] residual-status shared_*_file path canaries (path never dumped)"
+      echo "  [=] residual-status shared_*_file path + SUBJECT_LIMITER_MAX canaries (path never dumped)"
       RATE_PATH_MARKER="subject-rate-path-CANARY-never-in-json-$$"
       RATE_TMP_MARKED="$OUT_DIR/${RATE_PATH_MARKER}.dat"
       : >"$RATE_TMP_MARKED"
@@ -634,6 +649,82 @@ PY
           HARD_FAIL=1
         fi
       fi
+
+      # Optional subtest: SUBJECT_LIMITER_MAX_SUBJECTS set → subject_limiter_max_subjects==N
+      # (HOST-006 residual lite). Path never involved; omit when unset (default unlimited).
+      echo "  [=] residual-status SUBJECT_LIMITER_MAX_SUBJECTS canary (env=64 → field 64)"
+      LIMITER_MAX_CANARY=64
+      RESIDUAL_STATUS_LIM_JSON="$OUT_DIR/gateway-residual-status-limiter-max.json"
+      set +e
+      env JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS="$LIMITER_MAX_CANARY" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_LIM_JSON" 2>"$OUT_DIR/gateway-residual-status-limiter-max.stderr"
+      lrc=$?
+      set -e
+      if [[ $lrc -ne 0 ]]; then
+        residual_status_ok=0
+        HARD_FAIL=1
+        echo "  [fail] gateway residual-status with SUBJECT_LIMITER_MAX_SUBJECTS exit $lrc" >&2
+        if [[ -s "$OUT_DIR/gateway-residual-status-limiter-max.stderr" ]]; then
+          head -n 20 "$OUT_DIR/gateway-residual-status-limiter-max.stderr" >&2 || true
+        fi
+      else
+        assert_secret_free_file "$RESIDUAL_STATUS_LIM_JSON" "gateway-residual-status-limiter-max.json" || {
+          residual_status_ok=0
+          HARD_FAIL=1
+        }
+        export PE_LIM_JSON="$RESIDUAL_STATUS_LIM_JSON"
+        export PE_LIM_WANT="$LIMITER_MAX_CANARY"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["PE_LIM_JSON"]
+want = int(os.environ["PE_LIM_WANT"])
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+got = data.get("subject_limiter_max_subjects")
+try:
+    n = int(got)
+except (TypeError, ValueError):
+    errors.append(
+        f"subject_limiter_max_subjects={got!r} want int {want} when "
+        "JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS set"
+    )
+else:
+    if n != want:
+        errors.append(f"subject_limiter_max_subjects={n} want {want}")
+# Path residual fields must not flip solely because limiter max is set.
+if data.get("shared_subject_rate_file") is True:
+    errors.append("shared_subject_rate_file must stay false without SUBJECT_RATE_PATH")
+if data.get("shared_principal_cache_file") is True:
+    errors.append("shared_principal_cache_file must stay false without PRINCIPAL_CACHE_PATH")
+if data.get("shared_jwks_file") is True:
+    errors.append("shared_jwks_file must stay false without JWKS_CACHE_PATH")
+if data.get("shared_token_cache_file") is True:
+    errors.append("shared_token_cache_file must stay false without TOKEN_CACHE_PATH")
+blob = json.dumps(data)
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status SUBJECT_LIMITER_MAX_SUBJECTS canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print(
+    f"PASS: residual-status subject_limiter_max_subjects={want} when env set "
+    "(omit when unset; path never involved)"
+)
+sys.exit(0)
+PY
+        then
+          :
+        else
+          residual_status_ok=0
+          HARD_FAIL=1
+        fi
+      fi
     fi
 
     if [[ $residual_status_ok -eq 1 ]]; then
@@ -821,7 +912,7 @@ manifest = {
         "Full REL-002 make test / package / signing gates not included (see docs/release/gates.md)",
         "Live Rocky/Ubuntu install evidence remains operator-owned",
         "gateway residual-status / consent-residual in this pack are offline honesty — not live Mode B/C pin or multi-pod HA (see docs/gateway/live-pin-blockers.md)",
-        "shared_*_file default-false + lightweight path-not-dumped canaries in this pack; residual-smoke still has fuller residual suite (seeded principal Len, etc.)",
+        "shared_*_file default-false + subject_limiter_max_subjects omit default + path-not-dumped / SUBJECT_LIMITER_MAX_SUBJECTS canaries in this pack; residual-smoke still has fuller residual suite (seeded principal Len, etc.)",
     ],
 }
 if not profile:
