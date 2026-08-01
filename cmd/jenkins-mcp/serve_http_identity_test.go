@@ -13,7 +13,10 @@ import (
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
 	"github.com/simonfxr/go-jenkins-mcp/internal/authlab"
+	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
+	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 	"github.com/simonfxr/go-jenkins-mcp/internal/mcpserver"
+	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
 )
 
 func TestResolveHTTPRequireSubject(t *testing.T) {
@@ -517,6 +520,7 @@ func TestNewLabHTTPIdentityResolver(t *testing.T) {
 	}
 	req.Header.Set("X-Jenkins-MCP-Lab-Subject", "lab-user")
 	req.Header.Set("X-Jenkins-MCP-Lab-Tenant", "tid")
+	req.Header.Set("X-Jenkins-MCP-Lab-Groups", "ops,dev")
 	id, err = res(req)
 	if err != nil {
 		t.Fatal(err)
@@ -526,6 +530,64 @@ func TestNewLabHTTPIdentityResolver(t *testing.T) {
 	}
 	if id.Source != mcpserver.IdentitySourceLabHeader || !id.Verified {
 		t.Fatalf("source/verified: %+v", id)
+	}
+	if len(id.Groups) != 2 || id.Groups[0] != "ops" || id.Groups[1] != "dev" {
+		t.Fatalf("groups: %v", id.Groups)
+	}
+	// Lab off: spoof groups header ignored.
+	resOff := newLabHTTPIdentityResolver(false, "secret")
+	if resOff != nil {
+		t.Fatal("lab off → nil")
+	}
+}
+
+// AfterIdentity multi-user mapping: RequestIdentity groups → policy.Subject.Groups.
+func TestAfterIdentity_PolicySubjectReceivesGroups(t *testing.T) {
+	t.Parallel()
+	process := policy.NewSubject("corp", "process-bob", true).
+		WithExternal("process-sub").
+		WithGateway("tdef", "wdef", []string{"process-group"})
+	pid := contracts.ProfileID("corp")
+	id := mcpserver.RequestIdentity{
+		ExternalSubject:  "alice-sub",
+		Tenant:           "t1",
+		WorkloadID:       "w1",
+		JenkinsPrincipal: "alice-j",
+		Groups:           []string{"ops", "dev", "ops"},
+		Source:           mcpserver.IdentitySourceLabHeader,
+		Verified:         true,
+	}
+	// Mirror cmd AfterIdentity wire (groups copy → HTTPInbound → PolicySubject).
+	groups := append([]string(nil), id.Groups...)
+	in := gateway.HTTPInbound{
+		ExternalSubject:  id.ExternalSubject,
+		Tenant:           id.Tenant,
+		WorkloadID:       id.WorkloadID,
+		JenkinsPrincipal: id.JenkinsPrincipal,
+		Groups:           groups,
+		Source:           string(id.Source),
+		Verified:         id.Verified,
+	}
+	ps := gateway.PolicySubjectFromHTTPInbound(in, pid, process)
+	if ps.JenkinsUserID != "alice-j" || ps.ExternalSubject != "alice-sub" {
+		t.Fatalf("%+v", ps)
+	}
+	if len(ps.Groups) != 2 {
+		t.Fatalf("deduped groups: %v", ps.Groups)
+	}
+	for _, g := range ps.Groups {
+		if g == "process-group" {
+			t.Fatal("must not inherit process groups")
+		}
+	}
+	// Groups cannot elevate deny-only.
+	ev := policy.NewDenyOnlyEvaluator(policy.Document{
+		Mode:      policy.ModePilot,
+		DenyTools: map[string]struct{}{"jenkins_get_build_logs": {}},
+	})
+	d := ev.Evaluate(ps, policy.Action{ToolName: "jenkins_get_build_logs", Class: policy.EffectRead}, policy.Target{})
+	if !d.Denied() {
+		t.Fatal("deny_tools must still apply with inbound groups")
 	}
 }
 

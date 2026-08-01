@@ -291,11 +291,16 @@ func newHTTPIdentityResolver(
 		case "lab_header":
 			src = mcpserver.IdentitySourceLabHeader
 		}
+		var groups []string
+		if len(in.Groups) > 0 {
+			groups = append([]string(nil), in.Groups...)
+		}
 		return mcpserver.RequestIdentity{
 			ExternalSubject:  in.ExternalSubject,
 			Tenant:           in.Tenant,
 			WorkloadID:       in.WorkloadID,
 			JenkinsPrincipal: in.JenkinsPrincipal,
+			Groups:           groups,
 			Source:           src,
 			Verified:         in.Verified,
 		}, nil

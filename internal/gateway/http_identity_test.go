@@ -177,6 +177,130 @@ func TestResolveHTTPInbound_LabAndJWT(t *testing.T) {
 	}
 }
 
+// OAUTH-006 / GWY-002 residual lite: lab groups header + JWT groups wire-through.
+func TestParseLabHTTPInbound_Groups(t *testing.T) {
+	t.Parallel()
+	h := http.Header{}
+	h.Set(gateway.HeaderLabSubject, "alice")
+	h.Set(gateway.HeaderLabGroups, " ops,dev, ops , ")
+	// Lab off: groups spoof ignored with whole inbound.
+	if in := gateway.ParseLabHTTPInbound(h, false); in.Present() || len(in.Groups) != 0 {
+		t.Fatalf("lab off must ignore groups header: %+v", in)
+	}
+	in := gateway.ParseLabHTTPInbound(h, true)
+	if len(in.Groups) != 3 || in.Groups[0] != "ops" || in.Groups[1] != "dev" || in.Groups[2] != "ops" {
+		// parse keeps order; dedupe happens at bind.
+		t.Fatalf("groups: %v", in.Groups)
+	}
+	// BindSubject dedupes + bounds.
+	s, err := gateway.BindSubjectFromHTTP(in, "corp", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Groups) != 2 {
+		t.Fatalf("deduped groups: %v", s.Groups)
+	}
+}
+
+func TestParseLabHTTPInbound_GroupsHeaderOversizeRaw(t *testing.T) {
+	t.Parallel()
+	h := http.Header{}
+	h.Set(gateway.HeaderLabSubject, "alice")
+	// Oversize raw header → nil groups (fail closed).
+	huge := strings.Repeat("a", gateway.MaxLabGroupsHeaderBytes+1)
+	h.Set(gateway.HeaderLabGroups, huge)
+	in := gateway.ParseLabHTTPInbound(h, true)
+	if !in.Present() {
+		t.Fatal("subject still present")
+	}
+	if len(in.Groups) != 0 {
+		t.Fatalf("oversize header must yield nil groups: %d", len(in.Groups))
+	}
+}
+
+func TestResolveHTTPInbound_JWTGroupsAndRoles(t *testing.T) {
+	t.Parallel()
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwks := rsaJWKS(t, priv, "k1")
+	now := time.Now()
+	raw := mustSignRS256JWT(t, priv, map[string]any{
+		"iss":                "https://issuer.example",
+		"sub":                "jwt-sub-g",
+		"aud":                "https://jenkins.example/api",
+		"exp":                now.Add(time.Hour).Unix(),
+		"nbf":                now.Add(-time.Minute).Unix(),
+		"tid":                "tenant-1",
+		"preferred_username": "alice-j",
+		"groups":             []string{"g1", "g2"},
+		"roles":              []string{"r1"},
+	}, "k1")
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	params := auth.AccessTokenParams{
+		Issuer:   "https://issuer.example",
+		Audience: "https://jenkins.example/api",
+		Now:      func() time.Time { return now },
+	}
+	in, err := gateway.ResolveHTTPInbound(req, "transport-secret", false, jwks, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !in.Present() || in.Source != "jwt" {
+		t.Fatalf("%+v", in)
+	}
+	if in.JenkinsPrincipal != "alice-j" {
+		t.Fatalf("preferred_username: %q", in.JenkinsPrincipal)
+	}
+	// groups + roles merged into AccessTokenClaims.Groups then HTTPInbound.
+	if len(in.Groups) < 2 {
+		t.Fatalf("expected groups from JWT: %v", in.Groups)
+	}
+	seen := map[string]bool{}
+	for _, g := range in.Groups {
+		seen[g] = true
+	}
+	if !seen["g1"] || !seen["g2"] || !seen["r1"] {
+		t.Fatalf("want g1,g2,r1 got %v", in.Groups)
+	}
+	// Lab groups header ignored when JWT wins (and lab off).
+	req.Header.Set(gateway.HeaderLabGroups, "spoof-admin")
+	in2, err := gateway.ResolveHTTPInbound(req, "transport-secret", false, jwks, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, g := range in2.Groups {
+		if g == "spoof-admin" {
+			t.Fatal("lab groups spoof must not appear when lab off / JWT path")
+		}
+	}
+}
+
+func TestInboundClaimsFromHTTP_Groups(t *testing.T) {
+	t.Parallel()
+	in := gateway.HTTPInbound{
+		ExternalSubject:  "s",
+		Tenant:           "t",
+		WorkloadID:       "w",
+		JenkinsPrincipal: "j",
+		Groups:           []string{"a", "b"},
+		Verified:         true,
+	}
+	claims := gateway.InboundClaimsFromHTTP(in, "corp")
+	if len(claims.Groups) != 2 {
+		t.Fatalf("%+v", claims)
+	}
+	reqClaims, err := gateway.InboundClaimsFromRequestIdentity(in, "corp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reqClaims.Groups) != 2 {
+		t.Fatalf("%+v", reqClaims)
+	}
+}
+
 func rsaJWKS(t *testing.T, priv *rsa.PrivateKey, kid string) *auth.JWKS {
 	t.Helper()
 	n := base64.RawURLEncoding.EncodeToString(priv.N.Bytes())

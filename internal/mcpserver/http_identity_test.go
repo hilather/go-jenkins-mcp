@@ -118,6 +118,61 @@ func TestNewHTTPHandler_LabHeaderIgnoredWithoutLabMode(t *testing.T) {
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("want 401 when lab mode off, got %d body=%s", rr.Code, rr.Body.String())
 	}
+}
+
+// OAUTH-006 / GWY-002 residual lite: builtin lab extracts groups; lab-off ignores spoof.
+func TestNewHTTPHandler_LabGroupsHeader(t *testing.T) {
+	t.Parallel()
+	srv := mcpserver.NewServer("test", "0.0.1")
+	cfg := mcpserver.DefaultHTTPConfig()
+	cfg.RequireSubject = true
+	cfg.LabIdentity = true
+	var got mcpserver.RequestIdentity
+	cfg.AfterIdentity = func(ctx context.Context, id mcpserver.RequestIdentity) context.Context {
+		got = id
+		return ctx
+	}
+	h, err := mcpserver.NewHTTPHandler(srv, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := postLoopback(t, h, func(r *http.Request) {
+		r.Header.Set(mcpserver.HeaderLabSubject, "lab-alice")
+		r.Header.Set(mcpserver.HeaderLabGroups, "ops, dev, ops")
+	})
+	if rr.Code == http.StatusUnauthorized {
+		t.Fatalf("lab+groups should not 401: %s", rr.Body.String())
+	}
+	if !got.Present() || got.ExternalSubject != "lab-alice" {
+		t.Fatalf("identity: %+v", got)
+	}
+	if len(got.Groups) != 3 || got.Groups[0] != "ops" || got.Groups[1] != "dev" {
+		t.Fatalf("groups: %v", got.Groups)
+	}
+
+	// Lab off: groups header alone cannot establish identity (spoof fail closed).
+	cfg2 := mcpserver.DefaultHTTPConfig()
+	cfg2.RequireSubject = true
+	cfg2.LabIdentity = false
+	var got2 mcpserver.RequestIdentity
+	cfg2.AfterIdentity = func(ctx context.Context, id mcpserver.RequestIdentity) context.Context {
+		got2 = id
+		return ctx
+	}
+	h2, err := mcpserver.NewHTTPHandler(srv, cfg2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr2 := postLoopback(t, h2, func(r *http.Request) {
+		r.Header.Set(mcpserver.HeaderLabSubject, "spoof")
+		r.Header.Set(mcpserver.HeaderLabGroups, "admins")
+	})
+	if rr2.Code != http.StatusUnauthorized {
+		t.Fatalf("want 401 lab off, got %d", rr2.Code)
+	}
+	if got2.Present() || len(got2.Groups) != 0 {
+		t.Fatalf("spoof must not set identity/groups: %+v", got2)
+	}
 	if strings.Contains(rr.Body.String(), "spoofed-user") {
 		t.Fatalf("subject must not appear in error body: %s", rr.Body.String())
 	}

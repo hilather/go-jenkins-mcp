@@ -211,6 +211,9 @@ type jwtPayload struct {
 	// Resource is used by some IdPs as the resource indicator (treat like aud).
 	Resource string   `json:"resource"`
 	Groups   []string `json:"groups"`
+	// Roles is an optional alternate group/role claim key (OAUTH-006 parity with
+	// ExtractGroups DefaultGroupClaimNames). Merged into AccessTokenClaims.Groups.
+	Roles []string `json:"roles"`
 	// SCP presence helps distinguish access tokens; not required for MVP.
 	Scp string `json:"scp"`
 }
@@ -388,6 +391,10 @@ func validateJWTAccessToken(raw string, jwks *JWKS, p AccessTokenParams) (Access
 		nbfTime = time.Unix(pl.Nbf, 0)
 	}
 
+	// Merge groups + roles claim arrays (OAUTH-006 / DefaultGroupClaimNames).
+	// Full bound/dedupe/overage is applied by gateway BindSubject / ExtractGroups.
+	groups := mergeStringClaims(pl.Groups, pl.Roles)
+
 	return AccessTokenClaims{
 		Subject:           sub,
 		PreferredUsername: strings.TrimSpace(pl.PreferredUsername),
@@ -398,8 +405,27 @@ func validateJWTAccessToken(raw string, jwks *JWKS, p AccessTokenParams) (Access
 		AuthorizedParty:   azp,
 		TenantID:          strings.TrimSpace(pl.Tid),
 		TokenUse:          tokenUse,
-		Groups:            append([]string(nil), pl.Groups...),
+		Groups:            groups,
 	}, nil
+}
+
+// mergeStringClaims concatenates non-empty trimmed strings from claim slices
+// (preserves order; does not hard-cap — callers apply MaxStoredGroups bounds).
+func mergeStringClaims(parts ...[]string) []string {
+	var out []string
+	for _, list := range parts {
+		for _, s := range list {
+			s = strings.TrimSpace(s)
+			if s == "" {
+				continue
+			}
+			out = append(out, s)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func verifyJWS(alg string, pub any, signingInput, sig []byte) error {

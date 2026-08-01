@@ -150,7 +150,7 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 |------|----------|
 | Auth | `attachGatewayObtainAuthProviderDynamic` installs `AuthProviderCtx` |
 | Context Caller | HTTP `AfterIdentity` maps trusted `RequestIdentity` → `gateway.Caller` (ExternalSubject→Subject; Tenant/Workload from identity; ProfileID from process) |
-| Context policy.Subject | Same `AfterIdentity` builds `policy.Subject` via `PolicySubjectFromHTTPInbound` (JenkinsPrincipal→JenkinsUserID; ProfileID from process; **Verified** only when lab/JWT verified **and** Jenkins principal present) and stores with `ContextWithCallerAndPolicySubject` |
+| Context policy.Subject | Same `AfterIdentity` builds `policy.Subject` via `PolicySubjectFromHTTPInbound` (JenkinsPrincipal→JenkinsUserID; ProfileID from process; **Groups** from JWT `groups`/`roles` or lab `X-Jenkins-MCP-Lab-Groups` only — never process defaults; bounded MaxInboundGroups/name length; **Verified** only when lab/JWT verified **and** Jenkins principal present) and stores with `ContextWithCallerAndPolicySubject` |
 | Obtain | `CallerFromContext` when Valid → Obtain for that caller; else process defaultCaller |
 | Policy RBAC | `tools.RegisterOptions.SubjectFromContext` = `gateway.PolicySubjectFromContext`; `addTool` / `listToolsAllows` use `effectiveSubject` (ctx subject when present, else process Subject) |
 | Mutation Binding | `MutationBindingFromContext` = `mutationBindingFromGatewayCtx`: Valid `PolicySubject` → PrincipalID=`JenkinsUserID` (HTTP/lab JenkinsPrincipal); else Caller + process principal. Mode A vault multi-user: send lab/JWT JenkinsPrincipal matching vault username |
@@ -174,9 +174,14 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
   send `X-Jenkins-MCP-Lab-Jenkins-Principal` (or JWT preferred_username) matching
   vault username. **Residual:** Obtain/`AuthProviderCtx` success does not
   re-inject whoAmI principal onto request context mid-call.
-- **Live Entra groups claim completeness** remains residual (OAUTH-010 /
-  GWY-003): lab/JWT path may leave `Groups` empty; binding helpers do not
-  inherit process groups for a different ExternalSubject.
+- **IdP groups foundation (OAUTH-006 / GWY-002 residual lite): Done\*** —
+  JWT access-token `groups`/`roles` → `PolicySubjectFromHTTPInbound` /
+  `BindSubject` with `MaxInboundGroups=64`, name length 256, default
+  `FailOnGroupOverage=true`. Lab header `X-Jenkins-MCP-Lab-Groups`
+  (comma-separated) only when lab identity is on. Groups never elevate
+  `deny_tools` / `force_read_only`.
+- **Live Entra group overage / Microsoft Graph membership expansion** remains
+  residual (OAUTH-010 / GWY-003): no Graph call; overage references do not invent membership.
 - **Live Entra / JWKS rotation / Mode C 3LO browser UX** remain GWY-003 /
   OAUTH-010 residuals.
 - **MCP SDK context flow:** AuthProviderCtx / SubjectFromContext only see the
@@ -553,8 +558,9 @@ remain honest when RS is not live-qualified.
 
 | Helper | Role |
 |--------|------|
-| `InboundClaimsFromJWTClaims(auth.AccessTokenClaims, profileID, workloadID)` | Verified JWT claims → `InboundClaims` (`Verified=true`); requires `sub` + profile |
-| `InboundClaimsFromRequestIdentity(HTTPInbound, profileID)` | Fail-closed HTTP inbound → claims (subject + verified + profile) |
+| `InboundClaimsFromJWTClaims(auth.AccessTokenClaims, profileID, workloadID)` | Verified JWT claims → `InboundClaims` (`Verified=true`); requires `sub` + profile; copies `Groups` |
+| `InboundClaimsFromRequestIdentity(HTTPInbound, profileID)` | Fail-closed HTTP inbound → claims (subject + verified + profile + groups) |
+| `PolicySubjectFromHTTPInbound` / `…WithMeta` | Multi-user rebind: Jenkins principal + bounded inbound groups (never process groups) |
 | `RejectIdentityToolArgs` | Tool args still cannot set identity |
 
 ### AgentCore modes (Mode C / GWY-001)

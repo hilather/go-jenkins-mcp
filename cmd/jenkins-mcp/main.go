@@ -278,7 +278,7 @@ JENKINS_MCP_HTTP_DENY_ANONYMOUS=1 (alias; same RequireToken path). Non-local
 bind always requires a token, --http-allowed-origin, --http-allowed-host, and a
 per-request subject (RequireSubject). Gateway mode and --http-require-subject /
 JENKINS_MCP_HTTP_REQUIRE_SUBJECT reject non-health requests without subject.
-Lab-only subject header X-Jenkins-MCP-Lab-Subject when JENKINS_MCP_LAB_IDENTITY=1
+Lab-only subject header X-Jenkins-MCP-Lab-Subject (optional Groups: X-Jenkins-MCP-Lab-Groups) when JENKINS_MCP_LAB_IDENTITY=1
 (fail closed otherwise; not default). Production JWT subject path (HOST-001):
 JENKINS_MCP_HTTP_JWKS_URL + JENKINS_MCP_HTTP_JWT_ISSUER +
 JENKINS_MCP_HTTP_JWT_AUDIENCE (secret-free); optional JENKINS_MCP_HTTP_JWT_REQUIRED=1
@@ -2050,16 +2050,22 @@ func runServe(args []string) error {
 				processSubject := subject
 				pid := subject.ProfileID
 				cfg.AfterIdentity = func(ctx context.Context, id mcpserver.RequestIdentity) context.Context {
+					var groups []string
+					if len(id.Groups) > 0 {
+						groups = append([]string(nil), id.Groups...)
+					}
 					in := gateway.HTTPInbound{
 						ExternalSubject:  id.ExternalSubject,
 						Tenant:           id.Tenant,
 						WorkloadID:       id.WorkloadID,
 						JenkinsPrincipal: id.JenkinsPrincipal,
+						Groups:           groups,
 						Source:           string(id.Source),
 						Verified:         id.Verified,
 					}
 					c := gateway.MergeCallerDefaults(gateway.CallerFromHTTPInbound(in, pid), defaultCaller)
 					// policy.Subject for deny-only RBAC rebind (same trust path).
+					// Groups from JWT/lab only; bounded; never elevate deny-only/RO.
 					ps := gateway.PolicySubjectFromHTTPInbound(in, pid, processSubject)
 					return gateway.ContextWithCallerAndPolicySubject(ctx, c, ps)
 				}

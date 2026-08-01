@@ -27,7 +27,14 @@ const (
 	HeaderLabTenant           = "X-Jenkins-MCP-Lab-Tenant"
 	HeaderLabWorkload         = "X-Jenkins-MCP-Lab-Workload"
 	HeaderLabJenkinsPrincipal = "X-Jenkins-MCP-Lab-Jenkins-Principal"
+	// HeaderLabGroups is a comma-separated list of group/role ids (lab mode only).
+	// Bounded later by MaxInboundGroups / MaxInboundGroupNameBytes (OAUTH-006).
+	HeaderLabGroups = "X-Jenkins-MCP-Lab-Groups"
 )
+
+// MaxLabGroupsHeaderBytes is the hard cap on the raw lab groups header value
+// (fail closed on absurd sizes before split/parse).
+const MaxLabGroupsHeaderBytes = 16 * 1024
 
 // HTTPInbound is non-secret claim material extracted from a trusted HTTP path.
 // Raw tokens are never stored here.
@@ -40,6 +47,9 @@ type HTTPInbound struct {
 	WorkloadID string
 	// JenkinsPrincipal is optional exchanged / lab Jenkins user id.
 	JenkinsPrincipal string
+	// Groups is an optional list of IdP group/role ids (JWT claims or lab header).
+	// Bound at BindSubject / PolicySubjectFromHTTPInbound — never elevates deny-only.
+	Groups []string
 	// Source is a non-secret label: lab_header | jwt | resolver.
 	Source string
 	// Verified is true only for a trusted authentication path.
@@ -62,7 +72,8 @@ func LabIdentityEnabled(getenv func(string) string) bool {
 
 // ParseLabHTTPInbound extracts lab headers when lab mode is enabled.
 // When lab mode is off, returns zero inbound (headers ignored — fail closed).
-// Never reads tool arguments.
+// Never reads tool arguments. Lab groups header is ignored when lab is off
+// (spoof-resistant).
 func ParseLabHTTPInbound(h http.Header, labEnabled bool) HTTPInbound {
 	if !labEnabled || h == nil {
 		return HTTPInbound{}
@@ -76,9 +87,38 @@ func ParseLabHTTPInbound(h http.Header, labEnabled bool) HTTPInbound {
 		Tenant:           boundHTTPClaim(h.Get(HeaderLabTenant), 256),
 		WorkloadID:       boundHTTPClaim(h.Get(HeaderLabWorkload), 256),
 		JenkinsPrincipal: boundHTTPClaim(h.Get(HeaderLabJenkinsPrincipal), 256),
+		Groups:           parseLabGroupsHeader(h.Get(HeaderLabGroups)),
 		Source:           "lab_header",
 		Verified:         true,
 	}
+}
+
+// parseLabGroupsHeader splits a comma-separated lab groups header into a
+// pre-bound list (empty tokens dropped). Oversize header values yield nil
+// (fail closed — do not invent membership from truncated garbage).
+// Final caps (MaxInboundGroups, name length, overage) apply at BindSubject /
+// PolicySubjectFromHTTPInbound.
+func parseLabGroupsHeader(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	if len(raw) > MaxLabGroupsHeaderBytes {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func boundHTTPClaim(v string, max int) string {
@@ -123,10 +163,16 @@ func bearerTokenFromAuthHeader(h string) string {
 
 // InboundClaimsFromHTTP maps HTTPInbound to InboundClaims for BindSubject.
 // profileID is required (process profile, not from the client).
+// Groups are copied when present (bounded at BindSubject).
 func InboundClaimsFromHTTP(in HTTPInbound, profileID contracts.ProfileID) InboundClaims {
+	var groups []string
+	if len(in.Groups) > 0 {
+		groups = append([]string(nil), in.Groups...)
+	}
 	return InboundClaims{
 		Subject:          strings.TrimSpace(in.ExternalSubject),
 		Tenant:           strings.TrimSpace(in.Tenant),
+		Groups:           groups,
 		WorkloadID:       strings.TrimSpace(in.WorkloadID),
 		JenkinsPrincipal: strings.TrimSpace(in.JenkinsPrincipal),
 		ProfileID:        profileID,
@@ -138,6 +184,7 @@ func InboundClaimsFromHTTP(in HTTPInbound, profileID contracts.ProfileID) Inboun
 // with fail-closed checks (GWY-002). Requires subject and profileID; sets
 // Verified from inbound (must be true for production DefaultBindOptions).
 // Tool arguments never enter this path (see RejectIdentityToolArgs).
+// Groups are copied when present (bounded at BindSubject).
 func InboundClaimsFromRequestIdentity(in HTTPInbound, profileID contracts.ProfileID) (InboundClaims, error) {
 	sub := strings.TrimSpace(in.ExternalSubject)
 	if sub == "" {
@@ -153,9 +200,14 @@ func InboundClaimsFromRequestIdentity(in HTTPInbound, profileID contracts.Profil
 		return InboundClaims{}, apperr.New(apperr.CodeAuthentication,
 			"gateway request identity is not verified")
 	}
+	var groups []string
+	if len(in.Groups) > 0 {
+		groups = append([]string(nil), in.Groups...)
+	}
 	return InboundClaims{
 		Subject:          sub,
 		Tenant:           strings.TrimSpace(in.Tenant),
+		Groups:           groups,
 		WorkloadID:       strings.TrimSpace(in.WorkloadID),
 		JenkinsPrincipal: strings.TrimSpace(in.JenkinsPrincipal),
 		ProfileID:        pid,
@@ -255,11 +307,17 @@ func ResolveHTTPInboundFromAccessToken(raw string, jwks *auth.JWKS, p auth.Acces
 		return HTTPInbound{}, apperr.New(apperr.CodeAuthentication,
 			"jwt access token subject is required")
 	}
+	var groups []string
+	if len(res.Claims.Groups) > 0 {
+		groups = append([]string(nil), res.Claims.Groups...)
+	}
 	return HTTPInbound{
-		ExternalSubject: sub,
-		Tenant:          strings.TrimSpace(res.Claims.TenantID),
-		Source:          "jwt",
-		Verified:        true,
+		ExternalSubject:  sub,
+		Tenant:           strings.TrimSpace(res.Claims.TenantID),
+		JenkinsPrincipal: strings.TrimSpace(res.Claims.PreferredUsername),
+		Groups:           groups,
+		Source:           "jwt",
+		Verified:         true,
 	}, nil
 }
 
