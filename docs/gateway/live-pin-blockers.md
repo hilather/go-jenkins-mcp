@@ -298,11 +298,14 @@ make residual-smoke PROFILE=corp
 jenkins-mcp gateway qualify --offline
 jenkins-mcp release-evidence --offline
 jenkins-mcp gateway residual-status   # required Wave 8 honesty (ha_multi_replica=false, oauth009_offline, residual_ids)
+jenkins-mcp security self-check --json  # offline (no profile): item gateway_residual_status_honesty ok|warn
 jenkins-mcp gateway consent-residual  # optional progressive consent residual snapshot
 jenkins-mcp doctor --profile <id> --offline --json  # optional: gateway_residual_status nest (same map)
 # script: scripts/gateway-residual-smoke.sh → dist/residual-smoke/<ts>/
 #   (gateway-qualify.json, release-evidence.json, gateway-residual-status.json,
-#    doctor-offline.json when PROFILE set, …)
+#    security-self-check.json, doctor-offline.json when PROFILE set, …)
+# security self-check residual lite: item gateway_residual_status_honesty present;
+#   status ok|warn (never fail for empty-env honesty); secret-free canary; soft-skip if subcommand missing
 # qualify residual lite canaries (Wave 13): gateway-qualify.json must include
 #   case gateway_residual_status_offline_honesty (passed), residuals[] residual-status
 #   honesty note (case name or residual-status + honesty), passed >= 20, residual_count >= 8
@@ -341,7 +344,8 @@ That is an **honesty canary**, not a readiness badge.
 | Qualify suite contracts (wrong aud, Jenkins-as-AS reject, Mode A/B/C shapes, fallthrough classifiers) | Live Entra Conditional Access |
 | Qualify residual lite: case `gateway_residual_status_offline_honesty` present+passed in `gateway-qualify.json`; residual-status honesty note in `residuals[]`; suite floors `passed` ≥ 20 and `residual_count` ≥ 8 | Live residual-status multi-pod / Entra / AgentCore Done |
 | Residual ids still advertised in release-evidence | Live `jwt-auth-filter` version pin |
-| Secret-free JSON surfaces (no tokens in qualify/evidence) | Production AgentCore Identity vault |
+| Security self-check residual lite: item `gateway_residual_status_honesty` present in `security-self-check.json`; status **ok** or **warn** (never fail for empty-env honesty); secret-free canary | Live multi-user / Entra / AgentCore GO (self-check is offline posture only) |
+| Secret-free JSON surfaces (no tokens in qualify/evidence/self-check) | Production AgentCore Identity vault |
 | Doctor residual fields stay honest when profile/env set | Multi-pod shared vault safety |
 | Mode B/C “live qualified” flags remain **false** offline | Production multi-user GO |
 | residual-status: `shared_subject_rate_file` default false / true when path set (path never dumped); `shared_principal_cache_file` default false / true when path set (path never dumped); `shared_jwks_file` default false / true when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set (path never dumped); `shared_token_cache_file` default false / true when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` set (path never dumped; never opens token file); file Len `principal_cache_entries` when seeded; `principal_cache_process_note` this-process / file Len only | Live multi-pod shared rate/principal/JWKS/token or remote serve cache inventory |
@@ -371,7 +375,7 @@ live pin complete without lab evidence.
 | Mode C enabled | `mode_c_live_agentcore_qualified=false`, progressive_consent residual notes | Live opt-in wire ≠ AgentCore pin |
 | `gateway_status` | `ha_multi_replica=false`, `oauth009_offline_only`, `mode_*_live_*_qualified=false`, `session_affinity_recommended`, `gateway_ready` | Env/parse + Ready honesty |
 | `security self-check` | item `rs_qualification` (OAUTH-009 residual summary) | Warn on `oidc_bearer` or Mode B |
-| `security self-check` | item `gateway_residual_status_honesty` (GWY-003 residual lite) | Pure offline `BuildGatewayResidualStatus` honesty (same spirit as qualify `gateway_residual_status_offline_honesty`): `residual_ids` present, `ha_multi_replica=false`, live pins false, `shared_*_file` default false, secret-free; **ok** when honesty holds; **warn** if multi_user env set without claiming live multi-user GO; **not** residual-smoke / live GO |
+| `security self-check` | item `gateway_residual_status_honesty` (GWY-003 residual lite) | Pure offline `BuildGatewayResidualStatus` honesty (same spirit as qualify `gateway_residual_status_offline_honesty`): `residual_ids` present, `ha_multi_replica=false`, live pins false, `shared_*_file` default false, secret-free; **ok** when honesty holds; **warn** if multi_user env set without claiming live multi-user GO; **exercised by residual-smoke** (`security self-check --json`, no profile); not live GO |
 | Admin `GET /admin/v1/health` / `gateway/vault` | `haMultiReplica=false`, `sessionAffinityRecommended`, mode ids only | Never tokens |
 | `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count + process note, JWKS/token file bools) | Env/static honesty; Mode B id `oauth009_offline`; `shared_subject_rate_file` / `shared_principal_cache_file` / `shared_jwks_file` / `shared_token_cache_file` path residual (path never dumped; token residual never opens cache file); `principal_cache_entries` **this process / file Len only** (CLI/admin ≠ serve); never tokens/subjects; **exercised by residual-smoke** |
 | `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count + process note, JWKS file bool, optional limiter/rate max subjects) | Env/static honesty; Mode B id `oauth009_offline`; `shared_subject_rate_file` / `shared_principal_cache_file` / `shared_jwks_file` path residual (path never dumped); `subject_limiter_max_subjects` when `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` set (omit unlimited; path never involved); `principal_cache_entries` **this process / file Len only** (CLI/admin ≠ serve); never tokens/subjects; **exercised by residual-smoke** |
