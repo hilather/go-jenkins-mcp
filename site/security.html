@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Security — go-jenkins-mcp</title>
+    <meta name="description" content="Security posture: keyring, redaction, policy, mutations, and residual honesty for go-jenkins-mcp." />
+    <meta name="theme-color" content="#09090b" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container nav">
+        <a class="brand" href="index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16M4 12h10M4 17h14" stroke-linecap="round"/><circle cx="18" cy="12" r="2.2"/></svg>
+          </span>
+          <span class="brand-text">
+            <span class="brand-name">go-jenkins-mcp</span>
+            <span class="brand-tag">enterprise · v0.2.0</span>
+          </span>
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="index.html" data-nav="index.html">Overview</a>
+          <a href="getting-started.html" data-nav="getting-started.html">Start</a>
+          <a href="architecture.html" data-nav="architecture.html">Architecture</a>
+          <a href="security.html" data-nav="security.html">Security</a>
+          <a href="docs.html" data-nav="docs.html">Docs</a>
+        </nav>
+        <div class="nav-actions">
+          <a class="btn btn-primary" href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/security/operator-guide.md">Operator guide</a>
+          <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="false" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="mobile-nav" data-mobile-nav>
+        <a href="index.html" data-nav="index.html">Overview</a>
+        <a href="getting-started.html" data-nav="getting-started.html">Start</a>
+        <a href="architecture.html" data-nav="architecture.html">Architecture</a>
+        <a href="security.html" data-nav="security.html">Security</a>
+        <a href="docs.html" data-nav="docs.html">Docs</a>
+      </div>
+    </header>
+
+    <main>
+      <div class="page-hero">
+        <div class="container">
+          <div class="eyebrow"><span class="eyebrow-dot"></span> Threat model · operator guide</div>
+          <h1>Security is the product, not a chapter at the end.</h1>
+          <p>Agents with CI access are a new attack surface. This binary defaults to least privilege and refuses to put long-lived secrets on the model path.</p>
+        </div>
+      </div>
+
+      <section class="section">
+        <div class="container grid-3">
+          <article class="card">
+            <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3" stroke-linecap="round"/></svg></div>
+            <h3>Keyring credentials</h3>
+            <p>Personal API tokens verified then stored via Secret Service. Profiles never embed tokens. Deprecated bootstrap auth remains a known seed defect to avoid.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h16v12H4z"/><path d="M8 10h5M8 14h8" stroke-linecap="round"/></svg></div>
+            <h3>Log redaction</h3>
+            <p>Server-side scrubbing of common secret shapes before tool responses leave the process. Diagnose tools surface redaction counts as evidence, not the secrets themselves.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l8 4v5c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V7l8-4z"/></svg></div>
+            <h3>Policy envelopes</h3>
+            <p>Ed25519 signed policy bundles, deny-only job patterns, list privacy filters, and force_read_only operator caps that survive reloads.</p>
+          </article>
+          <article class="card">
+            <h3>Mutation discipline</h3>
+            <p>Start/stop/cancel require opt-in registration, preview tokens, confirm cooldown, rate limits, and audit reason codes — never silent execute.</p>
+          </article>
+          <article class="card">
+            <h3>Doctor + self-check</h3>
+            <p>Offline security self-check canaries cover origin pin, allowlist, mutation residual, update verify, and more for pilot evidence packs.</p>
+          </article>
+          <article class="card">
+            <h3>Support bundles</h3>
+            <p>Diagnostics extract privacy-scrubbed support material for operators without dumping credentials or unrestricted cache contents.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" style="padding-top:0">
+        <div class="container">
+          <div class="callout">
+            <strong>What we still will not claim</strong>
+            <p>Live Entra / jwt-auth-filter production pins, loopback HTTP socket client auth by default, multi-tenant gateway mutation isolation, and true t-of-n HSM policy signing remain residual. See KNOWN_DEFECTS and phase boards for the honest ledger.</p>
+          </div>
+          <div class="grid-2" style="margin-top:1.5rem">
+            <a class="card" href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/security/threat-model.md">
+              <h3>Threat model</h3>
+              <p>Assets, actors, trust boundaries.</p>
+              <span class="card-link">Open doc <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            </a>
+            <a class="card" href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/security/privacy-data-retention.md">
+              <h3>Privacy & retention</h3>
+              <p>Data classes and retention (QA-006).</p>
+              <span class="card-link">Open doc <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-bottom" style="border:0;padding:0">
+        <span><a href="index.html" style="color:var(--fg-muted)">← Overview</a></span>
+        <span>MIT · go-jenkins-mcp</span>
+      </div>
+    </footer>
+    <script src="assets/main.js"></script>
+  </body>
+</html>
