@@ -716,6 +716,8 @@ Query: `offline=1` (default true for v1). Returns bounded JSON summary (status f
 
 Response is `diagnostics.Report` JSON: `profileId`, `overall`, `checks[]`, plus **`gateway_residual_status`** — the same secret-free map as CLI `gateway residual-status` / `GET /admin/v1/gateway/residual-status` (`diagnostics.BuildGatewayResidualStatus`). Informational only (does not drive overall fail); live `mode_*_qualified` stay false; pointer to [live-pin-blockers.md](../gateway/live-pin-blockers.md). Never tokens/subjects.
 
+**SPA (HOST-007 residual lite):** Doctor page renders a **Gateway residual status** card after Overall when `gateway_residual_status` is present (shared_*_file, principal_cache_entries count, residual_id honesty; hides when omitted on older BFF). Same honesty helpers as Overview residual card; not live GO.
+
 **Online doctor (`offline=0`)** requires a configured admin shared secret. Without a token, the BFF returns `403 permission_denied` so loopback residual cannot exercise keyring → Jenkins network identity.
 
 ## Static SPA
