@@ -424,6 +424,269 @@ func TestSubjectRateLimiter_LowerRateOnlyLowers(t *testing.T) {
 	}
 }
 
+// HOST-008 residual lite: MaxSubjects=0 (default) never bounds the subject map.
+func TestSubjectRateLimiter_MaxSubjectsUnlimitedDefault(t *testing.T) {
+	t.Parallel()
+	l := gateway.NewSubjectRateLimiter(600, 50, 6000, 500)
+	if l.MaxSubjects() != 0 {
+		t.Fatalf("default MaxSubjects=%d want 0", l.MaxSubjects())
+	}
+	for i := 0; i < 40; i++ {
+		if err := l.Allow(gateway.SubjectKeyParts("t", fmt.Sprintf("u%02d", i), "p")); err != nil {
+			t.Fatalf("allow %d: %v", i, err)
+		}
+	}
+	if l.SubjectsTracked() != 40 {
+		t.Fatalf("unlimited tracked=%d want 40", l.SubjectsTracked())
+	}
+	st := l.StatusMap()
+	if _, ok := st["subject_rate_max_subjects"]; ok {
+		t.Fatalf("unlimited must omit subject_rate_max_subjects: %+v", st)
+	}
+}
+
+// HOST-008 residual lite: MaxSubjects LRU by lastAccess (oldest insert without
+// re-touch is evicted). Alice/Bob isolation still holds under the cap.
+// Clock advances are tiny so buckets stay partial (idle-full purge does not
+// free space) — LRU path is what we assert here.
+func TestSubjectRateLimiter_MaxSubjectsEvictOldest(t *testing.T) {
+	t.Parallel()
+	// Low refill rate: 30/min; nanosecond clock steps keep tokens partial.
+	l := gateway.NewSubjectRateLimiter(30, 10, 6000, 500)
+	l.SetMaxSubjects(2)
+	if l.MaxSubjects() != 2 {
+		t.Fatalf("MaxSubjects=%d", l.MaxSubjects())
+	}
+	base := time.Unix(1_700_000_000, 0).UTC()
+	var clock atomic.Value
+	clock.Store(base)
+	l.SetNow(func() time.Time { return clock.Load().(time.Time) })
+
+	k1 := gateway.SubjectKeyParts("t", "u1", "p")
+	k2 := gateway.SubjectKeyParts("t", "u2", "p")
+	k3 := gateway.SubjectKeyParts("t", "u3", "p")
+
+	if err := l.Allow(k1); err != nil {
+		t.Fatal(err)
+	}
+	clock.Store(base.Add(time.Nanosecond))
+	if err := l.Allow(k2); err != nil {
+		t.Fatal(err)
+	}
+	if l.SubjectsTracked() != 2 {
+		t.Fatalf("tracked=%d want 2", l.SubjectsTracked())
+	}
+	clock.Store(base.Add(2 * time.Nanosecond))
+	if err := l.Allow(k3); err != nil {
+		t.Fatal(err)
+	}
+	if l.SubjectsTracked() != 2 {
+		t.Fatalf("after eviction tracked=%d want 2", l.SubjectsTracked())
+	}
+	// k1 was oldest lastAccess → evicted. k2 and k3 remain.
+	// Re-allow k2/k3 (existing keys) must not fail for "missing" reasons.
+	clock.Store(base.Add(3 * time.Nanosecond))
+	if err := l.Allow(k2); err != nil {
+		t.Fatalf("k2 must remain: %v", err)
+	}
+	clock.Store(base.Add(4 * time.Nanosecond))
+	if err := l.Allow(k3); err != nil {
+		t.Fatalf("k3 must remain: %v", err)
+	}
+	// k1 is new again → gets a fresh full burst (eviction not "deny").
+	clock.Store(base.Add(5 * time.Nanosecond))
+	if err := l.Allow(k1); err != nil {
+		t.Fatalf("re-admit k1 after eviction: %v", err)
+	}
+	// Still capped at 2: one of k2/k3 was evicted for k1.
+	if l.SubjectsTracked() != 2 {
+		t.Fatalf("still capped tracked=%d", l.SubjectsTracked())
+	}
+
+	st := l.StatusMap()
+	if st["subject_rate_max_subjects"] != 2 {
+		t.Fatalf("status max: %+v", st)
+	}
+	if strings.Contains(fmt.Sprint(st), "u1") || strings.Contains(fmt.Sprint(st), "u2") {
+		t.Fatalf("StatusMap leaked subject keys: %+v", st)
+	}
+}
+
+// When subjects are fully refilled (idle), MaxSubjects prefers purging them
+// over LRU of partial-budget subjects.
+func TestSubjectRateLimiter_MaxSubjectsPurgeIdleFull(t *testing.T) {
+	t.Parallel()
+	// 60/min = 1/s refill; burst 2 → after spend-1, 2s later tokens full again.
+	l := gateway.NewSubjectRateLimiter(60, 2, 6000, 500)
+	l.SetMaxSubjects(2)
+	base := time.Unix(1_700_300_000, 0).UTC()
+	var clock atomic.Value
+	clock.Store(base)
+	l.SetNow(func() time.Time { return clock.Load().(time.Time) })
+
+	k1 := gateway.SubjectKeyParts("t", "idle1", "p")
+	k2 := gateway.SubjectKeyParts("t", "idle2", "p")
+	k3 := gateway.SubjectKeyParts("t", "new", "p")
+	if err := l.Allow(k1); err != nil {
+		t.Fatal(err)
+	}
+	clock.Store(base.Add(time.Nanosecond))
+	if err := l.Allow(k2); err != nil {
+		t.Fatal(err)
+	}
+	// Advance enough that both idle subjects refill to capacity.
+	clock.Store(base.Add(5 * time.Second))
+	if err := l.Allow(k3); err != nil {
+		t.Fatal(err)
+	}
+	// Idle-full purge can free both k1+k2 before insert; map may be just k3
+	// or k3 + whatever was not full. Must not exceed MaxSubjects.
+	if n := l.SubjectsTracked(); n > 2 {
+		t.Fatalf("tracked=%d exceeds max", n)
+	}
+	// k3 must be present (fresh allow succeeded and is tracked).
+	// Touch only k3: if only k3 remains, tracked=1; if one idle remained, =2.
+	if n := l.SubjectsTracked(); n < 1 {
+		t.Fatal("k3 should be tracked")
+	}
+	// New allow for k3 (existing) must not grow past cap.
+	if err := l.Allow(k3); err != nil {
+		t.Fatal(err)
+	}
+	if n := l.SubjectsTracked(); n > 2 {
+		t.Fatalf("after re-touch tracked=%d", n)
+	}
+}
+
+// Re-Allow of an existing subject under MaxSubjects does not grow or thrash.
+func TestSubjectRateLimiter_MaxSubjectsReplaceDoesNotGrow(t *testing.T) {
+	t.Parallel()
+	l := gateway.NewSubjectRateLimiter(600, 20, 6000, 500)
+	l.SetMaxSubjects(2)
+	base := time.Unix(1_700_100_000, 0).UTC()
+	var clock atomic.Value
+	clock.Store(base)
+	l.SetNow(func() time.Time { return clock.Load().(time.Time) })
+
+	k1 := gateway.SubjectKeyParts("t", "a", "p")
+	k2 := gateway.SubjectKeyParts("t", "b", "p")
+	if err := l.Allow(k1); err != nil {
+		t.Fatal(err)
+	}
+	clock.Store(base.Add(time.Second))
+	if err := l.Allow(k2); err != nil {
+		t.Fatal(err)
+	}
+	// Touch k1 many times — still 2 subjects.
+	for i := 0; i < 5; i++ {
+		clock.Store(base.Add(time.Duration(2+i) * time.Second))
+		if err := l.Allow(k1); err != nil {
+			t.Fatalf("touch k1: %v", err)
+		}
+	}
+	if l.SubjectsTracked() != 2 {
+		t.Fatalf("tracked=%d want 2", l.SubjectsTracked())
+	}
+}
+
+// Alice burst isolation still holds when MaxSubjects is configured.
+func TestSubjectRateLimiter_MaxSubjectsAliceBobIsolation(t *testing.T) {
+	t.Parallel()
+	l := gateway.NewSubjectRateLimiter(30, 2, 300, 60)
+	l.SetMaxSubjects(8)
+	alice := gateway.SubjectKeyParts("t1", "alice", "corp")
+	bob := gateway.SubjectKeyParts("t1", "bob", "corp")
+	if err := l.Allow(alice); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Allow(alice); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Allow(alice); err == nil {
+		t.Fatal("alice third must fail at burst")
+	}
+	if err := l.Allow(bob); err != nil {
+		t.Fatalf("bob isolated under MaxSubjects: %v", err)
+	}
+}
+
+// Concurrent Allow under MaxSubjects must not race (go test -race).
+func TestSubjectRateLimiter_MaxSubjectsConcurrentAllow(t *testing.T) {
+	t.Parallel()
+	l := gateway.NewSubjectRateLimiter(600, 50, 6000, 500)
+	l.SetMaxSubjects(4)
+	const subjects = 16
+	const tries = 20
+	var okCount atomic.Int64
+	var wg sync.WaitGroup
+	for s := 0; s < subjects; s++ {
+		key := gateway.SubjectKeyParts("t", fmt.Sprintf("u%02d", s), "corp")
+		for i := 0; i < tries; i++ {
+			wg.Add(1)
+			go func(k string) {
+				defer wg.Done()
+				if err := l.Allow(k); err == nil {
+					okCount.Add(1)
+				}
+			}(key)
+		}
+	}
+	wg.Wait()
+	if okCount.Load() == 0 {
+		t.Fatal("expected some successful allows")
+	}
+	if n := l.SubjectsTracked(); n > 4 {
+		t.Fatalf("tracked=%d exceeds MaxSubjects=4", n)
+	}
+}
+
+func TestResolveSubjectRateMaxSubjects(t *testing.T) {
+	t.Parallel()
+	n, err := gateway.ResolveSubjectRateMaxSubjects("")
+	if err != nil || n != 0 {
+		t.Fatalf("empty: n=%d err=%v", n, err)
+	}
+	n, err = gateway.ResolveSubjectRateMaxSubjects("  ")
+	if err != nil || n != 0 {
+		t.Fatalf("blank: n=%d err=%v", n, err)
+	}
+	n, err = gateway.ResolveSubjectRateMaxSubjects("4096")
+	if err != nil || n != 4096 {
+		t.Fatalf("4096: n=%d err=%v", n, err)
+	}
+	n, err = gateway.ResolveSubjectRateMaxSubjects("0")
+	if err != nil || n != 0 {
+		t.Fatalf("explicit 0 unlimited: n=%d err=%v", n, err)
+	}
+	if _, err := gateway.ResolveSubjectRateMaxSubjects("-1"); err == nil {
+		t.Fatal("negative must fail closed")
+	}
+	if _, err := gateway.ResolveSubjectRateMaxSubjects("x"); err == nil {
+		t.Fatal("non-int must fail closed")
+	}
+	if gateway.EnvGatewaySubjectRateMaxSubjects != "JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS" {
+		t.Fatalf("env name: %q", gateway.EnvGatewaySubjectRateMaxSubjects)
+	}
+	n, err = gateway.SubjectRateMaxSubjectsFromEnviron(func(k string) string {
+		if k == gateway.EnvGatewaySubjectRateMaxSubjects {
+			return "64"
+		}
+		return ""
+	})
+	if err != nil || n != 64 {
+		t.Fatalf("from environ: n=%d err=%v", n, err)
+	}
+	_, err = gateway.SubjectRateMaxSubjectsFromEnviron(func(k string) string {
+		if k == gateway.EnvGatewaySubjectRateMaxSubjects {
+			return "nope"
+		}
+		return ""
+	})
+	if err == nil {
+		t.Fatal("invalid from environ must fail closed")
+	}
+}
+
 // LowerRate updates existing subject buckets so tighter caps bind immediately.
 func TestSubjectRateLimiter_LowerRateUpdatesBuckets(t *testing.T) {
 	t.Parallel()

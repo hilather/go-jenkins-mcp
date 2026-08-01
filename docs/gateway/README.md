@@ -179,8 +179,10 @@ JenkinsUserID / mutation Binding re-resolve on the next tool call.
 combine mode-matrix residual, `multi_user_enabled`,
 `ha_multi_replica=false`, `session_affinity_recommended`, multi-pod residual fields,
 progressive consent residual, `rateEnabled` / `ratePerMinute` / `rateBurst`,
-`shared_subject_rate_file`, and `principal_cache_entries` (count only) plus optional
-`principal_cache_max_entries` / `principal_cache_ttl_seconds` when hygiene env is set.
+`shared_subject_rate_file`, optional `subject_rate_max_subjects` when
+`JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS` is set, and `principal_cache_entries`
+(count only) plus optional `principal_cache_max_entries` / `principal_cache_ttl_seconds`
+when hygiene env is set.
 Always advertises Mode B residual id `oauth009_offline` and points at
 [live-pin-blockers.md](live-pin-blockers.md). Shared assembly:
 `diagnostics.BuildGatewayResidualStatus`. Never tokens or subjects (no principal
@@ -385,13 +387,16 @@ Caller ExternalSubject isolation. Optional env:
 | `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` | Per-subject sustained tools/min (empty → 30; **0 = disabled** residual) |
 | `JENKINS_MCP_SUBJECT_RATE_BURST` | Per-subject token-bucket capacity (empty → 10) |
 | `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` | Optional same-host multi-process rate state file (`FileSubjectRateLimiter`, flock + secret-free JSON 0600). Empty → process-local `SubjectRateLimiter`. HOST-008 lite only — **not** multi-pod shared rate. Invalid path fails start |
+| `JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS` | Optional max tracked subjects before LRU/oldest `lastAccess` eviction (HOST-008 residual lite). Empty → unlimited (0). Invalid fails start. Process-local / file-local only — **not** multi-pod |
 
 Rate limiter is wired under `--gateway` when `rate_per_minute > 0` after resolve
 (default enabled). Explicit `0` leaves `SubjectRateLimiter` nil (unlimited rate;
 concurrency still applies). When `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is set,
 serve constructs `FileSubjectRateLimiter` instead (same Allow / LowerRate wire;
 `StatusMap` / residual-status `shared_subject_rate_file: true`; still
-`ha_multi_replica: false`).
+`ha_multi_replica: false`). Optional `JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS`
+applies `SetMaxSubjects` on either limiter; when set, `StatusMap` /
+residual-status include `subject_rate_max_subjects` (omit when unlimited).
 
 **Policy-driven rate reduction (HOST-006 Done\* foundation):** serve constructs
 `SubjectRateLimiter` from env bootstrap, then optional overlay fields may only

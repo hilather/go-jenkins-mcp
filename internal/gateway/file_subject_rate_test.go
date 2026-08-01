@@ -211,8 +211,9 @@ func TestFileSubjectRateLimiter_FileContentsSecretFree(t *testing.T) {
 			t.Fatalf("entry type for %s: %T", sk, v)
 		}
 		for k := range entry {
-			if k != "tokens" && k != "last" {
-				t.Fatalf("unexpected field %q in rate entry (must be secret-free tokens/last only)", k)
+			// tokens/last required; last_access optional LRU hygiene (HOST-008 residual lite).
+			if k != "tokens" && k != "last" && k != "last_access" {
+				t.Fatalf("unexpected field %q in rate entry (must be secret-free tokens/last[/last_access] only)", k)
 			}
 		}
 		if _, has := entry["tokens"]; !has {
@@ -362,5 +363,194 @@ func TestSubjectRateLimiter_StatusMapSharedFileFalse(t *testing.T) {
 	}
 	if st["kind"] != "memory" {
 		t.Fatalf("kind: %+v", st)
+	}
+}
+
+// HOST-008 residual lite: FileSubjectRateLimiter MaxSubjects LRU eviction.
+// Tiny clock steps keep buckets partial so idle-full purge does not free the map
+// before LRU (same pattern as memory MaxSubjectsEvictOldest).
+func TestFileSubjectRateLimiter_MaxSubjectsEvictOldest(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "max_subj_rate.json")
+	l, err := gateway.NewFileSubjectRateLimiter(path, 30, 10, 6000, 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.SetMaxSubjects(2)
+	base := time.Unix(1_700_200_000, 0).UTC()
+	var clock atomic.Value
+	clock.Store(base)
+	l.SetNow(func() time.Time { return clock.Load().(time.Time) })
+
+	k1 := gateway.SubjectKeyParts("t", "u1", "p")
+	k2 := gateway.SubjectKeyParts("t", "u2", "p")
+	k3 := gateway.SubjectKeyParts("t", "u3", "p")
+	if err := l.Allow(k1); err != nil {
+		t.Fatal(err)
+	}
+	clock.Store(base.Add(time.Nanosecond))
+	if err := l.Allow(k2); err != nil {
+		t.Fatal(err)
+	}
+	if l.SubjectsTracked() != 2 {
+		t.Fatalf("tracked=%d want 2", l.SubjectsTracked())
+	}
+	clock.Store(base.Add(2 * time.Nanosecond))
+	if err := l.Allow(k3); err != nil {
+		t.Fatal(err)
+	}
+	if l.SubjectsTracked() != 2 {
+		t.Fatalf("after eviction tracked=%d want 2", l.SubjectsTracked())
+	}
+
+	// Durable file must only keep 2 subjects; k1 (oldest last_access) gone.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Subjects map[string]map[string]any `json:"subjects"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Subjects) != 2 {
+		t.Fatalf("file subjects=%d want 2 body=%s", len(doc.Subjects), raw)
+	}
+	if _, ok := doc.Subjects[k1]; ok {
+		t.Fatalf("k1 must be evicted from file: %s", raw)
+	}
+	if _, ok := doc.Subjects[k2]; !ok {
+		t.Fatalf("k2 must remain: %s", raw)
+	}
+	if _, ok := doc.Subjects[k3]; !ok {
+		t.Fatalf("k3 must remain: %s", raw)
+	}
+
+	// Cross-instance sees the same capped map.
+	l2, err := gateway.NewFileSubjectRateLimiter(path, 30, 10, 6000, 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l2.SetMaxSubjects(2)
+	if l2.SubjectsTracked() != 2 {
+		t.Fatalf("l2 tracked=%d", l2.SubjectsTracked())
+	}
+
+	st := l.StatusMap()
+	if st["subject_rate_max_subjects"] != 2 {
+		t.Fatalf("status: %+v", st)
+	}
+	if st["shared_subject_rate_file"] != true {
+		t.Fatal("file status must keep shared_subject_rate_file")
+	}
+	blob := fmt.Sprintf("%v", st)
+	if strings.Contains(blob, "u1") || strings.Contains(blob, "Bearer ") {
+		t.Fatalf("status secret/subject leak: %s", blob)
+	}
+}
+
+func TestFileSubjectRateLimiter_MaxSubjectsUnlimitedDefault(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "unlim_rate.json")
+	l, err := gateway.NewFileSubjectRateLimiter(path, 600, 50, 6000, 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.MaxSubjects() != 0 {
+		t.Fatalf("default MaxSubjects=%d", l.MaxSubjects())
+	}
+	for i := 0; i < 12; i++ {
+		if err := l.Allow(gateway.SubjectKeyParts("t", fmt.Sprintf("u%02d", i), "p")); err != nil {
+			t.Fatalf("allow %d: %v", i, err)
+		}
+	}
+	if l.SubjectsTracked() != 12 {
+		t.Fatalf("tracked=%d want 12", l.SubjectsTracked())
+	}
+	st := l.StatusMap()
+	if _, ok := st["subject_rate_max_subjects"]; ok {
+		t.Fatalf("unlimited omit max: %+v", st)
+	}
+}
+
+// Alice/Bob burst isolation under MaxSubjects + secret-free file with last_access.
+func TestFileSubjectRateLimiter_MaxSubjectsAliceBobAndSecretFree(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "alice_bob_max.json")
+	l, err := gateway.NewFileSubjectRateLimiter(path, 30, 2, 300, 60)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.SetMaxSubjects(16)
+	alice := gateway.SubjectKeyParts("t1", "alice", "corp")
+	bob := gateway.SubjectKeyParts("t1", "bob", "corp")
+	if err := l.Allow(alice); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Allow(alice); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Allow(alice); err == nil {
+		t.Fatal("alice third must fail")
+	}
+	if err := l.Allow(bob); err != nil {
+		t.Fatalf("bob: %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	for _, bad := range []string{"Bearer ", "access_token", "refresh_token", "client_secret", "Authorization", "password"} {
+		if strings.Contains(body, bad) {
+			t.Fatalf("rate file must not contain %q: %s", bad, body)
+		}
+	}
+	// last_access present after successful allow (hygiene field, not a secret).
+	if !strings.Contains(body, "last_access") {
+		t.Fatalf("want last_access in file after allow: %s", body)
+	}
+}
+
+// Concurrent multi-instance Allow under MaxSubjects must not corrupt JSON or exceed cap.
+func TestFileSubjectRateLimiter_MaxSubjectsConcurrent(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "max_concurrent_rate.json")
+	const n = 12
+	var wg sync.WaitGroup
+	var okCount atomic.Int64
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			l, err := gateway.NewFileSubjectRateLimiter(path, 600, 50, 6000, 500)
+			if err != nil {
+				t.Errorf("new: %v", err)
+				return
+			}
+			l.SetMaxSubjects(4)
+			key := gateway.SubjectKeyParts("t", fmt.Sprintf("u%02d", i), "corp")
+			if err := l.Allow(key); err == nil {
+				okCount.Add(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	if okCount.Load() == 0 {
+		t.Fatal("expected some successful allows")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Subjects map[string]map[string]any `json:"subjects"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("corrupt after concurrent: %v body=%s", err, raw)
+	}
+	if len(doc.Subjects) > 4 {
+		t.Fatalf("subjects=%d exceeds MaxSubjects=4 body=%s", len(doc.Subjects), raw)
 	}
 }

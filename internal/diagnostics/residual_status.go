@@ -144,6 +144,11 @@ func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 			out["principal_cache_ttl_seconds"] = int(pcTTL / time.Second)
 		}
 	}
+	// Optional subject-rate map hygiene residual lite (empty = unlimited).
+	// Process-local / file-local only — multi-pod shared rate residual.
+	if maxSubj, err := gateway.SubjectRateMaxSubjectsFromEnviron(getenv); err == nil && maxSubj > 0 {
+		out["subject_rate_max_subjects"] = maxSubj
+	}
 	if mp.Checklist != "" {
 		out["multi_pod_residual_checklist"] = mp.Checklist
 	}
