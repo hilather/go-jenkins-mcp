@@ -98,6 +98,9 @@ if [[ -f "$DIST/BUILD_INFO" ]]; then
   assert "BUILD_INFO has version=" grep -q "^version=${VERSION}$" "$DIST/BUILD_INFO"
   assert "BUILD_INFO has commit=" grep -q "^commit=${COMMIT}$" "$DIST/BUILD_INFO"
   assert "BUILD_INFO has arch=" grep -q "^arch=linux/" "$DIST/BUILD_INFO"
+  # UI-008: package records admin SPA presence without failing when dist missing.
+  assert "BUILD_INFO has admin_ui=" grep -qE '^admin_ui=(present|missing)$' "$DIST/BUILD_INFO"
+  assert "BUILD_INFO has admin_ui_path=" grep -q '^admin_ui_path=/usr/share/jenkins-mcp/admin-ui$' "$DIST/BUILD_INFO"
   # Secret canaries in BUILD_INFO text
   if grep -Eiq '(password|api[_-]?token|authorization:|private[_-]?key|BEGIN (RSA |OPENSSH )?PRIVATE|client_secret)' "$DIST/BUILD_INFO"; then
     echo "FAIL: BUILD_INFO contains secret-like material" >&2

@@ -1,0 +1,522 @@
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  applyPolicyOverlay,
+  fetchEffectivePolicy,
+  fetchMe,
+  fetchPolicyOverlay,
+  formatApiError,
+  formatDenyListText,
+  getProfileId,
+  hasPolicyWrite,
+  parseDenyListText,
+  validatePolicyOverlay,
+} from "../api/client";
+import type {
+  PolicyFieldError,
+  PolicyOverlay,
+  PolicyValidateResponse,
+} from "../api/types";
+import { ErrorBanner, Loading } from "../components/ErrorBanner";
+
+function StringList({ items }: { items?: string[] }) {
+  if (!items?.length) {
+    return <span className="muted">(none)</span>;
+  }
+  return (
+    <ul className="list-inline">
+      {items.map((s) => (
+        <li key={s}>{s}</li>
+      ))}
+    </ul>
+  );
+}
+
+function emptyDraft(): PolicyOverlay {
+  return {
+    version: 1,
+    force_read_only: true,
+    mode: "pilot",
+    deny_tools: [],
+    deny_job_prefixes: [],
+    deny_node_names: [],
+    deny_view_names: [],
+    deny_artifact_paths: [],
+    deny_branch_names: [],
+  };
+}
+
+function overlayFromSource(src?: PolicyOverlay | null): PolicyOverlay {
+  if (!src) {
+    return emptyDraft();
+  }
+  return {
+    version: src.version || 1,
+    force_read_only: Boolean(src.force_read_only),
+    mode: src.mode || "pilot",
+    deny_tools: [...(src.deny_tools ?? [])],
+    deny_job_prefixes: [...(src.deny_job_prefixes ?? [])],
+    deny_node_names: [...(src.deny_node_names ?? [])],
+    deny_view_names: [...(src.deny_view_names ?? [])],
+    deny_artifact_paths: [...(src.deny_artifact_paths ?? [])],
+    deny_branch_names: [...(src.deny_branch_names ?? [])],
+    max_result_bytes: src.max_result_bytes,
+  };
+}
+
+export function PolicyPage() {
+  const profileId = getProfileId();
+  const qc = useQueryClient();
+
+  const meQ = useQuery({
+    queryKey: ["me"],
+    queryFn: () => fetchMe(),
+    retry: 1,
+  });
+  const canWrite = hasPolicyWrite(meQ.data);
+
+  const effectiveQ = useQuery({
+    queryKey: ["policy", "effective", profileId],
+    queryFn: () => fetchEffectivePolicy(profileId),
+    retry: 1,
+  });
+
+  const overlayQ = useQuery({
+    queryKey: ["policy", "overlay"],
+    queryFn: () => fetchPolicyOverlay(),
+    retry: 1,
+  });
+
+  const [draft, setDraft] = useState<PolicyOverlay>(() => emptyDraft());
+  const [denyText, setDenyText] = useState({
+    tools: "",
+    jobs: "",
+    nodes: "",
+    views: "",
+    artifacts: "",
+    branches: "",
+  });
+  const [maxBytesText, setMaxBytesText] = useState("");
+  const [seeded, setSeeded] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<PolicyFieldError[]>([]);
+  const [preview, setPreview] = useState<PolicyValidateResponse | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+
+  // Seed draft from plain overlay when available (once per successful load).
+  useEffect(() => {
+    if (seeded || !overlayQ.isSuccess) {
+      return;
+    }
+    const o = overlayQ.data.overlay;
+    if (overlayQ.data.available && o) {
+      const next = overlayFromSource(o);
+      setDraft(next);
+      setDenyText({
+        tools: formatDenyListText(next.deny_tools),
+        jobs: formatDenyListText(next.deny_job_prefixes),
+        nodes: formatDenyListText(next.deny_node_names),
+        views: formatDenyListText(next.deny_view_names),
+        artifacts: formatDenyListText(next.deny_artifact_paths),
+        branches: formatDenyListText(next.deny_branch_names),
+      });
+      setMaxBytesText(
+        next.max_result_bytes != null ? String(next.max_result_bytes) : "",
+      );
+    } else if (effectiveQ.isSuccess) {
+      // Fallback seed from effective (still pilot fields only).
+      const e = effectiveQ.data;
+      const next: PolicyOverlay = {
+        version: 1,
+        force_read_only: e.force_read_only,
+        mode: e.mode || "pilot",
+        deny_tools: [...(e.deny_tools ?? [])],
+        deny_job_prefixes: [...(e.deny_job_prefixes ?? [])],
+        deny_node_names: [...(e.deny_node_names ?? [])],
+        deny_view_names: [...(e.deny_view_names ?? [])],
+        deny_artifact_paths: [...(e.deny_artifact_paths ?? [])],
+        deny_branch_names: [...(e.deny_branch_names ?? [])],
+        max_result_bytes: e.max_result_bytes,
+      };
+      setDraft(next);
+      setDenyText({
+        tools: formatDenyListText(next.deny_tools),
+        jobs: formatDenyListText(next.deny_job_prefixes),
+        nodes: formatDenyListText(next.deny_node_names),
+        views: formatDenyListText(next.deny_view_names),
+        artifacts: formatDenyListText(next.deny_artifact_paths),
+        branches: formatDenyListText(next.deny_branch_names),
+      });
+      setMaxBytesText(
+        next.max_result_bytes != null ? String(next.max_result_bytes) : "",
+      );
+    }
+    setSeeded(true);
+  }, [overlayQ.isSuccess, overlayQ.data, effectiveQ.isSuccess, effectiveQ.data, seeded]);
+
+  const builtOverlay = useMemo((): PolicyOverlay => {
+    const maxTrim = maxBytesText.trim();
+    let max_result_bytes: number | undefined;
+    if (maxTrim !== "") {
+      const n = Number(maxTrim);
+      if (Number.isFinite(n) && n > 0) {
+        max_result_bytes = Math.floor(n);
+      }
+    }
+    return {
+      version: 1,
+      force_read_only: draft.force_read_only,
+      mode: draft.mode || "pilot",
+      deny_tools: parseDenyListText(denyText.tools),
+      deny_job_prefixes: parseDenyListText(denyText.jobs),
+      deny_node_names: parseDenyListText(denyText.nodes),
+      deny_view_names: parseDenyListText(denyText.views),
+      deny_artifact_paths: parseDenyListText(denyText.artifacts),
+      deny_branch_names: parseDenyListText(denyText.branches),
+      max_result_bytes,
+    };
+  }, [draft.force_read_only, draft.mode, denyText, maxBytesText]);
+
+  const validateMut = useMutation({
+    mutationFn: () => validatePolicyOverlay(builtOverlay, profileId),
+    onSuccess: (data) => {
+      setPreview(data);
+      setFieldErrors(data.errors ?? []);
+      setStatusMsg(data.valid ? "Validation OK (dry-run)" : "Validation failed");
+    },
+    onError: (err) => {
+      const { code, message } = formatApiError(err);
+      setStatusMsg(`${code}: ${message}`);
+      setFieldErrors([]);
+      setPreview(null);
+    },
+  });
+
+  const applyMut = useMutation({
+    mutationFn: () => applyPolicyOverlay(builtOverlay, profileId),
+    onSuccess: async (data) => {
+      setConfirmOpen(false);
+      if (!data.applied) {
+        setFieldErrors(data.errors ?? []);
+        setStatusMsg(data.notes?.[0] || "Apply refused");
+        return;
+      }
+      setFieldErrors([]);
+      setStatusMsg("Policy overlay applied");
+      setSeeded(false);
+      await qc.invalidateQueries({ queryKey: ["policy"] });
+    },
+    onError: (err) => {
+      setConfirmOpen(false);
+      const { code, message } = formatApiError(err);
+      setStatusMsg(`${code}: ${message}`);
+    },
+  });
+
+  const errorsByField = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const e of fieldErrors) {
+      const list = m.get(e.field) ?? [];
+      list.push(e.message);
+      m.set(e.field, list);
+    }
+    return m;
+  }, [fieldErrors]);
+
+  return (
+    <>
+      <h1 className="page-title">Policy</h1>
+      <p className="page-sub">
+        Effective deny-only MCP policy for profile <code>{profileId}</code>.
+        Controlled pilot overlay editor (UI-004) — keys never leave the host;
+        signing is CLI-only.
+      </p>
+
+      {meQ.isError && <ErrorBanner error={meQ.error} />}
+      {effectiveQ.isLoading && <Loading />}
+      {effectiveQ.isError && <ErrorBanner error={effectiveQ.error} />}
+
+      {effectiveQ.isSuccess && (
+        <>
+          <div className="card">
+            <h2>Effective policy (viewer)</h2>
+            <dl className="dl">
+              <dt>profile_id</dt>
+              <dd>{effectiveQ.data.profile_id || profileId}</dd>
+              <dt>policy_present</dt>
+              <dd>{String(effectiveQ.data.policy_present)}</dd>
+              <dt>signature_state</dt>
+              <dd>{effectiveQ.data.signature_state}</dd>
+              <dt>force_read_only</dt>
+              <dd>{String(effectiveQ.data.force_read_only)}</dd>
+              <dt>mode</dt>
+              <dd>{effectiveQ.data.mode || "—"}</dd>
+              <dt>max_result_bytes</dt>
+              <dd>
+                {effectiveQ.data.max_result_bytes != null
+                  ? String(effectiveQ.data.max_result_bytes)
+                  : "—"}
+              </dd>
+              <dt>bundle_seq</dt>
+              <dd>
+                {effectiveQ.data.bundle_seq != null
+                  ? String(effectiveQ.data.bundle_seq)
+                  : "—"}
+              </dd>
+              <dt>key_id</dt>
+              <dd>{effectiveQ.data.key_id || "—"}</dd>
+            </dl>
+          </div>
+
+          <div className="card">
+            <h2>Deny lists (effective)</h2>
+            <dl className="dl">
+              <dt>deny_tools</dt>
+              <dd>
+                <StringList items={effectiveQ.data.deny_tools} />
+              </dd>
+              <dt>deny_job_prefixes</dt>
+              <dd>
+                <StringList items={effectiveQ.data.deny_job_prefixes} />
+              </dd>
+              <dt>deny_node_names</dt>
+              <dd>
+                <StringList items={effectiveQ.data.deny_node_names} />
+              </dd>
+              <dt>deny_view_names</dt>
+              <dd>
+                <StringList items={effectiveQ.data.deny_view_names} />
+              </dd>
+              <dt>deny_artifact_paths</dt>
+              <dd>
+                <StringList items={effectiveQ.data.deny_artifact_paths} />
+              </dd>
+              <dt>deny_branch_names</dt>
+              <dd>
+                <StringList items={effectiveQ.data.deny_branch_names} />
+              </dd>
+            </dl>
+          </div>
+
+          {effectiveQ.data.notes && effectiveQ.data.notes.length > 0 && (
+            <div className="card">
+              <h2>Notes</h2>
+              <ul style={{ margin: 0, paddingLeft: "1.2rem" }}>
+                {effectiveQ.data.notes.map((n, i) => (
+                  <li key={i}>{n}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="card">
+        <h2>Pilot pilot overlay (draft → validate → apply)</h2>
+        {overlayQ.isLoading && <p className="muted">Loading overlay…</p>}
+        {overlayQ.isError && <ErrorBanner error={overlayQ.error} />}
+        {overlayQ.isSuccess && !overlayQ.data.available && (
+          <div className="banner warn" role="status">
+            Plain overlay not available for edit
+            {overlayQ.data.residual ? `: ${overlayQ.data.residual}` : "."}
+            {overlayQ.data.notes?.length
+              ? ` ${overlayQ.data.notes.join(" ")}`
+              : ""}
+          </div>
+        )}
+        {!canWrite && (
+          <div className="banner warn" role="status">
+            Role lacks <code>policy_write</code> (need{" "}
+            <code>--admin-role policy_admin</code>). Validate/Apply disabled.
+            Enterprise <code>force_read_only</code> can never be widened from
+            this console.
+          </div>
+        )}
+
+        <div className="form-grid">
+          <label className="form-field">
+            <span>force_read_only</span>
+            <input
+              type="checkbox"
+              checked={draft.force_read_only}
+              disabled={!canWrite}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, force_read_only: e.target.checked }))
+              }
+            />
+            {errorsByField.get("force_read_only")?.map((m, i) => (
+              <span key={i} className="field-error">
+                {m}
+              </span>
+            ))}
+          </label>
+
+          <label className="form-field">
+            <span>mode</span>
+            <select
+              value={draft.mode || "pilot"}
+              disabled={!canWrite}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, mode: e.target.value }))
+              }
+            >
+              <option value="pilot">pilot</option>
+              <option value="strict">strict</option>
+            </select>
+            {errorsByField.get("mode")?.map((m, i) => (
+              <span key={i} className="field-error">
+                {m}
+              </span>
+            ))}
+          </label>
+
+          <label className="form-field">
+            <span>max_result_bytes</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={maxBytesText}
+              disabled={!canWrite}
+              placeholder="optional positive int"
+              onChange={(e) => setMaxBytesText(e.target.value)}
+            />
+            {errorsByField.get("max_result_bytes")?.map((m, i) => (
+              <span key={i} className="field-error">
+                {m}
+              </span>
+            ))}
+          </label>
+
+          {(
+            [
+              ["tools", "deny_tools"],
+              ["jobs", "deny_job_prefixes"],
+              ["nodes", "deny_node_names"],
+              ["views", "deny_view_names"],
+              ["artifacts", "deny_artifact_paths"],
+              ["branches", "deny_branch_names"],
+            ] as const
+          ).map(([key, field]) => (
+            <label key={field} className="form-field form-field-wide">
+              <span>
+                {field}{" "}
+                <span className="muted">(one per line or comma-separated)</span>
+              </span>
+              <textarea
+                rows={3}
+                value={denyText[key]}
+                disabled={!canWrite}
+                onChange={(e) =>
+                  setDenyText((d) => ({ ...d, [key]: e.target.value }))
+                }
+              />
+              {errorsByField.get(field)?.map((m, i) => (
+                <span key={i} className="field-error">
+                  {m}
+                </span>
+              ))}
+            </label>
+          ))}
+        </div>
+
+        <div className="toolbar" style={{ marginTop: "0.75rem" }}>
+          <button
+            type="button"
+            className="btn"
+            disabled={!canWrite || validateMut.isPending}
+            onClick={() => validateMut.mutate()}
+          >
+            {validateMut.isPending ? "Validating…" : "Validate"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!canWrite || applyMut.isPending}
+            onClick={() => setConfirmOpen(true)}
+          >
+            Apply
+          </button>
+          {statusMsg && (
+            <span className="toolbar-meta muted" role="status">
+              {statusMsg}
+            </span>
+          )}
+        </div>
+
+        {fieldErrors.length > 0 && (
+          <div className="banner error" style={{ marginTop: "0.75rem" }}>
+            <strong>Field errors</strong>
+            <ul style={{ margin: "0.35rem 0 0", paddingLeft: "1.2rem" }}>
+              {fieldErrors.map((e, i) => (
+                <li key={i}>
+                  <code>{e.field}</code>: {e.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {preview?.effectivePreview && (
+          <div style={{ marginTop: "0.75rem" }}>
+            <h3 style={{ fontSize: "0.95rem", margin: "0 0 0.5rem" }}>
+              Effective preview (after validate)
+            </h3>
+            <pre className="json">
+              {JSON.stringify(preview.effectivePreview, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
+
+      {effectiveQ.isSuccess && (
+        <div className="card">
+          <h2>Raw effective JSON</h2>
+          <pre className="json">
+            {JSON.stringify(effectiveQ.data, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      {confirmOpen && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => !applyMut.isPending && setConfirmOpen(false)}
+        >
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="policy-apply-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="policy-apply-title">Apply pilot overlay?</h2>
+            <p className="muted">
+              Writes plain <code>overlay.json</code> (mode 0600) on the host.
+              Does <strong>not</strong> sign. Cannot widen enterprise{" "}
+              <code>force_read_only</code>. No private keys are sent.
+            </p>
+            <div className="toolbar">
+              <button
+                type="button"
+                className="btn"
+                disabled={applyMut.isPending}
+                onClick={() => setConfirmOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={applyMut.isPending}
+                onClick={() => applyMut.mutate()}
+              >
+                {applyMut.isPending ? "Applying…" : "Confirm apply"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

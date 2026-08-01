@@ -1,0 +1,400 @@
+# Admin BFF API v1 (UI-002–UI-009)
+
+**ADR:** [0014](../adr/0014-admin-console-reactive-spa.md)  
+**Base path:** `/admin/v1`  
+**Content-Type:** `application/json; charset=utf-8`
+
+**Agent hint:** This contract is the SoT for the operator console. When product
+features change operator day-2 behavior, **update this document and the BFF/SPA
+together** (or mark residual). See root [`AGENTS.md`](../../AGENTS.md) → “keep
+the admin console current”.
+
+## Authentication (shared secret)
+
+Optional shared secret (recommended). When configured, every `/admin/v1/*` request must present:
+
+```http
+Authorization: Bearer <token>
+```
+
+or
+
+```http
+X-Jenkins-MCP-Admin-Token: <token>
+```
+
+Constant-time compare. Token never logged and **never** returned in JSON bodies.
+
+| Mode | Behavior |
+|------|----------|
+| Token configured | Missing/wrong → **401** `{ "code": "authentication", "message": "unauthorized" }` |
+| Token empty on loopback | Pilot residual: API open to local processes; process **role still applies**; prefer `--require-token` |
+| Non-local bind | Token **required** at start (`--admin-allow-non-local`) |
+
+**CSRF residual:** v1 uses Bearer / header token (not cookies), so browser CSRF is **N/A** for the shared-secret gate. Future httpOnly cookie sessions (if any) **must** add CSRF tokens; full OIDC is out of v1.
+
+## Authorization (console RBAC — UI-003)
+
+Process-wide role via `jenkins-mcp admin serve --admin-role=…` (default **`viewer`**).  
+Console roles are **separate** from MCP deny-only subjects (ADR 0004). They never elevate Jenkins rights and **never** defeat enterprise `force_read_only`.
+
+| Role | Name | Permissions | Writes |
+|------|------|-------------|--------|
+| `viewer` | Read-only operator | `read` (GET routes) | none |
+| `operator` | Day-2 ops | `read` + `cache_destructive` | cache/doctor destructive (UI-007) |
+| `policy_admin` | Policy apply | `read` + `policy_write` | policy validate/apply (UI-004) |
+
+- Invalid `--admin-role` → **fail start**.
+- **UI-004** ships `POST /admin/v1/policy/validate` and `POST /admin/v1/policy/apply` (require `policy_write`).
+- `policy_admin` may hold `policy_write` but **`CanWidenForceReadOnly` is always false** for every role — admin cannot disable or weaken enterprise force RO.
+- Missing permission on a write → **403** `{ "code": "permission_denied", "message": "permission denied" }`.
+
+## Common error body
+
+```json
+{
+  "code": "invalid_argument",
+  "message": "human-safe message (redacted)"
+}
+```
+
+Stable codes include: `invalid_argument`, `authentication`, `permission_denied` / `authorization`, `not_found`, `internal`, …
+
+## GET /admin/v1/me
+
+Current process authentication state and console role. **Never includes the token value.**
+
+```json
+{
+  "authenticated": true,
+  "role": "viewer",
+  "permissions": ["read"],
+  "tokenConfigured": true,
+  "residual": "optional note when no token on loopback"
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `authenticated` | `true` when token configured **and** matched, **or** when no token is required (loopback residual). Middleware returns 401 before this handler when token is required and missing/wrong. |
+| `role` | `viewer` \| `operator` \| `policy_admin` |
+| `permissions` | e.g. `["read"]`, `["read","cache_destructive"]`, `["read","policy_write"]` |
+| `tokenConfigured` | Whether the server was started with a non-empty shared secret |
+| `residual` | Present when loopback pilot mode has no token (role still applies) |
+
+## GET /admin/v1/health
+
+```json
+{
+  "status": "ok",
+  "version": "v0.1.0",
+  "commit": "abc1234",
+  "uiBuild": ""
+}
+```
+
+## GET /admin/v1/version
+
+Subset of `jenkins-mcp version --json` (version, commit, buildTime, goVersion, os, arch). No secrets.
+
+## GET /admin/v1/profiles/{id}/policy/effective
+
+Same shape as `policy show-effective --json` for profile `id` (secret-free effective RO + deny lists + signature state).
+
+Query: none required. Optional `?readOnly=1` / `?allowMutations=1` for simulation flags (must not defeat enterprise force).
+
+## GET /admin/v1/policy/overlay (UI-004)
+
+Returns the current **plain pilot** overlay document when the resolved policy path is a plain `overlay.json` (no private keys, no PEM, signature field stripped).
+
+```json
+{
+  "available": true,
+  "path_base": "overlay.json",
+  "signature_state": "unverified_pilot",
+  "overlay": {
+    "version": 1,
+    "force_read_only": true,
+    "mode": "pilot",
+    "deny_tools": ["jenkins_get_build_logs"],
+    "max_result_bytes": 65536
+  },
+  "notes": ["plain pilot overlay (unsigned); production should use signed bundles"]
+}
+```
+
+| Case | Response |
+|------|----------|
+| Missing file | `available: false`, `signature_state: absent`, residual note |
+| Signed bundle at resolved path | `available: false`, residual: browser cannot edit/sign bundles |
+| Plain overlay | `available: true` + secret-free `overlay` object |
+
+Requires `read` (all roles). Token gate applies when configured.
+
+## POST /admin/v1/policy/validate (UI-004)
+
+Requires **`policy_write`** (`policy_admin`). Dry-run only — does not write.
+
+**Request body** (either wrapper or bare overlay):
+
+```json
+{
+  "profileId": "corp",
+  "overlay": {
+    "version": 1,
+    "force_read_only": true,
+    "mode": "pilot",
+    "deny_tools": ["jenkins_get_build_logs"],
+    "deny_job_prefixes": [],
+    "max_result_bytes": 32768
+  }
+}
+```
+
+- `overlay.signature` from the browser is **ignored/cleared** (never accepted as trust material).
+- Body size cap: 256 KiB.
+
+**Response:**
+
+```json
+{
+  "valid": false,
+  "errors": [
+    { "field": "force_read_only", "message": "cannot set force_read_only=false when enterprise/current force is enforced …" }
+  ],
+  "effectivePreview": { /* same shape as show-effective subset when valid */ },
+  "notes": []
+}
+```
+
+**Monotonic restrict (v1):**
+
+| Rule | Behavior |
+|------|----------|
+| `force_read_only` | If current effective/overlay force is **true**, draft must keep `force_read_only: true`. **`CanWidenForceReadOnly` is always false.** |
+| Deny lists | When a current overlay exists, each proposed deny list must be a **set superset** of the current list (entries may only grow). |
+| `mode` | Cannot weaken `strict` → `pilot`. |
+| `max_result_bytes` | When current has a cap, draft cannot clear it or raise it. |
+| Schema | `Overlay.Validate()` field-level errors. |
+
+Always HTTP **200** with `valid: true|false` when authz succeeds (invalid draft is not 4xx for validate). Authz failures: **401** / **403**.
+
+## POST /admin/v1/policy/apply (UI-004)
+
+Requires **`policy_write`**. Re-validates with the same rules as validate (**no partial apply**).
+
+**On success:** writes plain pilot overlay to default path (`…/policy/overlay.json` or `JENKINS_MCP_POLICY_FILE` when it is not a signed bundle) with mode **0600**. Returns applied effective summary.
+
+```json
+{
+  "applied": true,
+  "path_base": "overlay.json",
+  "effective": { /* show-effective shape subset */ },
+  "notes": ["plain pilot overlay written (mode 0600); signing remains host-side CLI only"]
+}
+```
+
+**Fail closed (no write):**
+
+| Condition | HTTP | Notes |
+|-----------|------|--------|
+| Lacks `policy_write` | 403 | `permission_denied` |
+| Token required missing/wrong | 401 | `authentication` |
+| Validation / monotonic fail | 400 | `applied: false` + field `errors` |
+| `JENKINS_MCP_POLICY_REQUIRED=1` | 403 | refuse write refused; use CLI `policy sign` on host |
+| Trusted public keys configured | 403 | signed bundles required; keys never leave the host |
+| Resolved path is signed bundle | 403 | browser cannot clobber/sign bundles |
+
+**Audit:** best-effort secret-free events (`policy_apply` / `policy_validate` deny) on the profile audit path when `profileId` / `--profile` is set. Fields: type, decision, reasonCode only — never tokens or key material.
+
+**Residuals:**
+
+- Signed-bundle apply / multi-sig from the browser is **out of scope** (CLI `jenkins-mcp policy sign` on host).
+- Multi-source merge beyond “current plain/signed overlay baseline + draft” is simplified; at minimum force RO and deny-list superset are enforced.
+- Hot-reload of a running `serve` process is separate (existing policy reload path); admin apply writes the file only.
+
+## GET /admin/v1/metrics
+
+```json
+{
+  "available": true,
+  "counters": { "tool_calls": 0 },
+  "gauges": {},
+  "residual": "process-local snapshot; empty if no serve registry"
+}
+```
+
+When global registry unset: `available: false`, empty maps, residual note.
+
+## GET /admin/v1/profiles/{id}/audit
+
+Query:
+
+| Param | Default | Max | Notes |
+|-------|---------|-----|--------|
+| `limit` | 50 | 200 | page size |
+| `type` | | | filter event type |
+| `before` | | | RFC3339 exclusive upper bound |
+
+```json
+{
+  "profileId": "corp",
+  "events": [ /* audit.Event objects */ ],
+  "truncated": false
+}
+```
+
+Missing audit file → empty `events` (not 500). Path traversal on `{id}` rejected.
+
+## GET /admin/v1/profiles/{id}/doctor
+
+Query: `offline=1` (default true for v1). Returns bounded JSON summary (status fields only). Fail closed on invalid profile.
+
+**Online doctor (`offline=0`)** requires a configured admin shared secret. Without a token, the BFF returns `403 permission_denied` so loopback residual cannot exercise keyring → Jenkins network identity.
+
+## Static SPA
+
+`GET /` and `/assets/*` served from (UI-008 priority): `--assets-dir` → packaged `/usr/share/jenkins-mcp/admin-ui` → dev `web/admin/dist` → embedded `uiembed` FS. API under `/admin/v1` only. Static assets are **not** gated by the admin token (loopback residual); API always is when a token is configured.
+
+All responses (SPA + JSON) include strict CSP and related security headers (see [`README.md`](README.md) § Security headers).
+## UI-007 — Profiles, cache, support-bundle
+
+All profile path params use the same **`ValidateProfileID`** rules (no path traversal, no absolute paths, safe charset). Responses are **secret-free**: no API tokens, keyring payloads, passwords, or client secrets. Credential presence is a boolean only (`hasCredential`).
+
+### Role matrix (UI-007)
+
+| Endpoint | Method | Permission |
+|----------|--------|------------|
+| `/admin/v1/profiles` | GET | `read` |
+| `/admin/v1/profiles/{id}` | GET | `read` |
+| `/admin/v1/profiles/{id}/cache` | GET | `read` |
+| `/admin/v1/profiles/{id}/security-selfcheck` | GET | `read` |
+| `/admin/v1/profiles/{id}/cache/evict-plan` | POST | `read` (non-destructive) |
+| `/admin/v1/profiles/{id}/cache/evict` | POST | `cache_destructive` + body `confirm: "EVICT"` |
+| `/admin/v1/profiles/{id}/support-bundle` | POST | `cache_destructive` (operator) |
+
+### GET /admin/v1/profiles
+
+Lists profiles from the XDG profile store (secret-free summaries).
+
+```json
+{
+  "profiles": [
+    {
+      "id": "corp",
+      "displayName": "Corp Jenkins",
+      "jenkinsURL": "https://jenkins.example.corp/",
+      "jenkinsHost": "jenkins.example.corp",
+      "authMethod": "api_token",
+      "username": "alice",
+      "readOnly": false,
+      "hasCredential": true,
+      "cacheEncryption": false
+    }
+  ]
+}
+```
+
+### GET /admin/v1/profiles/{id}
+
+Same summary shape as one list element. Missing profile → **404**. Path traversal → **400**.
+
+### GET /admin/v1/profiles/{id}/cache
+
+Secret-free quota/usage summary for the profile data dir.
+
+| Field | Meaning |
+|-------|---------|
+| `available` | `false` when meta/store is missing or unreadable (**HTTP 200**, not 500) |
+| `residual` | Human-safe reason when unavailable |
+| `needsEviction` | From `QuotaManager.NeedsEviction` when available |
+| `usage` | `store.UsageStats` (physical bytes, quota, generations, packs, …) |
+| `pins` | Count of durable pins (not full pin list — residual for SPA) |
+
+### GET /admin/v1/profiles/{id}/security-selfcheck
+
+Offline `diagnostics.RunSecuritySelfCheck` JSON (items + residuals). No network; secret canaries must never appear in the body.
+
+### POST /admin/v1/profiles/{id}/cache/evict-plan
+
+Non-destructive plan (mirrors `jenkins-mcp cache eviction-plan`). Body optional:
+
+```json
+{ "targetBytes": 0 }
+```
+
+Response includes `dryRun: true`, `candidates[]` (`kind`, `id`, `bytes`, optional `age`/`reason`), usage, `pinsSkipped`. Never deletes.
+
+### POST /admin/v1/profiles/{id}/cache/evict
+
+**Operator only.** Destructive apply (mirrors `cache evict --confirm`). Body:
+
+```json
+{ "confirm": "EVICT", "targetBytes": 0 }
+```
+
+| Case | Status |
+|------|--------|
+| Viewer / policy_admin | **403** `permission_denied` |
+| Missing or wrong `confirm` (must be exact `"EVICT"`) | **400** `invalid_argument` |
+| Operator + `EVICT` | **200** plan/result; `applied` true when run completed |
+
+Server-side double-confirm is the `confirm` string. SPA adds a modal that requires typing `EVICT` twice. Audit event type `admin_cache_evict` is emitted best-effort on apply.
+
+### POST /admin/v1/profiles/{id}/support-bundle
+
+**Operator only** (`cache_destructive`). Body:
+
+```json
+{ "preview": true, "offline": true }
+```
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `preview` | `false` | When true, returns category plan + `outputPath` only (no zip write) |
+| `offline` | `true` | Online (`false`) requires admin shared secret (same as doctor) |
+
+Create returns **path + size** (`path`, `bytes`) — not zip file bytes in JSON. Audit event `admin_support_bundle` on non-preview create.
+
+### Residuals (UI-007)
+
+- Full **pin list** UI / API (use CLI `cache pins --json`).
+- Full **cache repair** / verify from the console (CLI `cache repair` / `cache verify`).
+- Policy write editor (UI-004).
+- SPA does not download support-bundle bytes over HTTP (local path for loopback operator).
+
+## Testing (UI-009)
+
+Admin console adversarial / contract coverage is **Go-first** (no Playwright/Cypress dependency in default CI).
+
+### Primary gate — `go test ./internal/admin`
+
+| Test | Covers |
+|------|--------|
+| `TestUI009_AuthGate_WrongAndMissingToken` | 401 missing/wrong token; secret canary never in body |
+| `TestUI009_ViewerCannotApplyPolicy` | viewer/operator **403** on validate/apply; policy_admin validate dry-run OK |
+| `TestUI009_AuditXSSCanaries_JSONEscaped` | XSS payloads in audit `tool`/`reasonCode`/type returned as **JSON text** (`application/json`, HTML-escaped wire) |
+| `TestUI009_PolicyApply_XSSAndPathTraversalRejected` | adversarial draft fields; planted admin token never echoed on errors |
+| `TestUI009_CSPHeaders_RootAndHealth` | CSP + nosniff on `/` and `/admin/v1/health` (UI-008) |
+| `TestUI009_OnlineDoctorWithoutToken_403` | online doctor without shared secret → **403** |
+| `TestUI009_SPADeepLink_ServesIndexShell` | BrowserRouter deep links serve SPA shell |
+| `TestUI009_CacheEvict_Viewer403_OperatorMissingConfirm400` | viewer evict **403**; operator wrong confirm **400** |
+| `TestUI009_SecretCanaryAbsentAcrossRoutes` | planted secret absent across health/me/metrics/profiles/audit/doctor/cache |
+
+XSS assertion model: BFF always writes JSON via `encoding/json` with `SetEscapeHTML(true)` (`Content-Type: application/json`). Wire body must not contain raw `<script>` markup; decoded fields are **text only** for SPA rendering. CSP `script-src 'self'` further blocks inline script execution if HTML were ever mis-served.
+
+### Opt-in E2E smoke (not default CI)
+
+```bash
+make admin-e2e
+# or: scripts/admin-e2e-smoke.sh
+```
+
+Starts a real `jenkins-mcp admin serve` on an ephemeral loopback port against a temp XDG tree + minimal SPA (or `web/admin/dist` when present), curls health/me/metrics/policy/audit, checks **401** without token, SPA shell + deep link, CSP, viewer apply **403**, and secret-canary absence. Writes `dist/admin-e2e/status.json`.
+
+**Not** part of `make test` / `make ci` unless operators opt in (same pattern as `stdio-smoke` / `live-jenkins-test`).
+
+### Residual
+
+- Full **browser** Playwright/Cypress suite (DOM XSS “does not execute”, HAR scrub automation, multi-page SPA flows) is **not** shipped — defer until product requires browser CI.
+- CSRF remains **N/A** for v1 Bearer/header auth; cookie sessions would need CSRF tests.

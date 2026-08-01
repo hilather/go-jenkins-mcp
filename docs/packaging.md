@@ -31,6 +31,41 @@ make sbom           # modules.json (+ gomod text when binary exists)
 make package-amd64  # cross-compile linux/amd64 then package (host may differ)
 ```
 
+### Local Docker support stack (first-class, opt-in)
+
+**First-class** disposable **admin / support** path under [`deploy/local/`](../deploy/local/)
+(not the default Cursor stdio path — ADR 0002). Preferred when operators want the
+admin BFF/SPA without a host package install. SoT: [`deploy/local/README.md`](../deploy/local/README.md).
+
+```bash
+make local-docker-up      # admin BFF on 127.0.0.1:8787 (creates deploy/local/.env if missing)
+make local-docker-doctor  # offline doctor one-shot
+make local-docker-smoke   # opt-in config + up + health + down
+make local-docker-down    # remove containers + volumes
+```
+
+Profiles: `LOCAL_COMPOSE_PROFILES=http,with-jenkins` (comma-separated).  
+`deploy/local/.env` is **gitignored** — lab tokens only.  
+Gateway (near-Jenkins) scaffold remains under [`deploy/gateway/`](../deploy/gateway/).
+
+### Admin console SPA assets (UI-008)
+
+Optional operator console static files ship when `web/admin/dist` exists at package time:
+
+```bash
+make admin-ui && make package
+# stages usr/share/jenkins-mcp/admin-ui into tarball / DEB / RPM
+# BUILD_INFO: admin_ui=present admin_ui_path=/usr/share/jenkins-mcp/admin-ui
+```
+
+| Item | Behavior |
+|------|----------|
+| Missing `web/admin/dist` | Package **succeeds**; `BUILD_INFO` records `admin_ui=missing` (residual) |
+| Present | Copies production Vite tree (never `node_modules`) to `/usr/share/jenkins-mcp/admin-ui` |
+| Runtime | `jenkins-mcp admin serve` resolves assets: `--assets-dir` → packaged path → `web/admin/dist` (dev) → `go:embed` placeholder/full |
+| Bake into binary | `make admin-ui-embed` then `make build` (optional; binary still builds without Node using committed placeholder) |
+| Default-off | Admin HTTP stays off until explicit `admin serve` (see [`admin/README.md`](admin/README.md)) |
+
 Version metadata comes from git when available:
 
 ```text
@@ -39,7 +74,7 @@ COMMIT   = git rev-parse --short HEAD
 BUILDTIME = UTC ISO-8601
 ```
 
-Embedded in the binary via ldflags (`main.version`, `main.commit`, `main.buildTime`) and written into package `BUILD_INFO`.
+Embedded in the binary via ldflags (`main.version`, `main.commit`, `main.buildTime`) and written into package `BUILD_INFO` (plus secret-free `admin_ui*` fields when packaging runs).
 
 ### Version CLI (UPD-001)
 

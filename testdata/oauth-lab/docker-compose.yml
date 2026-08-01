@@ -1,0 +1,98 @@
+# Disposable OAuth / JWT auth lab (HOST-012…HOST-015).
+# Opt-in only — NOT part of default `make test` / `make ci`.
+#
+# Services:
+#   keygen     — one-shot shared lab RSA into volume
+#   mock-oidc  (HOST-014) — discovery + JWKS + token mint     :18081
+#   mock-rs    (HOST-013) — Bearer JWT RS (fail-closed)       :18082
+#   mock-token (HOST-015) — AgentCore/token-exchange mock     :18083
+#
+# Mode A (API token) reuses testdata/jenkins-compose (make live-jenkins-*).
+#
+# Usage (repo root):
+#   make live-oauth-up
+#   make live-oauth-smoke
+#   make live-oauth-down
+#
+# Tear-down destroys the lab_keys volume (ephemeral RSA).
+
+name: go-jenkins-mcp-oauth-lab
+
+x-authlab-common: &authlab-common
+  build:
+    context: ../..
+    dockerfile: testdata/oauth-lab/Dockerfile
+  image: go-jenkins-mcp/oauth-lab:dev
+  restart: "no"
+  volumes:
+    - lab_keys:/lab-keys
+  environment: &authlab-env
+    LAB_KEYS_DIR: /lab-keys
+    # Issuer must match host-facing URL so host smoke JWTs validate.
+    LAB_ISSUER: ${LAB_ISSUER:-http://127.0.0.1:18081}
+    LAB_AUDIENCE: ${LAB_AUDIENCE:-jenkins-api}
+
+services:
+  # HOST-012: generate disposable RSA once into the shared volume.
+  keygen:
+    <<: *authlab-common
+    command: ["keygen"]
+    # No ports; exits 0 when private.pem + public.jwks.json exist.
+
+  mock-oidc:
+    <<: *authlab-common
+    command: ["oidc", "-addr", ":18081"]
+    ports:
+      - "${OAUTH_HOST_BIND:-127.0.0.1}:${OAUTH_OIDC_PORT:-18081}:18081"
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:18081/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  mock-rs:
+    <<: *authlab-common
+    command: ["rs", "-addr", ":18082"]
+    # Load public JWKS from shared volume (same key as oidc/token).
+    # Override with LAB_JWKS_URL=http://mock-oidc:18081/jwks if needed.
+    environment:
+      <<: *authlab-env
+      LAB_JWKS_URL: ${LAB_JWKS_URL:-}
+    ports:
+      - "${OAUTH_HOST_BIND:-127.0.0.1}:${OAUTH_RS_PORT:-18082}:18082"
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      mock-oidc:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:18082/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  mock-token:
+    <<: *authlab-common
+    command: ["token", "-addr", ":18083"]
+    ports:
+      - "${OAUTH_HOST_BIND:-127.0.0.1}:${OAUTH_TOKEN_PORT:-18083}:18083"
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      mock-oidc:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:18083/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  lab_keys:
+    # Ephemeral; removed by `docker compose down -v`.

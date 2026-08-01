@@ -48,5 +48,8 @@ See **`docs/phase2-progress.md`** for ARC / JEN / PIPE / TEST / DIAG / OPS / HEA
 
 - [ ] **MUT-001** mutation preview/confirm (still RO by default)  
 - [ ] **PKG-001** signed Rocky/Ubuntu packages  
-- [ ] **ARC-004+** when ratarmount-rs is supplied  
-- [ ] Commit + tag baseline when ready  
+- [ ] **ARC-000** qualify pin `hilather/ratarmount-rs` **v0.1.14** (`eeff850…`) — see `docs/arc/ratarmount-rs-pin.json`  
+- [ ] **ARC-000a/b/c** build/SBOM, security review, Tier-1 sidecar+FUSE prototype  
+- [ ] **ARC-004 / ARC-004a/b** adapter after ARC-000 production go  
+- [ ] **ARC-012** seek-table / pin dialect compatibility  
+

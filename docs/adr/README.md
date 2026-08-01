@@ -35,6 +35,7 @@ ADR status values: **Accepted** (binding), **Proposed** (not yet binding), **Sup
 | [0011](0011-custom-jenkins-authz-plugin-gated.md) | Custom Jenkins authorization-server plugin is decision-gated | Accepted | FND-008, AUTH-000 |
 | [0012](0012-signed-policy-bundles-ed25519.md) | Signed enterprise policy bundles (Ed25519 envelope) | Accepted | FND-008, MGR-001, CFG-002 |
 | [0013](0013-jas-default-no-go-enforcement.md) | Jenkins-as-AS default no-go enforced in code (JAS-001) | Accepted | JAS-001, OAUTH-011, AUTH-000 |
+| [0014](0014-admin-console-reactive-spa.md) | Operator admin console: React SPA + local BFF | Accepted | UI-000–UI-010 |
 
 ## Conventions
 

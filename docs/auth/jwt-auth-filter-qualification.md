@@ -297,3 +297,7 @@ All of the above remain **offline-friendly** (`--offline` / no network for self-
 
 Offline **contract tests do not replace** live lab. Do not mark architecture
 acceptance criteria complete until live-lab §8 items have evidence.
+
+## Docker lab residual (HOST-013 / HOST-014)
+
+Disposable Compose for jwt RS + mock IdP is backlog **HOST-013** / **HOST-014** (umbrella **HOST-012**). See `docs/roadmap/server-team-hosted.md`. Live production Entra remains residual.

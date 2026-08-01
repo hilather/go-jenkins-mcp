@@ -9,8 +9,9 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 |------|-----|
 | Pilot / developer (Cursor stdio) | [user/README.md](user/README.md) |
 | Platform operator / packager | [admin/README.md](admin/README.md) |
+| **Local Docker support / admin UI** (no host install) | [`../deploy/local/README.md`](../deploy/local/README.md) · `make local-docker-up` |
 | Security reviewer | [security/operator-guide.md](security/operator-guide.md) · [security/threat-model.md](security/threat-model.md) |
-| Coding agent / model | [agent-usage.md](agent-usage.md) · [tool-contracts.md](tool-contracts.md) |
+| Coding agent / model | [agent-usage.md](agent-usage.md) · [tool-contracts.md](tool-contracts.md) · root [`AGENTS.md`](../AGENTS.md) |
 | Pilot evidence kit | [pilot/README.md](pilot/README.md) · [pilot/checklist.md](pilot/checklist.md) |
 
 ## Core product docs
@@ -18,10 +19,11 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | Doc | Purpose |
 |-----|---------|
 | [user/README.md](user/README.md) | Install Tier-1, profile, API-token login, RO Cursor stdio, OIDC residual, mutations preview |
-| [admin/README.md](admin/README.md) | Packages, `deny_tools` / `deny_job_prefixes`, policy verify/sign, gateway env, live lab, telemetry, HTTP loopback |
+| [admin/README.md](admin/README.md) | Packages, policy CLI, gateway, telemetry, HTTP loopback; admin SPA (UI-000–UI-009) |
+| [`../deploy/local/README.md`](../deploy/local/README.md) | **First-class** disposable admin BFF/SPA + optional lab Jenkins (Docker; not Cursor stdio) |
 | [agent-usage.md](agent-usage.md) | Triage flow; Wave 18–19 tools (queue cancel, ext-logs ACL, change correlation, search re-eval, start_job params) |
 | [tool-contracts.md](tool-contracts.md) | MCP tool inventory, budgets, error codes, side effects |
-| [packaging.md](packaging.md) | RPM/DEB/tar, XDG paths, update-check, HTTP mode notes |
+| [packaging.md](packaging.md) | RPM/DEB/tar, XDG paths, update-check, HTTP mode notes, local Docker pointer |
 | [policy-rbac.md](policy-rbac.md) | Deny-only RBAC + overlay schema |
 | [auth-architecture.md](auth-architecture.md) | Auth surfaces; Jenkins is not a 3LO AS |
 | [observability.md](observability.md) | Metrics, doctor, telemetry wiring |
@@ -58,6 +60,8 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [adapters/work-items.md](adapters/work-items.md) | Change / work-item correlation |
 | [adapters/otel-correlate.md](adapters/otel-correlate.md) | Trace refs |
 | [arc/pack-format-v1.md](arc/pack-format-v1.md) | L2 pack format |
+| [arc/ratarmount-rs-pin.json](arc/ratarmount-rs-pin.json) | Candidate pin: `ratarmount-rs` **v0.1.14** |
+| [arc/ratarmount-rs-qualification.md](arc/ratarmount-rs-qualification.md) | ARC-000 pin + qualification checklist |
 | [tst/README.md](tst/README.md) | Route matrix + opt-in live Jenkins |
 
 ## Planning, progress, release
@@ -79,4 +83,8 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 - SaaS log/ticket clients — residual  
 - Cursor host stdio CI — residual (Wave 25 offline binary `make stdio-smoke` does not close it) 
 - HTTP MCP: loopback-hardened but **no** socket client auth (KD-008)  
-- Windows — out of scope  
+- Windows — out of scope
+
+## Roadmaps
+
+| [roadmap/server-team-hosted.md](roadmap/server-team-hosted.md) | Path from local pilot → team/server-hosted gateway (Tier A/B) |

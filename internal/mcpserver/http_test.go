@@ -211,6 +211,8 @@ func TestNewHTTPHandler_NonLocalStillRejectsArbitraryOrigin(t *testing.T) {
 	cfg.AllowedHosts = []string{"192.168.1.10"}
 	// Wave 32: non-local always requires a shared secret (fail closed at handler build).
 	cfg.BearerToken = "test-shared-secret"
+	// HOST-001: non-local implies RequireSubject — lab identity for offline tests.
+	cfg.LabIdentity = true
 	h, err := mcpserver.NewHTTPHandler(srv, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -221,6 +223,7 @@ func TestNewHTTPHandler_NonLocalStillRejectsArbitraryOrigin(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("Authorization", "Bearer test-shared-secret")
+	req.Header.Set(mcpserver.HeaderLabSubject, "lab-user-1")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusForbidden {
@@ -233,6 +236,7 @@ func TestNewHTTPHandler_NonLocalStillRejectsArbitraryOrigin(t *testing.T) {
 	req2.Header.Set("Content-Type", "application/json")
 	req2.Header.Set("Accept", "application/json, text/event-stream")
 	req2.Header.Set("Authorization", "Bearer test-shared-secret")
+	req2.Header.Set(mcpserver.HeaderLabSubject, "lab-user-1")
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, req2)
 	if rr2.Code == http.StatusForbidden && strings.Contains(rr2.Body.String(), "Origin") {
@@ -240,6 +244,9 @@ func TestNewHTTPHandler_NonLocalStillRejectsArbitraryOrigin(t *testing.T) {
 	}
 	if rr2.Code == http.StatusForbidden && strings.Contains(rr2.Body.String(), "Host") {
 		t.Fatalf("allowed host should not fail Host check: %s", rr2.Body.String())
+	}
+	if rr2.Code == http.StatusUnauthorized {
+		t.Fatalf("lab subject + token should not 401: %s", rr2.Body.String())
 	}
 }
 
@@ -252,6 +259,8 @@ func TestNewHTTPHandler_NonLocalHostAllowList(t *testing.T) {
 	cfg.AllowedOrigins = []string{"https://portal.example.corp"}
 	cfg.AllowedHosts = []string{"mcp.example.corp", "192.168.1.10:8765"}
 	cfg.BearerToken = "test-shared-secret"
+	// HOST-001: non-local implies RequireSubject.
+	cfg.LabIdentity = true
 	h, err := mcpserver.NewHTTPHandler(srv, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -263,6 +272,7 @@ func TestNewHTTPHandler_NonLocalHostAllowList(t *testing.T) {
 	reqOK.Header.Set("Content-Type", "application/json")
 	reqOK.Header.Set("Accept", "application/json, text/event-stream")
 	reqOK.Header.Set("Authorization", "Bearer test-shared-secret")
+	reqOK.Header.Set(mcpserver.HeaderLabSubject, "lab-user-1")
 	rrOK := httptest.NewRecorder()
 	h.ServeHTTP(rrOK, reqOK)
 	if rrOK.Code == http.StatusForbidden {
@@ -275,6 +285,7 @@ func TestNewHTTPHandler_NonLocalHostAllowList(t *testing.T) {
 	reqIP.Header.Set("Content-Type", "application/json")
 	reqIP.Header.Set("Accept", "application/json, text/event-stream")
 	reqIP.Header.Set("Authorization", "Bearer test-shared-secret")
+	reqIP.Header.Set(mcpserver.HeaderLabSubject, "lab-user-1")
 	rrIP := httptest.NewRecorder()
 	h.ServeHTTP(rrIP, reqIP)
 	if rrIP.Code == http.StatusForbidden {
@@ -287,6 +298,7 @@ func TestNewHTTPHandler_NonLocalHostAllowList(t *testing.T) {
 	reqBad.Header.Set("Content-Type", "application/json")
 	reqBad.Header.Set("Accept", "application/json, text/event-stream")
 	reqBad.Header.Set("Authorization", "Bearer test-shared-secret")
+	reqBad.Header.Set(mcpserver.HeaderLabSubject, "lab-user-1")
 	rrBad := httptest.NewRecorder()
 	h.ServeHTTP(rrBad, reqBad)
 	if rrBad.Code != http.StatusForbidden {

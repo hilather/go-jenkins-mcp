@@ -41,6 +41,7 @@ var requiredPackages = []string{
 	"internal/telemetry/fleet",
 	"internal/contracts",
 	"internal/apperr",
+	"internal/admin",
 }
 
 func moduleRoot(t *testing.T) string {
@@ -276,6 +277,20 @@ func TestDependencyDirection(t *testing.T) {
 		"internal/otelx":     {},
 		"internal/correlate": {}, // INT-004 pure extractors (no network, no jenkins).
 		"internal/depgraph":  {},
+		// UI-002 / ADR 0014: local admin BFF (read path); no MCP tools, no raw Jenkins HTTP.
+		// UI-002 / UI-004 / UI-007 / UI-008 / ADR 0014: local admin BFF.
+		// UI-007: store for cache quota/evict; auth for credential presence only.
+		// UI-008: uiembed for packaged/embedded SPA assets.
+		"internal/admin": {
+			"internal/admin/uiembed",
+			"internal/apperr", "internal/audit", "internal/auth", "internal/config",
+			"internal/diagnostics", "internal/keyring", "internal/policy",
+			"internal/gateway", "internal/profile", "internal/store", "internal/telemetry",
+		},
+		// UI-008: embed-only SPA assets; stdlib only (no other internal imports).
+		"internal/admin/uiembed": {},
+		// HOST-012…015: opt-in OAuth lab helpers (stdlib only; no other internal imports).
+		"internal/authlab": {},
 	}
 
 	for pkgPath, imps := range imports {

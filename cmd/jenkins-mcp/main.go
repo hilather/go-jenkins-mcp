@@ -140,6 +140,10 @@ func main() {
 		if err := runServe(os.Args[2:]); err != nil {
 			fatal(err)
 		}
+	case "admin":
+		if err := runAdmin(os.Args[2:]); err != nil {
+			fatal(err)
+		}
 	default:
 		// Legacy: flags-only invocation defaults to serve (seed compatibility).
 		if strings.HasPrefix(os.Args[1], "-") {
@@ -245,6 +249,10 @@ Usage:
   jenkins-mcp serve --profile <id> [--mutation-max-previews-per-minute N]
   jenkins-mcp serve --profile <id> [--mutation-token-ttl DURATION]
   jenkins-mcp serve --profile <id> [--log-level debug|info|warn|error]
+  jenkins-mcp admin serve --addr 127.0.0.1:8787 [--profile ID]
+  jenkins-mcp admin serve [--admin-token-env=VAR | --admin-token-file=PATH]
+  jenkins-mcp admin serve [--admin-role viewer|operator|policy_admin]
+  jenkins-mcp admin serve [--assets-dir PATH] [--require-token] [--admin-allow-non-local]
   jenkins-mcp serve --url URL --auth user:token   # deprecated bootstrap (KD-003)
 
 Read-only is the pilot default (POL-001). Cursor should pass --read-only or
@@ -258,14 +266,23 @@ Mutation token TTL (MUT-001): --mutation-token-ttl / JENKINS_MCP_MUTATION_TOKEN_
 
 HTTP mode (--http) is optional and not the pilot default (ADR 0002). Bind is
 loopback-only unless --http-allow-non-local (tests / residual advanced use).
-Shared secret is optional on loopback by default (local pilot residual). Fail
-closed with --http-require-token, JENKINS_MCP_HTTP_REQUIRE_TOKEN=1, or
+Shared secret is optional on loopback by default (local pilot residual) and is a
+transport gate only — not multi-user identity (HOST-001 / KD-008). Fail closed
+with --http-require-token, JENKINS_MCP_HTTP_REQUIRE_TOKEN=1, or
 JENKINS_MCP_HTTP_DENY_ANONYMOUS=1 (alias; same RequireToken path). Non-local
-bind always requires a token, --http-allowed-origin, and --http-allowed-host.
-Request body cap defaults to 4 MiB; raise with --http-max-body-bytes /
-JENKINS_MCP_HTTP_MAX_BODY_BYTES (absolute fail-closed 16 MiB). Residual: not
-per-user / multi-tenant OAuth (KD-008); non-loopback hardening beyond
-AllowedHosts remains separate.
+bind always requires a token, --http-allowed-origin, --http-allowed-host, and a
+per-request subject (RequireSubject). Gateway mode and --http-require-subject /
+JENKINS_MCP_HTTP_REQUIRE_SUBJECT reject non-health requests without subject.
+Lab-only subject header X-Jenkins-MCP-Lab-Subject when JENKINS_MCP_LAB_IDENTITY=1
+(fail closed otherwise; not default). Production JWT subject path (HOST-001):
+JENKINS_MCP_HTTP_JWKS_URL + JENKINS_MCP_HTTP_JWT_ISSUER +
+JENKINS_MCP_HTTP_JWT_AUDIENCE (secret-free); optional JENKINS_MCP_HTTP_JWT_REQUIRED=1
+implies require-subject. Shared transport secret is never treated as subject.
+Request body cap defaults to
+4 MiB; raise with --http-max-body-bytes / JENKINS_MCP_HTTP_MAX_BODY_BYTES
+(absolute fail-closed 16 MiB). Residual:
+mid-session subject rebind / JWKS rotation under load; prefer stdio for pilot
+(ADR 0002).
 
 TLS/proxy (NET-004): profile may set caBundlePath, proxyURL, noProxy, clientCertFile,
 clientKeyFile (paths only — never private keys in profile JSON). CLI --ca-bundle /
@@ -840,6 +857,8 @@ func runServe(args []string) error {
 	httpTokenEnv := fs.String("http-token-env", "", "Env var name holding optional HTTP shared secret (value never on argv; do not pass token on command line)")
 	httpTokenFile := fs.String("http-token-file", "", "Path to file with optional HTTP shared secret (mode 0600; read once; never put token on argv)")
 	httpRequireToken := fs.Bool("http-require-token", false, "Fail closed if HTTP mode has no shared secret (also JENKINS_MCP_HTTP_REQUIRE_TOKEN=1 or JENKINS_MCP_HTTP_DENY_ANONYMOUS=1; always on with --http-allow-non-local)")
+	// HOST-001: per-request subject for gateway / multi-user HTTP (shared secret is not identity).
+	httpRequireSubject := fs.Bool("http-require-subject", false, "Fail closed if HTTP requests lack trusted subject identity (also --gateway, JENKINS_MCP_HTTP_REQUIRE_SUBJECT=1; always on with --http-allow-non-local; transport secret alone is not identity)")
 	// Wave 44 Track C: Streamable HTTP request body cap (absolute fail-closed 16 MiB).
 	httpMaxBodyBytesFlag := fs.String("http-max-body-bytes", "", "Streamable HTTP request body cap in bytes (empty/0=default 4MiB; env JENKINS_MCP_HTTP_MAX_BODY_BYTES fallback; flag wins; max 16MiB absolute fail-closed)")
 	var httpAllowedOrigins multiString
@@ -849,7 +868,7 @@ func runServe(args []string) error {
 	useStdio := fs.Bool("stdio", true, "Serve MCP over stdio (default)")
 	showVer := fs.Bool("version", false, "Print version and exit")
 	readOnly := fs.Bool("read-only", false, "Force global read-only (omit mutation tools; POL-001)")
-	gatewayMode := fs.Bool("gateway", false, "Managed-gateway / AgentCore mode (GWY-001/002); requires AS URL + audience")
+	gatewayMode := fs.Bool("gateway", false, "Managed-gateway / AgentCore mode (GWY-001/002); requires AS URL + audience; HTTP also requires per-request subject (HOST-001)")
 	var enableAdapters multiString
 	fs.Var(&enableAdapters, "enable-adapter", "Enable an approved adapter by id (repeatable; default none). Built-ins: noop, clock, otel-correlate, otel-export, ext-logs, work-items")
 	adapterAllowlist := fs.String("adapter-allowlist", "", "Path to adapter allowlist JSON (required for non-builtin adapters; optional Ed25519 signature when JENKINS_MCP_ADAPTER_ALLOWLIST_TRUSTED_KEYS is set)")
@@ -1039,10 +1058,17 @@ func runServe(args []string) error {
 		log.Printf("Gateway mode enabled provider_configured=%v ready=%v mode=%s",
 			st.Configured, st.Ready, st.Mode)
 		if !st.Ready {
-			// Live AgentCore acquisition is foundation-stubbed; local keyring session
-			// remains the Jenkins credential path until GWY live wiring. Obtain stays
+			// Mode C / AgentCore: Live=false until TokenFetcher wire (GWY-001 residual).
+			// Local keyring/OIDC session remains the Jenkins HTTP path; Obtain stays
 			// fail-closed (capability_missing) so no shared SA is ever substituted.
-			log.Printf("Gateway credential obtain is not live (capability_missing until AgentCore pin)")
+			log.Printf("Gateway credential obtain is not live (capability_missing until AgentCore pin); Jenkins HTTP uses local session")
+		} else if st.Mode == gateway.ModeAPITokenVault {
+			// HOST-009 + HOST-003: Mode A Ready → per-request Obtain AuthProvider
+			// (Basic personal token; never shared SA / ambient keyring fallthrough).
+			log.Printf("Gateway mode A (api_token_vault) Obtain Ready; Jenkins HTTP will use per-request vault credentials")
+		} else {
+			// Mode B/C Ready (mock/live Fetcher): Obtain → Bearer AuthProvider.
+			log.Printf("Gateway Obtain Ready mode=%s; Jenkins HTTP will use per-request Obtain credentials", st.Mode)
 		}
 	}
 
@@ -1185,8 +1211,45 @@ func runServe(args []string) error {
 	// max_concurrent=0 means unlimited (log as number only).
 	log.Printf("max_json_body_bytes=%d max_retries=%d circuit_failure_threshold=%d circuit_open_duration=%s max_concurrent=%d initial_backoff=%s max_backoff=%s mutation_confirm_cooldown=%s mutation_token_ttl=%s mutation_max_previews_per_minute=%d",
 		maxJSONBodyBytes, maxRetries, circuitThreshold, circuitOpenDuration, maxConcurrent, initialBackoff, maxBackoff, mutationConfirmCooldown, mutationTokenTTL, mutationMaxPreviews)
-	// Mid-serve OIDC refresh via AuthProvider; api_token leaves provider nil.
-	attachLiveAuthProvider(client, oidcSess.Live)
+
+	// POL-003 / GWY-002: resolve profile id early so gateway subject bind can
+	// precede AuthProvider install (HOST-003: Obtain needs bound Caller).
+	profileID := sess.ProfileID
+	if profileID == "" && *profileFlag != "" {
+		profileID = contracts.ProfileID(*profileFlag)
+	}
+	if profileID == "" && principal.ID != "" {
+		profileID = contracts.ProfileID("_legacy")
+	}
+
+	// Mid-serve credentials (HOST-003):
+	//   gateway + Ready → Obtain AuthProvider (Mode A Basic / B+C Bearer); never keyring fallthrough
+	//   gateway + !Ready → residual local session (Mode C AgentCore stub) via OIDC Live or static
+	//   non-gateway → OIDC LiveSessionSource refresh; api_token leaves provider nil
+	var subject policy.Subject
+	var gatewayObtainWired bool
+	if useGateway {
+		gwSubject, err := bindGatewaySubject(profileID, principal.ID)
+		if err != nil {
+			return err
+		}
+		subject = gwSubject
+		log.Printf("Gateway policy subject profile=%s external=%s jenkins=%s tenant_set=%v workload_set=%v verified=%v",
+			subject.ProfileID, subject.ExternalSubject, subject.JenkinsUserID,
+			subject.Tenant != "", subject.WorkloadID != "", subject.Verified)
+		if gatewayObtainReady(gatewayProv) {
+			caller := gateway.CallerFromBoundSubject(subject)
+			attachGatewayObtainAuthProvider(client, gatewayProv, caller)
+			gatewayObtainWired = true
+			log.Printf("Gateway Jenkins AuthProvider: Obtain mode=%s (no keyring fallthrough)", gatewayProv.Mode())
+		} else {
+			// Mode C residual: Obtain not Ready; keep local keyring/OIDC path.
+			attachLiveAuthProvider(client, oidcSess.Live)
+			log.Printf("Gateway Obtain not Ready; Jenkins AuthProvider uses local session residual")
+		}
+	} else {
+		attachLiveAuthProvider(client, oidcSess.Live)
+	}
 
 	log.Printf("Using Jenkins URL: %s", client.URL)
 	// Log verified principal id only (username) — never token (KD-004 residual for broader redact).
@@ -1196,6 +1259,8 @@ func runServe(args []string) error {
 	}
 	if usedLegacy {
 		log.Printf("auth source: deprecated legacy bootstrap")
+	} else if gatewayObtainWired {
+		log.Printf("auth source: gateway Obtain mode=%s profile=%s", gatewayProv.Mode(), sess.ProfileID)
 	} else {
 		log.Printf("auth source: keyring profile=%s method=%s", sess.ProfileID, sess.Method)
 	}
@@ -1260,34 +1325,19 @@ func runServe(args []string) error {
 	log.Printf("Read-only effective=%v sources=%v", gate.Effective(), gate.Sources())
 	client.WithMutationGuard(policy.NewReadOnlyMutationGuard(gate))
 
-	// POL-003 / GWY-002: subject from verified principal or gateway claims — never tool args.
+	// POL-003: non-gateway subject from verified principal — never tool args.
 	// OIDC: attach bounded groups from validated JWT claims (OAUTH-006).
-	var subject policy.Subject
-	profileID := sess.ProfileID
-	if profileID == "" && *profileFlag != "" {
-		profileID = contracts.ProfileID(*profileFlag)
-	}
-	if profileID == "" && principal.ID != "" {
-		profileID = contracts.ProfileID("_legacy")
-	}
-	if useGateway {
-		gwSubject, err := bindGatewaySubject(profileID, principal.ID)
-		if err != nil {
-			return err
+	// Gateway subject was already bound above (HOST-003 AuthProvider order).
+	if !useGateway {
+		if principal.ID != "" && profileID != "" {
+			subject = policy.NewSubject(profileID, principal.ID, true)
+			subject = applyOIDCSubjectFields(subject, sess, oidcSess, profDoc)
+			log.Printf("Policy subject profile=%s user=%s verified=%v external_set=%v group_count=%d",
+				subject.ProfileID, subject.JenkinsUserID, subject.Verified,
+				subject.ExternalSubject != "", len(subject.Groups))
+		} else {
+			log.Printf("Policy subject unbound; RBAC denials apply if evaluator set")
 		}
-		subject = gwSubject
-		log.Printf("Gateway policy subject profile=%s external=%s jenkins=%s tenant_set=%v workload_set=%v verified=%v",
-			subject.ProfileID, subject.ExternalSubject, subject.JenkinsUserID,
-			subject.Tenant != "", subject.WorkloadID != "", subject.Verified)
-		_ = gatewayProv // retained for future per-call Obtain / cache (GWY live)
-	} else if principal.ID != "" && profileID != "" {
-		subject = policy.NewSubject(profileID, principal.ID, true)
-		subject = applyOIDCSubjectFields(subject, sess, oidcSess, profDoc)
-		log.Printf("Policy subject profile=%s user=%s verified=%v external_set=%v group_count=%d",
-			subject.ProfileID, subject.JenkinsUserID, subject.Verified,
-			subject.ExternalSubject != "", len(subject.Groups))
-	} else {
-		log.Printf("Policy subject unbound; RBAC denials apply if evaluator set")
 	}
 
 	// Budgets (Wave 25/31/37/47):
@@ -1838,6 +1888,14 @@ func runServe(args []string) error {
 		cfg.AllowedOrigins = append([]string(nil), httpAllowedOrigins...)
 		cfg.AllowedHosts = append([]string(nil), httpAllowedHosts...)
 		cfg.RequireToken = resolveHTTPRequireToken(*httpRequireToken)
+		// HOST-001 production JWT: secret-free JWKS/iss/aud env (optional).
+		jwtEnv, err := parseHTTPJWTEnv(os.Getenv)
+		if err != nil {
+			return err
+		}
+		// HOST-001: gateway / --http-require-subject / JWT_REQUIRED / non-local require subject.
+		cfg.RequireSubject = resolveHTTPRequireSubject(*httpRequireSubject, useGateway) || jwtEnv.Required
+		cfg.LabIdentity = labIdentityEnabled()
 		// Wave 44 Track C: explicit positive MaxBodyBytes after resolve (0→default).
 		maxBody, err := mcpserver.ResolveHTTPMaxBodyBytes(*httpMaxBodyBytesFlag, os.Getenv(mcpserver.EnvHTTPMaxBodyBytes))
 		if err != nil {
@@ -1849,9 +1907,23 @@ func runServe(args []string) error {
 			return err
 		}
 		cfg.BearerToken = token
+		var jwks *auth.JWKS
+		if jwtEnv.Configured() {
+			// Fetch once at serve start (fail closed). Mid-session JWKS rebind residual.
+			jwks, err = fetchHTTPJWKS(serveCtx, nil, jwtEnv)
+			if err != nil {
+				return err
+			}
+		}
+		cfg.IdentityResolver = newHTTPIdentityResolver(cfg.LabIdentity, token, jwks, auth.AccessTokenParams{
+			Issuer:   jwtEnv.Issuer,
+			Audience: jwtEnv.Audience,
+		})
 		// Never log token values — only required/configured bools and body cap.
-		log.Printf("http serve token policy: http_token_required=%v http_token_configured=%v max_body_bytes=%d",
-			mcpserver.HTTPTokenRequired(cfg), cfg.BearerToken != "", cfg.MaxBodyBytes)
+		log.Printf("http serve token policy: http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v http_jwt_configured=%v http_jwt_required=%v max_body_bytes=%d",
+			mcpserver.HTTPTokenRequired(cfg), cfg.BearerToken != "",
+			mcpserver.HTTPSubjectRequired(cfg), cfg.LabIdentity,
+			jwtEnv.Configured(), jwtEnv.Required, cfg.MaxBodyBytes)
 		if err := mcpserver.RunHTTP(serveCtx, server, cfg); err != nil {
 			return err
 		}
@@ -1864,6 +1936,14 @@ func runServe(args []string) error {
 	if *httpRequireToken || envHTTPRequireTokenTruthy() || envHTTPDenyAnonymousTruthy() {
 		return apperr.New(apperr.CodeInvalidArgument,
 			"--http-require-token / JENKINS_MCP_HTTP_REQUIRE_TOKEN / JENKINS_MCP_HTTP_DENY_ANONYMOUS require --http")
+	}
+	if *httpRequireSubject || envHTTPRequireSubjectTruthy() {
+		return apperr.New(apperr.CodeInvalidArgument,
+			"--http-require-subject / JENKINS_MCP_HTTP_REQUIRE_SUBJECT require --http")
+	}
+	if envHTTPJWTConfigured() {
+		return apperr.New(apperr.CodeInvalidArgument,
+			"JENKINS_MCP_HTTP_JWKS_URL / JENKINS_MCP_HTTP_JWT_* require --http")
 	}
 	if strings.TrimSpace(*httpMaxBodyBytesFlag) != "" {
 		return apperr.New(apperr.CodeInvalidArgument,
@@ -1990,11 +2070,15 @@ func reorderFlagArgs(args []string, valueFlags map[string]bool) []string {
 	return append(flags, pos...)
 }
 
-// requireGatewayProvider loads and validates AgentCore config (GWY-001).
-// Fails closed when AS URL/audience missing or when endpoints point at Jenkins.
+// requireGatewayProvider selects the gateway CredentialProvider from env
+// (HOST-009 Mode A api_token_vault or Mode C AgentCore; Mode B residual).
+//
+// Mode A: Live vault provider (per-subject Obtain → Basic AuthProvider, HOST-003).
+// Mode C: AgentCore provider with Live=false until TokenFetcher wire; when not
+// Ready, serve keeps local keyring/OIDC Jenkins HTTP residual. Never falls back
+// to a shared SA. When Ready, attachGatewayObtainAuthProvider wires Obtain.
 func requireGatewayProvider(jenkinsBaseURL string) (gateway.CredentialProvider, error) {
-	cfg := gateway.ConfigFromEnviron(jenkinsBaseURL)
-	return gateway.RequireGatewaySetup(cfg)
+	return gateway.CredentialProviderFromEnviron(jenkinsBaseURL, nil)
 }
 
 // bindGatewaySubject maps trusted gateway env claims + verified Jenkins principal

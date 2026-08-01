@@ -4,7 +4,7 @@
 **Default:** `Live=false`, `Fetcher=nil` → fail-closed `not_configured` (no network).  
 **Offline qualify** (GWY-003 lite) available; **live Entra / AgentCore pin residual**.  
 **GWY-004:** deployment **scaffold** (compose/kustomize/docs) only — no live AgentCore image.  
-**Related:** [deployment.md](deployment.md), [qualification.md](qualification.md), [auth-architecture.md](../auth-architecture.md) §2.3, [ADR 0003](../adr/0003-jenkins-not-oauth-authorization-server.md), [policy-rbac.md](../policy-rbac.md), architecture §§1–2 / §6.6.
+**Related:** [deployment.md](deployment.md), [qualification.md](qualification.md), [auth-architecture.md](../auth-architecture.md) §2.3, [ADR 0003](../adr/0003-jenkins-not-oauth-authorization-server.md), [policy-rbac.md](../policy-rbac.md), architecture §§1–2 / §6.6, **[server/team-hosted roadmap](../roadmap/server-team-hosted.md)** (Tier A path, HOST-*, 30/60/90).
 
 ---
 
@@ -166,6 +166,7 @@ Enable gateway mode with any of:
 
 | Env | Constant | Meaning |
 |-----|----------|---------|
+| `JENKINS_MCP_GATEWAY_MODE` | `EnvGatewayModeVar` | `1` / `true` enables gateway mode |
 | `JENKINS_MCP_GATEWAY_SUBJECT` | `EnvGatewaySubject` | Entra/OIDC sub (**required** in gateway mode) |
 | `JENKINS_MCP_GATEWAY_TENANT` | `EnvGatewayTenant` | Tenant id (**required**) |
 | `JENKINS_MCP_GATEWAY_WORKLOAD` | `EnvGatewayWorkload` | Workload id (**required**) |
@@ -183,13 +184,14 @@ Missing identity env fields → bind fails closed at serve start.
 |----------|--------|
 | **Live Entra / AgentCore network acquisition pin** | GWY-003 / OAUTH-010 — offline mock + `HTTPTokenFetcher` only prove contracts |
 | AgentCore Identity/Token Vault (durable) | GWY-001 completion (process memory cache is not a vault) |
-| Serve wiring that injects `HTTPTokenFetcher` + Live | Operator config residual; default remains fail-closed |
+| Serve wiring that injects `HTTPTokenFetcher` + Live | Operator config residual; default remains fail-closed (HOST-003) |
 | Packaging near-source gateway image (signed prod) | GWY-004 residual — scaffold in `deploy/gateway/` + [deployment.md](deployment.md) |
 | Live AgentCore sidecar pin | GWY-003 / GWY-004 residual |
 | Custom Jenkins authorization-server plugin | ADR 0011 / OAUTH-011 **default no-go** |
 | Shared Jenkins service account for interactive users | **Never** |
 | Real client secret storage | keyring / vault (not profile JSON) |
-| Streamable HTTP gateway transport hardening | GWY-004 residual |
+| Streamable HTTP gateway transport hardening | GWY-004 residual (HOST-001 / HOST-002) |
+| **Program path to team-hosted** | [roadmap/server-team-hosted.md](../roadmap/server-team-hosted.md) |
 
 Until live AgentCore is pinned, local **API token + keyring** remains the Jenkins
 HTTP credential path when serve still starts. Default `CredentialProvider.Obtain`
@@ -218,3 +220,93 @@ offline qualify vault hit/miss, IdP outage chaos, JWKS kid-lite (see
 - `policy.Subject` gains optional gateway fields; API-token path unchanged.
 - Profile `gatewayMode` optional bool; serve `--gateway` flag.
 - Docs: this file; backlog GWY-001/002 foundation progress (not full DoD).
+
+## Server-side auth modes (Tier A)
+
+See [../roadmap/server-team-hosted.md](../roadmap/server-team-hosted.md). Modes **A** (HOST-009 API token vault), **B** (OAUTH-009 + HOST-010 JWT RS), **C** (OAUTH-010 + GWY-001 3LO/OBO) are all first-class; HOST-011 is the fail-closed mode matrix.
+
+## Mode A — per-user personal API token vault (HOST-009)
+
+```text
+Obtain (APITokenVaultProvider):
+  Live=false              → capability_missing / not_configured
+  Live=true, Vault=nil    → not_configured
+  Live=true, missing key  → not_found (never ambient keyring / other subject)
+  Live=true, hit          → Credential{Mode: api_token_vault, AccessToken: token,
+                                       JenkinsPrincipal: username}
+  HTTPAuthFromCredential  → scheme=basic, username, token
+```
+
+| Type | Role |
+|------|------|
+| `APITokenVault` | `Get` / `Put` / `Delete` by `subjectKey` (never logs values) |
+| `MemoryAPITokenVault` | Process memory for tests |
+| `FileAPITokenVault` | Lab file under configurable path, mode **0600** |
+| `APITokenVaultProvider` | Mode A `CredentialProvider` |
+| `SubjectKey(caller)` | Stable `tenant\|subject\|profile` — **never** tool args |
+| `HTTPAuthFromCredential` | HOST-003 helper: Basic (A) vs Bearer (B/C) |
+
+**subjectKey:** `gateway.SubjectKey(Caller)` = `tenant|subject|profile` (trimmed).
+Production gateways should always set all three fields so keys never collide.
+CLI/operators may pass an explicit key string that matches that format.
+`SubjectKeyHash` is available for filesystem-safe names when needed.
+
+**Provision / rotate / revoke (CLI):**
+
+```bash
+# Token value lives only in the environment — never on argv.
+export MY_TOKEN='…personal jenkins api token…'
+jenkins-mcp gateway vault-put \
+  --subject 'tenant|entra-sub|corp' \
+  --user alice \
+  --token-env MY_TOKEN \
+  --vault-path /path/to/apitoken_vault.json   # optional
+
+jenkins-mcp gateway vault-delete --subject 'tenant|entra-sub|corp'
+```
+
+| Env | Meaning |
+|-----|---------|
+| `JENKINS_MCP_GATEWAY_CREDENTIAL_MODE=api_token_vault` | Select Mode A for serve provider setup |
+| `JENKINS_MCP_GATEWAY_VAULT_PATH` | File vault path (default: `$XDG_DATA_HOME/jenkins-mcp/gateway/apitoken_vault.json`) |
+
+**Admin console residual:** Mode A vault provision/list is **CLI-only** in this
+foundation (HOST-007 / admin SPA residual). Never put vault tokens in admin JSON.
+
+### AgentCore modes (Mode C / GWY-001)
+
+| Mode | Intent | Default (`Live=false`) | Offline mock (`Live=true` + `Fetcher`) |
+|------|--------|------------------------|----------------------------------------|
+| `authorization_code` | User-delegated 3LO + consent URL propagation | `not_configured` | Cache → `TokenFetcher`; may return `ConsentRequired` |
+| `token_exchange` / `obo` | OBO / RFC 8693 exchange → Jenkins-audience token | `not_configured` | Same; wrong-audience fails closed |
+
+### Pluggable `TokenFetcher` (GWY-001 offline mock)
+
+```text
+Obtain:
+  Live=false              → capability_missing / not_configured (cache ignored)
+  Live=true, Fetcher=nil  → capability_missing (not silent success)
+  Live=true, Fetcher set  → validate → cache hit? → Fetcher → cache → Credential
+  Fetcher error           → authentication / capability_missing / ConsentRequired
+                            (never shared Jenkins SA)
+```
+
+| Type | Role |
+|------|------|
+| `TokenFetcher` | Interface: `FetchJenkinsCredential(ctx, caller, cfg) (Credential, error)` |
+| `FuncTokenFetcher` | Function adapter for unit tests |
+| `HTTPTokenFetcher` | Optional production-shaped HTTPS token POST (https-only, no redirects, body cap, never log tokens). **Not** attached by `NewAgentCoreProvider` |
+| Mock AS (`httptest` TLS in tests) | Returns JSON `access_token` + `expires_in` + optional `audience` / `jenkins_principal`; consent via 401 + auth URL/session |
+
+`NewAgentCoreProvider` always starts **Live=false**, **Fetcher=nil**. Tests (or future operators) inject a fetcher and set `Live=true` explicitly. **No real Entra** is called from default serve wiring.
+
+Consent metadata (`ConsentInfo`) may carry **authorization URL + session id** only —
+never access tokens, refresh tokens, client secrets, or auth codes.
+
+Token cache: in-memory, keyed by `(user, workload, profile)`, TTL-bounded.
+`String()` / errors / `Status` **never** include token bytes (canary tests).
+
+When the token JSON includes `audience` / `resource`, it must **exactly** match
+configured Jenkins API audience (wrong-audience residual fail-closed).
+
+---

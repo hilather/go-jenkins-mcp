@@ -21,6 +21,11 @@ const (
 	// ModeOBO is an alias label for on-behalf-of / JWT grant exchange.
 	// Prefer ModeTokenExchange in new config; both are accepted.
 	ModeOBO Mode = "obo"
+
+	// ModeJWTRSBearer is HOST-011 Mode B: Jenkins resource-server Bearer JWT
+	// (jwt-auth-filter / proxy RS). Distinct from AgentCore AS modes.
+	// Live acquire remains HOST-010 residual; HTTPAuth shape is Bearer.
+	ModeJWTRSBearer Mode = "jwt_rs_bearer"
 )
 
 // Valid reports whether m is a known acquisition mode.

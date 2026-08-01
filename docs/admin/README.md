@@ -13,6 +13,102 @@ Gateway deploy: [`../gateway/deployment.md`](../gateway/deployment.md).
 Release gates: [`../release/gates.md`](../release/gates.md).  
 User Cursor path: [`../user/README.md`](../user/README.md).
 
+### Admin console (UI-000–UI-009)
+
+A **reactive SPA** lives under `web/admin/` (React + TypeScript + Vite; ADR [0014](../adr/0014-admin-console-reactive-spa.md)). The **local admin BFF** is started only via explicit CLI or Docker — **admin HTTP is off by default** until `jenkins-mcp admin serve` (or the local Docker stack). Contract: [`api-v1.md`](api-v1.md).
+
+**Agent / implementer note:** Treat the console as a living operator surface. Feature work that affects policy, metrics, audit, doctor/cache, profiles, or other day-2 ops **must** update BFF + SPA + this API contract in the same change (or record an explicit residual). Standing rule: root [`AGENTS.md`](../../AGENTS.md) → “keep the admin console current”.
+
+#### Enable path A — Docker (no host package install)
+
+**Preferred when you want the admin UI/BFF without installing a Tier-1 package or building Go on the host.** First-class stack: [`../../deploy/local/README.md`](../../deploy/local/README.md).
+
+```bash
+# From repo root (Docker Compose v2). Cursor MCP stdio remains host-native.
+cp deploy/local/.env.example deploy/local/.env
+echo "JENKINS_MCP_ADMIN_TOKEN=$(openssl rand -hex 24)" >> deploy/local/.env
+make local-docker-up
+# Admin UI: http://127.0.0.1:8787  — Bearer token from deploy/local/.env
+# Optional lab Jenkins: LOCAL_COMPOSE_PROFILES=with-jenkins make local-docker-up
+make local-docker-down   # when finished (wipes volumes)
+```
+
+Profiles: `LOCAL_COMPOSE_PROFILES=http` and/or `with-jenkins`. Smoke: `make local-docker-smoke` (opt-in; not in default CI).
+
+#### Enable path B — host binary (pilot / package install)
+
+```bash
+# 1) Prefer a shared secret on multi-user hosts (never commit; never put value on argv).
+export JENKINS_MCP_ADMIN_TOKEN='…'
+
+# 2) Start loopback BFF (default 127.0.0.1:8787). SPA assets resolve automatically
+#    when packaged under /usr/share/jenkins-mcp/admin-ui (UI-008) or via --assets-dir.
+jenkins-mcp admin serve \
+  --addr 127.0.0.1:8787 \
+  --profile corp \
+  --admin-token-env JENKINS_MCP_ADMIN_TOKEN \
+  --admin-role viewer \
+  --require-token
+# Optional override: --assets-dir /path/to/web/admin/dist
+```
+
+| Flag | Meaning |
+|------|---------|
+| `--addr` | Listen address (default `127.0.0.1:8787`, loopback only) |
+| `--admin-token-env` / `--admin-token-file` | Shared secret source (env **name** or file **path** only; mode 0600 for file) |
+| `--require-token` | Fail start if no secret configured |
+| `--admin-role` | `viewer` (default) \| `operator` \| `policy_admin` (UI-003) |
+| `--assets-dir` | Optional SPA static root (overrides package/dev/embed defaults) |
+| `--admin-allow-non-local` | Residual non-loopback bind; **requires** token (not for production) |
+
+#### SPA asset resolution (UI-008)
+
+Priority when `--assets-dir` is empty:
+
+1. **Packaged** `/usr/share/jenkins-mcp/admin-ui` (if `index.html` exists) — fresh install without npm  
+2. **Dev residual** `web/admin/dist` (cwd-relative, after `make admin-ui`)  
+3. **Embedded** `internal/admin/uiembed` (committed placeholder, or full SPA after `make admin-ui-embed` + rebuild)  
+
+`GET /admin/v1/health` and `GET /admin/v1/version` expose secret-free `uiBuild` when a stamp is available (`UI_BUILD` file or embed id).
+
+Package with SPA assets:
+
+```bash
+make admin-ui && make package
+# BUILD_INFO: admin_ui=present|missing
+```
+
+Package **does not fail** when `web/admin/dist` is missing (`admin_ui=missing` residual in `BUILD_INFO`).
+
+#### Security headers and timeouts (UI-008)
+
+All admin responses include:
+
+| Header | Value (summary) |
+|--------|-----------------|
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'` |
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Referrer-Policy` | `no-referrer` |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
+
+`style-src 'unsafe-inline'` is intentional for Vite/React residual inline styles; **scripts remain `'self'` only** (no CDN). Subresource Integrity for third-party CDNs is **not** used — assets are same-origin only.
+
+HTTP server timeouts (local admin, not multi-tenant gateway): `ReadHeaderTimeout` 10s, `ReadTimeout` 30s, `WriteTimeout` 60s, `IdleTimeout` 120s.
+
+**Reverse-proxy residual:** prefer **same-origin** (SPA + `/admin/v1` on one host). If TLS terminates upstream, do **not** strip or weaken CSP carelessly; re-apply or pass through origin headers.
+
+**Console RBAC** (separate from MCP deny-only subjects): `viewer` = read GETs; `operator` = future cache destructive; `policy_admin` = future policy write. **No role can widen enterprise `force_read_only`.** API contract: [`api-v1.md`](api-v1.md) (includes `GET /admin/v1/me`). SPA notes: [`../../web/admin/README.md`](../../web/admin/README.md).
+
+| Surface | SPA status (honest) |
+|---------|---------------------|
+| Overview / policy effective / doctor read | Scaffold (UI-001) + BFF (UI-002) + role badge / token control (UI-003) + serve/CSP packaging (UI-008) |
+| **Metrics** (UI-005) | Auto-refresh (15s) with pause on hidden tab + manual pause, session sparklines (≤60 pts), secret-free JSON export. **Residual:** process-local only; no fleet aggregation |
+| **Audit** (UI-006) | type/limit/before filters, detail drawer, load-older via `before` cursor, export loaded events. **Residual:** no live SSE tail; page-capped client export only |
+| Policy write editor | Not yet (UI-004) |
+| Destructive ops | Not yet (UI-007) |
+
+**Residuals:** loopback without token is pilot-only (any local process can call the API with the configured role); token-in-`localStorage` SPA UX is pilot-only; v1 Bearer/header auth (CSRF N/A); cookie sessions / OIDC not implemented; policy apply not exposed yet (UI-004); no CDN/SRI; multi-arch SPA packaging is the same static tree for all arches.
 ---
 
 ## 1. Packaging (RPM / DEB / tar)
@@ -756,3 +852,9 @@ package defaults keep DefaultConfirmCooldown (5s) < DefaultTokenTTL (2m). No
 unlimited/disabled TTL path (library `Config.TTL` ≤0 still yields a positive
 TTL). Mutations remain opt-in (`--allow-mutations`); pilot default is still
 read-only.
+
+### UI-009 testing
+
+- Default gate: `go test ./internal/admin -run UI009` (included in `make test`).
+- Opt-in smoke: `make admin-e2e` → `dist/admin-e2e/status.json` (not in default CI).
+- Residual: full-browser Playwright/Cypress not required for v1.

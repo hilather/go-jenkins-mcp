@@ -1,7 +1,7 @@
 # go-jenkins-mcp — developer targets (FND-002)
 # Tier-1: linux/amd64 (+ aarch64 when enabled). No Windows client targets.
 
-export PATH := $(HOME)/.local/go/bin:/usr/local/go/bin:$(PATH)
+export PATH := $(HOME)/.local/go/bin:/usr/local/go/bin:$(HOME)/.local/node-v22.14.0-linux-x64/bin:$(PATH)
 
 MODULE      ?= github.com/simonfxr/go-jenkins-mcp
 BIN_DIR     ?= bin
@@ -37,7 +37,7 @@ help:
 	@echo "  make lint       gofmt check + go vet"
 	@echo "  make vuln       govulncheck (installs if needed)"
 	@echo "  make sbom       Generate SPDX SBOM under $(DIST_DIR)/"
-	@echo "  make package    Linux tarball (+ optional rpm/deb helpers)"
+	@echo "  make package    Linux tarball (+ optional rpm/deb helpers; includes admin-ui when dist exists)"
 	@echo "  make package-smoke  PKG-001 offline package script smoke (SKIP_DEB/RPM; not in default test)"
 	@echo "  make stdio-smoke    FND-006 offline MCP stdio host-lifecycle smoke (not in default test; Cursor product residual)"
 	@echo "  make pilot-evidence  Offline pilot/release evidence under dist/pilot-evidence/ (REL-001/002)"
@@ -46,6 +46,18 @@ help:
 	@echo "  make live-jenkins-down  Stop disposable Jenkins and remove volume"
 	@echo "  make live-jenkins-fixtures-rebuild  Re-queue mock-inv-* builds (lab running)"
 	@echo "  make ci         lint + test + build (merge gate subset)"
+	@echo "  make admin-ui   UI-001 production build of web/admin → web/admin/dist"
+	@echo "  make admin-ui-embed  Build SPA and copy into internal/admin/uiembed/dist (UI-008)"
+	@echo "  make admin-ui-dev  UI-001 Vite dev server (proxies /admin → :8787)"
+	@echo "  make admin-e2e  UI-009 opt-in admin BFF+SPA smoke (not in default test/ci; artifact dist/admin-e2e/)"
+	@echo "  make live-oauth-up     HOST-012…015 OAuth/JWT mock lab (opt-in; not default test)"
+	@echo "  make live-oauth-test   OAuth lab up + smoke + down"
+	@echo "  make local-docker-up   Support stack: admin BFF in Docker (deploy/local; not default test)"
+	@echo "  make local-docker-down Tear down local Docker stack + volumes"
+	@echo "  make local-docker-doctor  Offline doctor via local Docker image"
+	@echo "  make local-docker-status  Compose + health + ready JSON (secret-free)"
+	@echo "  make local-docker-smoke   Opt-in SPA+BFF smoke (build/up/health/SPA/down)"
+	@echo "  make local-docker-init-profile  Bootstrap secret-free profile on docker volume"
 	@echo "  make clean      Remove bin/ and dist/"
 
 .PHONY: test
@@ -143,6 +155,8 @@ sbom:
 .PHONY: package
 package: build
 	@mkdir -p $(DIST_DIR)
+	@# UI-008: when web/admin/dist exists, package-linux.sh stages it under
+	@# usr/share/jenkins-mcp/admin-ui. Prefer: make admin-ui && make package
 	./scripts/package-linux.sh "$(BIN_DIR)/$(BINARY)" "$(DIST_DIR)" "$(VERSION)" "$(COMMIT)"
 
 .PHONY: package-tarball
@@ -215,6 +229,151 @@ live-jenkins-fixtures-rebuild:
 	@chmod +x $(CURDIR)/scripts/jenkins-fixture-rebuild.sh
 	JENKINS_HOST_PORT=$(JENKINS_HOST_PORT) \
 		$(CURDIR)/scripts/jenkins-fixture-rebuild.sh
+
+# UI-001: reactive admin SPA (ADR 0014). Requires Node ≥ 18 / npm.
+# Production assets land in web/admin/dist for packaging and --assets-dir (UI-008).
+.PHONY: admin-ui
+admin-ui:
+	cd web/admin && npm ci && npm run build
+	@# Stamp secret-free UI build id for health/version (UI-008).
+	@printf '%s\n' "$(VERSION)" > web/admin/dist/UI_BUILD
+	@echo "admin-ui: wrote web/admin/dist (UI_BUILD=$(VERSION))"
+
+# UI-008: bake production SPA into go:embed tree for self-contained binary.
+# Requires Node. Binary builds without this target still succeed (placeholder embed).
+.PHONY: admin-ui-embed
+admin-ui-embed: admin-ui
+	@rm -rf internal/admin/uiembed/dist
+	@mkdir -p internal/admin/uiembed/dist
+	@cp -a web/admin/dist/. internal/admin/uiembed/dist/
+	@printf '%s\n' "$(VERSION)" > internal/admin/uiembed/dist/UI_BUILD
+	@echo "admin-ui-embed: copied web/admin/dist → internal/admin/uiembed/dist (rebuild binary to bake)"
+	@echo "note: do not commit node_modules; commit of full uiembed dist is release-optional"
+
+.PHONY: admin-ui-dev
+admin-ui-dev:
+	cd web/admin && npm install && npm run dev
+
+# UI-009: opt-in admin console E2E smoke (real binary + curl; NOT part of make test / ci).
+# Primary adversarial/RBAC/XSS gate is go test ./internal/admin -run UI009.
+# Residual: full-browser Playwright/Cypress not shipped.
+.PHONY: admin-e2e
+admin-e2e: build
+	@chmod +x $(CURDIR)/scripts/admin-e2e-smoke.sh
+	BIN=$(CURDIR)/$(BIN_DIR)/$(BINARY) \
+	OUT_DIR=$(CURDIR)/$(DIST_DIR)/admin-e2e \
+	$(CURDIR)/scripts/admin-e2e-smoke.sh
+
+# HOST-012…015: disposable OAuth/JWT lab (mock OIDC + mock RS + mock token).
+# Opt-in only — NOT part of make test / make ci. Mode A remains live-jenkins-*.
+# See testdata/oauth-lab/README.md. Residual: real Entra / jwt-auth-filter / AgentCore.
+COMPOSE_OAUTH ?= testdata/oauth-lab/docker-compose.yml
+OAUTH_OIDC_PORT ?= 18081
+OAUTH_RS_PORT ?= 18082
+OAUTH_TOKEN_PORT ?= 18083
+OAUTH_HOST_BIND ?= 127.0.0.1
+LAB_ISSUER ?= http://127.0.0.1:$(OAUTH_OIDC_PORT)
+LAB_AUDIENCE ?= jenkins-api
+
+.PHONY: live-oauth-up
+live-oauth-up:
+	@command -v docker >/dev/null || { echo "docker required"; exit 1; }
+	OAUTH_OIDC_PORT=$(OAUTH_OIDC_PORT) OAUTH_RS_PORT=$(OAUTH_RS_PORT) OAUTH_TOKEN_PORT=$(OAUTH_TOKEN_PORT) \
+		OAUTH_HOST_BIND=$(OAUTH_HOST_BIND) LAB_ISSUER=$(LAB_ISSUER) LAB_AUDIENCE=$(LAB_AUDIENCE) \
+		docker compose -f $(COMPOSE_OAUTH) up -d --build --wait
+	@echo "oauth lab: oidc http://$(OAUTH_HOST_BIND):$(OAUTH_OIDC_PORT) rs :$(OAUTH_RS_PORT) token :$(OAUTH_TOKEN_PORT) (lab-only)"
+
+.PHONY: live-oauth-down
+live-oauth-down:
+	@command -v docker >/dev/null || { echo "docker required"; exit 1; }
+	docker compose -f $(COMPOSE_OAUTH) down -v --remove-orphans
+	@echo "oauth lab stopped; lab_keys volume removed (disposable RSA destroyed)"
+
+.PHONY: live-oauth-smoke
+live-oauth-smoke:
+	@chmod +x $(CURDIR)/scripts/oauth-lab-smoke.sh
+	OAUTH_OIDC_PORT=$(OAUTH_OIDC_PORT) OAUTH_RS_PORT=$(OAUTH_RS_PORT) OAUTH_TOKEN_PORT=$(OAUTH_TOKEN_PORT) \
+		OAUTH_HOST_BIND=$(OAUTH_HOST_BIND) LAB_ISSUER=$(LAB_ISSUER) LAB_AUDIENCE=$(LAB_AUDIENCE) \
+		$(CURDIR)/scripts/oauth-lab-smoke.sh --smoke-only
+
+.PHONY: live-oauth-test
+live-oauth-test:
+	@chmod +x $(CURDIR)/scripts/oauth-lab-smoke.sh
+	OAUTH_OIDC_PORT=$(OAUTH_OIDC_PORT) OAUTH_RS_PORT=$(OAUTH_RS_PORT) OAUTH_TOKEN_PORT=$(OAUTH_TOKEN_PORT) \
+		OAUTH_HOST_BIND=$(OAUTH_HOST_BIND) LAB_ISSUER=$(LAB_ISSUER) LAB_AUDIENCE=$(LAB_AUDIENCE) \
+		$(CURDIR)/scripts/oauth-lab-smoke.sh
+
+# Local Docker support stack (deploy/local). Opt-in; not part of make test / ci.
+# Profiles: LOCAL_COMPOSE_PROFILES=http and/or with-jenkins
+# Cursor MCP stdio remains host-native (ADR 0002).
+.PHONY: local-docker-build local-docker-up local-docker-down local-docker-ps \
+	local-docker-logs local-docker-doctor local-docker-init-profile \
+	local-docker-version local-docker-shell local-docker-run local-docker-config \
+	local-docker-status local-docker-ready local-docker-smoke
+local-docker-build:
+	@chmod +x $(CURDIR)/scripts/local-docker.sh
+	VERSION=$(VERSION) COMMIT=$(COMMIT) BUILDTIME=$(BUILDTIME) SKIP_SPA=$(SKIP_SPA) \
+		$(CURDIR)/scripts/local-docker.sh build
+
+local-docker-up:
+	@chmod +x $(CURDIR)/scripts/local-docker.sh
+	# ensure_env_file in scripts/local-docker.sh creates .env + lab token
+	VERSION=$(VERSION) COMMIT=$(COMMIT) BUILDTIME=$(BUILDTIME) SKIP_SPA=$(SKIP_SPA) \
+		$(CURDIR)/scripts/local-docker.sh up
+
+local-docker-down:
+	@chmod +x $(CURDIR)/scripts/local-docker.sh
+	$(CURDIR)/scripts/local-docker.sh down
+
+local-docker-ps:
+	@chmod +x $(CURDIR)/scripts/local-docker.sh
+	$(CURDIR)/scripts/local-docker.sh ps
+
+local-docker-logs:
+	@chmod +x $(CURDIR)/scripts/local-docker.sh
+	$(CURDIR)/scripts/local-docker.sh logs
+
+local-docker-doctor:
+	@chmod +x $(CURDIR)/scripts/local-docker.sh
+	$(CURDIR)/scripts/local-docker.sh doctor
+
+# Bootstrap secret-free profile on the docker config volume (optional URL).
+# Example: make local-docker-init-profile PROFILE_ID=corp JENKINS_URL=http://jenkins:8080
+local-docker-init-profile:
+	@chmod +x $(CURDIR)/scripts/local-docker.sh
+	$(CURDIR)/scripts/local-docker.sh init-profile \
+		$(or $(PROFILE_ID),corp) \
+		$(or $(JENKINS_URL),http://jenkins:8080)
+
+local-docker-version:
+	@chmod +x $(CURDIR)/scripts/local-docker.sh
+	$(CURDIR)/scripts/local-docker.sh version
+
+local-docker-shell:
+	@chmod +x $(CURDIR)/scripts/local-docker.sh
+	$(CURDIR)/scripts/local-docker.sh shell
+
+# Example: make local-docker-run ARGS='policy show-effective --profile corp --json'
+local-docker-run:
+	@chmod +x $(CURDIR)/scripts/local-docker.sh
+	$(CURDIR)/scripts/local-docker.sh run -- $(ARGS)
+
+local-docker-config:
+	@chmod +x $(CURDIR)/scripts/local-docker.sh
+	$(CURDIR)/scripts/local-docker.sh config
+
+local-docker-status:
+	@chmod +x $(CURDIR)/scripts/local-docker.sh
+	$(CURDIR)/scripts/local-docker.sh status
+
+local-docker-ready:
+	@chmod +x $(CURDIR)/scripts/local-docker.sh
+	$(CURDIR)/scripts/local-docker.sh ready
+
+local-docker-smoke:
+	@chmod +x $(CURDIR)/scripts/local-docker-smoke.sh
+	VERSION=$(VERSION) COMMIT=$(COMMIT) BUILDTIME=$(BUILDTIME) SKIP_SPA=$(SKIP_SPA) \
+		$(CURDIR)/scripts/local-docker-smoke.sh
 
 .PHONY: clean
 clean:

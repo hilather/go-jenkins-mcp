@@ -18,18 +18,18 @@
     "cycle_task_ids": []
   },
   "summary": {
-    "task_count": 121,
+    "task_count": 152,
     "conditional_task_count": 5,
     "priority_counts": {
-      "P0": 53,
-      "P1": 45,
-      "P2": 14,
-      "P3": 9
+      "P0": 67,
+      "P1": 57,
+      "P2": 18,
+      "P3": 10
     },
     "phase_count": 7,
     "dependency_edge_count": 244,
     "maximum_dependency_depth": 19,
-    "acceptance_criteria_count": 565,
+    "acceptance_criteria_count": 694,
     "definition_of_done_checkbox_count": 12,
     "total_markdown_checkbox_count": 577,
     "topological_wave_count": 20
@@ -84,7 +84,7 @@
       "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
       "phase_order": 4,
       "conditional": false,
-      "task_count": 14,
+      "task_count": 25,
       "priority_counts": {
         "P2": 10,
         "P3": 4
@@ -754,9 +754,10 @@
       ],
       "dependency_text": "FND-002, FND-008",
       "parallel_safe": null,
-      "objective": "Turn the preferred but not yet supplied Rust archive implementation into a measured, security-reviewed go/no-go decision without guessing which project is intended.",
-      "implementation": "Obtain the exact repository URL, owner, commit or release, license, provenance, support model, and expected integration mode from engineering. If the dependency cannot be supplied or reproduced, record an explicit no-go/deferred result and continue with the native Go reader; never substitute a similarly named public project silently. Review build reproducibility, release/signing process, SBOM/crates, unsafe Rust, parser boundaries, fuzzing, CVE response, supported seekable-Zstandard dialect, index format, Tier-1 platform behavior (Rocky Linux, Ubuntu) including **native Linux FUSE**, optional macOS behavior, and recovery semantics. Prototype direct library/FFI, managed local sidecar/CLI, and Linux FUSE mount modes; do **not** design for WinFsp/Windows. Keep MCP core reads functional via direct API/native Go when FUSE is absent. Verify independent-frame seekable `.tar.zst` compatibility and compare all reads with the native Go fallback. Benchmark index build/load, range access, concurrency, cancellation, SELinux/AppArmor, truncation, corruption, crash recovery, and endpoint protection on representative Rocky/Ubuntu images.",
+      "objective": "Qualify the exact ratarmount-rs dependency against the recorded candidate pin (v0.1.14) into a measured security-reviewed go/no-go without replacing native Go.",
+      "implementation": "Candidate pin (2026-08-01): https://github.com/hilather/ratarmount-rs release **v0.1.14** commit eeff8502539375acb0e0bfae9d0b327fee0fbe4d (MIT). Machine pin: docs/arc/ratarmount-rs-pin.json. Complete ARC-000a/b/c qualification before production go; native Go reader remains mandatory. Obtain the exact repository URL, owner, commit or release, license, provenance, support model, and expected integration mode from engineering. If the dependency cannot be supplied or reproduced, record an explicit no-go/deferred result and continue with the native Go reader; never substitute a similarly named public project silently. Review build reproducibility, release/signing process, SBOM/crates, unsafe Rust, parser boundaries, fuzzing, CVE response, supported seekable-Zstandard dialect, index format, Tier-1 platform behavior (Rocky Linux, Ubuntu) including **native Linux FUSE**, optional macOS behavior, and recovery semantics. Prototype direct library/FFI, managed local sidecar/CLI, and Linux FUSE mount modes; do **not** design for WinFsp/Windows. Keep MCP core reads functional via direct API/native Go when FUSE is absent. Verify independent-frame seekable `.tar.zst` compatibility and compare all reads with the native Go fallback. Benchmark index build/load, range access, concurrency, cancellation, SELinux/AppArmor, truncation, corruption, crash recovery, and endpoint protection on representative Rocky/Ubuntu images.",
       "acceptance_criteria": [
+        "Candidate pin records repository hilather/ratarmount-rs, tag v0.1.14, commit eeff8502539375acb0e0bfae9d0b327fee0fbe4d, license MIT.",
         "Approved go/no-go names the exact repository, commit/release, owner, license, provenance, SBOM/dependencies, build process, update/rollback plan, and security-response owner.",
         "If the exact dependency cannot be accessed, reproduced, or approved, status is explicit no-go/deferred and the native reader remains the supported path.",
         "No similarly named project is substituted or described as the intended dependency without engineering confirmation.",
@@ -767,7 +768,7 @@
         "Adapter failure/disablement does not invalidate `ArchiveStore` or the durable format.",
         "No ordinary single-frame `.tar.zst` is accepted as performant random-access storage."
       ],
-      "acceptance_criteria_count": 9,
+      "acceptance_criteria_count": 10,
       "evidence_tests": [],
       "source_line": 330,
       "dependency_depth": 5,
@@ -1282,7 +1283,8 @@
       "dependents": [
         "SEC-003",
         "JEN-002",
-        "TEST-001"
+        "TEST-001",
+        "HOST-001"
       ]
     },
     {
@@ -2121,7 +2123,8 @@
       "dependency_depth": 13,
       "dependents": [
         "OAUTH-011",
-        "GWY-003"
+        "GWY-003",
+        "HOST-010"
       ]
     },
     {
@@ -2301,7 +2304,7 @@
       "dependency_text": "ARC-000, ARC-002",
       "parallel_safe": null,
       "objective": "Use the preferred archive implementation without making it a single point of failure.",
-      "implementation": "Implement the approved direct Rust API or managed sidecar. Pin version, sandbox/lifecycle/limits, controlled index location, cancellation, health checks, and sanitized errors. Optional mount mode is diagnostic only.",
+      "implementation": "Target pin hilather/ratarmount-rs v0.1.14 @ eeff8502539375acb0e0bfae9d0b327fee0fbe4d after ARC-000 production go. Implement the approved direct Rust API or managed sidecar. Pin version, sandbox/lifecycle/limits, controlled index location, cancellation, health checks, and sanitized errors. Optional mount mode is diagnostic only.",
       "acceptance_criteria": [
         "Adapter opens/list/range-reads supported packs within limits.",
         "No public listener or arbitrary user path traversal exists.",
@@ -3533,7 +3536,12 @@
       "source_line": 2374,
       "dependency_depth": 15,
       "dependents": [
-        "GWY-003"
+        "GWY-003",
+        "HOST-001",
+        "HOST-003",
+        "HOST-004",
+        "HOST-009",
+        "HOST-010"
       ]
     },
     {
@@ -3595,7 +3603,9 @@
       "evidence_tests": [],
       "source_line": 2420,
       "dependency_depth": 19,
-      "dependents": []
+      "dependents": [
+        "HOST-005"
+      ]
     },
     {
       "id": "MGR-001",
@@ -4086,6 +4096,915 @@
       "acceptance_criteria_count": 6,
       "evidence_tests": [],
       "source_line": 2824,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "ARC-000a",
+      "title": "Reproduce build and SBOM for ratarmount-rs pin v0.1.14",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "ARC-000",
+        "FND-002"
+      ],
+      "dependency_text": "ARC-000, FND-002",
+      "parallel_safe": null,
+      "objective": "Reproduce the pinned ratarmount-rs v0.1.14 build on Tier-1 Linux and capture SBOM/lock inputs.",
+      "implementation": "Checkout eeff8502539375acb0e0bfae9d0b327fee0fbe4d (tag v0.1.14) from https://github.com/hilather/ratarmount-rs; build on Rocky+Ubuntu; capture Cargo.lock hash, toolchain, features; produce SBOM.",
+      "acceptance_criteria": [
+        "Build of v0.1.14 succeeds on Rocky and Ubuntu with recorded toolchain.",
+        "SBOM and lockfile hash stored for the pin.",
+        "Re-fetch and verify instructions documented."
+      ],
+      "acceptance_criteria_count": 3,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "ARC-000b",
+        "ARC-000c"
+      ]
+    },
+    {
+      "id": "ARC-000b",
+      "title": "Security and supply-chain review of ratarmount-rs pin v0.1.14",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "ARC-000a"
+      ],
+      "dependency_text": "ARC-000a",
+      "parallel_safe": null,
+      "objective": "Security-review the pinned release before product adapter work.",
+      "implementation": "Review unsafe Rust, parser boundaries, licenses, CVE/update owner; define pin bump and adapter-disable rollback to native Go; time-boxed adversarial open/list/range tests.",
+      "acceptance_criteria": [
+        "Security/supply-chain notes recorded for v0.1.14.",
+        "Update/rollback process documented.",
+        "Bounded adversarial input exercise completed or residual risk accepted."
+      ],
+      "acceptance_criteria_count": 3,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "ARC-000"
+      ]
+    },
+    {
+      "id": "ARC-000c",
+      "title": "Tier-1 sidecar and optional FUSE prototype for pin v0.1.14",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "ARC-000a"
+      ],
+      "dependency_text": "ARC-000a",
+      "parallel_safe": true,
+      "objective": "Prototype integration modes for the pin without requiring FUSE for MCP.",
+      "implementation": "Sidecar/CLI lifecycle limits; optional Rocky/Ubuntu FUSE inspection; measure range/concurrency/cancel; prove kill/disable falls back to native Go ArchiveStore.",
+      "acceptance_criteria": [
+        "Sidecar prototype measured on Rocky and Ubuntu.",
+        "Optional FUSE path documented default-off.",
+        "Adapter disable leaves native reads working."
+      ],
+      "acceptance_criteria_count": 3,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "ARC-004a"
+      ]
+    },
+    {
+      "id": "ARC-004a",
+      "title": "ratarmount-rs sidecar/CLI lifecycle and sandbox (pin v0.1.14)",
+      "phase": "Phase 2 - Enterprise archive, diagnostics, and integrations",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ARC-004",
+        "ARC-000c"
+      ],
+      "dependency_text": "ARC-004, ARC-000c",
+      "parallel_safe": null,
+      "objective": "Productionize sandboxed sidecar lifecycle for the qualified pin.",
+      "implementation": "Spawn/kill/timeout/cancel; resource limits; allowlisted pack paths; health + native fallback; operator docs.",
+      "acceptance_criteria": [
+        "Lifecycle and sandbox limits enforced.",
+        "No non-loopback listener; path allowlist holds.",
+        "Operator enable/disable docs exist."
+      ],
+      "acceptance_criteria_count": 3,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "ARC-004b"
+      ]
+    },
+    {
+      "id": "ARC-004b",
+      "title": "Optional FUSE inspection path for ratarmount-rs (diag only)",
+      "phase": "Phase 2 - Enterprise archive, diagnostics, and integrations",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "ARC-004a",
+        "ARC-000c"
+      ],
+      "dependency_text": "ARC-004a, ARC-000c",
+      "parallel_safe": null,
+      "objective": "Optional human FUSE mount of L2 packs; never MCP hot path.",
+      "implementation": "Rocky+Ubuntu FUSE default-off; SELinux/AppArmor notes; Windows unsupported.",
+      "acceptance_criteria": [
+        "FUSE path default-off and documented.",
+        "MCP tools do not require FUSE.",
+        "Windows explicitly out of scope."
+      ],
+      "acceptance_criteria_count": 3,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "UI-000",
+      "title": "ADR: admin console architecture, reactive framework, and threat model",
+      "phase": "Phase 6 - Operator admin console (reactive SPA)",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "SEC-001",
+        "FND-008",
+        "OPS-001",
+        "AUD-001",
+        "OBS-001"
+      ],
+      "dependency_text": "SEC-001, FND-008, OPS-001, AUD-001, OBS-001",
+      "parallel_safe": null,
+      "objective": "Lock reactive SPA framework, admin BFF boundaries, operator authn/z, and threat model before UI code.",
+      "implementation": "Write ADRs for React+TS+Vite (or ADR equivalent), local admin BFF, loopback defaults, CSP, separation from MCP stdio; update threat model for XSS/CSRF/local privilege.",
+      "acceptance_criteria": [
+        "ADR records chosen reactive framework.",
+        "Threat model covers admin UI assets/actors.",
+        "No design places API tokens in browser storage.",
+        "MCP path independent of console."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "UI-001",
+        "UI-002"
+      ]
+    },
+    {
+      "id": "UI-001",
+      "title": "Scaffold reactive admin SPA and static asset pipeline",
+      "phase": "Phase 6 - Operator admin console (reactive SPA)",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "UI-000",
+        "FND-002",
+        "PKG-001"
+      ],
+      "dependency_text": "UI-000, FND-002, PKG-001",
+      "parallel_safe": null,
+      "objective": "Create reactive SPA workspace that builds versioned static assets.",
+      "implementation": "Scaffold web/admin with React+TypeScript+Vite (or ADR framework); make admin-ui; routes for Policy/Metrics/Audit/Diagnostics; CI smoke.",
+      "acceptance_criteria": [
+        "make admin-ui builds reproducibly on Rocky/Ubuntu.",
+        "Component test harness smoke in CI.",
+        "Shell routes exist.",
+        "Frontend license/NOTICE residual recorded."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "UI-004",
+        "UI-005",
+        "UI-006",
+        "UI-008"
+      ]
+    },
+    {
+      "id": "UI-002",
+      "title": "Local admin BFF / HTTP API (read path)",
+      "phase": "Phase 6 - Operator admin console (reactive SPA)",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "UI-000",
+        "OPS-001",
+        "OBS-001",
+        "AUD-001",
+        "POL-005"
+      ],
+      "dependency_text": "UI-000, OPS-001, OBS-001, AUD-001, POL-005",
+      "parallel_safe": null,
+      "objective": "Secret-free JSON API wrapping doctor, telemetry, effective policy, audit tail.",
+      "implementation": "admin serve or /admin/v1 default-off loopback; endpoints for health, version, effective policy, metrics, doctor, audit pagination; OpenAPI; canary scrub tests.",
+      "acceptance_criteria": [
+        "Admin HTTP disabled by default.",
+        "Loopback default; non-local residual hardened.",
+        "No secrets in JSON canary tests.",
+        "Stable error codes; pagination caps fail closed."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "UI-003",
+        "UI-004",
+        "UI-005",
+        "UI-006",
+        "UI-007"
+      ]
+    },
+    {
+      "id": "UI-003",
+      "title": "Operator authentication and admin RBAC for the console",
+      "phase": "Phase 6 - Operator admin console (reactive SPA)",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "UI-002",
+        "AUTH-001",
+        "POL-002",
+        "SEC-001"
+      ],
+      "dependency_text": "UI-002, AUTH-001, POL-002, SEC-001",
+      "parallel_safe": null,
+      "objective": "Authorize operators for console read/write; separate from MCP deny-only subjects.",
+      "implementation": "Roles viewer/operator/policy_admin; session bind; CSRF; cannot defeat force_read_only; logout invalidation.",
+      "acceptance_criteria": [
+        "Unauthenticated denied.",
+        "viewer cannot mutate policy/cache destroy.",
+        "policy_admin cannot widen enterprise force RO.",
+        "Spoofing tests pass."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "UI-004",
+        "UI-006",
+        "UI-007",
+        "UI-009",
+        "HOST-007"
+      ]
+    },
+    {
+      "id": "UI-004",
+      "title": "Policy / deny-only MCP RBAC viewer and controlled editor",
+      "phase": "Phase 6 - Operator admin console (reactive SPA)",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "UI-001",
+        "UI-002",
+        "UI-003",
+        "POL-001",
+        "POL-002",
+        "POL-003",
+        "POL-004",
+        "POL-005",
+        "MGR-001",
+        "CFG-002"
+      ],
+      "dependency_text": "UI-001, UI-002, UI-003, POL-001, POL-002, POL-003, POL-004, POL-005, MGR-001, CFG-002",
+      "parallel_safe": null,
+      "objective": "View effective RBAC/policy and apply controlled overlay changes via reactive UI.",
+      "implementation": "Effective policy view parity with policy show-effective; draft/validate/apply; signing keys stay server-side; dry-run diff; audit apply.",
+      "acceptance_criteria": [
+        "Parity with show-effective.",
+        "Invalid overlays rejected.",
+        "Cannot widen enterprise restrictions.",
+        "Signature mode fail-closed.",
+        "Reactive refresh after apply."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "UI-009"
+      ]
+    },
+    {
+      "id": "UI-005",
+      "title": "Performance and metrics dashboard",
+      "phase": "Phase 6 - Operator admin console (reactive SPA)",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "UI-001",
+        "UI-002",
+        "OBS-001",
+        "PERF-001"
+      ],
+      "dependency_text": "UI-001, UI-002, OBS-001, PERF-001",
+      "parallel_safe": null,
+      "objective": "Monitor in-process performance metrics in the admin console.",
+      "implementation": "Reactive dashboard for tool_calls, mcp_tool_*, Jenkins HTTP counters, circuit, cache gauges; auto-refresh; secret-free export.",
+      "acceptance_criteria": [
+        "Matches telemetry snapshot model.",
+        "No high-cardinality secret labels.",
+        "Series length capped.",
+        "Fleet aggregation residual documented."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "UI-009"
+      ]
+    },
+    {
+      "id": "UI-006",
+      "title": "Audit log browser",
+      "phase": "Phase 6 - Operator admin console (reactive SPA)",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "UI-001",
+        "UI-002",
+        "UI-003",
+        "AUD-001"
+      ],
+      "dependency_text": "UI-001, UI-002, UI-003, AUD-001",
+      "parallel_safe": null,
+      "objective": "Browse privacy-preserving audit events without shell access to JSONL.",
+      "implementation": "Filterable table, detail drawer, pagination, optional live tail, scrubbed export; never params/log bodies/tokens.",
+      "acceptance_criteria": [
+        "Parity with on-disk audit JSONL spot checks.",
+        "No non-schema field exfil.",
+        "Bounded memory.",
+        "Export secret-free and size-capped."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "UI-009"
+      ]
+    },
+    {
+      "id": "UI-007",
+      "title": "Administrative task surfaces (profiles, doctor, cache)",
+      "phase": "Phase 6 - Operator admin console (reactive SPA)",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "UI-002",
+        "UI-003",
+        "OPS-001",
+        "CFG-001"
+      ],
+      "dependency_text": "UI-002, UI-003, OPS-001, CFG-001",
+      "parallel_safe": null,
+      "objective": "Day-2 admin tasks currently done via CLI.",
+      "implementation": "Profiles list/show, doctor, cache status/verify, pins, quota, support-bundle, self-check; destructive confirm+audit.",
+      "acceptance_criteria": [
+        "CLI field parity for documented ops.",
+        "Destructive double-confirm audited.",
+        "No keyring material in profile show."
+      ],
+      "acceptance_criteria_count": 3,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "UI-008",
+      "title": "Serve integration, CSP, and packaging",
+      "phase": "Phase 6 - Operator admin console (reactive SPA)",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "UI-001",
+        "UI-002",
+        "PKG-001",
+        "FND-006"
+      ],
+      "dependency_text": "UI-001, UI-002, PKG-001, FND-006",
+      "parallel_safe": null,
+      "objective": "Ship SPA assets with binary/packages safely.",
+      "implementation": "embed or package dist/admin; admin serve; strict CSP; Rocky/Ubuntu+tarball assets; version shows UI build id.",
+      "acceptance_criteria": [
+        "Target host serves without npm.",
+        "CSP check.",
+        "Admin port default-off in docs.",
+        "Version includes UI asset id."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "UI-009",
+      "title": "E2E tests and adversarial checks for admin console",
+      "phase": "Phase 6 - Operator admin console (reactive SPA)",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "UI-004",
+        "UI-005",
+        "UI-006",
+        "UI-003",
+        "POL-005",
+        "TST-001"
+      ],
+      "dependency_text": "UI-004, UI-005, UI-006, UI-003, POL-005, TST-001",
+      "parallel_safe": null,
+      "objective": "Prevent console authz bypass and XSS regressions.",
+      "implementation": "Playwright/Cypress E2E; API contract tests; XSS canaries; CSRF; secret canary in responses.",
+      "acceptance_criteria": [
+        "E2E smoke documented/CI.",
+        "XSS canaries do not execute.",
+        "viewer cannot apply policy.",
+        "Secret canary absent from responses."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "UI-010",
+      "title": "Accessibility, residual honesty UX polish",
+      "phase": "Phase 6 - Operator admin console (reactive SPA)",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "UI-001",
+        "UI-004",
+        "UI-005",
+        "UI-006"
+      ],
+      "dependency_text": "UI-001, UI-004, UI-005, UI-006",
+      "parallel_safe": null,
+      "objective": "Operator-usable accessible console.",
+      "implementation": "Keyboard nav, ARIA, axe smoke, residual banners, docs links.",
+      "acceptance_criteria": [
+        "Critical flows keyboard-only.",
+        "a11y smoke on primary routes.",
+        "Residual banners for unsigned policy/disabled telemetry/etc."
+      ],
+      "acceptance_criteria_count": 3,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "HOST-001",
+      "title": "Harden Streamable HTTP for multi-user gateway authn",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "GWY-002",
+        "MCP-001"
+      ],
+      "dependency_text": "GWY-002, MCP-001",
+      "parallel_safe": null,
+      "objective": "Authenticated individual subjects on MCP HTTP in gateway mode.",
+      "implementation": "Per-user authn on Streamable HTTP; shared secret not multi-user identity; bind to policy.Subject.",
+      "acceptance_criteria": [
+        "Non-local bind requires authenticated subject.",
+        "Shared-secret alone is not multi-user identity.",
+        "Session binds to policy.Subject; subject change fails closed.",
+        "Tokens never in logs/errors/metrics/support bundles.",
+        "Gateway mode cannot enable anonymous multi-user."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "HOST-002",
+        "HOST-006",
+        "HOST-009",
+        "HOST-010"
+      ]
+    },
+    {
+      "id": "HOST-002",
+      "title": "Reverse-proxy and non-loopback deployment matrix",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "HOST-001"
+      ],
+      "dependency_text": "HOST-001",
+      "parallel_safe": null,
+      "objective": "Safe reverse-proxy and non-loopback placement for gateway HTTP.",
+      "implementation": "Document TLS/path-prefix/Host/Origin matrix; fail closed empty allow lists.",
+      "acceptance_criteria": [
+        "Documented deployment shapes without CORS wildcard.",
+        "Empty AllowedHosts/Origins fail closed for non-local.",
+        "Path-prefix origin pin coverage.",
+        "Health does not leak secrets without auth."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "HOST-003",
+      "title": "Gateway serve wiring: live Obtain to Jenkins client",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "GWY-002"
+      ],
+      "dependency_text": "GWY-002",
+      "parallel_safe": null,
+      "objective": "Wire Obtain for enabled auth modes into Jenkins client in gateway mode.",
+      "implementation": "Mode A Basic token; mode B/C Bearer access token; no shared SA fallthrough.",
+      "acceptance_criteria": [
+        "Mode A uses subject-only personal API token.",
+        "Mode B/C use Bearer access token only.",
+        "Obtain failure does not use another subject credential.",
+        "ConsentRequired exposes auth URL metadata only.",
+        "Tests per mode with mocks."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "HOST-008",
+        "HOST-011"
+      ]
+    },
+    {
+      "id": "HOST-004",
+      "title": "Multi-tenant cache and continuation isolation",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "GWY-002"
+      ],
+      "dependency_text": "GWY-002",
+      "parallel_safe": null,
+      "objective": "Prevent cross-user cache and continuation leakage on shared host.",
+      "implementation": "Namespace cache by subject/tenant/profile; continuations fail closed across subjects.",
+      "acceptance_criteria": [
+        "Cache key includes subject/tenant/profile or process isolation tested.",
+        "Continuations fail closed across subjects.",
+        "Two-user offline isolation test.",
+        "Support-bundle/doctor secret-free."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "HOST-008"
+      ]
+    },
+    {
+      "id": "HOST-005",
+      "title": "Gateway health, readiness, and resource envelope",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "GWY-004"
+      ],
+      "dependency_text": "GWY-004",
+      "parallel_safe": null,
+      "objective": "Production liveness/readiness and resource limits for gateway package.",
+      "implementation": "Non-root image, readiness when provider not Ready, documented limits.",
+      "acceptance_criteria": [
+        "Readiness fails or residual when provider not Ready.",
+        "Non-root; limited writable volumes.",
+        "Documented CPU/memory/FD limits.",
+        "Secret-free compose/kustomize examples."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "HOST-006",
+      "title": "Per-subject rate limits and multi-tenant budgets",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "HOST-001"
+      ],
+      "dependency_text": "HOST-001",
+      "parallel_safe": null,
+      "objective": "Per-subject budgets so one user cannot exhaust process for others.",
+      "implementation": "Per-subject concurrent caps under process absolute ceilings.",
+      "acceptance_criteria": [
+        "Per-subject concurrent tool/preview caps.",
+        "Process absolute ceilings remain.",
+        "Starvation policy tested or documented.",
+        "Mutation confirms cannot replay across subjects."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "HOST-007",
+      "title": "Gateway operator admin path (non-SaaS)",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "UI-003"
+      ],
+      "dependency_text": "UI-003",
+      "parallel_safe": null,
+      "objective": "Operator admin for team gateway without multi-tenant SaaS control plane.",
+      "implementation": "Document non-loopback admin; no vault material in browser; residual multi-operator sessions.",
+      "acceptance_criteria": [
+        "Non-loopback admin documented with token/mTLS residual.",
+        "No Jenkins tokens/vault in browser responses.",
+        "Multi-operator residual or designed sessions.",
+        "localStorage token pilot-only.",
+        "Enabled auth modes listed secret-free."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "HOST-008",
+      "title": "HA / multi-replica residual (Tier B)",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P3",
+      "dependencies": [
+        "HOST-003",
+        "HOST-004"
+      ],
+      "dependency_text": "HOST-003, HOST-004",
+      "parallel_safe": null,
+      "objective": "Define multi-replica only after durable vault.",
+      "implementation": "Single-replica Tier A default; multi-replica checklist.",
+      "acceptance_criteria": [
+        "Single-replica Tier A default documented.",
+        "Multi-replica checklist (vault, affinity, audit).",
+        "Non-goal until vault exists."
+      ],
+      "acceptance_criteria_count": 3,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "HOST-009",
+      "title": "Mode A: per-user personal API token vault (gateway)",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "HOST-001",
+        "GWY-002"
+      ],
+      "dependency_text": "HOST-001, GWY-002",
+      "parallel_safe": null,
+      "objective": "Multi-user gateway using personal API tokens only (no OAuth/JWT required).",
+      "implementation": "Per-user vault Obtain \u2192 Basic to Jenkins; never shared SA.",
+      "acceptance_criteria": [
+        "Provision/rotate/revoke per-user token in vault.",
+        "Obtain subject-isolated; cross-subject fails closed.",
+        "No process-wide default token fallthrough.",
+        "Secret canaries on logs/admin/MCP/bundles.",
+        "RO and deny-only RBAC unchanged.",
+        "Documented as first-class Tier A mode."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "HOST-011"
+      ]
+    },
+    {
+      "id": "HOST-010",
+      "title": "Mode B: Jenkins JWT resource-server bearer path",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "OAUTH-009",
+        "HOST-001",
+        "GWY-002"
+      ],
+      "dependency_text": "OAUTH-009, HOST-001, GWY-002",
+      "parallel_safe": null,
+      "objective": "End-to-end Bearer Jenkins-audience JWT with Jenkins as RS only.",
+      "implementation": "jwt-auth-filter live pin + claim validation + gateway Bearer wire.",
+      "acceptance_criteria": [
+        "Live invalid Bearer no Basic/session/anonymous fallthrough.",
+        "Claim validation; ID token not API credential.",
+        "Wrong audience/Graph/generic rejected.",
+        "Bearer without Basic mix on same call.",
+        "Doctor residual when RS not qualified.",
+        "Operator docs for Entra + filter pin."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "HOST-011"
+      ]
+    },
+    {
+      "id": "HOST-011",
+      "title": "Auth mode matrix and fail-closed mode switch (A+B+C)",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "HOST-009",
+        "HOST-010",
+        "HOST-003"
+      ],
+      "dependency_text": "HOST-009, HOST-010, HOST-003",
+      "parallel_safe": null,
+      "objective": "Ship and qualify all three auth modes with fail-closed switch.",
+      "implementation": "Config enables api_token_vault, jwt_rs_bearer, agentcore_3lo_obo; no silent fallthrough.",
+      "acceptance_criteria": [
+        "Explicit enabled-mode config for A/B/C.",
+        "Offline matrix row per mode for auth header shape.",
+        "Failed/disabled mode does not use another credential.",
+        "Qualify evidence or residual per mode.",
+        "Operator guide for choosing A vs B vs C.",
+        "Admin residual lists enabled modes."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "HOST-012",
+      "title": "Docker lab umbrella for server-side auth (opt-in Makefile)",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "HOST-009"
+      ],
+      "dependency_text": "HOST-009",
+      "parallel_safe": null,
+      "objective": "Documented Compose + Makefile entry points for modes A/B/C auth labs without default CI gate.",
+      "implementation": "Docker Compose opt-in lab; not default make test. See docs/roadmap/server-team-hosted.md and AGENTS.md Docker scaffolds.",
+      "acceptance_criteria": [
+        "Opt-in Makefile targets for auth labs.",
+        "Documented compose profiles for A and stubs for B/C.",
+        "Tear-down removes volumes; no secrets committed.",
+        "README cross-links OAUTH/HOST mode docs.",
+        "No shared SA or Jenkins-as-AS guidance."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "HOST-013",
+      "title": "Docker scaffold: Jenkins JWT resource-server lab (mode B)",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "OAUTH-009"
+      ],
+      "dependency_text": "OAUTH-009",
+      "parallel_safe": null,
+      "objective": "Disposable JWT RS lab (jwt-auth-filter or mock RS proxy) for mode B Bearer tests.",
+      "implementation": "Docker Compose opt-in lab; not default make test. See docs/roadmap/server-team-hosted.md and AGENTS.md Docker scaffolds.",
+      "acceptance_criteria": [
+        "make-up healthy lab with residual documented if plugin pin deferred.",
+        "Opt-in test: valid JWT allowed; wrong aud/exp/iss denied.",
+        "Invalid Bearer no Basic/session/anonymous success on OAuth-required routes.",
+        "Lab-only keys; tear-down destroys secrets."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "HOST-014",
+      "title": "Docker scaffold: mock OIDC IdP (PKCE / claims)",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [],
+      "dependency_text": "None",
+      "parallel_safe": null,
+      "objective": "Mock OIDC AS for offline mode B token mint and claim validation.",
+      "implementation": "Docker Compose opt-in lab; not default make test. See docs/roadmap/server-team-hosted.md and AGENTS.md Docker scaffolds.",
+      "acceptance_criteria": [
+        "Discovery+JWKS on loopback.",
+        "Mint tokens with configurable aud/iss/exp for HOST-013.",
+        "Wrong-audience/expired fail closed in tests.",
+        "No production secrets committed; opt-in only."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "HOST-015",
+      "title": "Docker scaffold: mock AgentCore / token-exchange endpoint (mode C)",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "GWY-001"
+      ],
+      "dependency_text": "GWY-001",
+      "parallel_safe": null,
+      "objective": "Mock token/3LO peer for gateway Obtain integration without live AgentCore.",
+      "implementation": "Docker Compose opt-in lab; not default make test. See docs/roadmap/server-team-hosted.md and AGENTS.md Docker scaffolds.",
+      "acceptance_criteria": [
+        "Obtain Live against mock returns correct audience credential.",
+        "Wrong audience/errors fail closed without shared SA.",
+        "ConsentRequired metadata only; no tokens in logs.",
+        "Residual vs real AgentCore vault documented.",
+        "Opt-in Makefile; secret-free compose."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 0,
       "dependency_depth": 0,
       "dependents": []
     }

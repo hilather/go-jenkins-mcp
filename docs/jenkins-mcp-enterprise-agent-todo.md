@@ -21,6 +21,8 @@ regressions, code review, documentation, and incomplete-work tracking.
 3. **Code review for every change set:** structured review (prefer `/review`) after tests/docs; fix bug-severity findings before treating work as done or committing large behavioral changes.
 4. **Documentation always updated:** behavior, CLI/tool contracts, architecture, packaging, and agent guidance stay in sync with the code in the same change; no silent capability claims.
 5. **Todo / backlog tracking:** work against task IDs; maintain session todos; if incomplete, leave explicit **next steps** (remaining work, blockers, verification); never check acceptance/DoD boxes without demonstrated evidence.
+6. **Admin console kept current:** operator-relevant features (policy, metrics, audit, doctor/cache, profiles, day-2 CLI) update `internal/admin` + `web/admin` + `docs/admin/api-v1.md` in the same change, or leave an explicit residual TODO — never silent drift (see `AGENTS.md`).
+7. **Docker integration scaffolds:** for external systems (Jenkins, IdP/JWT RS, gateway, HTTP peers), extend or add Compose under `testdata/` / `deploy/` with opt-in Makefile targets — **not** default `make test`. Prefer mocks for Entra; never bake secrets. See `AGENTS.md` “Docker integration scaffolds” and **HOST-012…HOST-015**.
 
 ### Backlog workflow
 
@@ -35,19 +37,20 @@ regressions, code review, documentation, and incomplete-work tracking.
 9. Attach before/after measurements for performance-sensitive changes: latency, CPU, allocation/RSS, network, disk, compression, amplification, and MCP bytes.
 10. Every storage task includes crash/recovery, corruption, compatibility, and bounded-read tests.
 11. Every behavior change updates schema/tool/user/admin/security documentation and relevant ADRs.
-12. Do not add mutating Jenkins tools until global read-only, MCP RBAC, audit, preview/confirmation, and mutation-policy epics are approved.
-13. Treat effective access as `Jenkins allow AND global mode AND MCP policy AND operation budgets`; MCP policy only reduces access.
-14. A Cursor/profile setting can enable read-only but cannot disable a stronger enterprise or emergency read-only state.
-15. Jenkins is not a native 3LO authorization server. Do not confuse UI OIDC login, outbound workload OIDC, or credential frameworks with delegated API authorization.
-16. Do not send ID/Graph/generic gateway tokens to Jenkins. Bearer mode requires a validated access token for the exact Jenkins resource/audience.
-17. Zstandard random access is based on independent frames/checkpoints plus a seek table. Do not call arbitrary blocks inside one frame independently seekable.
-18. Never produce a conventional single-frame `.tar.zst` for L2 and call it random access; validate frame count, seek table, TAR, and checksums.
-19. Managed/gateway mode preserves the personal subject end to end and never collapses users into a generic Jenkins identity.
-20. `ratarmount-rs` is the preferred L2 engine, but all durable data must remain readable through the versioned format and native fallback.
-21. AgentCore authorization, token, discovery, and consent endpoints point to Entra ID or another approved authorization server, not Jenkins, unless the conditional Jenkins authorization-server epic receives an explicit go decision.
-22. Count encoded wire bytes and decoded bytes separately. Stream the decoded response directly into bounded parsers or independent Zstandard frames; never stage an unbounded plaintext log merely to compress it later.
-23. Batch only related logs whose user, profile/controller, authorization policy, retention, sensitivity, and encryption domains match; never improve locality by weakening isolation.
-24. If a task or session is only partially done, record **next steps** (remaining acceptance criteria, blockers, follow-up task IDs, verification commands) before stopping; do not leave status implied.
+12. Keep the **operator admin console** current with operator-relevant product changes (BFF/SPA/API contract or documented residual) — see `AGENTS.md`.
+13. Do not add mutating Jenkins tools until global read-only, MCP RBAC, audit, preview/confirmation, and mutation-policy epics are approved.
+14. Treat effective access as `Jenkins allow AND global mode AND MCP policy AND operation budgets`; MCP policy only reduces access.
+15. A Cursor/profile setting can enable read-only but cannot disable a stronger enterprise or emergency read-only state.
+16. Jenkins is not a native 3LO authorization server. Do not confuse UI OIDC login, outbound workload OIDC, or credential frameworks with delegated API authorization.
+17. Do not send ID/Graph/generic gateway tokens to Jenkins. Bearer mode requires a validated access token for the exact Jenkins resource/audience.
+18. Zstandard random access is based on independent frames/checkpoints plus a seek table. Do not call arbitrary blocks inside one frame independently seekable.
+19. Never produce a conventional single-frame `.tar.zst` for L2 and call it random access; validate frame count, seek table, TAR, and checksums.
+20. Managed/gateway mode preserves the personal subject end to end and never collapses users into a generic Jenkins identity.
+21. `ratarmount-rs` is the preferred L2 engine, but all durable data must remain readable through the versioned format and native fallback.
+22. AgentCore authorization, token, discovery, and consent endpoints point to Entra ID or another approved authorization server, not Jenkins, unless the conditional Jenkins authorization-server epic receives an explicit go decision.
+23. Count encoded wire bytes and decoded bytes separately. Stream the decoded response directly into bounded parsers or independent Zstandard frames; never stage an unbounded plaintext log merely to compress it later.
+24. Batch only related logs whose user, profile/controller, authorization policy, retention, sensitivity, and encryption domains match; never improve locality by weakening isolation.
+25. If a task or session is only partially done, record **next steps** (remaining acceptance criteria, blockers, follow-up task IDs, verification commands) before stopping; do not leave status implied.
 
 ### Definition of done for every task
 
@@ -352,27 +355,76 @@ Write an ADR and security review note that distinguishes Jenkins scripted Basic/
 ## ARC-000 - Obtain and qualify the exact `ratarmount-rs` dependency
 
 **Priority:** P0  
-**Dependencies:** FND-002, FND-008
+**Dependencies:** FND-002, FND-008  
+**Status:** Candidate pin recorded (2026-08-01) — qualification open  
+**Pin:** [`docs/arc/ratarmount-rs-pin.json`](arc/ratarmount-rs-pin.json) · [qualification](arc/ratarmount-rs-qualification.md)
+
+| Pin field | Value |
+|-----------|--------|
+| Repository | https://github.com/hilather/ratarmount-rs |
+| Release | **v0.1.14** (latest as of 2026-08-01) |
+| Commit | `eeff8502539375acb0e0bfae9d0b327fee0fbe4d` |
+| License | MIT |
+| Release URL | https://github.com/hilather/ratarmount-rs/releases/tag/v0.1.14 |
 
 **Objective**
 
-Turn the preferred but not yet supplied Rust archive implementation into a measured, security-reviewed go/no-go decision without guessing which project is intended.
+Turn the preferred Rust archive implementation into a measured, security-reviewed go/no-go decision against an **exact pinned release**, without guessing the repository and without replacing the mandatory native Go reader.
 
 **Implementation**
 
-Obtain the exact repository URL, owner, commit or release, license, provenance, support model, and expected integration mode from engineering. If the dependency cannot be supplied or reproduced, record an explicit no-go/deferred result and continue with the native Go reader; never substitute a similarly named public project silently. Review build reproducibility, release/signing process, SBOM/crates, unsafe Rust, parser boundaries, fuzzing, CVE response, supported seekable-Zstandard dialect, index format, Tier-1 platform behavior (Rocky Linux, Ubuntu) including **native Linux FUSE**, optional macOS behavior, and recovery semantics. Prototype direct library/FFI, managed local sidecar/CLI, and Linux FUSE mount modes; do **not** design for WinFsp/Windows. Keep MCP core reads functional via direct API/native Go when FUSE is absent. Verify independent-frame seekable `.tar.zst` compatibility and compare all reads with the native Go fallback. Benchmark index build/load, range access, concurrency, cancellation, SELinux/AppArmor, truncation, corruption, crash recovery, and endpoint protection on representative Rocky/Ubuntu images.
+Use the candidate pin above (do not silently substitute Python ratarmount or other similarly named projects). Review build reproducibility, release/signing process, SBOM/crates, unsafe Rust, parser boundaries, fuzzing, CVE response, supported seekable-Zstandard dialect, index format, Tier-1 platform behavior (Rocky Linux, Ubuntu) including **native Linux FUSE**, optional macOS behavior, and recovery semantics. Prototype managed local sidecar/CLI (preferred isolation), optional Linux FUSE mount for inspection, and direct library/FFI only if a stable C API exists; do **not** design for WinFsp/Windows. Keep MCP core reads functional via direct API/native Go when FUSE is absent. Verify independent-frame seekable `.tar.zst` compatibility and compare all reads with the native Go fallback. Benchmark index build/load, range access, concurrency, cancellation, SELinux/AppArmor, truncation, corruption, crash recovery, and endpoint protection on representative Rocky/Ubuntu images. On go: set pin JSON `status` to `production_go` and unlock ARC-004 product wiring.
 
 **Acceptance criteria**
 
-- [ ] Approved go/no-go names the exact repository, commit/release, owner, license, provenance, SBOM/dependencies, build process, update/rollback plan, and security-response owner.
-- [ ] If the exact dependency cannot be accessed, reproduced, or approved, status is explicit no-go/deferred and the native reader remains the supported path.
-- [ ] No similarly named project is substituted or described as the intended dependency without engineering confirmation.
+- [x] Candidate pin names exact repository, release tag, commit SHA, owner, and license (v0.1.14 / `eeff850…` / MIT).
+- [ ] Approved production go/no-go records provenance, SBOM/dependencies, build process, update/rollback plan, and security-response owner.
+- [ ] If the pin cannot be reproduced or approved, status is explicit no-go/deferred and the native reader remains the only supported path.
+- [ ] No similarly named project is substituted without engineering confirmation (pin is `hilather/ratarmount-rs` only).
 - [ ] Rocky Linux and Ubuntu qualify native Linux FUSE mount paths; MCP still serves log/search reads via direct API or native Go when FUSE is unavailable.
 - [ ] Direct API, sidecar, and Linux FUSE mount choices are measured and documented; WinFsp/Windows is out of scope.
-- [ ] Qualified adapter and native reader return identical golden pack/member/range bytes.
-- [ ] Warm/cold read, index, memory, concurrency, cancellation, corruption, recovery, and EDR measurements exist.
+- [ ] Qualified adapter and native reader return identical golden pack/member/range bytes (or documented compatibility repack).
+- [ ] Warm/cold read, index, memory, concurrency, cancellation, corruption, recovery, and EDR measurements exist for the pin.
 - [ ] Adapter failure/disablement does not invalidate `ArchiveStore` or the durable format.
 - [ ] No ordinary single-frame `.tar.zst` is accepted as performant random-access storage.
+
+### Follow-up tasks (pin → product)
+
+#### ARC-000a - Reproduce build and SBOM for pin v0.1.14
+
+**Priority:** P0  
+**Dependencies:** ARC-000 (pin), FND-002
+
+- [ ] Checkout `eeff8502539375acb0e0bfae9d0b327fee0fbe4d` / tag `v0.1.14` and build default workspace members on Rocky + Ubuntu.
+- [ ] Capture `Cargo.lock` (or generate and hash), Rust toolchain version, and feature flags used for the product integration path.
+- [ ] Produce SBOM (e.g. `cargo cyclonedx` / org standard) and store under `docs/arc/` or release evidence (no secrets).
+- [ ] Document how to re-fetch the pin tarball and verify SHA of tag object.
+
+#### ARC-000b - Security and supply-chain review of pin v0.1.14
+
+**Priority:** P0  
+**Dependencies:** ARC-000a
+
+- [ ] Review unsafe Rust, parser/FFI boundaries, and trust model for untrusted pack bytes.
+- [ ] Confirm license set (MIT + transitive) is acceptable; record CVE-response / update owner.
+- [ ] Define update/rollback: how product bumps pin (tag+SHA only), and how adapter disable returns to native Go.
+- [ ] Fuzz or bounded adversarial inputs for open/list/range on multi-frame `.tar.zst` (time-boxed).
+
+#### ARC-000c - Tier-1 sidecar + optional FUSE prototype (pin v0.1.14)
+
+**Priority:** P0  
+**Dependencies:** ARC-000a
+
+- [ ] Sidecar/CLI: lifecycle, timeout, cancel, no public listener, controlled index paths, sanitized errors.
+- [ ] Optional FUSE mount on Rocky + Ubuntu for **diagnostic inspection only** (not required for MCP).
+- [ ] Measure index build/load, warm/cold range, concurrency, cancel, SELinux/AppArmor notes.
+- [ ] Prove adapter kill/disable leaves native Go `ArchiveStore` reads working.
+
+---
+
+## ARC-000 / ARC-004 gate
+
+Do **not** ship ARC-004 in the default pilot binary until ARC-000 production go is recorded. Native Go L2 remains the only required path for RO pilot.
 
 ---
 
@@ -1505,23 +1557,44 @@ Parse and validate the selected seek table, map raw TAR/member ranges to indepen
 ## ARC-004 - Implement the qualified `ratarmount-rs` adapter
 
 **Priority:** P1  
-**Dependencies:** ARC-000, ARC-002
+**Dependencies:** ARC-000 (production go), ARC-002, ARC-003  
+**Pin target:** `hilather/ratarmount-rs` **v0.1.14** @ `eeff8502539375acb0e0bfae9d0b327fee0fbe4d` (see `docs/arc/ratarmount-rs-pin.json`)
 
 **Objective**
 
-Use the preferred archive implementation without making it a single point of failure.
+Use the preferred archive implementation without making it a single point of failure; MCP default remains native Go.
 
 **Implementation**
 
-Implement the approved direct Rust API or managed sidecar. Pin version, sandbox/lifecycle/limits, controlled index location, cancellation, health checks, and sanitized errors. Optional mount mode is diagnostic only.
+Implement the approved managed sidecar/CLI (preferred) or direct API after ARC-000 go. Embed or document the pin (tag + SHA). Sandbox/lifecycle/limits, controlled index location, cancellation, health checks, and sanitized errors. Optional FUSE mount mode is diagnostic only. Never require FUSE for tool reads. Expose capability flags (`RatarmountAdapter`, `FUSEMountAvailable`) honestly.
 
 **Acceptance criteria**
 
-- [ ] Adapter opens/list/range-reads supported packs within limits.
+- [ ] Adapter opens/list/range-reads pack-format-v1 packs within limits against pin **v0.1.14**.
 - [ ] No public listener or arbitrary user path traversal exists.
 - [ ] Sidecar/FFI failure degrades to native reader where possible.
 - [ ] Index corruption/mismatch is detected and recoverable.
-- [ ] Supply-chain/update/rollback process is documented.
+- [ ] Supply-chain/update/rollback process is documented (bump pin JSON + re-qualify).
+- [ ] Default pilot/serve path works with adapter disabled.
+
+#### ARC-004a - Sidecar/CLI lifecycle and sandbox (pin v0.1.14)
+
+**Priority:** P1  
+**Dependencies:** ARC-004, ARC-000c
+
+- [ ] Spawn/kill/timeout/cancel policies; resource limits (CPU/RSS/files).
+- [ ] No listen on non-loopback; pack paths allowlisted to profile data dir only.
+- [ ] Health check + fail-closed handoff to native Go.
+- [ ] Operator docs: enable/disable, logs (secret-free), troubleshooting.
+
+#### ARC-004b - Optional FUSE inspection path (diag only)
+
+**Priority:** P2  
+**Dependencies:** ARC-004a, ARC-000c
+
+- [ ] Rocky + Ubuntu FUSE mount for human inspection of L2 packs (not MCP hot path).
+- [ ] Policy/default-off; document residual SELinux/AppArmor.
+- [ ] Windows explicitly unsupported.
 
 ---
 
@@ -1691,7 +1764,8 @@ Plan packs by user/profile/controller, root job/build or investigation collectio
 ## ARC-012 - Validate seek-table and ratarmount compatibility variants
 
 **Priority:** P1  
-**Dependencies:** ARC-003, ARC-004, ARC-010
+**Dependencies:** ARC-003, ARC-004, ARC-010  
+**Pin target:** `ratarmount-rs` **v0.1.14** @ `eeff8502539375acb0e0bfae9d0b327fee0fbe4d`
 
 **Objective**
 
@@ -2223,7 +2297,12 @@ Add shared request plans, deduplicated fetches, compact cached summaries, priori
 
 ---
 
-# Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations
+# Phase 4 - Controlled mutations, AgentCore gateway
+
+> **Server / team-hosted roadmap (planning SoT):** [`docs/roadmap/server-team-hosted.md`](roadmap/server-team-hosted.md)  
+> Prioritize existing **GWY-001–004**, **OAUTH-009/010**, **MGR-001**, and proposed **HOST-001…** gap tasks there. Local stdio remains default (ADR 0002). Do not invent a parallel product epic.
+
+, and optional integrations
 
 ## MUT-001 - Implement mutation policy, preview, and confirmation framework
 
@@ -2501,6 +2580,316 @@ Produce a signed non-root Linux container/service with approved Streamable HTTP 
 - [ ] Global read-only and MCP RBAC behavior matches local mode.
 - [ ] Image is minimal/non-root/signed with SBOM/provenance and bounded resources.
 - [ ] Near-source deployment demonstrates measurable bandwidth benefit without unacceptable auth/latency cost.
+
+---
+
+# Server / team-hosted deployment epic (HOST-*) — implement all auth modes
+
+**Planning SoT:** [`docs/roadmap/server-team-hosted.md`](roadmap/server-team-hosted.md)  
+**Standing decision:** Tier A implements **all three** Jenkins credential modes as first-class; a site enables one or more and picks a default. Do **not** collapse the epic to “OAuth only” or “JWT only.”
+
+| Mode | ID | Jenkins wire | Obtain path | Primary tasks |
+|------|-----|--------------|-------------|---------------|
+| **A** | `api_token_vault` | Basic personal API token | Per-user vault (never shared SA) | **HOST-009**, HOST-003 |
+| **B** | `jwt_rs_bearer` | Bearer Jenkins-audience JWT | External IdP (Entra) issuance; Jenkins **jwt-auth-filter** RS only | **OAUTH-009**, **HOST-010** |
+| **C** | `agentcore_3lo_obo` | Bearer JWT (typical) | AgentCore 3LO and/or OBO against **Entra AS** | **OAUTH-010**, **GWY-001**, HOST-003 |
+
+**Shared (all modes):** HOST-001, HOST-002, GWY-002, HOST-003, HOST-004, HOST-005, HOST-006, HOST-011, GWY-003/004, MGR-001, REL-001/002.  
+**Docker labs (opt-in):** **HOST-012** (umbrella + Makefile), **HOST-013** (mode B JWT/RS compose), **HOST-014** (mock OIDC IdP), **HOST-015** (mode C mock token/3LO). Extend `testdata/jenkins-compose/` / new `testdata/oauth-lab/` — never default `make test`.  
+**Ops residual:** HOST-007 (admin). **Tier B:** HOST-008 (HA).
+
+**Agent rule:** When implementing HOST/GWY/OAUTH for server-side, keep operator admin console residual notes current (`AGENTS.md`). Prefer one task ID per PR; modes may parallelize after HOST-001 + GWY-002. **Always scaffold Docker for integration labs where possible** (`AGENTS.md`).
+
+---
+
+## HOST-001 - Harden Streamable HTTP for multi-user gateway authn
+
+**Priority:** P0  
+**Dependencies:** GWY-002, MCP-001  
+
+**Objective**
+
+Authenticated individual subjects on MCP HTTP in gateway mode (shared secret alone is not multi-user identity).
+
+**Acceptance criteria**
+
+- [ ] Non-local bind requires authenticated subject (not anonymous).
+- [ ] Shared-secret is transport gate only if retained; still requires per-user identity.
+- [ ] Session/request credentials bind to `policy.Subject`; mid-session subject change fails closed.
+- [ ] Tokens never in logs/errors/metrics/support bundles (canaries).
+- [ ] Gateway mode cannot enable anonymous multi-user; local KD-008 residual remains explicit for non-gateway.
+
+---
+
+## HOST-002 - Reverse-proxy and non-loopback deployment matrix
+
+**Priority:** P1  
+**Dependencies:** HOST-001, NET-001  
+
+**Objective**
+
+Safe placement behind site reverse-proxy (TLS, path prefix, Host/Origin).
+
+**Acceptance criteria**
+
+- [ ] Documented allowed deployment shapes (no CORS wildcard).
+- [ ] Empty AllowedHosts / AllowedOrigins fail closed for non-local.
+- [ ] Path-prefix origin pin fixture/live matrix (NET-001 residual).
+- [ ] Health endpoints do not leak secrets or broad inventory without auth.
+
+---
+
+## HOST-003 - Gateway serve wiring: live Obtain to Jenkins client
+
+**Priority:** P0  
+**Dependencies:** GWY-001 (mode C), HOST-009 (mode A), HOST-010 (mode B), GWY-002  
+
+**Objective**
+
+When `--gateway` and provider Ready, Jenkins credentials come from **Obtain for the bound subject and enabled mode** — never silent shared keyring/SA fallthrough.
+
+**Acceptance criteria**
+
+- [ ] Mode A → Basic personal token for subject only.
+- [ ] Mode B/C → Bearer access token only (never ID token as API credential).
+- [ ] Obtain failure does not use another subject’s credential.
+- [ ] ConsentRequired (mode C) surfaces auth URL metadata only.
+- [ ] Unit/integration tests per mode with mocks.
+- [ ] `docs/gateway/README.md` residuals closed for wiring.
+
+---
+
+## HOST-004 - Multi-tenant cache and continuation isolation
+
+**Priority:** P0  
+**Dependencies:** GWY-002, STO layout  
+
+**Acceptance criteria**
+
+- [ ] Cache key includes subject/tenant/profile (or process isolation enforced and tested).
+- [ ] Continuations fail closed across subjects when multi-tenant.
+- [ ] Two-user offline test: no shared archive handle / cache hit leakage.
+- [ ] Support-bundle/doctor remain secret-free under multi-user layout.
+
+---
+
+## HOST-005 - Gateway health, readiness, and resource envelope
+
+**Priority:** P1  
+**Dependencies:** GWY-004 scaffold  
+
+**Acceptance criteria**
+
+- [ ] Readiness fails or clearly residual when gateway provider not Ready.
+- [ ] Non-root image; writable only cache/config volumes where practical.
+- [ ] Documented CPU/memory/FD limits for pilot.
+- [ ] Compose/kustomize examples secret-free.
+
+---
+
+## HOST-006 - Per-subject rate limits and multi-tenant budgets
+
+**Priority:** P1  
+**Dependencies:** MCP-001, HOST-001  
+
+**Acceptance criteria**
+
+- [ ] Per-subject concurrent tool/preview caps (policy may only reduce).
+- [ ] Process absolute ceilings still apply.
+- [ ] Tests or documented fair-share policy for cross-subject starvation.
+- [ ] Mutation confirm tokens cannot replay across subjects.
+
+---
+
+## HOST-007 - Gateway operator admin path (non-SaaS)
+
+**Priority:** P2  
+**Dependencies:** UI-003–UI-009, ADR 0014  
+
+**Acceptance criteria**
+
+- [ ] Document non-loopback admin only with token (+ residual mTLS/OIDC design).
+- [ ] No Jenkins API tokens or vault material in browser responses.
+- [ ] Multi-operator sessions: residual “single process role” or designed sessions + CSRF.
+- [ ] Quarantine localStorage token UX for non-pilot.
+- [ ] CSP preserved under reverse-proxy; secret-free note of **enabled auth modes**.
+
+---
+
+## HOST-008 - HA / multi-replica residual (Tier B)
+
+**Priority:** P3  
+**Dependencies:** HOST-003, HOST-004, durable vault  
+
+**Acceptance criteria**
+
+- [ ] Single-replica Tier A default documented.
+- [ ] Multi-replica checklist: shared vault, affinity, audit aggregation.
+- [ ] Explicit non-goal until vault exists.
+
+---
+
+## HOST-009 - Mode A: per-user personal API token vault (gateway)
+
+**Priority:** P0  
+**Dependencies:** HOST-001, GWY-002, AUTH-001 / ADR 0009  
+
+**Objective**
+
+Multi-user gateway with **personal API tokens only** (no OAuth/JWT required on Jenkins for this mode).
+
+**Acceptance criteria**
+
+- [ ] Provision/rotate/revoke per-user API token in vault (CLI and/or residual control plane).
+- [ ] Obtain returns credentials only for bound subject; cross-subject fails closed.
+- [ ] No process-wide or default API token fallthrough.
+- [ ] Secret canaries on logs, admin JSON, MCP, support bundles.
+- [ ] RO + deny-only RBAC unchanged.
+- [ ] Documented as first-class Tier A mode.
+
+---
+
+## HOST-010 - Mode B: Jenkins JWT resource-server bearer path
+
+**Priority:** P0  
+**Dependencies:** OAUTH-009, OAUTH-003, OAUTH-005, HOST-001, GWY-002  
+
+**Objective**
+
+End-to-end **Bearer Jenkins-audience JWT** with Jenkins as **RS only** (`jwt-auth-filter` or approved proxy). Complements IdP issuance; never claims Jenkins is an AS.
+
+**Acceptance criteria**
+
+- [ ] Live OAUTH-009: invalid Bearer no Basic/session/anonymous fallthrough on OAuth-required routes.
+- [ ] Claim validation (iss/aud/exp/nbf); ID token never used as Jenkins API credential.
+- [ ] Graph / generic gateway / wrong-audience rejected.
+- [ ] Gateway/local path can send Bearer without mixing Basic on the same call.
+- [ ] Doctor/self-check honest when RS not qualified.
+- [ ] Operator docs: Entra app + jwt-auth-filter version pin for mode B.
+
+---
+
+## HOST-011 - Auth mode matrix and fail-closed mode switch (A + B + C)
+
+**Priority:** P0  
+**Dependencies:** HOST-009, HOST-010, GWY-001 (or mocks), HOST-003  
+
+**Objective**
+
+Configure and qualify **all three** modes. No silent cross-mode fallthrough.
+
+**Acceptance criteria**
+
+- [ ] Explicit config for enabled modes: `api_token_vault`, `jwt_rs_bearer`, `agentcore_3lo_obo`.
+- [ ] Offline matrix row per mode: Obtain → correct auth header shape (Basic vs Bearer).
+- [ ] Disabled/failed mode does not use another subject’s or another mode’s credential.
+- [ ] GWY-003/host qualify documents evidence or residual per mode.
+- [ ] Operator guide: when to choose A vs B vs C; never shared SA.
+- [ ] Admin residual lists enabled modes (secret-free).
+
+---
+
+## HOST-012 - Docker lab umbrella for server-side auth (opt-in Makefile)
+
+**Priority:** P0  
+**Dependencies:** TST-001 (jenkins-compose pattern), HOST-009 (mode A can reuse existing lab)  
+
+**Objective**
+
+One documented entry point to bring up disposable Docker labs for modes A/B/C without putting them on default `make test` / `make ci`.
+
+**Implementation**
+
+- Extend `testdata/jenkins-compose/` and/or add `testdata/oauth-lab/` (+ optional `testdata/gateway-lab/`).  
+- Makefile targets (names may vary): `live-oauth-up` / `live-oauth-test` / `live-oauth-down` (and/or `live-auth-lab-*`) that compose the right profiles.  
+- Reuse patterns from `make live-jenkins-*` (wait health, ephemeral secrets, `down -v`).  
+- README: which services, ports, env vars, residual vs production Entra/jwt-auth-filter pin.
+
+**Acceptance criteria**
+
+- [ ] Documented Compose files exist for at least mode A (existing Jenkins) and stubs for B/C lab profiles.
+- [ ] Opt-in Makefile targets; **not** part of default `make test` / `make ci`.
+- [ ] Tear-down removes volumes; no secrets committed; disposable passwords only.
+- [ ] README cross-links OAUTH-009, HOST-010, HOST-014/015, gateway docs.
+- [ ] Fail closed: lab docs never recommend shared Jenkins SA or Jenkins-as-AS.
+
+---
+
+## HOST-013 - Docker scaffold: Jenkins JWT resource-server lab (mode B)
+
+**Priority:** P0  
+**Dependencies:** HOST-012, OAUTH-009 offline contracts  
+
+**Objective**
+
+Disposable Jenkins (or RS proxy) lab that exercises **Bearer JWT** validation for mode B — ideally with `jwt-auth-filter` when plugin install is practical, otherwise a **documented mock RS reverse-proxy** that enforces audience/iss/exp fail-closed for contract tests.
+
+**Implementation**
+
+- Compose profile: Jenkins LTS + plugins (or nginx/caddy mock RS in front of fixture API).  
+- Init/config: OAuth-required routes; invalid Bearer must not fall through to Basic/anonymous (match OAUTH-009 matrix).  
+- Mint test JWTs via **HOST-014** mock IdP (or local test keys in lab only).  
+- `go test -tags=live_oauth` / `live_jwt` package(s) opt-in.
+
+**Acceptance criteria**
+
+- [ ] `make …-up` brings lab healthy; docs list residual if real jwt-auth-filter pin deferred.
+- [ ] Automated opt-in test: valid Jenkins-audience JWT → allowed; wrong aud/exp/iss → 401/403.
+- [ ] Invalid Bearer does not succeed via Basic/session/anonymous on OAuth-required routes (lab or mock RS).
+- [ ] No production secrets in image/compose; JWKS/keys are lab-only and rotated on rebuild.
+- [ ] Tear-down destroys lab keys/tokens.
+
+---
+
+## HOST-014 - Docker scaffold: mock OIDC IdP (PKCE / claims)
+
+**Priority:** P0  
+**Dependencies:** HOST-012, OAUTH-001…003 offline  
+
+**Objective**
+
+Mock OIDC authorization server (Keycloak, WireMock+fixtures, or small Go IdP container) for offline **mode B** token issuance and claim-validation integration without real Entra.
+
+**Implementation**
+
+- Compose service with discovery, JWKS, authorize/token (as needed for MCP PKCE or static test tokens).  
+- Seed clients and a **Jenkins API audience**.  
+- Scripts/tests: fetch token, assert aud/iss; reject Graph-like wrong audience.  
+- Document residual: not production Entra Conditional Access / tenant policy.
+
+**Acceptance criteria**
+
+- [ ] Discovery + JWKS reachable on loopback from host tests.
+- [ ] Can mint access tokens with configurable aud/iss/exp for HOST-013.
+- [ ] Wrong-audience / expired tokens fail MCP or RS tests as designed.
+- [ ] No client secrets committed; lab client is public/PKCE or disposable secret in volume.
+- [ ] Opt-in only; clean `down -v`.
+
+---
+
+## HOST-015 - Docker scaffold: mock AgentCore / token-exchange endpoint (mode C)
+
+**Priority:** P0  
+**Dependencies:** HOST-012, GWY-001 offline mock, OAUTH-010  
+
+**Objective**
+
+Disposable HTTP peer that simulates AgentCore/Entra **token exchange / OBO / authorization-code token** responses so gateway `TokenFetcher` / Obtain can be integration-tested without live AgentCore.
+
+**Implementation**
+
+- Compose service implementing minimal token endpoint(s) used by `HTTPTokenFetcher` / mode C.  
+- Fixtures: success token (Jenkins audience), wrong audience, 5xx, slow response, consent-required metadata.  
+- Wire `gateway qualify` or `go test -tags=live_gateway` against compose network.  
+- Never host “Jenkins AS”; AS base URL must not be the Jenkins origin (existing reject rules).
+
+**Acceptance criteria**
+
+- [ ] Obtain Live path against mock returns credential for correct subject/audience.
+- [ ] Wrong audience / error fixtures fail closed without shared SA fallthrough.
+- [ ] ConsentRequired-shaped response exposes auth URL metadata only (no tokens in logs).
+- [ ] Document residual vs real AgentCore Identity vault.
+- [ ] Opt-in Makefile target; secret-free compose.
 
 ---
 
@@ -2991,6 +3380,281 @@ These scenarios become end-to-end tests and release evidence.
 
 ---
 
+# Phase 6 - Operator admin console (reactive SPA)
+
+**Goal:** Browser-based **admin front end** for operators to manage local/enterprise pilot deployments: administrative tasks, **deny-only MCP RBAC / policy** (view + controlled edit), **performance/metrics**, and **audit log** inspection. Implementation uses a **reactive UI framework** (SPA) talking to a **local admin BFF** that reuses existing CLI/library controls — not a second policy engine.
+
+**Agent hint (standing rule — all phases):** When implementing **any** operator-relevant feature outside this phase (policy, metrics/telemetry, audit fields, doctor/support-bundle, cache/pins/quota, profiles, packaging, day-2 CLI), **keep the admin console current** in the same change: update `internal/admin` BFF, `web/admin` SPA, and `docs/admin/api-v1.md` when that domain is already exposed — or leave an explicit residual TODO. Do not let CLI/library behavior drift silently ahead of the console. Full policy: root **`AGENTS.md`** → “Non-negotiable: keep the admin console current”.
+
+**Non-goals / constraints (global):**
+
+- **No secrets in the browser** (tokens, keyring material, raw Authorization headers never returned).
+- **Not multi-tenant SaaS control plane** in v1 (single operator host / loopback or mTLS-gated bind; residual multi-tenant gateway isolation remains).
+- **Windows out of scope** for packaging; Tier-1 Rocky/Ubuntu (+ optional macOS).
+- **stdio MCP** remains the agent path; admin console is **operator-only**, separate from Cursor tool discovery.
+- Policy writes remain **fail-closed**, signed-overlay-aware, and cannot widen enterprise `force_read_only`.
+- Prefer **React + TypeScript + Vite** (or ADR-selected equivalent reactive stack: Vue/Svelte) with component state + server state (e.g. TanStack Query).
+
+**Depends on:** OPS-001, AUD-001, OBS-001, POL-001–005, CFG-001/002, MGR-001 (for signed policy), DOC-001.
+
+---
+
+## UI-000 - ADR: admin console architecture, reactive framework, and threat model
+
+**Priority:** P1  
+**Dependencies:** SEC-001, FND-008, OPS-001, AUD-001, OBS-001
+
+**Objective**
+
+Lock architecture before UI code: reactive framework choice, process boundaries, authn/z for operators, data classes, and residual risks.
+
+**Implementation**
+
+Write ADR(s) covering: (1) **reactive SPA** framework + TS toolchain; (2) **local admin BFF** (extend `jenkins-mcp` HTTP loopback or dedicated `admin serve` subcommand) vs embedding static assets; (3) operator authentication (OS user + optional shared-secret/token for loopback; no Jenkins token in browser); (4) read vs write surfaces; (5) CSP, CORS, cookie/token storage policy; (6) mapping console actions to existing `policy` / `telemetry` / audit / doctor packages. Update threat model for admin UI XSS, CSRF, local privilege escalation, and audit leakage.
+
+**Acceptance criteria**
+
+- [ ] ADR records chosen reactive framework and why alternatives were rejected.
+- [ ] Threat model lists admin UI assets/actors and high/critical mitigations.
+- [ ] Explicit: MCP tool path and admin path are separate; RO pilot does not require the console.
+- [ ] Bind defaults: loopback-only unless advanced residual flag; Windows not required.
+- [ ] No design requires placing API tokens or OIDC refresh tokens in browser storage.
+
+---
+
+## UI-001 - Scaffold reactive admin SPA and static asset pipeline
+
+**Priority:** P1  
+**Dependencies:** UI-000, FND-002, PKG-001
+
+**Objective**
+
+Create a maintainable SPA workspace that builds into versioned static assets consumable by the Go binary or reverse proxy.
+
+**Implementation**
+
+Scaffold `web/admin/` (or `ui/admin/`) with the ADR framework (default recommendation: **React 18+ / TypeScript / Vite**). Add lint/format/test scripts, design tokens minimal layout (nav: Overview, Policy/RBAC, Metrics, Audit, Cache/Doctor), routing, and `make admin-ui` / CI job that produces `dist/admin/` artifacts. Embed or serve assets via Go `embed` in a later task; v1 may use `admin serve --assets-dir`. No production secrets in frontend env.
+
+**Acceptance criteria**
+
+- [ ] `make admin-ui` (or documented npm/pnpm script) builds production assets reproducibly.
+- [ ] Unit/component test harness runs in CI (smoke).
+- [ ] SPA has shell routes for Policy, Metrics, Audit, Diagnostics placeholders.
+- [ ] License/NOTICE for frontend deps recorded; SBOM path residual or generated.
+- [ ] Build does not require Windows; documented on Rocky/Ubuntu.
+
+---
+
+## UI-002 - Local admin BFF / HTTP API (read path)
+
+**Priority:** P1  
+**Dependencies:** UI-000, OPS-001, OBS-001, AUD-001, POL-005
+
+**Objective**
+
+Expose a **secret-free JSON API** for the SPA that wraps existing libraries/CLI semantics (doctor, telemetry snapshot, effective policy, audit tail).
+
+**Implementation**
+
+Add `jenkins-mcp admin serve` (or extend loopback HTTP with `/admin/v1/*` behind explicit enable flag default-off). Endpoints (v1 read): health, version, effective config/policy (reuse policy show-effective), telemetry snapshot, doctor offline/online (bounded), audit list/tail with pagination + filters (type, tool, reason, time), cache status summary. All responses scrubbed; fail closed on missing profile. Shared-secret or OS-session gate required even on loopback residual. OpenAPI/JSON schema for the SPA.
+
+**Acceptance criteria**
+
+- [ ] Default: admin HTTP **disabled**; enable only with explicit flag/env.
+- [ ] Loopback bind default; non-local requires stronger residual flags + token + host/origin allow-lists.
+- [ ] Canary tests: no token/password/Authorization in any admin JSON body.
+- [ ] API errors use stable codes; never raw transport dumps.
+- [ ] Contract tests cover pagination caps and invalid filters fail closed.
+
+---
+
+## UI-003 - Operator authentication and admin RBAC for the console
+
+**Priority:** P0  
+**Dependencies:** UI-002, AUTH-001, POL-002, SEC-001
+
+**Objective**
+
+Ensure only authorized **operators** use write surfaces; read surfaces still require local operator authn.
+
+**Implementation**
+
+Define admin roles (e.g. `viewer`, `operator`, `policy_admin`) separate from MCP deny-only RBAC subjects. Bind session to local operator identity (not Jenkins end-user spoofable via query params). Session tokens httpOnly/secure where applicable; CSRF protection for cookie sessions. Map roles to API routes. Document that console RBAC does not replace Jenkins authorization or MCP deny lists.
+
+**Acceptance criteria**
+
+- [x] Unauthenticated requests denied (when token configured → 401; token required for non-local).
+- [x] `viewer` cannot mutate policy/cache destructive ops (`PermPolicyWrite` / `PermCacheDestructive` deny + middleware 403 tests).
+- [x] `policy_admin` still cannot defeat enterprise `force_read_only` (`CanWidenForceReadOnly` always false).
+- [x] Tests for privilege escalation (role matrix + RequirePermission) and secret canaries (token never in JSON).
+- [ ] Logout invalidates session (in-process + durable residual documented). **Residual:** v1 is shared-secret Bearer/header (no cookie session table); “logout” = drop client token; durable multi-session invalidation deferred with cookie/OIDC.
+
+**Implementation notes (landed lite):** `internal/admin` Role/Permission, `--admin-role`, `GET /admin/v1/me`, `RequirePermission` / `CheckPermission`. No production write routes yet (UI-004). CSRF N/A for Bearer; documented residual for future cookie sessions.
+
+---
+
+## UI-004 - Policy / deny-only MCP RBAC viewer and controlled editor
+
+**Priority:** P1  
+**Dependencies:** UI-001, UI-002, UI-003, POL-001–005, MGR-001, CFG-002
+
+**Objective**
+
+Operators can **see effective RBAC/policy** and propose/apply controlled changes without hand-editing JSON only.
+
+**Implementation**
+
+**Viewer:** render effective force RO, deny_tools, deny_job_prefixes, deny_node/view/artifact/branch patterns, signature state, source provenance (enterprise vs profile). **Editor (draft → validate → apply):** form/structured editor for pilot overlay fields; client-side validation; server validate against schema; optional sign step (keys never in browser — invoke local sign via BFF with keys-dir on server host only). Show dry-run diff of effective policy before apply. Hot-reload awareness (last-good).
+
+**Acceptance criteria**
+
+- [ ] Effective policy page matches `policy show-effective` for the same profile.
+- [ ] Invalid overlays rejected with field-level errors; no partial apply.
+- [ ] Apply path cannot widen enforced enterprise restrictions.
+- [ ] Signature required mode fail-closed when configured.
+- [ ] Audit events emitted for policy view (optional) and policy apply/deny.
+- [ ] Reactive UI updates after apply without full manual reload (query invalidation).
+
+---
+
+## UI-005 - Performance and metrics dashboard
+
+**Priority:** P1  
+**Dependencies:** UI-001, UI-002, OBS-001, PERF-001
+
+**Objective**
+
+Monitor application performance and operational metrics from the console.
+
+**Implementation**
+
+Dashboard cards/charts (reactive): tool_calls, mcp_tool_ok/error/deny, Jenkins HTTP request/error/byte counters, circuit open events, cache maint/evict/pack gauges, identity reverify denials if exposed. Auto-refresh with backoff; pause on hidden tab. Link to budgets and serve log-level guidance. Optional export of secret-free snapshot JSON. No high-cardinality labels (no job names/tokens as series).
+
+**Acceptance criteria**
+
+- [ ] Metrics match `telemetry show` / in-process registry for same process or documented scrape model.
+- [ ] Refresh does not leak secrets; empty/missing metrics show residual honesty.
+- [ ] Caps on history series length to bound memory in the SPA.
+- [ ] Document residual: multi-process fleet aggregation not in v1 (MGR-002 residual).
+
+---
+
+## UI-006 - Audit log browser
+
+**Priority:** P1  
+**Dependencies:** UI-001, UI-002, UI-003, AUD-001
+
+**Objective**
+
+Inspect privacy-preserving audit events without shell access to JSONL files.
+
+**Implementation**
+
+Table + filters: time range, type, tool, decision, reasonCode, principalId (non-secret). Detail drawer for single event. Pagination / cursor; hard caps on page size. Optional live tail (SSE/WebSocket) with backpressure. Download scrubbed CSV/JSON export. Never show job parameters, log bodies, or tokens (not present in schema — enforce in API).
+
+**Acceptance criteria**
+
+- [ ] Events match on-disk audit JSONL for the profile (spot-check tests).
+- [ ] Filters cannot be used to exfiltrate non-schema fields.
+- [ ] Large audit files do not load entirely into browser memory.
+- [ ] Export is secret-free and size-capped.
+
+---
+
+## UI-007 - Administrative task surfaces (profiles, doctor, cache)
+
+**Priority:** P2  
+**Dependencies:** UI-002, UI-003, OPS-001, CFG-001
+
+**Objective**
+
+Cover day-2 admin tasks operators currently do via CLI.
+
+**Implementation**
+
+Pages/actions: profile list/show (no secrets), doctor run + result view, cache status/verify summary, pin list, quota usage, support-bundle trigger (download scrubbed zip path), security self-check results. Destructive cache ops require confirm modal + operator role + optional `--confirm` equivalent server-side.
+
+**Acceptance criteria**
+
+- [ ] Doctor/self-check/cache status parity with CLI for documented fields.
+- [ ] Destructive actions double-confirm and are audited.
+- [ ] Profile show never returns keyring material.
+
+---
+
+## UI-008 - Serve integration, CSP, and packaging
+
+**Priority:** P1  
+**Dependencies:** UI-001, UI-002, PKG-001, FND-006
+
+**Objective**
+
+Ship the console safely with the binary/packages.
+
+**Implementation**
+
+`embed` or package `dist/admin` assets; `admin serve --profile …` wires BFF + static. Strict CSP, no inline secrets, Subresource Integrity residual for CDN (default: no CDN). Document reverse-proxy residual. Rocky/Ubuntu packages optionally include assets; portable tarball includes them. Health/readiness for admin port separate from MCP stdio.
+
+**Acceptance criteria**
+
+- [ ] Fresh install serves console from packaged assets without npm on the target host.
+- [ ] CSP blocks unexpected script origins in automated check.
+- [ ] Admin port off by default in pilot docs; enable path documented.
+- [ ] Version endpoint shows UI asset build id + binary version.
+
+---
+
+## UI-009 - E2E tests and adversarial checks for admin console
+
+**Priority:** P1  
+**Dependencies:** UI-004, UI-005, UI-006, UI-003, POL-005, TST-001
+
+**Objective**
+
+Prevent console regressions and authz bypasses.
+
+**Implementation**
+
+Playwright/Cypress (or ADR choice) against BFF+SPA: login gate, policy view, metrics render, audit filter, privilege escalation attempts, XSS canaries in audit fields, CSRF on writes. Go contract tests for admin API. CI job optional non-gate then promote.
+
+**Status (honest):** Done* for **Go adversarial/contract gate** + **documented opt-in E2E smoke** (`make admin-e2e` → `dist/admin-e2e/status.json`). Full-browser Playwright/Cypress and HAR scrub automation remain residual (no new heavy deps). CSRF N/A for v1 Bearer/header auth.
+
+**Acceptance criteria**
+
+- [x] E2E smoke in CI **or** documented opt-in with artifact (`make admin-e2e` / `scripts/admin-e2e-smoke.sh` → `dist/admin-e2e/status.json`; **not** default `make test`/`ci`).
+- [x] XSS/canary payloads in reason/tool fields do not execute (asserted as **JSON text only** / HTML-escaped wire + CSP; browser “does not execute” residual without Playwright).
+- [x] viewer cannot apply policy in automated test (`TestUI009_ViewerCannotApplyPolicy` + e2e curl 403).
+- [x] Secret canary never appears in network/API responses (`TestUI009_SecretCanaryAbsentAcrossRoutes` + e2e canary scrub; full HAR residual).
+
+**Evidence**
+
+- `internal/admin/ui009_adversarial_test.go` (`TestUI009_*`)
+- `scripts/admin-e2e-smoke.sh`, Makefile `admin-e2e`
+- `docs/admin/api-v1.md` § Testing (UI-009)
+
+---
+
+## UI-010 - Accessibility, i18n residual, and operator UX polish
+
+**Priority:** P2  
+**Dependencies:** UI-001, UI-004, UI-005, UI-006
+
+**Objective**
+
+Production-usable console for operators.
+
+**Implementation**
+
+Keyboard nav, focus traps in modals, contrast, ARIA for tables/live regions (metrics refresh, audit tail). Empty/error/residual states honest. Optional i18n residual. Link out to docs/admin and pilot checklist.
+
+**Acceptance criteria**
+
+- [ ] Critical flows usable keyboard-only.
+- [ ] Automated a11y smoke (axe) on primary routes.
+- [ ] Residual banners for unsigned policy, disabled telemetry, adapter-off, etc.
+
+---
+
 # Recommended implementation sequence
 
 1. FND-001 through FND-008, PERF-001, SEC-001, AUTH-000, and ARC-000.
@@ -3001,11 +3665,12 @@ These scenarios become end-to-end tests and release evidence.
 6. OAUTH-001 through OAUTH-008, then OAUTH-009. Run OAUTH-010 as the AgentCore 3LO/OBO feasibility prototype and OAUTH-011 as the explicit Jenkins-authorization-server decision gate.
 7. ARC-001 through ARC-004, ARC-010 through ARC-012, ARC-005 through ARC-008, and PERF-002. ARC-011 defines bounded semantic grouping before ARC-005 publishes packs.
 8. JEN/PIPE/TEST/SCM/GRAPH/ART/HEALTH, followed by DIAG-001 through DIAG-007 and PERF-003.
-9. Optional AgentCore productionization (GWY-001 through GWY-004), signed policy/fleet management, controlled mutations, and external integrations.
+9. Optional **server/team-hosted** path (see `docs/roadmap/server-team-hosted.md`): implement **all three** auth modes — **HOST-009** (API token vault), **OAUTH-009+HOST-010** (JWT RS bearer), **OAUTH-010+GWY-001** (AgentCore 3LO/OBO) — plus **HOST-001–006**, **HOST-011** mode matrix, **HOST-012…015** Docker labs (mock IdP/JWT RS/token peer; opt-in Makefile), **GWY-002–004**, **MGR-001**, **REL-001/002**. Sites pick which modes to enable; engineering ships all.
 10. Execute JAS-001 through JAS-005 only after an OAUTH-011 **go** decision. The normal external-IdP resource-server/AgentCore 3LO-OBO release path must not depend on this conditional epic.
 11. QA, documentation, local/gateway pilots, and production release gates.
+12. **Admin console (Phase 6):** UI-000 → UI-001/002/003 → UI-004 (policy/RBAC) + UI-005 (metrics) + UI-006 (audit) in parallel where deps allow → UI-007/008 → UI-009/010. Reactive SPA + local admin BFF; native MCP stdio path unchanged. Keep console residual notes current as HOST modes land (`AGENTS.md`).
 
-Tasks in a step run in parallel only when declared dependencies permit. Authentication semantics, signed policy, public tools, subject/cache isolation, Zstandard/TAR formats, and `ratarmount-rs` compatibility require architecture and security review.
+Tasks in a step run in parallel only when declared dependencies permit. Authentication semantics, signed policy, public tools, subject/cache isolation, Zstandard/TAR formats, `ratarmount-rs` compatibility, and **admin console authz/CSP** require architecture and security review.
 
 ---
 

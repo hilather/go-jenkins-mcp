@@ -19,6 +19,8 @@ file is repo-specific and must not be ignored.
 | Machine-readable task graph | `docs/jenkins-mcp-enterprise-task-index.json` |
 | Planning pack overview | `docs/README-jenkins-mcp-enterprise-planning-pack.md` |
 | Phase 0 progress | `docs/phase0-progress.md` |
+| Operator admin console (BFF + SPA) | ADR 0014; `docs/admin/api-v1.md`; `internal/admin/`; `web/admin/` |
+| Server/team-hosted roadmap | `docs/roadmap/server-team-hosted.md` |
 | Agent policy (this file) | `AGENTS.md` |
 | Implemented code (when present) | `cmd/`, `internal/`, `pkg/` |
 
@@ -48,6 +50,32 @@ change** (same commit preferred; same PR required).
 
 When code exists, run the project test entrypoint (e.g. `make test` / `go test ./...`
 with race where applicable) and keep it green before claiming done.
+
+---
+
+## Non-negotiable: Docker integration scaffolds where possible
+
+**Prefer Docker Compose (or equivalent disposable containers) for integration
+labs** whenever a feature talks to an external or multi-process system that can
+be faked or pinned offline. Offline pure-Go unit tests remain the default
+`make test` gate; containers are **opt-in** unless the task explicitly requires
+them in CI.
+
+| Expectation | Detail |
+|-------------|--------|
+| **When required** | Network clients, HTTP peers, IdP/JWT RS, Jenkins controller, gateway, DB-like peers, reverse proxies, multi-container deploys — add or extend a scaffold under `testdata/` or `deploy/` in the **same change** (or leave an explicit residual TODO). |
+| **Existing pattern** | `testdata/jenkins-compose/` + `make live-jenkins-up/test/down` (TST-001); OAuth mock lab `testdata/oauth-lab/` + `make live-oauth-*` (HOST-012…015). Reuse/extend these rather than inventing one-off scripts. |
+| **First-class local admin/support deploy** | **`deploy/local/`** + `make local-docker-up/down/doctor/smoke` is the **first-class local MCP admin/support Docker stack** (admin BFF/SPA on loopback, optional `http` / `with-jenkins` profiles via `LOCAL_COMPOSE_PROFILES=http,with-jenkins`). SoT: `deploy/local/README.md`. **Cursor MCP stdio remains host-native** (ADR 0002) — do not document Docker as the daily Cursor path. Opt-in only; **not** in default `make test`. |
+| **OAuth / JWT labs** | Plan and scaffold: mock OIDC IdP + Jenkins RS path for mode B; mock token/3LO endpoint for mode C — see **HOST-012…HOST-015** / `docs/roadmap/server-team-hosted.md`. Real Entra remains residual; mocks must still enforce audience/iss/exp fail-closed. |
+| **Secrets** | Ephemeral only; never bake production tokens/passwords into images or compose files. Use generated disposable secrets written into the container volume at boot (same as API-token lab). `deploy/local/.env` is gitignored. |
+| **Makefile** | Document `make …-up` / `…-test` / `…-down` (or equivalent); keep default `make test` / `make ci` offline. Local Docker group is listed under **Local Docker (support / admin UI)** in `make help`. |
+| **Docs** | README next to the compose file: ports, env vars, tear-down, what is residual (e.g. “not production Entra”). For `deploy/local/`, keep operator quick start + troubleshooting current. |
+| **Fail closed** | Lab profiles must not teach shared Jenkins SAs or Jenkins-as-AS. |
+| **When Docker is wrong** | Pure algorithm/format/crypto unit tests; no need for a container. Say so briefly if a reviewer might expect one. |
+
+**Do not** claim live OAuth/JWT/gateway integration is “done” without either a
+Docker (or documented equivalent) lab path **or** an explicit residual naming
+the missing harness.
 
 ---
 
@@ -93,7 +121,9 @@ review findings unless the user explicitly accepts them.
 - Bounds: network, disk, memory, MCP response size, fan-out  
 - No secrets in logs, errors, fixtures, CLI args, or MCP output  
 - Package boundaries (Jenkins client must not import MCP; tools must not raw-HTTP)  
-- Platform claims match the Tier-1 matrix (no accidental Windows support claims)
+- Platform claims match the Tier-1 matrix (no accidental Windows support claims)  
+- **Admin console parity:** operator-relevant changes update BFF/SPA/api-v1 (or document residual)  
+- **Docker lab residual:** integration-facing work has compose/Makefile/docs scaffold or an explicit residual
 
 ---
 
@@ -108,6 +138,7 @@ required before treating work done).
 | Tool schemas, defaults, budgets, CLI flags/env | Architecture and/or tool-contract docs; user/admin guidance when present; backlog notes if contracts change |
 | Auth, policy, platform matrix, packaging | `docs/jenkins-mcp-enterprise-architecture.md`, packaging notes, `AGENTS.md` if agent policy changes |
 | Storage/format/index behavior | Architecture storage sections + task acceptance evidence notes |
+| Operator-visible day-2 surfaces (policy, metrics, audit, doctor/cache, profiles, support-bundle, security self-check, budgets/caps) | **Admin console** — see next section (`internal/admin`, `web/admin`, `docs/admin/api-v1.md`) |
 | Task completion / partial work | Backlog checkboxes and task status (see next section) |
 | ADRs / irreversible choices | New or updated ADR per backlog FND-008 / task requirements |
 | Docs-only polish | No extra churn; fix anything you know is wrong |
@@ -119,6 +150,54 @@ source of truth for that surface.
 If documentation is intentionally deferred, say so in the session response and
 leave an explicit TODO with an owner/next step — never imply docs are current
 when they are not.
+
+---
+
+## Non-negotiable: keep the admin console current
+
+The **operator admin console** (`jenkins-mcp admin serve` + SPA under `web/admin/`,
+BFF in `internal/admin/`, contract in `docs/admin/api-v1.md`, ADR 0014) is a
+**first-class surface**. It must not lag product behavior.
+
+**When you implement or change any operator-relevant feature, update the admin
+interface in the same change** (or leave an explicit residual TODO with task ID
+if intentionally deferred — never silent drift).
+
+| Product change | Admin follow-through (as applicable) |
+|----------------|--------------------------------------|
+| New/changed **policy / RO / deny-lists / signed bundles** | Effective/overlay APIs; Policy page; validate/apply rules; docs |
+| New/changed **metrics / telemetry / budgets / caps** | `GET /admin/v1/metrics` (or residual note); Metrics page; honesty banners |
+| New/changed **audit event types or fields** | Audit list/filter; SPA columns/drawer; never secret fields |
+| New/changed **doctor / support-bundle / security self-check** | Doctor/ops endpoints; SPA; fail-closed online paths |
+| New/changed **cache / pin / quota / eviction** | Cache APIs; Cache page; operator-only destructive + confirm |
+| New/changed **profiles / config paths / packaging** | Profile list/show; asset packaging if operator-facing |
+| New **CLI day-2 commands** operators will use | Prefer BFF parity or document CLI-only residual on the SPA page |
+| Authn/z for **admin itself** (roles, tokens, CSP) | `rbac`, `/me`, middleware, SPA role gates, adversarial tests (UI-009) |
+
+**Rules**
+
+| Rule | Detail |
+|------|--------|
+| **Same change preferred** | BFF + SPA + `docs/admin/api-v1.md` (+ short admin README note) land with the feature when the console already exposes that domain. |
+| **No second policy engine** | Admin BFF **wraps** existing libraries/CLI semantics; do not re-implement policy, budgets, or auth differently. |
+| **Secret-free forever** | Never return tokens, keyring material, Authorization headers, raw logs, or job parameters in admin JSON/SPA. Canary tests when touching responses. |
+| **Fail closed** | New write/destructive admin routes require console RBAC (`viewer` / `operator` / `policy_admin`); confirm tokens for destructive ops; cannot widen enterprise `force_read_only`. |
+| **Tests** | Extend `internal/admin` tests (and SPA unit tests when UI changes). Prefer `TestUI009_*` patterns for authz/XSS canaries on new write surfaces. |
+| **Honest residuals** | If SPA/BFF parity is deferred, say so on the page + API doc + session next steps — do not imply the console manages a feature that only exists on CLI. |
+| **Not MCP** | Admin is operator-only and separate from Cursor tool discovery / stdio serve (ADR 0002 / 0014). |
+
+**Quick map for agents**
+
+| Path | Role |
+|------|------|
+| `internal/admin/` | Admin BFF handlers, RBAC, assets/CSP |
+| `web/admin/src/` | React SPA pages and API client |
+| `docs/admin/api-v1.md` | HTTP contract SoT |
+| `docs/admin/README.md` | Operator enablement |
+| `cmd/jenkins-mcp/admin_cmd.go` | `admin serve` CLI |
+| `make admin-ui` / `make admin-e2e` | Build SPA; opt-in e2e smoke |
+
+Before claiming a feature “done for operators,” ask: *Can an operator see or safely act on this from `admin serve` if we already have that surface — and if not, is the residual documented?*
 
 ---
 
@@ -154,11 +233,13 @@ comment):
 1. Identify task ID(s) and re-read architecture + dependency tasks
 2. Implement within task scope
 3. Add/update tests (features + regression tests for fixes)
-4. Update documentation and backlog/todo status
-5. Run lint/tests/race as applicable; attach perf evidence if required
-6. Structured code review (/review); fix bug findings; re-test
-7. If incomplete: write next steps; do not mark DoD complete
-8. Commit code + tests + docs together when practical
+4. If external-system/integration: add or extend Docker compose lab (opt-in Makefile) or residual TODO
+5. Update documentation and backlog/todo status
+6. If operator-relevant: update admin BFF/SPA/api-v1 (or explicit residual TODO)
+7. Run lint/tests/race as applicable; attach perf evidence if required
+8. Structured code review (/review); fix bug findings; re-test
+9. If incomplete: write next steps; do not mark DoD complete
+10. Commit code + tests + docs (+ admin + lab scaffolds) together when practical
 ```
 
 ---

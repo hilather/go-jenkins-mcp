@@ -57,12 +57,23 @@ Operator: _____________  Date: _____________
 - [ ] Optional enterprise overlay: `policy show-effective --profile <id>` matches intended deny list
 - [ ] Evidence files stored in pilot tracker (not in git with secrets)
 
-## 7. Rollback
+## 7. Optional — Docker admin path (support / no host package)
+
+Not required for Cursor stdio pilot evidence. Useful when operators need the
+admin console without an RPM/DEB install. SoT: [`../../deploy/local/README.md`](../../deploy/local/README.md).
+
+- [ ] `make local-docker-up` (or `LOCAL_COMPOSE_PROFILES=with-jenkins make local-docker-up`)
+- [ ] Open `http://127.0.0.1:8787` with lab token from `deploy/local/.env` (never commit `.env`)
+- [ ] `make local-docker-doctor` offline OK
+- [ ] `make local-docker-down` after use (volumes wiped)
+
+## 8. Rollback
 
 - [ ] Cursor MCP entry removed or pointed at previous binary
 - [ ] `jenkins-mcp logout --profile <id>`
 - [ ] Optional: `profile remove`, XDG cache/data cleanup (user-controlled)
 - [ ] Previous package reinstall verified if regression
+- [ ] If Docker admin was used: `make local-docker-down`
 
 ## Sign-off
 

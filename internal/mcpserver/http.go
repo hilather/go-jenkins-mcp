@@ -51,16 +51,23 @@ const HeaderJenkinsMCPToken = "X-Jenkins-MCP-Token"
 //     AllowedOrigins — browser CSRF defense.
 //   - Optional shared-secret gate (BearerToken): when non-empty, every request
 //     must present Authorization: Bearer <token> or X-Jenkins-MCP-Token: <token>
-//     with constant-time exact match (KD-008 lite). Not multi-tenant OAuth.
+//     with constant-time exact match (KD-008 lite). Transport gate only — not
+//     multi-user / per-request identity (HOST-001). Prefer X-Jenkins-MCP-Token
+//     for the shared secret when Authorization: Bearer carries a user access token.
 //   - RequireToken (or AllowNonLocal) fails closed at serve start when
 //     BearerToken is empty so operators can opt into a mandatory secret on
 //     loopback; non-loopback always requires a secret, AllowedOrigins, and
 //     AllowedHosts.
+//   - RequireSubject (gateway / --http-require-subject, or AllowNonLocal): every
+//     non-health request must establish RequestIdentity from a trusted source
+//     (lab header when LabIdentity, or IdentityResolver e.g. JWT). Shared secret
+//     alone never satisfies subject requirements (HOST-001).
 //
-// Residual (not closed by this package): no per-user auth; empty BearerToken on
-// loopback without RequireToken still leaves the socket open to any local
-// process; session fixation; production multi-tenant gateway hardening (GWY-*).
-// Prefer stdio for pilot (ADR 0002).
+// Residual: empty BearerToken on loopback without RequireToken still leaves the
+// socket open to any local process (KD-008 pilot residual, non-gateway only).
+// Production multi-user JWT/OIDC validation is partial (lab header + resolver
+// hook foundation; full JWKS pin residual HOST-001 / HOST-014). Prefer stdio
+// for pilot (ADR 0002).
 type HTTPConfig struct {
 	// Addr is the listen address (e.g. "127.0.0.1:8765", "localhost:0").
 	Addr string
@@ -69,7 +76,8 @@ type HTTPConfig struct {
 	// Default false: reject 0.0.0.0, ::, LAN IPs, hostnames that are not loopback.
 	// Wire as --http-allow-non-local in the CLI (tests / residual advanced use).
 	// When true, BearerToken, AllowedOrigins, and AllowedHosts are always
-	// required (fail closed).
+	// required (fail closed). Also implies RequireSubject (HOST-001: non-local
+	// cannot be anonymous multi-user).
 	AllowNonLocal bool
 
 	// MaxBodyBytes caps the HTTP request body. Zero uses DefaultMaxBodyBytes.
@@ -95,6 +103,7 @@ type HTTPConfig struct {
 	// X-Jenkins-MCP-Token: <token>. Compared with crypto/subtle constant-time
 	// equality. Never log or echo this value. Empty (default) skips the check
 	// on loopback unless RequireToken is set (KD-008 residual).
+	// Transport gate only — not policy.Subject / multi-user identity.
 	BearerToken string
 
 	// RequireToken, when true, fails ValidateHTTPConfig / RunHTTP if BearerToken
@@ -103,6 +112,23 @@ type HTTPConfig struct {
 	// the same requirement even when this flag is false. Loopback default
 	// remains optional token for pilot compatibility (KD-008 residual).
 	RequireToken bool
+
+	// RequireSubject, when true, requires a trusted RequestIdentity on every
+	// non-health request (HOST-001). Wire as --gateway, --http-require-subject,
+	// or JENKINS_MCP_HTTP_REQUIRE_SUBJECT. AllowNonLocal implies the same
+	// requirement. Shared secret alone never satisfies this gate.
+	RequireSubject bool
+
+	// LabIdentity, when true, accepts X-Jenkins-MCP-Lab-Subject (and optional
+	// lab claim headers) as a trusted subject source. Wire from
+	// JENKINS_MCP_LAB_IDENTITY=1 only. Fail closed when false: lab headers are
+	// ignored. Residual: production uses JWT validation only.
+	LabIdentity bool
+
+	// IdentityResolver optionally supplies RequestIdentity (e.g. JWT + JWKS).
+	// Called after the shared-secret gate; lab headers are a fallback when the
+	// resolver returns empty. Never log resolver inputs (tokens).
+	IdentityResolver IdentityResolver
 
 	// Logger receives start/stop messages. Default: log.Default().
 	Logger *log.Logger
@@ -184,6 +210,13 @@ func ValidateHTTPConfig(cfg HTTPConfig) error {
 // (RequireToken flag/env or AllowNonLocal). Never logs token values.
 func HTTPTokenRequired(cfg HTTPConfig) bool {
 	return cfg.RequireToken || cfg.AllowNonLocal
+}
+
+// HTTPSubjectRequired reports whether a trusted RequestIdentity is mandatory for
+// cfg (RequireSubject flag/env/gateway or AllowNonLocal). Never logs tokens.
+// HOST-001: shared secret does not satisfy this requirement.
+func HTTPSubjectRequired(cfg HTTPConfig) bool {
+	return cfg.RequireSubject || cfg.AllowNonLocal
 }
 
 // validateHTTPTokenRequirement fails closed when a secret is mandatory but empty.
@@ -269,12 +302,15 @@ func NewHTTPHandler(server *mcp.Server, cfg HTTPConfig) (http.Handler, error) {
 		return server
 	}, nil)
 	return &protectHandler{
-		inner:          inner,
-		maxBody:        maxBody,
-		allowNonLocal:  cfg.AllowNonLocal,
-		allowedOrigins: append([]string(nil), cfg.AllowedOrigins...),
-		allowedHosts:   append([]string(nil), cfg.AllowedHosts...),
-		bearerToken:    cfg.BearerToken,
+		inner:            inner,
+		maxBody:          maxBody,
+		allowNonLocal:    cfg.AllowNonLocal,
+		allowedOrigins:   append([]string(nil), cfg.AllowedOrigins...),
+		allowedHosts:     append([]string(nil), cfg.AllowedHosts...),
+		bearerToken:      cfg.BearerToken,
+		requireSubject:   HTTPSubjectRequired(cfg),
+		labIdentity:      cfg.LabIdentity,
+		identityResolver: cfg.IdentityResolver,
 	}, nil
 }
 
@@ -389,10 +425,11 @@ func RunHTTP(ctx context.Context, server *mcp.Server, cfg HTTPConfig) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		// Never log BearerToken value — only bools for required/configured.
-		logger.Printf("Starting MCP HTTP server on %s (loopback_enforced=%v max_body=%d http_token_required=%v http_token_configured=%v)",
+		// Never log BearerToken or access-token values — only bools.
+		logger.Printf("Starting MCP HTTP server on %s (loopback_enforced=%v max_body=%d http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v)",
 			ln.Addr().String(), !cfg.AllowNonLocal, effectiveMaxBody(cfg),
-			HTTPTokenRequired(cfg), cfg.BearerToken != "")
+			HTTPTokenRequired(cfg), cfg.BearerToken != "",
+			HTTPSubjectRequired(cfg), cfg.LabIdentity)
 		errCh <- srv.Serve(ln)
 	}()
 
@@ -421,15 +458,18 @@ func effectiveMaxBody(cfg HTTPConfig) int64 {
 	return cfg.MaxBodyBytes
 }
 
-// protectHandler applies optional shared-secret, body size, Host, and Origin
-// checks around the SDK handler.
+// protectHandler applies optional shared-secret, subject identity, body size,
+// Host, and Origin checks around the SDK handler (HOST-001 + KD-008).
 type protectHandler struct {
-	inner          http.Handler
-	maxBody        int64
-	allowNonLocal  bool
-	allowedOrigins []string
-	allowedHosts   []string
-	bearerToken    string
+	inner            http.Handler
+	maxBody          int64
+	allowNonLocal    bool
+	allowedOrigins   []string
+	allowedHosts     []string
+	bearerToken      string
+	requireSubject   bool
+	labIdentity      bool
+	identityResolver IdentityResolver
 }
 
 func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -438,13 +478,41 @@ func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Optional shared-secret gate (KD-008 lite). Fail closed with 401 and a
-	// generic body — never echo the expected token or compare result details.
+	// Secret-free health/ready: no shared secret, no subject, no tool inventory.
+	// Exact path only (HOST-001 / HOST-002 residual for broader probe matrix).
+	if isHealthPath(r.URL.Path) && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		writeHealthOK(w)
+		return
+	}
+
+	// Optional shared-secret gate (KD-008 lite / transport only). Fail closed
+	// with 401 and a generic body — never echo the expected token or compare
+	// result details. Does not establish multi-user identity.
 	if h.bearerToken != "" {
 		if !requestHasValidToken(r, h.bearerToken) {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="jenkins-mcp"`)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
+		}
+	}
+
+	// HOST-001: per-request subject when require-subject / non-local.
+	// Shared secret above is not sufficient. Identity is non-secret labels only.
+	var reqID RequestIdentity
+	if h.requireSubject || h.labIdentity || h.identityResolver != nil {
+		id, err := resolveRequestIdentity(r, h.labIdentity, h.identityResolver)
+		if err != nil {
+			// Invalid credentials (e.g. bad JWT) — generic 401, never token text.
+			unauthorizedIdentity(w)
+			return
+		}
+		reqID = id
+		if h.requireSubject && !reqID.Present() {
+			unauthorizedIdentity(w)
+			return
+		}
+		if reqID.Present() {
+			r = r.WithContext(ContextWithIdentity(r.Context(), reqID))
 		}
 	}
 

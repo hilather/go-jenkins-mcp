@@ -17,6 +17,7 @@ provides:
 
 **User path:** [../user/README.md](../user/README.md)  
 **Operator path:** [../admin/README.md](../admin/README.md)  
+**Optional Docker admin/support (no host package):** [`../../deploy/local/README.md`](../../deploy/local/README.md) · `make local-docker-up`  
 **Agent triage:** [../agent-usage.md](../agent-usage.md) · [../tool-contracts.md](../tool-contracts.md)  
 **Wave board:** [../phase2-progress.md](../phase2-progress.md) (Wave 20 DOC-001/002)
 
@@ -201,10 +202,26 @@ conformance CI is still residual (FND-006). Offline binary stdio smoke
 (`make stdio-smoke`, Wave 25) reduces residual further but does not replace Cursor.
 Live Entra / jwt-auth-filter lab is residual.
 
+## Optional: Docker admin console (operators)
+
+For day-2 **admin UI / doctor** without installing a host package, use the
+first-class local stack (loopback only; lab tokens). **Not** a substitute for
+Cursor stdio pilot evidence on Rocky/Ubuntu packages.
+
+```bash
+make local-docker-up          # http://127.0.0.1:8787 — see deploy/local/.env for token
+make local-docker-doctor
+make local-docker-down
+```
+
+Docs: [`../../deploy/local/README.md`](../../deploy/local/README.md). Checklist
+item is optional under [checklist.md](checklist.md).
+
 ## Related docs
 
 - User guide (Cursor + login): [`../user/README.md`](../user/README.md)
 - Admin guide: [`../admin/README.md`](../admin/README.md)
+- Local Docker support stack: [`../../deploy/local/README.md`](../../deploy/local/README.md)
 - Operator security: [`../security/operator-guide.md`](../security/operator-guide.md)
 - Tool contracts / agent usage: [`../tool-contracts.md`](../tool-contracts.md), [`../agent-usage.md`](../agent-usage.md)
 - Release gates: [`../release/gates.md`](../release/gates.md)

@@ -1,0 +1,45 @@
+{
+  "schema": "jenkins-mcp.ratarmount-rs-pin.v1",
+  "status": "candidate_pin_pending_qualification",
+  "updated": "2026-08-01",
+  "dependency": {
+    "name": "ratarmount-rs",
+    "repository": "https://github.com/hilather/ratarmount-rs",
+    "owner": "hilather",
+    "license_spdx": "MIT",
+    "default_branch": "main",
+    "release_tag": "v0.1.14",
+    "release_url": "https://github.com/hilather/ratarmount-rs/releases/tag/v0.1.14",
+    "release_published_at": "2026-08-01T00:54:57Z",
+    "commit_sha": "eeff8502539375acb0e0bfae9d0b327fee0fbe4d",
+    "workspace_package_version": "0.1.14",
+    "tarball_url": "https://github.com/hilather/ratarmount-rs/archive/refs/tags/v0.1.14.tar.gz"
+  },
+  "integration_modes_to_qualify": [
+    "managed_cli_sidecar",
+    "native_linux_fuse_optional_inspection",
+    "direct_library_ffi_if_stable_c_api"
+  ],
+  "product_constraints": {
+    "native_go_reader_mandatory": true,
+    "mcp_reads_without_fuse": true,
+    "windows_winfsp_out_of_scope": true,
+    "tier1_os": ["rocky", "ubuntu"]
+  },
+  "notes": [
+    "Candidate pin is the latest GitHub release of hilather/ratarmount-rs as of 2026-08-01.",
+    "Cargo.toml workspace.package.repository may still name mxmlnkn/ratarmount-rs; product pin is the resolved public repo URL above.",
+    "ARC-000 must complete security/supply-chain/FUSE/golden-byte qualification before ARC-004 ships in product.",
+    "Do not treat this pin as a production go until ARC-000 acceptance criteria are checked."
+  ],
+  "related_tasks": [
+    "ARC-000",
+    "ARC-004",
+    "ARC-012",
+    "ARC-000a",
+    "ARC-000b",
+    "ARC-000c",
+    "ARC-004a",
+    "ARC-004b"
+  ]
+}

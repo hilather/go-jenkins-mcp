@@ -117,6 +117,27 @@ if [[ -f "$ROOT/docs/packaging.md" ]]; then
   install -D -m 0644 "$ROOT/docs/packaging.md" "$STAGE/usr/share/doc/$NAME/packaging.md"
 fi
 
+# UI-008: optional admin SPA assets (fresh install without npm on target).
+# Build with: make admin-ui && make package  (does not fail package if missing).
+ADMIN_UI_SRC="${ADMIN_UI_SRC:-$ROOT/web/admin/dist}"
+ADMIN_UI_DST="usr/share/jenkins-mcp/admin-ui"
+ADMIN_UI_STATUS="missing"
+ADMIN_UI_BUILD=""
+if [[ -d "$ADMIN_UI_SRC" && -f "$ADMIN_UI_SRC/index.html" ]]; then
+  mkdir -p "$STAGE/$ADMIN_UI_DST"
+  # Copy tree; never ship node_modules (dist is production build only).
+  cp -a "$ADMIN_UI_SRC"/. "$STAGE/$ADMIN_UI_DST/"
+  # Stamp package version into UI_BUILD when SPA did not write one.
+  if [[ ! -f "$STAGE/$ADMIN_UI_DST/UI_BUILD" ]]; then
+    printf '%s\n' "${VERSION}" >"$STAGE/$ADMIN_UI_DST/UI_BUILD"
+  fi
+  ADMIN_UI_STATUS="present"
+  ADMIN_UI_BUILD="$(tr -d '\r\n' <"$STAGE/$ADMIN_UI_DST/UI_BUILD" | head -c 128 || true)"
+  echo "admin-ui: packaged $ADMIN_UI_SRC → /$ADMIN_UI_DST (ui_build=${ADMIN_UI_BUILD})"
+else
+  echo "admin-ui: residual — $ADMIN_UI_SRC missing; package without SPA assets (run make admin-ui first for full console)"
+fi
+
 # Version / commit metadata (no secrets).
 cat >"$STAGE/usr/share/doc/$NAME/BUILD_INFO" <<EOF
 name=${NAME}
@@ -126,10 +147,15 @@ commit=${COMMIT}
 arch=linux/${ARCH}
 built=${BUILDTIME}
 go=${GO_VERSION}
+admin_ui=${ADMIN_UI_STATUS}
+admin_ui_path=/${ADMIN_UI_DST}
+admin_ui_build=${ADMIN_UI_BUILD}
 # Install: binary at /usr/bin/${NAME} (or extract tarball under a prefix).
+# Admin SPA: /usr/share/jenkins-mcp/admin-ui when admin_ui=present (UI-008).
 # Config/data: XDG paths under \$XDG_CONFIG_HOME/${NAME}, \$XDG_DATA_HOME/${NAME}
 # Credentials: OS Secret Service (Linux) — never in config files or Cursor args.
 # Docs: docs/packaging.md
+# Admin console: docs/admin/README.md (admin serve is default-off).
 EOF
 
 TARBALL="$DIST/${NAME}_${VERSION}_linux_${ARCH}.tar.gz"
@@ -147,6 +173,11 @@ elif command -v dpkg-deb >/dev/null 2>&1; then
   cp "$BINARY" "$DEB_ROOT/usr/bin/$NAME"
   chmod 0755 "$DEB_ROOT/usr/bin/$NAME"
   cp -a "$STAGE/usr/share/doc/$NAME/." "$DEB_ROOT/usr/share/doc/$NAME/" 2>/dev/null || true
+  # UI-008: include admin SPA when staged.
+  if [[ -d "$STAGE/usr/share/jenkins-mcp" ]]; then
+    mkdir -p "$DEB_ROOT/usr/share"
+    cp -a "$STAGE/usr/share/jenkins-mcp" "$DEB_ROOT/usr/share/"
+  fi
   DEB_ARCH="$ARCH"
   cat >"$DEB_ROOT/DEBIAN/control" <<EOF
 Package: $NAME
@@ -158,6 +189,7 @@ Maintainer: go-jenkins-mcp maintainers <maintainers@localhost>
 Description: Enterprise Jenkins MCP server (local stdio)
  Local per-user Jenkins MCP for Cursor on Tier-1 Linux (Rocky/Ubuntu).
  Credentials use OS Secret Service; profiles use XDG paths. No Windows package.
+ Optional admin console assets under /usr/share/jenkins-mcp/admin-ui (UI-008).
 Homepage: https://github.com/simonfxr/go-jenkins-mcp
 Recommends: libsecret-1-0
 EOF
@@ -189,6 +221,12 @@ elif command -v rpmbuild >/dev/null 2>&1; then
     arm64) RPM_ARCH=aarch64 ;;
   esac
 
+  # UI-008: optional admin-ui path in %files only when staged.
+  RPM_ADMIN_UI_FILE=""
+  if [[ -d "$STAGE/usr/share/jenkins-mcp/admin-ui" ]]; then
+    RPM_ADMIN_UI_FILE="/usr/share/jenkins-mcp/admin-ui"
+  fi
+
   SPEC="$RPM_TOP/SPECS/${NAME}.spec"
   cat >"$SPEC" <<EOF
 Name:           ${NAME}
@@ -205,6 +243,7 @@ Local per-user Jenkins MCP for Cursor on Tier-1 Linux (Rocky/Ubuntu).
 Credentials use OS Secret Service; profiles use XDG paths.
 Windows packages are out of scope. Optional FUSE (fuse3) is only needed for
 future L2 mount inspection; native Go log paths work without FUSE.
+Optional admin console assets under /usr/share/jenkins-mcp/admin-ui (UI-008).
 
 %prep
 %setup -q
@@ -220,6 +259,7 @@ cp -a usr %{buildroot}/
 %files
 /usr/bin/%{name}
 /usr/share/doc/%{name}
+${RPM_ADMIN_UI_FILE}
 
 %changelog
 * $(date -u +'%a %b %d %Y') go-jenkins-mcp maintainers <maintainers@localhost> - ${RPM_VERSION}-1

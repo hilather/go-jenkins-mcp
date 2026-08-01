@@ -1,0 +1,144 @@
+# Local / support Docker stack for jenkins-mcp.
+#
+# Easy supportability: admin console (real SPA baked into image) + optional HTTP
+# serve + optional disposable Jenkins.
+# Cursor MCP stdio remains the default host path (ADR 0002); this stack helps operators
+# and support engineers run doctor/admin without a full host install or host npm.
+#
+# Platforms: Rocky/Ubuntu hosts with Docker Compose v2. Windows out of scope.
+#
+# Quick start (from repo root):
+#   cp deploy/local/.env.example deploy/local/.env   # edit; never commit .env
+#   make local-docker-up
+#   # Admin SPA + API: http://127.0.0.1:8787  (set token in .env for API)
+#   make local-docker-smoke   # opt-in SPA + health checks
+#   make local-docker-doctor
+#   make local-docker-down
+#
+# Build args (passed by make local-docker-build/up from git metadata):
+#   VERSION, COMMIT, BUILDTIME  — binary ldflags + SPA UI_BUILD stamp
+#   SKIP_SPA=1                  — omit SPA bake (embed/placeholder only)
+#
+# With lab Jenkins:
+#   make local-docker-up PROFILE=with-jenkins
+#   # or: docker compose -f deploy/local/docker-compose.yml --profile with-jenkins up -d --build
+
+name: jenkins-mcp-local
+
+services:
+  mcp:
+    image: ${LOCAL_IMAGE:-jenkins-mcp-local:dev}
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-unknown}
+        BUILDTIME: ${BUILDTIME:-unknown}
+        # 0 (default): multi-stage Node build bakes web/admin into
+        # /usr/share/jenkins-mcp/admin-ui. 1/true/yes: skip SPA (placeholder).
+        SKIP_SPA: ${SKIP_SPA:-0}
+    user: "65532:65532"
+    environment:
+      JENKINS_MCP_PROFILE: ${JENKINS_MCP_PROFILE:-corp}
+      JENKINS_MCP_ADMIN_ROLE: ${JENKINS_MCP_ADMIN_ROLE:-viewer}
+      JENKINS_MCP_ADMIN_ADDR: ${JENKINS_MCP_ADMIN_ADDR:-0.0.0.0:8787}
+      JENKINS_MCP_READ_ONLY: ${JENKINS_MCP_READ_ONLY:-true}
+      # Value from .env — never commit real tokens. Prefer random lab token.
+      JENKINS_MCP_ADMIN_TOKEN: ${JENKINS_MCP_ADMIN_TOKEN:-}
+      XDG_CONFIG_HOME: /home/nonroot/.config
+      XDG_DATA_HOME: /home/nonroot/.local/share
+      XDG_CACHE_HOME: /home/nonroot/.cache
+      # Optional: point at lab Jenkins when profile with-jenkins is up
+      JENKINS_URL: ${JENKINS_URL:-}
+    command: ["admin"]
+    ports:
+      # Host loopback only (lab/support safety).
+      - "127.0.0.1:${LOCAL_ADMIN_HOST_PORT:-8787}:8787"
+    volumes:
+      - local-config:/home/nonroot/.config/jenkins-mcp
+      - local-data:/home/nonroot/.local/share/jenkins-mcp
+      - local-cache:/home/nonroot/.cache/jenkins-mcp
+    healthcheck:
+      # API liveness. Token required when JENKINS_MCP_ADMIN_TOKEN is set.
+      # SPA shell is verified by scripts/local-docker-smoke.sh (opt-in).
+      test:
+        [
+          "CMD-SHELL",
+          "if [ -n \"$$JENKINS_MCP_ADMIN_TOKEN\" ]; then curl -fsS -H \"Authorization: Bearer $$JENKINS_MCP_ADMIN_TOKEN\" http://127.0.0.1:8787/admin/v1/health >/dev/null; else curl -fsS http://127.0.0.1:8787/admin/v1/health >/dev/null; fi || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: "no"
+    networks:
+      - localnet
+
+  # Optional Streamable HTTP for support/lab (not Cursor default).
+  mcp-http:
+    profiles: ["http"]
+    image: ${LOCAL_IMAGE:-jenkins-mcp-local:dev}
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-unknown}
+        BUILDTIME: ${BUILDTIME:-unknown}
+        SKIP_SPA: ${SKIP_SPA:-0}
+    user: "65532:65532"
+    environment:
+      JENKINS_MCP_PROFILE: ${JENKINS_MCP_PROFILE:-corp}
+      JENKINS_MCP_HTTP_ADDR: ${JENKINS_MCP_HTTP_ADDR:-0.0.0.0:8081}
+      JENKINS_MCP_READ_ONLY: ${JENKINS_MCP_READ_ONLY:-true}
+      JENKINS_MCP_HTTP_TOKEN: ${JENKINS_MCP_HTTP_TOKEN:-}
+      XDG_CONFIG_HOME: /home/nonroot/.config
+      XDG_DATA_HOME: /home/nonroot/.local/share
+      XDG_CACHE_HOME: /home/nonroot/.cache
+    command: ["serve-http"]
+    ports:
+      - "127.0.0.1:${LOCAL_HTTP_HOST_PORT:-8081}:8081"
+    volumes:
+      - local-config:/home/nonroot/.config/jenkins-mcp
+      - local-data:/home/nonroot/.local/share/jenkins-mcp
+      - local-cache:/home/nonroot/.cache/jenkins-mcp
+    restart: "no"
+    networks:
+      - localnet
+
+  # Optional disposable Jenkins from testdata lab (mode A API-token support path).
+  jenkins:
+    profiles: ["with-jenkins"]
+    build:
+      context: ../../testdata/jenkins-compose
+      dockerfile: Dockerfile
+    image: go-jenkins-mcp/live-jenkins:lts
+    environment:
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:-test}
+      JAVA_OPTS: >-
+        -Djenkins.install.runSetupWizard=false
+        -Djenkins.model.Jenkins.slaveAgentPort=-1
+    ports:
+      - "127.0.0.1:${JENKINS_HOST_PORT:-18080}:8080"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/login >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 36
+      start_period: 90s
+    restart: "no"
+    networks:
+      - localnet
+
+networks:
+  localnet:
+    driver: bridge
+
+volumes:
+  local-config:
+  local-data:
+  local-cache:
+  jenkins_home:

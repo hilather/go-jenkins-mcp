@@ -4,6 +4,7 @@
 /dist/
 /out/
 *.local.env
+deploy/local/.env
 *.log
 *.exe
 coverage.out
@@ -12,3 +13,6 @@ coverage.html
 .idea/
 .vscode/
 *.swp
+web/admin/dist/
+web/admin/.vite/
+web/admin/node_modules/

@@ -1,0 +1,99 @@
+package admin
+
+import (
+	"context"
+	"net/http"
+	"os"
+	"sort"
+	"strings"
+
+	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+)
+
+// gatewayVaultResponse is GET /admin/v1/gateway/vault (HOST-011 / HOST-009 residual).
+//
+// Secret-free forever: never includes API tokens, raw vault file bytes, or
+// Authorization material. Subject inventory is SubjectKeyHash only.
+type gatewayVaultResponse struct {
+	// Mode is the HOST-011 primary credential mode.
+	Mode string `json:"mode"`
+	// EnabledModes is the allow-list (primary-only when ENABLED_MODES unset).
+	EnabledModes []string `json:"enabledModes"`
+	// VaultConfigured is true when the Mode A vault file exists on disk.
+	VaultConfigured bool `json:"vaultConfigured"`
+	// EntryCount is the number of subject entries (0 when missing/unreadable).
+	EntryCount int `json:"entryCount"`
+	// Subjects are SubjectKeyHash values only (never raw subject keys or tokens).
+	Subjects []string `json:"subjects"`
+	// Residual is set for Mode B/C notes or vault CLI-only write residual.
+	Residual string `json:"residual,omitempty"`
+}
+
+// handleGatewayVault returns secret-free Mode A vault inventory + HOST-011 mode
+// matrix. Requires read (viewer/operator/policy_admin). No write from SPA.
+func (s *server) handleGatewayVault(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "invalid_argument", "method not allowed")
+		return
+	}
+	// All roles with read may view status; write remains CLI-only.
+	if !CheckPermission(w, r, PermRead) {
+		return
+	}
+	writeJSON(w, http.StatusOK, s.gatewayVaultStatus(r.Context()))
+}
+
+func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
+	_ = s
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	resp := gatewayVaultResponse{
+		Subjects:     []string{},
+		EnabledModes: []string{},
+		Residual:     "vault write is CLI-only: jenkins-mcp gateway vault-put / vault-delete (never put tokens in the browser)",
+	}
+
+	mx, err := gateway.ModeMatrixFromEnviron(os.Getenv)
+	if err != nil {
+		// Fail closed on invalid mode config: still return a safe status body
+		// so the SPA can show residual rather than 500 (operator can fix env).
+		resp.Mode = string(gateway.CredentialModeFromEnviron(os.Getenv))
+		if !gateway.CredentialMode(resp.Mode).Valid() {
+			resp.Mode = ""
+		}
+		resp.Residual = "gateway credential mode config invalid: " + err.Error() +
+			"; vault write is CLI-only (jenkins-mcp gateway vault-put)"
+		return resp
+	}
+	resp.Mode = mx.Primary.String()
+	for _, m := range mx.Enabled {
+		resp.EnabledModes = append(resp.EnabledModes, m.String())
+	}
+	if mx.Residual != "" {
+		resp.Residual = mx.Residual + "; " + resp.Residual
+	}
+
+	path := gateway.VaultPathFromEnviron(os.Getenv)
+	vault, err := gateway.NewFileAPITokenVault(path)
+	if err != nil {
+		resp.Residual = strings.TrimSpace(resp.Residual + "; vault path not usable")
+		return resp
+	}
+	resp.VaultConfigured = vault.FileExists()
+	keys, err := vault.ListSubjectKeys(ctx)
+	if err != nil {
+		// Corrupt vault: report not configured inventory; do not leak file body.
+		resp.VaultConfigured = vault.FileExists()
+		resp.Residual = strings.TrimSpace(resp.Residual + "; vault unreadable (corrupt or permission); use CLI to inspect")
+		return resp
+	}
+	resp.EntryCount = len(keys)
+	hashes := make([]string, 0, len(keys))
+	for _, k := range keys {
+		hashes = append(hashes, gateway.SubjectKeyHash(k))
+	}
+	sort.Strings(hashes)
+	resp.Subjects = hashes
+	return resp
+}

@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
@@ -27,6 +28,10 @@ const EnvAgentCoreAuthEndpoint = "JENKINS_MCP_AGENTCORE_AUTH_ENDPOINT"
 
 // EnvAgentCoreTokenEndpoint optional token endpoint URL.
 const EnvAgentCoreTokenEndpoint = "JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT"
+
+// DefaultAPITokenVaultRelPath is the conventional vault file under XDG data
+// (HOST-009 lab): $XDG_DATA_HOME/jenkins-mcp/gateway/apitoken_vault.json
+const DefaultAPITokenVaultRelPath = "jenkins-mcp/gateway/apitoken_vault.json"
 
 // ModeEnabled reports whether gateway mode is requested via flag or env.
 func ModeEnabled(flagGateway bool, profileGateway bool) bool {
@@ -65,6 +70,9 @@ func ConfigFromEnviron(jenkinsBaseURL string) AgentCoreConfig {
 //
 // When cfg is incomplete (missing AS/audience), returns an error — gateway mode
 // fails closed rather than starting without a provider (GWY-002).
+//
+// For Mode A (api_token_vault) use RequireAPITokenVaultSetup or
+// CredentialProviderFromEnviron instead — AgentCore AS is not required for Mode A.
 func RequireGatewaySetup(cfg AgentCoreConfig) (CredentialProvider, error) {
 	if !cfg.Configured() {
 		return nil, apperr.New(apperr.CodeCapabilityMissing,
@@ -78,4 +86,150 @@ func RequireGatewaySetup(cfg AgentCoreConfig) (CredentialProvider, error) {
 		return nil, err
 	}
 	return p, nil
+}
+
+// CredentialModeFromEnviron reads JENKINS_MCP_GATEWAY_CREDENTIAL_MODE.
+// Empty defaults to agentcore_3lo_obo (Mode C fail-closed AgentCore path).
+// Unknown values are returned as-is (invalid); callers must check Valid()
+// or use CredentialModeFromEnvironStrict.
+func CredentialModeFromEnviron(getenv func(string) string) CredentialMode {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	raw := strings.TrimSpace(getenv(EnvGatewayCredentialMode))
+	if raw == "" {
+		return CredentialModeAgentCore
+	}
+	return NormalizeCredentialMode(CredentialMode(raw))
+}
+
+// CredentialModeFromEnvironStrict is like CredentialModeFromEnviron but returns
+// invalid_argument for unknown mode names (fail start).
+func CredentialModeFromEnvironStrict(getenv func(string) string) (CredentialMode, error) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	raw := strings.TrimSpace(getenv(EnvGatewayCredentialMode))
+	if raw == "" {
+		return CredentialModeAgentCore, nil
+	}
+	return ParseCredentialMode(raw)
+}
+
+// EnabledModesFromEnviron reads JENKINS_MCP_GATEWAY_ENABLED_MODES.
+// Empty → nil (primary-only semantics in ModeEnabledIn / ModeMatrixFromEnviron).
+// Unknown mode names fail closed.
+func EnabledModesFromEnviron(getenv func(string) string) ([]CredentialMode, error) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	return ParseEnabledModes(getenv(EnvGatewayEnabledModes))
+}
+
+// ModeMatrix is a secret-free HOST-011 mode switch snapshot (admin / doctor).
+type ModeMatrix struct {
+	// Primary is the single serve credential mode (JENKINS_MCP_GATEWAY_CREDENTIAL_MODE).
+	Primary CredentialMode `json:"primary"`
+	// Enabled is the allow-list (explicit ENABLED_MODES or [Primary] when unset).
+	Enabled []CredentialMode `json:"enabled"`
+	// Residual notes residual modes (e.g. Mode B HOST-010).
+	Residual string `json:"residual,omitempty"`
+}
+
+// ModeMatrixFromEnviron builds the HOST-011 matrix for status surfaces.
+// Fails when primary or enabled list is invalid, or primary is not enabled.
+func ModeMatrixFromEnviron(getenv func(string) string) (ModeMatrix, error) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	primary, err := CredentialModeFromEnvironStrict(getenv)
+	if err != nil {
+		return ModeMatrix{}, err
+	}
+	enabled, err := EnabledModesFromEnviron(getenv)
+	if err != nil {
+		return ModeMatrix{}, err
+	}
+	if len(enabled) == 0 {
+		enabled = []CredentialMode{primary}
+	} else if !ModeEnabledIn(primary, enabled, primary) {
+		return ModeMatrix{}, apperr.New(apperr.CodeInvalidArgument,
+			"gateway primary credential mode is not in JENKINS_MCP_GATEWAY_ENABLED_MODES")
+	}
+	mx := ModeMatrix{Primary: primary, Enabled: enabled}
+	if ModeEnabledIn(CredentialModeJWTRSBearer, enabled, primary) {
+		mx.Residual = "jwt_rs_bearer residual (HOST-010); live IdP JWT RS not wired"
+	}
+	return mx, nil
+}
+
+// VaultPathFromEnviron returns the Mode A vault file path from env or default
+// under XDG_DATA_HOME (or ~/.local/share) + DefaultAPITokenVaultRelPath.
+func VaultPathFromEnviron(getenv func(string) string) string {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	if p := strings.TrimSpace(getenv(EnvGatewayVaultPath)); p != "" {
+		return p
+	}
+	dataHome := strings.TrimSpace(getenv("XDG_DATA_HOME"))
+	if dataHome == "" {
+		home := strings.TrimSpace(getenv("HOME"))
+		if home == "" {
+			home = "."
+		}
+		dataHome = filepath.Join(home, ".local", "share")
+	}
+	return filepath.Join(dataHome, filepath.FromSlash(DefaultAPITokenVaultRelPath))
+}
+
+// CredentialProviderFromEnviron selects the HOST-011 primary CredentialProvider
+// from env (Mode A vault, Mode B residual, Mode C AgentCore). No silent
+// cross-mode fallthrough: unknown mode fails start; Mode B is an explicit
+// residual not_configured provider (never AgentCore silent); disabled modes
+// are not constructed.
+//
+// Mode A Live provider is returned when vault path is constructible; empty vault
+// file is OK (per-subject Obtain still not_found). Mode C uses RequireGatewaySetup
+// (Live=false until TokenFetcher wire).
+//
+// getenv nil → os.Getenv. jenkinsBaseURL is required for Mode C only.
+func CredentialProviderFromEnviron(jenkinsBaseURL string, getenv func(string) string) (CredentialProvider, error) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	mx, err := ModeMatrixFromEnviron(getenv)
+	if err != nil {
+		return nil, err
+	}
+	mode := mx.Primary
+	switch mode {
+	case CredentialModeAPITokenVault:
+		path := VaultPathFromEnviron(getenv)
+		vault, err := NewFileAPITokenVault(path)
+		if err != nil {
+			return nil, err
+		}
+		return RequireAPITokenVaultSetup(vault)
+	case CredentialModeJWTRSBearer:
+		// Explicit residual provider — not AgentCore, not nil error-only path
+		// that could be mistaken for "use default AgentCore".
+		return NewResidualJWTRSProvider(), nil
+	case CredentialModeAgentCore:
+		// Mode C: AgentCore path (Live=false until TokenFetcher wire).
+		// Use injected getenv so tests do not depend on process env pollution.
+		cfg := AgentCoreConfig{
+			AuthorizationServerBaseURL: strings.TrimSpace(getenv(EnvAgentCoreASURL)),
+			AuthorizationEndpoint:      strings.TrimSpace(getenv(EnvAgentCoreAuthEndpoint)),
+			TokenEndpoint:              strings.TrimSpace(getenv(EnvAgentCoreTokenEndpoint)),
+			Audience:                   strings.TrimSpace(getenv(EnvAgentCoreAudience)),
+			ClientID:                   strings.TrimSpace(getenv(EnvAgentCoreClientID)),
+			Mode:                       Mode(strings.TrimSpace(getenv(EnvAgentCoreMode))),
+			JenkinsBaseURL:             strings.TrimSpace(jenkinsBaseURL),
+		}
+		return RequireGatewaySetup(cfg)
+	default:
+		return nil, apperr.New(apperr.CodeInvalidArgument,
+			"unsupported gateway credential mode (want api_token_vault, jwt_rs_bearer, or agentcore_3lo_obo)")
+	}
 }

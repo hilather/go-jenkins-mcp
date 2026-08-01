@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>jenkins-mcp admin</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 40rem; color: #1a1a1a; }
+    code { background: #f4f4f5; padding: 0.1em 0.35em; border-radius: 3px; }
+    a { color: #0b5fff; }
+  </style>
+</head>
+<body>
+  <h1>jenkins-mcp admin</h1>
+  <p>
+    Embedded placeholder UI (UI-008). Full SPA assets were not baked into this binary.
+    Serve a production build with <code>--assets-dir</code>, package path
+    <code>/usr/share/jenkins-mcp/admin-ui</code>, or rebuild with
+    <code>make admin-ui-embed</code>.
+  </p>
+  <p>API is at <code>/admin/v1/*</code>. Admin HTTP is off until <code>admin serve</code>.</p>
+  <ul>
+    <li><a href="/admin/v1/health">/admin/v1/health</a></li>
+    <li><a href="/admin/v1/version">/admin/v1/version</a></li>
+    <li><a href="/admin/v1/me">/admin/v1/me</a></li>
+    <li><a href="/admin/v1/metrics">/admin/v1/metrics</a></li>
+  </ul>
+</body>
+</html>

@@ -68,6 +68,24 @@ Twelve `mock-inv-*` Pipeline jobs cover failure modes for MCP triage drills
 (compile/test/unstable/nested/parallel/docker/OOM/long-log/post/artifacts).
 Catalog and example prompts: [FIXTURES.md](FIXTURES.md).
 
+## OAuth / JWT labs (planned — HOST-012…015)
+
+This compose is the **mode A** (API token) live harness today. Server-side
+**mode B** (JWT RS) and **mode C** (AgentCore/token exchange) Docker scaffolds
+are backlog tasks:
+
+| Task | Lab |
+|------|-----|
+| **HOST-012** | Umbrella Makefile + docs for auth labs |
+| **HOST-013** | Jenkins + jwt-auth-filter **or** mock RS reverse-proxy |
+| **HOST-014** | Mock OIDC IdP (PKCE/JWKS/claims) |
+| **HOST-015** | Mock AgentCore / token-exchange peer |
+
+Planning SoT: [`docs/roadmap/server-team-hosted.md`](../../docs/roadmap/server-team-hosted.md).  
+Agent policy: always scaffold Docker for integration tests where possible
+([`AGENTS.md`](../../AGENTS.md)). Real Entra remains residual; mocks must still
+fail closed on wrong audience/issuer.
+
 Rebuild all fixture jobs on a running lab:
 
 ```bash
