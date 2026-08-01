@@ -496,6 +496,14 @@ func TestGatewayResidualStatus(t *testing.T) {
 	if _, ok := payload["principal_cache_entries"].(float64); !ok {
 		t.Fatalf("principal_cache_entries: %+v", payload["principal_cache_entries"])
 	}
+	// Process-local honesty: CLI residual-status count is this process, not remote serve.
+	pcNote, _ := payload["principal_cache_process_note"].(string)
+	if pcNote == "" {
+		t.Fatal("principal_cache_process_note must be present")
+	}
+	if !strings.Contains(strings.ToLower(pcNote), "this process") {
+		t.Fatalf("principal_cache_process_note process-local honesty: %q", pcNote)
+	}
 	// Empty hygiene env → omit max/ttl (unlimited residual default).
 	if _, ok := payload["principal_cache_max_entries"]; ok {
 		t.Fatalf("unlimited default must omit principal_cache_max_entries: %+v", payload["principal_cache_max_entries"])
@@ -515,6 +523,40 @@ func TestGatewayResidualStatus(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(out), "production go complete") {
 		t.Fatal("must not claim production GO complete")
+	}
+}
+
+// shared_subject_rate_file flips true when path set; path never appears in JSON.
+func TestGatewayResidualStatus_SharedSubjectRateFileEnv(t *testing.T) {
+	marker := "cli-subject-rate-path-canary-NEVER"
+	path := filepath.Join(t.TempDir(), marker+".dat")
+	t.Setenv(gateway.EnvGatewaySubjectRatePath, path)
+	t.Setenv("HOST009_FAKE_TOKEN", canaryCLIToken)
+
+	out := buildGatewayResidualStatus(os.Getenv)
+	if out["shared_subject_rate_file"] != true {
+		t.Fatalf("shared_subject_rate_file want true: %+v", out["shared_subject_rate_file"])
+	}
+	// Default-path call without env must stay false (fresh getenv with empty path).
+	clear := buildGatewayResidualStatus(func(string) string { return "" })
+	if clear["shared_subject_rate_file"] != false {
+		t.Fatalf("shared_subject_rate_file default false: %+v", clear["shared_subject_rate_file"])
+	}
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: SUBJECT_RATE_PATH leaked into residual-status")
+	}
+	for _, bad := range []string{canaryCLIToken, "access_token=", "refresh_token=", "Bearer " + canaryCLIToken} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q", bad)
+		}
+	}
+	if _, ok := out["principal_cache_process_note"].(string); !ok {
+		t.Fatal("principal_cache_process_note required")
 	}
 }
 

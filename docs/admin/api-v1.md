@@ -249,7 +249,9 @@ rate knobs keep admin health names `rateEnabled` / `ratePerMinute` / `rateBurst`
   "rateEnabled": true,
   "ratePerMinute": 30,
   "rateBurst": 10,
+  "shared_subject_rate_file": false,
   "principal_cache_entries": 0,
+  "principal_cache_process_note": "principal_cache_entries is count for this process only (CLI/admin ≠ serve MemoryTokenCache/PrincipalCache unless shared file caches)",
   "residual_note": "unified gateway residual snapshot … see docs/gateway/live-pin-blockers.md",
   "doc": "docs/gateway/live-pin-blockers.md"
 }
@@ -273,7 +275,9 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 | `kubernetes_env_detected` | `true` when `KUBERNETES_SERVICE_HOST` set (value never embedded) |
 | `progressive_consent` | OAUTH-010 / GWY-001 StatusMap (static; never tokens) |
 | `rateEnabled` / `ratePerMinute` / `rateBurst` | HOST-006 process-local rate knobs |
-| `principal_cache_entries` | Process-local principal cache **count** only |
+| `shared_subject_rate_file` | `true` only when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` set (HOST-008 same-host lite); path never returned |
+| `principal_cache_entries` | Principal cache **count** for **this process only** (CLI or admin BFF — not remote MCP serve unless shared file caches) |
+| `principal_cache_process_note` | Secret-free honesty sentence for process-local count scope |
 | `residual_note` / `doc` | Honesty sentence + pointer to [live-pin-blockers.md](../gateway/live-pin-blockers.md) |
 
 **SPA:** Overview card “Gateway residual status” loads this route; **404 hides the

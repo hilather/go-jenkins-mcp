@@ -132,7 +132,7 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 - **Not** multi-replica shared store; sticky sessions / shared AgentCore vault remain residual.
 
 ```bash
-jenkins-mcp gateway residual-status    # unified secret-free residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count)
+jenkins-mcp gateway residual-status    # unified secret-free residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count + process note)
 # same map on admin BFF (HOST-007 SPA Overview): GET /admin/v1/gateway/residual-status
 jenkins-mcp gateway consent-residual   # progressive consent residual + last consent_sessions if file present
 jenkins-mcp gateway consent-purge      # purge TTL-expired metadata (or --session-id / --all); secret-free counts
@@ -179,7 +179,8 @@ JenkinsUserID / mutation Binding re-resolve on the next tool call.
 combine mode-matrix residual, `multi_user_enabled`,
 `ha_multi_replica=false`, `session_affinity_recommended`, multi-pod residual fields,
 progressive consent residual, `rateEnabled` / `ratePerMinute` / `rateBurst`,
-`shared_subject_rate_file`, and `principal_cache_entries` (count only) plus optional
+`shared_subject_rate_file`, and `principal_cache_entries` (count only) plus
+`principal_cache_process_note` (this-process only: CLI/admin ≠ remote serve) and optional
 `principal_cache_max_entries` / `principal_cache_ttl_seconds` when hygiene env is set.
 Always advertises Mode B residual id `oauth009_offline` and points at
 [live-pin-blockers.md](live-pin-blockers.md). Shared assembly:
