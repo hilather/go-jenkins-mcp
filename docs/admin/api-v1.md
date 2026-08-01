@@ -717,7 +717,7 @@ When global registry unset: `available: false`, empty maps, residual note.
 is present, `mcp_subject_rate_quota` / `mcp_subject_slot_quota` may appear as
 process-local counters (CodeQuota from subject rate `Allow` / slot `Hold`).
 **Never** subject keys, principal ids, or tokens as series labels. Multi-pod
-aggregation residual. SPA Metrics page prefers those keys in sparkline selection
+aggregation residual. SPA Metrics page prefers those keys in ECharts history selection
 when non-zero present.
 
 ## GET /admin/v1/profiles/{id}/audit

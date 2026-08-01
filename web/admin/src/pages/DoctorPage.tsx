@@ -2,7 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { fetchDoctor, getProfileId } from "../api/client";
 import type { GatewayResidualStatusResponse } from "../api/types";
+import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
+import { PageHeader } from "../components/PageHeader";
 import {
   CONSENT_FILE_BACKED_HONESTY,
   CONSENT_MULTI_REPLICA_SHARED_HONESTY,
@@ -55,8 +57,11 @@ function DoctorGatewayResidualCard({
   const showConsent = Boolean(data.progressive_consent);
 
   return (
-    <div className="card">
-      <h2>Gateway residual status</h2>
+    <div className="card residual-card">
+      <h2>
+        Gateway residual status{" "}
+        <span className="residual-badge">HOST-007</span>
+      </h2>
       <p className="muted" style={{ marginTop: 0 }}>
         HOST-007 doctor embed (
         <code>gateway_residual_status</code>) — same secret-free map as{" "}
@@ -230,14 +235,9 @@ export function DoctorPage() {
 
   return (
     <>
-      <h1 className="page-title">Doctor</h1>
-      <p className="page-sub">
-        Bounded diagnostics for profile <code>{profileId}</code> (
-        <code>
-          GET /admin/v1/profiles/{"{id}"}/doctor?offline={offline ? "1" : "0"}
-        </code>
-        ). Online mode requires a configured admin shared secret.
-      </p>
+      <PageHeader title="Doctor">
+        Offline doctor report for profile <code>{profileId}</code>
+      </PageHeader>
 
       <div className="toolbar">
         <label className="check-label">
@@ -288,9 +288,12 @@ export function DoctorPage() {
           <div className="card">
             <h2>Checks</h2>
             {!q.data.checks?.length ? (
-              <p className="muted">No checks returned.</p>
+              <EmptyState title="No checks returned">
+                Run doctor to populate checks. Residual honesty is separate from overall.
+              </EmptyState>
             ) : (
-              <table className="data">
+              <div className="table-scroll">
+                <table className="data">
                 <thead>
                   <tr>
                     <th>name</th>
@@ -304,7 +307,7 @@ export function DoctorPage() {
                       <td className="mono">{c.name}</td>
                       <td>
                         <span
-                          className={`tag ${statusClass(String(c.status))}`}
+                          className={`check-pill ${statusClass(String(c.status))}`}
                         >
                           {c.status}
                         </span>
@@ -314,6 +317,7 @@ export function DoctorPage() {
                   ))}
                 </tbody>
               </table>
+                </div>
             )}
           </div>
         </>

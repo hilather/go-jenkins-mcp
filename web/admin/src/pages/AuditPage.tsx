@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAudit, getProfileId } from "../api/client";
 import type { AuditEvent, AuditQuery } from "../api/types";
+import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
+import { PageHeader } from "../components/PageHeader";
 import {
   AUDIT_LIMIT_OPTIONS,
   AUDIT_TYPE_OPTIONS,
@@ -187,17 +189,9 @@ export function AuditPage() {
 
   return (
     <>
-      <h1 className="page-title">Audit</h1>
-      <p className="page-sub">
-        Privacy-preserving audit tail for profile <code>{profileId}</code>{" "}
-        (<code>GET /admin/v1/profiles/{"{id}"}/audit</code>). Cap limit ≤ 200.
-        Same-host lite: BFF merges active <code>audit.jsonl</code> with rotated
-        siblings (<code>audit.jsonl.N</code>). Multi-pod fleet aggregation remains
-        residual. Multi-user correlation: BFF <code>external_subject</code> exact
-        match on <code>externalSubject</code>; table also shows{" "}
-        <code>subjectKeyHash</code> (opaque hash only — never tokens). No live
-        SSE tail in v1.
-      </p>
+      <PageHeader title="Audit">
+        Profile <code>{profileId}</code> · privacy-preserving event list
+      </PageHeader>
 
       <form className="card filters-card" onSubmit={applyFilters}>
         <h2>Filters</h2>
@@ -332,7 +326,7 @@ export function AuditPage() {
                 )
               </h2>
               {!loaded.length ? (
-                <p className="muted">{emptyMessage}</p>
+                <EmptyState title="No audit events">{emptyMessage}</EmptyState>
               ) : !displayed.length ? (
                 <p className="muted">
                   No events match externalSubject exact filter (BFF

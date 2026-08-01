@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchMetrics } from "../api/client";
+import { EChart } from "../components/charts/EChart";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
+import { PageHeader } from "../components/PageHeader";
 import { downloadJson } from "../lib/download";
+import {
+  historyLineOption,
+  multiHistoryLineOption,
+  snapshotBarOption,
+} from "../lib/metricCharts";
 import {
   METRICS_HISTORY_MAX_POINTS,
   appendMetricsHistory,
@@ -10,7 +17,6 @@ import {
   selectMetricKeys,
   type MetricsHistory,
 } from "../lib/metricsHistory";
-import { sparklinePoints } from "../lib/sparkline";
 
 const REFRESH_MS = 15_000;
 
@@ -26,64 +32,61 @@ function MapTable({
   );
   return (
     <div className="card">
-      <h2>{title}</h2>
+      <h2>{title} (table)</h2>
       {entries.length === 0 ? (
         <p className="muted">Empty.</p>
       ) : (
-        <table className="data">
-          <thead>
-            <tr>
-              <th>name</th>
-              <th>value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map(([k, v]) => (
-              <tr key={k}>
-                <td className="mono">{k}</td>
-                <td className="mono">{v}</td>
+        <div className="table-scroll">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>name</th>
+                <th>value</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {entries.map(([k, v]) => (
+                <tr key={k}>
+                  <td className="mono">{k}</td>
+                  <td className="mono">{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
 }
 
-function Sparkline({
-  series,
+function HistoryCard({
   label,
+  series,
 }: {
-  series: { t: number; v: number }[];
   label: string;
+  series: { t: number; v: number }[];
 }) {
   const latest = series.length ? series[series.length - 1].v : 0;
-  const pts = sparklinePoints(series);
+  const option = useMemo(
+    () => historyLineOption(label, series),
+    [label, series],
+  );
   return (
-    <div className="sparkline-row" title={label}>
-      <div className="sparkline-meta">
+    <div className="metric-chart-card" title={label}>
+      <div className="metric-chart-head">
         <span className="mono sparkline-name">{label}</span>
         <span className="mono sparkline-value">{latest}</span>
       </div>
-      {pts ? (
-        <svg
-          className="sparkline-svg"
-          viewBox="0 0 120 28"
-          width="120"
-          height="28"
-          role="img"
-          aria-label={`${label} history, ${series.length} points, latest ${latest}`}
-        >
-          <polyline
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            points={pts}
-          />
-        </svg>
+      {option ? (
+        <EChart
+          option={option}
+          height={140}
+          ariaLabel={`${label} history, ${series.length} points, latest ${latest}`}
+        />
       ) : (
-        <span className="muted sparkline-empty">need ≥2 samples</span>
+        <p className="muted metric-chart-empty">
+          need ≥2 samples for ECharts history
+        </p>
       )}
     </div>
   );
@@ -129,7 +132,6 @@ export function MetricsPage() {
     if (keys.length === 0 && !q.data.available) {
       return;
     }
-    // Still track preferred empty series when available so sparklines can start.
     const trackKeys =
       keys.length > 0
         ? keys
@@ -146,6 +148,19 @@ export function MetricsPage() {
   }, [q.dataUpdatedAt, q.isSuccess, q.data]);
 
   const trackedKeys = useMemo(() => Object.keys(history).sort(), [history]);
+
+  const countersBar = useMemo(
+    () => snapshotBarOption("Counters", q.data?.counters ?? {}),
+    [q.data?.counters],
+  );
+  const gaugesBar = useMemo(
+    () => snapshotBarOption("Gauges", q.data?.gauges ?? {}),
+    [q.data?.gauges],
+  );
+  const overlay = useMemo(
+    () => multiHistoryLineOption(history, 6),
+    [history],
+  );
 
   const exportSnapshot = () => {
     if (!q.data) {
@@ -168,11 +183,9 @@ export function MetricsPage() {
 
   return (
     <>
-      <h1 className="page-title">Metrics</h1>
-      <p className="page-sub">
-        Process-local telemetry snapshot (
-        <code>GET /admin/v1/metrics</code>). No fleet aggregation in v1.
-      </p>
+      <PageHeader title="Metrics">
+        Process-local telemetry · charts: <strong>Apache ECharts</strong>
+      </PageHeader>
 
       <div className="banner warn" role="status">
         <strong>Residual:</strong> counters/gauges are{" "}
@@ -182,7 +195,7 @@ export function MetricsPage() {
         counters (<code>mcp_subject_rate_quota</code> /{" "}
         <code>mcp_subject_slot_quota</code>) are process-local HOST-006 CodeQuota
         totals only — never subject keys as labels; multi-pod aggregation residual.
-        History sparklines are browser-session only (max{" "}
+        History series are browser-session only (max{" "}
         {METRICS_HISTORY_MAX_POINTS} points per key).
       </div>
 
@@ -247,20 +260,69 @@ export function MetricsPage() {
                   ? trackedKeys.join(", ")
                   : "(waiting for samples)"}
               </dd>
+              <dt>chart library</dt>
+              <dd>Apache ECharts (canvas)</dd>
             </dl>
           </div>
+
+          <div className="metrics-charts-grid">
+            <div className="card metric-snapshot-card">
+              <h2>Counters snapshot</h2>
+              <EChart
+                option={countersBar}
+                height={Math.max(
+                  160,
+                  Math.min(
+                    360,
+                    64 + Object.keys(q.data.counters ?? {}).length * 22,
+                  ),
+                )}
+                ariaLabel="Counters bar chart"
+              />
+            </div>
+            <div className="card metric-snapshot-card">
+              <h2>Gauges snapshot</h2>
+              <EChart
+                option={gaugesBar}
+                height={Math.max(
+                  160,
+                  Math.min(
+                    360,
+                    64 + Object.keys(q.data.gauges ?? {}).length * 22,
+                  ),
+                )}
+                ariaLabel="Gauges bar chart"
+              />
+            </div>
+          </div>
+
+          {overlay && (
+            <div className="card">
+              <h2>
+                History overlay{" "}
+                <span className="muted" style={{ fontWeight: 400 }}>
+                  (ECharts · session ring ≤ {METRICS_HISTORY_MAX_POINTS})
+                </span>
+              </h2>
+              <EChart
+                option={overlay}
+                height={280}
+                ariaLabel="Multi-series metrics history"
+              />
+            </div>
+          )}
 
           {trackedKeys.length > 0 && (
             <div className="card">
               <h2>
-                History sparklines{" "}
+                Per-metric history{" "}
                 <span className="muted" style={{ fontWeight: 400 }}>
-                  (session ring ≤ {METRICS_HISTORY_MAX_POINTS})
+                  (ECharts line)
                 </span>
               </h2>
-              <div className="sparkline-list">
+              <div className="metric-chart-list">
                 {trackedKeys.map((k) => (
-                  <Sparkline key={k} label={k} series={history[k] ?? []} />
+                  <HistoryCard key={k} label={k} series={history[k] ?? []} />
                 ))}
               </div>
             </div>

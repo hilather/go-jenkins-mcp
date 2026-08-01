@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import {
   AdminApiError,
   fetchGatewayResidualStatus,
@@ -18,11 +18,18 @@ import type {
   GatewayResidualStatusResponse,
   GatewaySubjectInvalidateResponse,
 } from "../api/types";
+import { EChart } from "../components/charts/EChart";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
+import { PageHeader } from "../components/PageHeader";
+import { StatusChipRow } from "../components/StatusChip";
 import {
   canSubmitConsentPurge,
   CLEAR_ALL_CONFIRM_TOKEN,
 } from "../lib/consentPurge";
+import {
+  buildOverviewStatusChips,
+  overviewLivePinBarOption,
+} from "../lib/overviewHealth";
 import {
   CONSENT_FILE_BACKED_HONESTY,
   CONSENT_MULTI_REPLICA_SHARED_HONESTY,
@@ -105,13 +112,57 @@ export function OverviewPage() {
       health.data.credentialMode === "agentcore_3lo_obo" ||
       Boolean(health.data.enabledModes?.includes("agentcore_3lo_obo")));
 
+  const livePins = residual.isSuccess
+    ? pickResidualLivePinFields(residual.data)
+    : null;
+
+  const statusChips = useMemo(
+    () =>
+      buildOverviewStatusChips({
+        apiReachable: !apiDown,
+        status: health.data?.status,
+        multiUserEnabled: health.data?.multiUserEnabled,
+        gatewayReady: health.data?.gatewayReady,
+        haMultiReplica: health.data?.haMultiReplica,
+        credentialMode: health.data?.credentialMode,
+        residualAvailable: residual.isSuccess && !residualMissing,
+        modeALive: livePins?.mode_a_live_obtain_qualified,
+        modeBLive: livePins?.mode_b_live_rs_qualified,
+        modeCLive: livePins?.mode_c_live_agentcore_qualified,
+      }),
+    [
+      apiDown,
+      health.data,
+      residual.isSuccess,
+      residualMissing,
+      livePins?.mode_a_live_obtain_qualified,
+      livePins?.mode_b_live_rs_qualified,
+      livePins?.mode_c_live_agentcore_qualified,
+    ],
+  );
+
+  const livePinChart = useMemo(
+    () =>
+      overviewLivePinBarOption({
+        residualAvailable: residual.isSuccess && !residualMissing,
+        modeALive: livePins?.mode_a_live_obtain_qualified,
+        modeBLive: livePins?.mode_b_live_rs_qualified,
+        modeCLive: livePins?.mode_c_live_agentcore_qualified,
+      }),
+    [
+      residual.isSuccess,
+      residualMissing,
+      livePins?.mode_a_live_obtain_qualified,
+      livePins?.mode_b_live_rs_qualified,
+      livePins?.mode_c_live_agentcore_qualified,
+    ],
+  );
+
   return (
     <>
-      <h1 className="page-title">Overview</h1>
-      <p className="page-sub">
-        Profile <code>{profileId}</code> · admin BFF{" "}
-        <code>/admin/v1</code>
-      </p>
+      <PageHeader title="Overview">
+        Profile <code>{profileId}</code> · admin BFF <code>/admin/v1</code>
+      </PageHeader>
 
       {apiDown && (
         <div className="banner warn" role="status">
@@ -126,6 +177,8 @@ export function OverviewPage() {
 
       {health.isLoading && <Loading />}
       {health.isError && <ErrorBanner error={health.error} />}
+
+      <StatusChipRow chips={statusChips} />
 
       {health.isSuccess && (
         <div className="banner ok" role="status">
@@ -142,6 +195,24 @@ export function OverviewPage() {
               · commit <code>{health.data.commit}</code>
             </>
           ) : null}
+        </div>
+      )}
+
+      {(residual.isSuccess || residual.isLoading) && !residualMissing && (
+        <div className="card residual-card">
+          <h2>
+            Live pin residual{" "}
+            <span className="residual-badge">offline honesty</span>
+          </h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            ECharts counts of <code>mode_*_live_*_qualified</code> still false
+            (typical offline: three residual flags). Not production GO.
+          </p>
+          <EChart
+            option={livePinChart}
+            height={200}
+            ariaLabel="Live pin residual bar chart"
+          />
         </div>
       )}
 

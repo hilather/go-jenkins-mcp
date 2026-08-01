@@ -1,5 +1,9 @@
 /**
- * Pure SVG sparkline helpers (UI-005). No chart library.
+ * Deprecated pure-geometry helpers (pre-ECharts).
+ *
+ * Agent policy: **do not** use these for admin UI charts. All charts must use
+ * Apache ECharts via `components/charts/EChart` and `lib/metricCharts.ts`.
+ * Kept only for unit coverage of scaling math; prefer `metricCharts` for new work.
  */
 
 export interface SparklinePoint {

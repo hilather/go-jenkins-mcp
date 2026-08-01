@@ -166,7 +166,7 @@ if intentionally deferred — never silent drift).
 | Product change | Admin follow-through (as applicable) |
 |----------------|--------------------------------------|
 | New/changed **policy / RO / deny-lists / signed bundles** | Effective/overlay APIs; Policy page; validate/apply rules; docs |
-| New/changed **metrics / telemetry / budgets / caps** | `GET /admin/v1/metrics` (or residual note); Metrics page; honesty banners |
+| New/changed **metrics / telemetry / budgets / caps** | `GET /admin/v1/metrics` (or residual note); Metrics page; **ECharts** visualization for every metric surface (see chart rules below); honesty banners |
 | New/changed **audit event types or fields** | Audit list/filter; SPA columns/drawer; never secret fields |
 | New/changed **doctor / support-bundle / security self-check** | Doctor/ops endpoints; SPA; fail-closed online paths |
 | New/changed **cache / pin / quota / eviction** | Cache APIs; Cache page; operator-only destructive + confirm |
@@ -192,12 +192,38 @@ if intentionally deferred — never silent drift).
 |------|------|
 | `internal/admin/` | Admin BFF handlers, RBAC, assets/CSP |
 | `web/admin/src/` | React SPA pages and API client |
+| `web/admin/src/components/charts/EChart.tsx` | **Only** chart host (Apache ECharts) |
+| `web/admin/src/lib/metricCharts.ts` | ECharts option builders for metrics |
 | `docs/admin/api-v1.md` | HTTP contract SoT |
 | `docs/admin/README.md` | Operator enablement |
 | `cmd/jenkins-mcp/admin_cmd.go` | `admin serve` CLI |
 | `make admin-ui` / `make admin-e2e` | Build SPA; opt-in e2e smoke |
 
-Before claiming a feature “done for operators,” ask: *Can an operator see or safely act on this from `admin serve` if we already have that surface — and if not, is the residual documented?*
+### Admin SPA charts and metrics visualization (non-negotiable)
+
+| Rule | Detail |
+|------|--------|
+| **Charts = ECharts only** | All charts in `web/admin` **must** use **Apache ECharts** (`echarts` + `echarts-for-react` via `components/charts/EChart`). **Do not** add Recharts, Chart.js, Plotly, Visx, Nivo, Highcharts, or ad-hoc SVG/canvas chart shells for dashboards. Deprecated pure SVG helpers under `lib/sparkline.ts` are **not** for UI charts. |
+| **Metrics always visualized** | Any operator-facing **metrics / counters / gauges / rates / budgets / quota totals** exposed on the Metrics page (or new metrics surfaces) must ship with **at least one basic ECharts visualization** (bar, line, or area) in addition to tables when tables exist. Empty snapshots still mount an ECharts empty-state shell — not table-only. |
+| **New metric fields** | When BFF adds metric keys or maps, extend Metrics page charts (snapshot bar and/or history line) and option builders in `lib/metricCharts.ts` in the **same change**. |
+| **Theme** | Prefer colors from `lib/metricCharts.ts` `chartTheme` aligned with `styles.css` tokens; keep dark/light readable. |
+| **Secret-free** | Never chart or label raw subject keys, tokens, or secret-shaped strings. |
+| **Tests** | Unit-test option builders (`metricCharts.test.ts`); run `npm test` / `make admin-ui` when touching SPA charts. |
+
+**Admin UI polish backlog (UI-POLISH-001…008) — closed 2026-08-01:**
+
+| ID | Status | Shipped |
+|----|--------|---------|
+| **UI-POLISH-001** | Done | Design tokens + density (`styles.css` space/elevation scale; `PageHeader`) |
+| **UI-POLISH-002** | Done | Sticky topbar + sticky desktop sidebar; active nav border; mobile horizontal-nav residual note |
+| **UI-POLISH-003** | Done | Overview status chips + ECharts live-pin residual bar (`overviewHealth.ts`) |
+| **UI-POLISH-004** | Done | Sticky table headers (`.table-scroll`); Audit/Metrics empty states |
+| **UI-POLISH-005** | Done | Doctor residual badge + check-pill hierarchy |
+| **UI-POLISH-006** | Done | Focus rings; chart aria-labels; reduced-motion CSS + ECharts animation 0 |
+| **UI-POLISH-007** | Done | Light theme CSS + `chartThemeLight` for ECharts options |
+| **UI-POLISH-008** | Done\* residual | Tree-shaken ECharts; prod JS ~887 kB min / ~287 kB gzip — further code-split optional residual |
+
+Before claiming a feature “done for operators,” ask: *Can an operator see or safely act on this from `admin serve` if we already have that surface — and if not, is the residual documented? If metrics/charts: is it ECharts with at least a basic viz?*
 
 ---
 

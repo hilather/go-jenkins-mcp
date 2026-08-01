@@ -18,10 +18,21 @@ import type {
   PolicyValidateResponse,
 } from "../api/types";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
+import { PageHeader } from "../components/PageHeader";
 
-function StringList({ items }: { items?: string[] }) {
+function StringList({
+  items,
+  emptyLabel = "No entries",
+}: {
+  items?: string[];
+  emptyLabel?: string;
+}) {
   if (!items?.length) {
-    return <span className="muted">(none)</span>;
+    return (
+      <p className="muted deny-list-empty" role="status">
+        {emptyLabel}
+      </p>
+    );
   }
   return (
     <ul className="list-inline">
@@ -254,12 +265,9 @@ export function PolicyPage() {
 
   return (
     <>
-      <h1 className="page-title">Policy</h1>
-      <p className="page-sub">
-        Effective deny-only MCP policy for profile <code>{profileId}</code>.
-        Controlled pilot overlay editor (UI-004) — keys never leave the host;
-        signing is CLI-only.
-      </p>
+      <PageHeader title="Policy">
+        Profile <code>{profileId}</code> · effective + overlay (UI-004)
+      </PageHeader>
 
       {meQ.isError && <ErrorBanner error={meQ.error} />}
       {effectiveQ.isLoading && <Loading />}

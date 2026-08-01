@@ -24,7 +24,30 @@ console current”.
 - React 18 + TypeScript + Vite
 - React Router
 - TanStack Query (server state)
+- **Apache ECharts** (`echarts` + `echarts-for-react`) — **only** chart library
 - package manager: **npm** (commit `package-lock.json`)
+
+### Agent hint: charts and metrics
+
+| Rule | Detail |
+|------|--------|
+| **Charts = ECharts only** | All charts go through `src/components/charts/EChart.tsx` + option builders (e.g. `src/lib/metricCharts.ts`). Do **not** add Recharts, Chart.js, Plotly, Visx, Nivo, or ad-hoc SVG chart UIs. |
+| **Metrics must visualize** | Counters/gauges/rates on the Metrics page always have **at least** a basic ECharts chart (snapshot bar and/or history line), not tables alone. Empty maps still show an ECharts empty shell. |
+| **Same change** | New BFF metric fields → update Metrics charts in the same PR. |
+| **Root policy** | See root `AGENTS.md` → “Admin SPA charts and metrics visualization”. |
+
+### Admin UI polish (UI-POLISH-001…008) — Done\* 2026-08-01
+
+| ID | Status | Notes |
+|----|--------|--------|
+| **001** | Done | Tokens/density + `PageHeader` |
+| **002** | Done | Sticky topbar/sidebar; active nav; mobile nav residual honesty |
+| **003** | Done | Overview chips + ECharts live-pin residual chart |
+| **004** | Done | Sticky table headers; empty states |
+| **005** | Done | Doctor residual hierarchy (`check-pill`, residual badge) |
+| **006** | Done | Focus rings; chart aria; reduced-motion |
+| **007** | Done | Light CSS + light ECharts theme tokens |
+| **008** | Done\* residual | Tree-shaken ECharts (`lib/echartsSetup.ts`). **Current prod assets:** JS ~**887 kB** min / ~**287 kB** gzip; CSS ~14 kB. Further dynamic `import()` split is optional residual — not a merge blocker. |
 
 ## Prerequisites
 
@@ -122,7 +145,9 @@ localStorage.setItem("jenkins-mcp.admin.profile", "corp");
 
 - Auto-refresh every **15s**; **pauses when the tab is hidden** (`document.visibilityState`) and resumes when visible.
 - Manual **Pause / Resume** toggle and **Refresh now**.
-- Session **history sparklines** (pure SVG) for preferred counter/gauge names when present, else top values by magnitude. Cap **≤ 60 points** per series (browser memory bound).
+- **ECharts** snapshot **bar charts** for counters and gauges (always mounted; empty-state option when maps are empty).
+- Session **history** via ECharts (multi-series overlay + per-metric line cards) for preferred keys / top magnitude. Cap **≤ 60 points** per series (browser memory bound).
+- Tables remain under the charts for exact values.
 - **Export JSON** downloads the current secret-free snapshot as `metrics-snapshot.json` (client-side only).
 - **Residual:** process-local registry only; **no multi-process / fleet aggregation** in v1 (MGR-002 residual). Empty maps when the registry is unset are expected.
 
@@ -137,7 +162,7 @@ localStorage.setItem("jenkins-mcp.admin.profile", "corp");
 
 ## Frontend license / NOTICE residual
 
-Runtime deps (React, React Router, TanStack Query) are MIT. Full license texts ship under `node_modules/<pkg>/LICENSE` after `npm ci`. A consolidated third-party NOTICE for the admin SPA is **residual** (generate at package/release time or when UI-008 embeds assets). Do not vendor secrets or private keys into this tree.
+Runtime deps (React, React Router, TanStack Query, **Apache ECharts** / echarts-for-react) are MIT (ECharts: Apache-2.0). Full license texts ship under `node_modules/<pkg>/LICENSE` after `npm ci`. A consolidated third-party NOTICE for the admin SPA is **residual** (generate at package/release time or when UI-008 embeds assets). Do not vendor secrets or private keys into this tree.
 
 ## Security notes
 

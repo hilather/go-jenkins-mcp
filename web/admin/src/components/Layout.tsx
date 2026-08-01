@@ -10,6 +10,7 @@ import {
   setProfileId,
 } from "../api/client";
 import type { MeResponse } from "../api/types";
+import { navLinkClassName } from "../lib/uiTheme";
 
 const navItems: { to: string; label: string; end?: boolean }[] = [
   { to: "/", label: "Overview", end: true },
@@ -32,7 +33,6 @@ export function Layout() {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [meError, setMeError] = useState<string | null>(null);
 
-  // Persist ?profile= into localStorage when present.
   useEffect(() => {
     const fromQuery = searchParams.get("profile")?.trim();
     if (fromQuery) {
@@ -41,7 +41,6 @@ export function Layout() {
     }
   }, [searchParams]);
 
-  // Load /admin/v1/me (role + residual). Re-fetch after token save/clear.
   useEffect(() => {
     let cancelled = false;
     fetchMe()
@@ -91,13 +90,25 @@ export function Layout() {
   }
 
   const roleLabel = me?.role ?? (meError ? "—" : "…");
+  const profileId = getProfileId();
 
   return (
     <div className="app-shell">
+      <header className="app-topbar" role="banner">
+        <div className="app-topbar-title">jenkins-mcp · Admin</div>
+        <div className="app-topbar-meta" aria-live="polite">
+          profile <code>{profileId}</code>
+          {" · "}
+          role <strong>{roleLabel}</strong>
+        </div>
+      </header>
       <aside className="sidebar">
+        <p className="mobile-nav-residual" role="note">
+          Narrow layout residual: horizontal nav scroll — not a full mobile shell.
+        </p>
         <div className="brand">
           jenkins-mcp
-          <span>Admin console (v1 + ops)</span>
+          <span>Operator console (BFF + SPA)</span>
         </div>
         <div
           className="role-badge"
@@ -122,7 +133,7 @@ export function Layout() {
               key={item.to}
               to={{ pathname: item.to, search: searchParams.toString() }}
               end={item.end === true}
-              className={({ isActive }) => (isActive ? "active" : undefined)}
+              className={({ isActive }) => navLinkClassName(isActive)}
             >
               {item.label}
             </NavLink>
@@ -161,7 +172,7 @@ export function Layout() {
           </button>
         </form>
       </aside>
-      <main className="main">
+      <main className="main" id="main-content">
         <Outlet />
       </main>
     </div>
