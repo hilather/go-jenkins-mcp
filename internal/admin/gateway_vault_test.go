@@ -60,6 +60,9 @@ func TestHealth_EnabledModesSecretFree(t *testing.T) {
 	if m["haMultiReplica"] != false {
 		t.Fatalf("HOST-008 haMultiReplica must be false: %v", m["haMultiReplica"])
 	}
+	if m["sessionAffinityRecommended"] != false {
+		t.Fatalf("sessionAffinityRecommended want false when multi_user off: %v", m["sessionAffinityRecommended"])
+	}
 	// Default rate env empty → rateEnabled true + package defaults (HOST-006 residual).
 	if m["rateEnabled"] != true {
 		t.Fatalf("rateEnabled default want true got %v", m["rateEnabled"])
@@ -192,6 +195,13 @@ func TestHealth_MultiUserResidualNote(t *testing.T) {
 	}
 	if m["haMultiReplica"] != false {
 		t.Fatalf("haMultiReplica=%v", m["haMultiReplica"])
+	}
+	// HOST-008: multi-user env → recommend sticky Service affinity (scaffold only).
+	if m["sessionAffinityRecommended"] != true {
+		t.Fatalf("sessionAffinityRecommended want true when multi_user: %v", m["sessionAffinityRecommended"])
+	}
+	if !strings.Contains(res, "sessionAffinityRecommended") && !strings.Contains(strings.ToLower(res), "session affinity") {
+		t.Fatalf("want sessionAffinity residual honesty in note: %q", res)
 	}
 }
 

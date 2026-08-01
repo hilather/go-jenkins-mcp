@@ -23,8 +23,8 @@ import (
 // healthResponse is GET /admin/v1/health.
 // enabledModes is a secret-free HOST-011 listing (mode ids only; no tokens).
 // multiUserEnabled / credentialMode / haMultiReplica / gatewayReady /
-// rateEnabled / ratePerMinute / rateBurst are secret-free gateway residual
-// posture (HOST-006 / HOST-008); never tokens or subjects.
+// sessionAffinityRecommended / rateEnabled / ratePerMinute / rateBurst are
+// secret-free gateway residual posture (HOST-006 / HOST-008); never tokens or subjects.
 type healthResponse struct {
 	Status       string   `json:"status"`
 	Version      string   `json:"version"`
@@ -41,6 +41,10 @@ type healthResponse struct {
 	GatewayReady bool `json:"gatewayReady"`
 	// HAMultiReplica is always false (HOST-008 Tier A single-replica default).
 	HAMultiReplica bool `json:"haMultiReplica"`
+	// SessionAffinityRecommended is true when multi-user env is set (HOST-008
+	// sticky Service scaffold honesty). Not multi-replica Done — kustomize
+	// sessionAffinity alone is packaging residual.
+	SessionAffinityRecommended bool `json:"sessionAffinityRecommended"`
 	// RateEnabled is true when subject rate env would enable HOST-006 limiting
 	// (empty JENKINS_MCP_SUBJECT_RATE_PER_MINUTE = default on; 0 = disabled).
 	// Process-local residual only — not multi-replica shared rate (HOST-008).
@@ -105,22 +109,23 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if multiUser {
 		// Secret-free honesty only (SPA reads residual; no SPA rebuild required for this string).
 		// multi_user_offline + host008_single_replica residual ids: release-evidence --offline.
-		residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO; haMultiReplica always false / HOST-008 single-replica; no tokens in health); " + residual
+		residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO; haMultiReplica always false / HOST-008 single-replica; sessionAffinityRecommended=true scaffold only — multi-replica residual; no tokens in health); " + residual
 	}
 	writeJSON(w, http.StatusOK, healthResponse{
-		Status:           "ok",
-		Version:          s.cfg.Version,
-		Commit:           s.cfg.Commit,
-		UIBuild:          s.cfg.UIBuild,
-		EnabledModes:     modes,
-		CredentialMode:   mode,
-		MultiUserEnabled: multiUser,
-		GatewayReady:     false, // admin BFF ≠ MCP serve Ready probe
-		HAMultiReplica:   false, // HOST-008 Tier A default
-		RateEnabled:      rateEnabled,
-		RatePerMinute:    ratePerMinute,
-		RateBurst:        rateBurst,
-		Residual:         residual,
+		Status:                     "ok",
+		Version:                    s.cfg.Version,
+		Commit:                     s.cfg.Commit,
+		UIBuild:                    s.cfg.UIBuild,
+		EnabledModes:               modes,
+		CredentialMode:             mode,
+		MultiUserEnabled:           multiUser,
+		GatewayReady:               false, // admin BFF ≠ MCP serve Ready probe
+		HAMultiReplica:             false, // HOST-008 Tier A default
+		SessionAffinityRecommended: multiUser,
+		RateEnabled:                rateEnabled,
+		RatePerMinute:              ratePerMinute,
+		RateBurst:                  rateBurst,
+		Residual:                   residual,
 	})
 }
 

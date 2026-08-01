@@ -26,6 +26,8 @@ export interface HealthResponse {
   gatewayReady?: boolean;
   /** Always false (HOST-008 Tier A single-replica residual). */
   haMultiReplica?: boolean;
+  /** True when multi-user env set (HOST-008 sticky Service scaffold honesty; not multi-replica Done). */
+  sessionAffinityRecommended?: boolean;
   /** HOST-006 rate env residual (process-local; not multi-replica shared rate). */
   rateEnabled?: boolean;
   /** Resolved bootstrap tools/min (default or env); 0 when disabled. Never tokens. */
@@ -315,6 +317,8 @@ export interface GatewayVaultResponse {
   multiUserEnabled?: boolean;
   /** Always false (HOST-008 Tier A residual). */
   haMultiReplica?: boolean;
+  /** True when multi-user env set (HOST-008 sticky scaffold honesty; not multi-replica Done). */
+  sessionAffinityRecommended?: boolean;
   /** HOST-006 rate env residual (process-local only). */
   rateEnabled?: boolean;
   /** Resolved bootstrap tools/min; 0 when disabled. Never tokens. */

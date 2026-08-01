@@ -487,7 +487,7 @@ Operators of a **team gateway** can use admin BFF safely; still **not** a multi-
 **Priority:** P3  
 **Dependencies:** HOST-003, HOST-004, durable vault  
 **Maps to:** architecture HA session notes  
-**Progress:** **Done* lite** — same-host file vault flock + docs residual (no multi-replica runtime)  
+**Progress:** **Done* lite** — same-host file vault flock + sticky Service scaffold + docs residual (no multi-replica runtime)  
 
 **Objective**
 
@@ -498,6 +498,7 @@ Define when multi-replica is allowed (external vault, sticky sessions, no split-
 - [x] Architecture note: single-replica Tier A default.
 - [x] Checklist for multi-replica: shared vault, session affinity, audit aggregation.
 - [x] Shared vault path + flock multi-process lite (not multi-pod Done).
+- [x] Sticky session kustomize Service scaffold (`sessionAffinity: ClientIP`) — Done* packaging; residual runtime HA.
 - [x] Explicit non-goal until multi-pod durable vault + sticky sessions exist.
 
 ---

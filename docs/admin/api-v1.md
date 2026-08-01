@@ -95,6 +95,7 @@ Current process authentication state and console role. **Never includes the toke
   "multiUserEnabled": false,
   "gatewayReady": false,
   "haMultiReplica": false,
+  "sessionAffinityRecommended": false,
   "rateEnabled": true,
   "ratePerMinute": 30,
   "rateBurst": 10,
@@ -111,10 +112,11 @@ Current process authentication state and console role. **Never includes the toke
 | `multiUserEnabled` | **HOST-008 residual:** `true` when `JENKINS_MCP_GATEWAY_MULTI_USER` is truthy. Foundation residual only — **not** production multi-user GO. |
 | `gatewayReady` | Always **`false` on admin BFF** (separate process from MCP serve). Live Obtain Ready is `GET /readyz` on the gateway serve process. |
 | `haMultiReplica` | Always **`false`** (HOST-008 Tier A single-replica default; multi-replica runtime not implemented). |
+| `sessionAffinityRecommended` | **HOST-008 residual:** `true` when multi-user env is set. Recommends kustomize Service sticky scaffold (`sessionAffinity: ClientIP`) if replicas are ever scaled — **not** multi-replica Done. Scaffold packaging only. |
 | `rateEnabled` | **HOST-006 / HOST-008 residual:** `true` when subject rate env would enable process-local limiting (empty `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` → default on; explicit `0` → false). **Not** multi-replica shared rate. Never tokens. |
-| `ratePerMinute` | **HOST-006 residual knob:** resolved bootstrap tools/min via `gateway.ResolveSubjectRateCaps` / `SubjectRateConfigFromEnviron` (package default **30** when env empty; explicit env value when set; **0** when disabled or invalid parse fail-closed). Process-local only — not multi-replica shared rate. Never tokens. |
-| `rateBurst` | **HOST-006 residual knob:** resolved bootstrap burst via same resolver (package default **10** when env empty; **0** when rate disabled — burst is ignored when rate is off). Process-local only. Never tokens. |
-| `residual` | Secret-free honesty note (never tokens). Always includes process-local subject-rate residual + HOST-008 multi-replica shared-rate residual. When multi-user env is set, also mentions foundation residual + HOST-008 single-replica (`haMultiReplica` always false). |
+| `ratePerMinute` | **HOST-006 residual knob:** resolved bootstrap tools/min via `gateway.SubjectRateConfigFromEnviron` (package default **30**; **0** when disabled). Process-local only. Never tokens. |
+| `rateBurst` | **HOST-006 residual knob:** resolved bootstrap burst (package default **10**; **0** when rate off). Process-local only. Never tokens. |
+| `residual` | Secret-free honesty note (never tokens). Process-local subject-rate residual + HOST-008 multi-replica residual; multi-user env also notes foundation residual + sticky scaffold honesty. |
 
 ## GET /admin/v1/gateway/vault
 
@@ -128,6 +130,7 @@ Authorization headers, or raw subject keys.
   "enabledModes": ["api_token_vault"],
   "multiUserEnabled": false,
   "haMultiReplica": false,
+  "sessionAffinityRecommended": false,
   "rateEnabled": true,
   "ratePerMinute": 30,
   "rateBurst": 10,
@@ -144,6 +147,7 @@ Authorization headers, or raw subject keys.
 | `enabledModes` | Allow-list of mode ids (secret-free) |
 | `multiUserEnabled` | `JENKINS_MCP_GATEWAY_MULTI_USER` truthy parse (foundation residual; not production GO) |
 | `haMultiReplica` | Always `false` (HOST-008 Tier A; multi-replica not implemented) |
+| `sessionAffinityRecommended` | `true` when multi-user env set (HOST-008 sticky Service scaffold honesty; not multi-replica Done) |
 | `rateEnabled` | HOST-006 env residual (process-local rate would be enabled; not multi-replica shared rate) |
 | `ratePerMinute` | Resolved bootstrap tools/min (default or `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE`); **0** when disabled. Process-local residual only. Never tokens. |
 | `rateBurst` | Resolved bootstrap burst (default or `JENKINS_MCP_SUBJECT_RATE_BURST`); **0** when rate disabled. Process-local residual only. Never tokens. |
@@ -158,9 +162,10 @@ is not available from the browser.
 **Multi-user residual (secret-free):** Admin JSON never returns Jenkins tokens,
 vault bytes, Authorization headers, or raw subject keys. `multiUserEnabled` reports
 env parse only — it does **not** certify multi-user MCP production readiness.
-When the env is set, `residual` includes an honesty note (no tokens). Operators
-rely on gateway/REL evidence for live multi-user claims. Multi-replica remains
-HOST-008 Tier B (`haMultiReplica: false`).
+When the env is set, `residual` includes an honesty note (no tokens) and
+`sessionAffinityRecommended` is `true` (kustomize sticky scaffold honesty only).
+Operators rely on gateway/REL evidence for live multi-user claims. Multi-replica
+remains HOST-008 Tier B (`haMultiReplica: false`).
 
 ## GET /admin/v1/version
 

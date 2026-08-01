@@ -1,7 +1,8 @@
 # GWY-004 kustomize stub — not a production chart.
 # Apply only after replacing image + non-secret config; never commit secrets.
-# HOST-008: base Deployment uses replicas: 1 (Tier A). Multi-replica HA is a
-# non-goal until durable shared vault + affinity checklist in
+# HOST-008: base Deployment uses replicas: 1 (Tier A). Service includes optional
+# sessionAffinity: ClientIP scaffold (Done* packaging; residual runtime HA).
+# Multi-replica HA is a non-goal until durable shared vault + full checklist in
 # docs/gateway/deployment.md §9. Do not claim multi-replica Done from this stub.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

@@ -470,7 +470,7 @@ session store (HOST-008).
 | Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT, session fingerprint, JWKS TTL refresh + MaxStaleAge, multi-user Obtain + **policy.Subject rebind foundation** + **protect→inner Alice/Bob** (`multi_user_http_test.go`) + **tools/call JSON-RPC Alice/Bob AuthProviderCtx e2e** (`multi_user_tools_call_test.go`, session-scoped Connect ctx); residual: multi-instance JWKS HA, live Entra groups claim completeness, per-POST (intra-session) handler-ctx rebind if SDK adds it |
 | Reverse-proxy non-local matrix | HOST-002 **Partial Done***: docs + `PathPrefix` strip + dual health + offline origin pin fixtures + `TrustedProxy` default false; live edge residual; no CORS wildcards |
 | Health/readiness envelope | HOST-005 **partial** — `/healthz` + `/readyz` + compose/k8s limits; Obtain Ready on `/readyz` when `--gateway` |
-| Multi-replica HA | HOST-008 Tier B residual (single-replica Tier A default) |
+| Multi-replica HA | HOST-008 Tier B residual (single-replica Tier A; sticky Service Done* scaffold; multi-pod vault residual) |
 | **Program path to team-hosted** | [roadmap/server-team-hosted.md](../roadmap/server-team-hosted.md) |
 
 **HOST-003 wiring (Ready path):** closed for Mode A and Mode C Live-opt-in foundation

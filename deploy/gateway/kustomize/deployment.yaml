@@ -6,6 +6,14 @@
 #     durable shared vault + sticky sessions + audit aggregation exist — see
 #     docs/gateway/deployment.md §9). Do not claim multi-replica Done from this
 #     scaffold.
+#   - When an operator scales replicas > 1 they MUST also provide:
+#       1) Service sessionAffinity (ClientIP scaffold in service.yaml) OR a
+#          shared session store
+#       2) Shared vault path on multi-pod storage (flock is multi-process same
+#          host / shared FS only — emptyDir is NOT multi-pod safe)
+#       3) External / shared rate + Obtain cache residual (process-local today)
+#       4) Audit aggregation (per-pod files are incomplete forensics)
+#     Affinity + flock alone ≠ multi-replica Done.
 #   - non-root, read-only root FS, drop ALL caps
 #   - resource requests/limits (pilot envelope)
 #   - HTTP probes on /healthz and /readyz (secret-free; no inventory)
@@ -18,11 +26,15 @@ metadata:
   labels:
     app.kubernetes.io/name: jenkins-mcp-gateway
 spec:
-  # HOST-008 Tier A: single-replica default.
-  # Do NOT raise replicas until the multi-replica checklist is complete:
-  #   shared durable vault, sticky sessions or shared session store,
-  #   no memory-only token cache, audit aggregation
-  #   (docs/gateway/deployment.md §9). HA is an explicit non-goal until then.
+  # HOST-008 Tier A: single-replica default — keep replicas: 1.
+  # Do NOT raise replicas until the multi-replica checklist is complete
+  # (docs/gateway/deployment.md §9):
+  #   - sticky sessions (Service sessionAffinity scaffold) OR shared session store
+  #   - multi-pod durable shared vault (not emptyDir; flock = same-host lite only)
+  #   - no memory-only Obtain/token cache as sole store
+  #   - external/shared subject rate residual closed
+  #   - audit aggregation
+  # HA is an explicit non-goal until that vault + residuals exist.
   replicas: 1
   selector:
     matchLabels:

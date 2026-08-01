@@ -112,6 +112,9 @@ func TestRunDoctor_OfflineNoSecrets(t *testing.T) {
 			if c.Details["ha_multi_replica"] != false {
 				t.Fatalf("HOST-008 residual must report ha_multi_replica=false: %+v", c.Details)
 			}
+			if c.Details["session_affinity_recommended"] != false {
+				t.Fatalf("session_affinity_recommended want false when multi_user off: %+v", c.Details)
+			}
 			if c.Details["gateway_ready"] != false {
 				t.Fatalf("offline gateway_ready must be false residual: %+v", c.Details)
 			}
@@ -194,6 +197,10 @@ func TestRunDoctor_GatewayStatus_MultiUserResidual(t *testing.T) {
 	}
 	if gs.Details["ha_multi_replica"] != false || gs.Details["gateway_ready"] != false {
 		t.Fatalf("HOST-008 residual fields: %+v", gs.Details)
+	}
+	// HOST-008 sticky scaffold honesty when multi-user env set (not multi-replica Done).
+	if gs.Details["session_affinity_recommended"] != true {
+		t.Fatalf("session_affinity_recommended want true when multi_user: %+v", gs.Details)
 	}
 	if gs.Details["credential_mode"] != string(gateway.CredentialModeAgentCore) {
 		t.Fatalf("credential_mode=%v", gs.Details["credential_mode"])

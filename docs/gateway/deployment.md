@@ -367,7 +367,8 @@ Obtain Ready and Streamable HTTP mTLS hardening remain residuals.
 | Control | Tier A posture |
 |---------|----------------|
 | Kustomize / compose | **`replicas: 1`** (`deploy/gateway/kustomize/deployment.yaml`) |
-| Token / JWT vault | File vault: process-local mutex + **flock** on `path.lock` (HOST-008 **Done* lite** multi-process same host/shared FS). Memory vault process-local only. **Not multi-pod** without shared FS + remaining checklist |
+| Service sticky (scaffold) | **`sessionAffinity: ClientIP`** + `sessionAffinityConfig` on `deploy/gateway/kustomize/service.yaml` (**Done* scaffold** only — does not enable multi-replica runtime) |
+| Token / JWT vault | File vault: process-local mutex + **flock** on `path.lock` (HOST-008 **Done* lite** multi-process **same host / shared FS**). Memory vault process-local only. **Not multi-pod** without shared FS + remaining checklist |
 | Token Obtain cache | In-process `MemoryTokenCache` only |
 | Subject limiter / rate | Process-local (`SubjectLimiter` / `SubjectRateLimiter.StatusMap` → `ha_multi_replica: false`) |
 | Audit | Local file / sink per process |
@@ -376,7 +377,7 @@ Obtain Ready and Streamable HTTP mTLS hardening remain residuals.
 **Do not** set Deployment `replicas` > 1 for interactive multi-user gateway until
 **all** multi-replica checklist rows below are met with durable shared vault.
 Scaffold comments and docs treat multi-replica HA as an **explicit non-goal**
-until that vault exists.
+until that vault exists. Sticky Service affinity is packaging only — **not** a GO.
 
 ### Why single-replica is the default
 
@@ -384,39 +385,55 @@ until that vault exists.
 |------------------------------|--------------|
 | Memory token cache alone | Pod A has refresh; pod B re-fetches / re-consents → double-mint, thrash |
 | File vault on emptyDir | Each pod has a different vault → cross-subject miss / wrong-subject risk |
+| File vault flock without shared FS | Flock is multi-process **same host**; multi-pod without shared volume → split vaults |
 | Confirm / session tokens | Sticky sessions missing → 401 / re-auth loops |
 | Continuations / page tokens | Subject-bound tokens minted on pod A rejected on pod B |
+| Process-local rate / slots | Per-pod budgets → uneven enforcement / bypass under multi-replica |
 | Audit files | Incomplete fleet forensics; no single timeline |
 
-### Multi-replica checklist (not Tier A MVP — not implemented)
+### Multi-replica checklist (not Tier A MVP — runtime residual)
 
 Raise replicas **only** when every row is satisfied (org-owned design):
 
 | # | Requirement | Why | Status in this repo |
 |---|-------------|-----|---------------------|
-| 1a | **Shared vault path + flock (same host / shared FS)** | CLI + serve (or multi-process lab) on one vault file without corrupt load-modify-save | **Done* lite** — `FileAPITokenVault` / `FileJWTVault` use process mutex + `syscall.Flock` on `path.lock` (unix/Tier-1 Linux). Not multi-pod alone |
+| 1a | **Shared vault path + flock (same host / shared FS)** | CLI + serve (or multi-process lab) on one vault file without corrupt load-modify-save | **Done* lite** — `FileAPITokenVault` / `FileJWTVault` use process mutex + `syscall.Flock` on `path.lock` (unix/Tier-1 Linux). **Honesty:** multi-process same host / shared FS only — **not** multi-pod alone |
 | 1b | **Durable shared token vault** (external / AgentCore Identity / multi-pod) | Memory vaults and emptyDir file vaults are not multi-pod safe | **Residual** (HOST-008 / GWY-001) |
-| 2 | **Session affinity** (sticky sessions) **or** shared session store | Subject bind / confirm tokens must not split-brain across pods | **Residual** |
+| 2 | **Session affinity** (sticky sessions) **or** shared session store | Subject bind / confirm tokens must not split-brain across pods | **Done* scaffold / residual runtime** — kustomize Service `sessionAffinity: ClientIP` + `sessionAffinityConfig.clientIP.timeoutSeconds` (default 10800). Affinity is optional packaging for operators who later scale; **does not** close multi-replica HA without 1b + 3–8. Shared durable session store still residual |
 | 3 | **No reliance on memory token cache alone** | In-process Obtain cache must be shared or disabled under multi-replica | **Residual** (`MemoryTokenCache` only today) |
 | 4 | Shared or carefully partitioned **cache / archive** policy | Avoid cross-pod archive handle / pin confusion | **Residual** (STO / HOST-004) |
 | 5 | **Audit aggregation** (central sink) | Per-pod files are not a fleet audit plane | **Residual** |
 | 6 | Sticky or shared Obtain / consent correlation | Refresh/consent must not double-mint unsafely | **Residual** (Mode C progressive consent) |
 | 7 | JWKS / identity multi-instance behavior measured | Process-local JWKS refresh is not multi-region HA | **Residual** |
-| 8 | Shared subject rate / concurrency limiters | Process-local `SubjectRateLimiter` / `SubjectLimiter` only today | **Residual** (admin `rateEnabled`/`ratePerMinute`/`rateBurst` are process-local env residual only) |
+| 8 | Shared subject rate / concurrency limiters | Process-local `SubjectRateLimiter` / `SubjectLimiter` only today | **Residual** (admin `rateEnabled`/`ratePerMinute`/`rateBurst` are process-local env residual only; external rate residual when scaling) |
 
-**Honesty:** **Done* lite** (1a) is multi-process file safety on a **shared path**, not multi-replica HA. Do **not** raise `replicas` > 1 until **1b–8** are satisfied.
+**Honesty:**
+
+- **Done* lite** (1a) is multi-process file safety on a **shared path**, not multi-replica HA.
+- **Done* scaffold** (2) is Service YAML + docs only; kube sticky routing is **not** a multi-replica GO.
+- Do **not** raise `replicas` > 1 until **1b–8** are satisfied (affinity alone is insufficient).
+
+### Operator scale checklist (if replicas ever raised)
+
+When (and only if) org design closes 1b–8 and operators set `replicas` > 1:
+
+1. Keep **Service** sticky (`sessionAffinity: ClientIP` scaffold) **or** deploy a shared session store.  
+2. Mount a **shared vault path** (ReadWriteMany / external vault) — flock alone is same-host lite; emptyDir is wrong.  
+3. Treat process-local **rate / Obtain cache** as residual until externalized.  
+4. Aggregate **audit** outside per-pod files.  
+5. Re-run doctor / release-evidence; `ha_multi_replica` / `haMultiReplica` stay **false** until runtime multi-replica is implemented.
 
 ### Operator status surfaces (secret-free residual)
 
 | Surface | Fields | Honesty |
 |---------|--------|---------|
 | `SubjectLimiter.StatusMap` | `ha_multi_replica: false` | Always false until multi-replica runtime exists |
-| Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `mode_a/b/c_enabled`, `mode_*_live_*_qualified=false`, `oauth009_offline_only`, `gateway_ready=false`, `ha_multi_replica=false`, `mode_matrix_residual` | Env parse only; Ready is serve `/readyz`; unified modes A/B/C residual honesty |
-| Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false`, `rateEnabled`/`ratePerMinute`/`rateBurst` | Admin BFF ≠ MCP serve; Ready residual documented; rate knobs = HOST-006 env resolve only (process-local) |
-| Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false`, `rateEnabled`/`ratePerMinute`/`rateBurst` + mode matrix | Never tokens; multi-user residual note when env set; file vault flock is multi-process lite only |
+| Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `mode_a/b/c_enabled`, `mode_*_live_*_qualified=false`, `oauth009_offline_only`, `gateway_ready=false`, `ha_multi_replica=false`, `session_affinity_recommended` (true when multi-user env set), `mode_matrix_residual` | Env parse only; Ready is serve `/readyz`; sticky recommendation is residual honesty, not HA Done |
+| Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst` | Admin BFF ≠ MCP serve; rate knobs = HOST-006 env resolve only (process-local) |
+| Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst` + mode matrix | Never tokens; multi-user residual note when env set; file vault flock is multi-process lite only |
 
-**Never** claim multi-replica Done from docs, kustomize `replicas: 1`, or these
-status fields. See [roadmap § HOST-008](../roadmap/server-team-hosted.md).
+**Never** claim multi-replica Done from docs, kustomize `replicas: 1`, Service
+`sessionAffinity`, or these status fields. See [roadmap § HOST-008](../roadmap/server-team-hosted.md).
 
 ### Explicit non-goal until durable vault exists
 
@@ -424,6 +441,7 @@ status fields. See [roadmap § HOST-008](../roadmap/server-team-hosted.md).
 - Shared in-memory token cache across pods  
 - Raising kustomize / compose replicas above **1** in this scaffold  
 - Treating `JENKINS_MCP_GATEWAY_MULTI_USER=1` as multi-replica or production HA  
+- Treating Service `sessionAffinity: ClientIP` alone as multi-replica Done  
 
 ---
 

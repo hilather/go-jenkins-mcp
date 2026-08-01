@@ -2839,12 +2839,13 @@ or overlay `max_tools_*` knobs.
 **Acceptance criteria**
 
 - [x] Single-replica Tier A default documented. — `docs/gateway/deployment.md` §9 runbook; kustomize/compose `replicas: 1` comments
-- [x] Multi-replica checklist: shared vault, affinity, no memory-only token cache, audit aggregation. — expanded checklist in deployment.md §9
-- [x] Shared vault path + flock multi-process lite (**Done* lite**). — `FileAPITokenVault` / `FileJWTVault`: process mutex + `syscall.Flock` on `path.lock` (unix); tests multi-instance concurrent Put + multi-process block on Linux. **Not** multi-pod HA; sticky sessions / external vault / shared rate still residual
-- [x] Explicit non-goal until multi-pod durable vault + affinity exist. — documented non-goal; do not claim multi-replica Done
-- [x] Secret-free residual surfaces: doctor `gateway_status` + admin health/vault (`multi_user_enabled` / `multiUserEnabled`, `credential_mode`, `gateway_ready=false`, `ha_multi_replica=false`, `rateEnabled` / `ratePerMinute` / `rateBurst` env residual knobs)
+- [x] Multi-replica checklist: shared vault, affinity, no memory-only token cache, audit aggregation. — expanded checklist in deployment.md §9 (row 2 sticky **Done* scaffold / residual runtime**)
+- [x] Shared vault path + flock multi-process lite (**Done* lite**). — `FileAPITokenVault` / `FileJWTVault`: process mutex + `syscall.Flock` on `path.lock` (unix). **Honesty:** multi-process same host / shared FS only — **not** multi-pod HA
+- [x] Sticky session Service scaffold (**Done* scaffold**). — kustomize Service `sessionAffinity: ClientIP`; deployment scale comments. **Not** multi-replica runtime Done
+- [x] Explicit non-goal until multi-pod durable vault + affinity exist. — do not claim multi-replica Done from affinity alone
+- [x] Secret-free residual surfaces: doctor + admin health/vault (`multiUserEnabled`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst`)
 
-**Status:** **Done*** lite for same-host shared file vault flock + docs residual + secret-free status fields. **No multi-replica runtime** (sticky sessions, shared Obtain cache, multi-pod vault, shared rate still residual).
+**Status:** **Done*** lite for same-host shared file vault flock + sticky Service scaffold + docs residual + secret-free status fields. **No multi-replica runtime** (shared Obtain cache, multi-pod vault, shared rate, audit aggregation still residual).
 
 ---
 

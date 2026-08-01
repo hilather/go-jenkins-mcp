@@ -106,6 +106,13 @@ export function OverviewPage() {
               {health.data.haMultiReplica ? "yes" : "no"}{" "}
               <span className="muted">(HOST-008 Tier A single-replica default)</span>
             </dd>
+            <dt>sessionAffinityRecommended</dt>
+            <dd>
+              {health.data.sessionAffinityRecommended ? "yes" : "no"}{" "}
+              <span className="muted">
+                (HOST-008 sticky Service scaffold when multi-user; not multi-replica Done)
+              </span>
+            </dd>
             <dt>rateEnabled</dt>
             <dd>
               {health.data.rateEnabled ? "yes" : "no"}{" "}
@@ -209,6 +216,11 @@ export function OverviewPage() {
               <dd>{vault.data.multiUserEnabled ? "yes (foundation residual)" : "no"}</dd>
               <dt>haMultiReplica</dt>
               <dd>{vault.data.haMultiReplica ? "yes" : "no (HOST-008 residual)"}</dd>
+              <dt>sessionAffinityRecommended</dt>
+              <dd>
+                {vault.data.sessionAffinityRecommended ? "yes" : "no"}{" "}
+                <span className="muted">(sticky scaffold honesty; not multi-replica Done)</span>
+              </dd>
               <dt>rateEnabled</dt>
               <dd>
                 {vault.data.rateEnabled ? "yes" : "no"}{" "}
