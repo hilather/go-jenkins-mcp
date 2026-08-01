@@ -211,7 +211,8 @@ func xdgDataHome(getenv func(string) string) string {
 //
 // Mode A/B Live providers are returned when vault paths are constructible;
 // empty vault files are OK (per-subject Obtain still not_found). Mode C uses
-// RequireGatewaySetup (Live=false until TokenFetcher wire).
+// RequireGatewaySetup (Live=false by default) and optionally EnableLiveHTTPFetcher
+// when JENKINS_MCP_GATEWAY_LIVE is set with a token endpoint (GWY-001 Live foundation).
 //
 // getenv nil → os.Getenv. jenkinsBaseURL is required for Mode C only.
 func CredentialProviderFromEnviron(jenkinsBaseURL string, getenv func(string) string) (CredentialProvider, error) {
@@ -225,6 +226,12 @@ func CredentialProviderFromEnviron(jenkinsBaseURL string, getenv func(string) st
 	mode := mx.Primary
 	switch mode {
 	case CredentialModeAPITokenVault:
+		// Live env is Mode C only — Mode A is already Live via vault setup.
+		// Reject Live=1 on Mode A so operators do not think AgentCore is wired.
+		if LiveEnabledFromEnviron(getenv) {
+			return nil, apperr.New(apperr.CodeInvalidArgument,
+				"JENKINS_MCP_GATEWAY_LIVE applies only to agentcore_3lo_obo (Mode C); Mode A uses api_token_vault Live via vault setup")
+		}
 		path := VaultPathFromEnviron(getenv)
 		vault, err := NewFileAPITokenVault(path)
 		if err != nil {
@@ -234,6 +241,11 @@ func CredentialProviderFromEnviron(jenkinsBaseURL string, getenv func(string) st
 	case CredentialModeJWTRSBearer:
 		// Mode B offline vault foundation (HOST-010) — not AgentCore silent.
 		// Live jwt-auth-filter production pin remains OAUTH-009 residual.
+		// JENKINS_MCP_GATEWAY_LIVE is Mode C only.
+		if LiveEnabledFromEnviron(getenv) {
+			return nil, apperr.New(apperr.CodeInvalidArgument,
+				"JENKINS_MCP_GATEWAY_LIVE applies only to agentcore_3lo_obo (Mode C); jwt_rs_bearer uses JWT vault Live via vault setup (OAUTH-009 residual for live RS pin)")
+		}
 		path := JWTVaultPathFromEnviron(getenv)
 		vault, err := NewFileJWTVault(path)
 		if err != nil {
@@ -241,7 +253,8 @@ func CredentialProviderFromEnviron(jenkinsBaseURL string, getenv func(string) st
 		}
 		return RequireJWTRSBearerSetup(vault)
 	case CredentialModeAgentCore:
-		// Mode C: AgentCore path (Live=false until TokenFetcher wire).
+		// Mode C: AgentCore path. Default Live=false / Fetcher=nil (no network).
+		// Opt-in Live: JENKINS_MCP_GATEWAY_LIVE=1 + token endpoint → HTTPTokenFetcher.
 		// Use injected getenv so tests do not depend on process env pollution.
 		cfg := AgentCoreConfig{
 			AuthorizationServerBaseURL: strings.TrimSpace(getenv(EnvAgentCoreASURL)),
@@ -252,7 +265,14 @@ func CredentialProviderFromEnviron(jenkinsBaseURL string, getenv func(string) st
 			Mode:                       Mode(strings.TrimSpace(getenv(EnvAgentCoreMode))),
 			JenkinsBaseURL:             strings.TrimSpace(jenkinsBaseURL),
 		}
-		return RequireGatewaySetup(cfg)
+		p, err := RequireGatewaySetup(cfg)
+		if err != nil {
+			return nil, err
+		}
+		if err := ApplyLiveHTTPFetcherFromEnviron(p, cfg, getenv); err != nil {
+			return nil, err
+		}
+		return p, nil
 	default:
 		return nil, apperr.New(apperr.CodeInvalidArgument,
 			"unsupported gateway credential mode (want api_token_vault, jwt_rs_bearer, or agentcore_3lo_obo)")

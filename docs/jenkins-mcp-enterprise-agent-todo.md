@@ -2494,6 +2494,11 @@ per-user ticket credentials.
 **Priority:** P2  
 **Dependencies:** OAUTH-010, INT-001
 
+**Status:** **Partial** — offline mock Obtain + **Live opt-in foundation**
+(`EnableLiveHTTPFetcher` / `JENKINS_MCP_GATEWAY_LIVE` + `HTTPTokenFetcher`).
+**Not fully Done** (real Entra/AgentCore pin, durable vault, 3LO browser UX,
+refresh/revocation SLOs remain GWY-003 / OAUTH-010).
+
 **Objective**
 
 Provide an optional gateway credential provider that obtains Jenkins-audience tokens for the validated caller through user-delegated authorization-code 3LO and/or OBO/token exchange.
@@ -2508,8 +2513,8 @@ Integrate AgentCore workload identity and outbound OAuth credential retrieval. S
 - [ ] Authorization-code consent and callback/session binding cannot be replayed across users/providers.
 - [ ] Token cache, refresh, force-reauthentication, and revocation behavior is isolated per user/workload.
 - [ ] Wrong subject, audience, tenant, provider, return URL, or session binding fails closed.
-- [ ] Provider exposes no token, client secret, or authorization code to MCP tools, logs, or support bundles.
-- [ ] Jenkins endpoints are never used as OAuth authorization/token endpoints unless the conditional JAS epic is deployed and approved.
+- [x] Provider exposes no token, client secret, or authorization code to MCP tools, logs, or support bundles. *(canary tests; Live foundation)*
+- [x] Jenkins endpoints are never used as OAuth authorization/token endpoints unless the conditional JAS epic is deployed and approved. *(ValidateProviderConfig + tests)*
 
 ---
 
@@ -2644,18 +2649,24 @@ Safe placement behind site reverse-proxy (TLS, path prefix, Host/Origin).
 **Priority:** P0  
 **Dependencies:** GWY-001 (mode C), HOST-009 (mode A), HOST-010 (mode B), GWY-002  
 
+**Status:** **Partial / foundation Done\*** for Mode A + Mode C Live-opt-in Ready
+path (Obtain AuthProvider, clear static, whoAmI via Obtain, ConsentRequired
+metadata, no other-subject fallthrough). Mode B Live residual (HOST-010).
+Bootstrap local session before Ready wire remains residual for multi-user
+gateway without local keyring (HOST-001).
+
 **Objective**
 
 When `--gateway` and provider Ready, Jenkins credentials come from **Obtain for the bound subject and enabled mode** — never silent shared keyring/SA fallthrough.
 
 **Acceptance criteria**
 
-- [ ] Mode A → Basic personal token for subject only.
-- [ ] Mode B/C → Bearer access token only (never ID token as API credential).
-- [ ] Obtain failure does not use another subject’s credential.
-- [ ] ConsentRequired (mode C) surfaces auth URL metadata only.
-- [ ] Unit/integration tests per mode with mocks.
-- [ ] `docs/gateway/README.md` residuals closed for wiring.
+- [x] Mode A → Basic personal token for subject only.
+- [x] Mode B/C → Bearer access token only (never ID token as API credential). *(Mode C Ready + unit tests; Mode B residual provider not Ready)*
+- [x] Obtain failure does not use another subject’s credential.
+- [x] ConsentRequired (mode C) surfaces auth URL metadata only.
+- [x] Unit/integration tests per mode with mocks. *(A + C offline; B residual)*
+- [x] `docs/gateway/README.md` residuals closed for wiring. *(wiring section; Entra pin still residual)*
 
 ---
 

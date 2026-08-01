@@ -1,8 +1,9 @@
 # Managed gateway / AgentCore foundation (GWY-001/002)
 
-**Status:** Foundation + **offline mock obtain path** (pluggable `TokenFetcher`).  
+**Status:** Foundation + offline mock obtain + **HOST-003 Ready wire** + **GWY-001 Live opt-in foundation** (`HTTPTokenFetcher`).  
 **Default:** `Live=false`, `Fetcher=nil` → fail-closed `not_configured` (no network).  
-**Offline qualify** (GWY-003 lite) available; **live Entra / AgentCore pin residual**.  
+**Live opt-in:** `JENKINS_MCP_GATEWAY_LIVE=1` + token endpoint → `EnableLiveHTTPFetcher` (Mode C only).  
+**Real Entra / AgentCore Identity vault pin residual** (GWY-003 / OAUTH-010) — do **not** mark GWY-001 fully Done.  
 **GWY-004:** deployment **scaffold** (compose/kustomize/docs) only — no live AgentCore image.  
 **Related:** [deployment.md](deployment.md), [qualification.md](qualification.md), [auth-architecture.md](../auth-architecture.md) §2.3, [ADR 0003](../adr/0003-jenkins-not-oauth-authorization-server.md), [policy-rbac.md](../policy-rbac.md), architecture §§1–2 / §6.6, **[server/team-hosted roadmap](../roadmap/server-team-hosted.md)** (Tier A path, HOST-*, 30/60/90).
 
@@ -64,12 +65,37 @@ Obtain:
 | `TokenFetcher` | Interface: `FetchJenkinsCredential(ctx, caller, cfg) (Credential, error)` |
 | `FuncTokenFetcher` | Function adapter for unit tests |
 | `HTTPTokenFetcher` | Optional production-shaped HTTPS token POST (https-only, no redirects, body cap, never log tokens). **Not** attached by `NewAgentCoreProvider` |
+| `EnableLiveHTTPFetcher` | GWY-001 factory: attach `HTTPTokenFetcher` + `Live=true` when token endpoint is resolvable; fail closed without it |
 | Mock AS (`httptest` TLS in tests) | Returns JSON `access_token` + `expires_in` + optional `audience` / `jenkins_principal`; consent via 401 + auth URL/session |
 
-`NewAgentCoreProvider` always starts **Live=false**, **Fetcher=nil**. Tests (or future operators) inject a fetcher and set `Live=true` explicitly. **No real Entra** is called from default serve wiring.
+`NewAgentCoreProvider` always starts **Live=false**, **Fetcher=nil**. Default serve
+wiring keeps that fail-closed path unless the operator sets Live opt-in env
+(below). **No real Entra** is called unless Live is enabled **and** a reachable
+token endpoint is configured (still contract-shaped HTTP; AgentCore pin residual).
+
+### Live opt-in (GWY-001 foundation — not full AgentCore pin)
+
+| Env | Meaning |
+|-----|---------|
+| `JENKINS_MCP_GATEWAY_LIVE=1` | Mode C only: call `EnableLiveHTTPFetcher` after provider setup |
+| `JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT` | **Required** when Live=1 (absolute **https** URL or path under AS base) |
+
+```text
+Mode C serve provider:
+  default                         → Live=false, Fetcher=nil, Ready=false
+  LIVE=1 without token endpoint   → serve start error (capability_missing / not_configured)
+  LIVE=1 + token endpoint         → HTTPTokenFetcher, Live=true, Ready=true
+  LIVE=1 on Mode A / Mode B       → start error (no silent cross-mode)
+```
+
+`EnableLiveHTTPFetcher(p, cfg)` / `EnableLiveHTTPFetcherWithClient` (tests inject
+TLS mock clients) do **not** perform network I/O at wire time; Obtain uses the
+fetcher later. Real Entra discovery, durable vault, and 3LO browser UX remain
+**GWY-003 / OAUTH-010 residuals**.
 
 Consent metadata (`ConsentInfo`) may carry **authorization URL + session id** only —
 never access tokens, refresh tokens, client secrets, or auth codes.
+`ConsentRequired` is preserved through Obtain → AuthProvider (HOST-003).
 
 Token cache: in-memory, keyed by `(tenant, user, workload, profile)` (HOST-004),
 TTL-bounded. `String()` / errors / `Status` **never** include token bytes (canary tests).
@@ -79,7 +105,31 @@ configured Jenkins API audience (wrong-audience residual fail-closed).
 
 ---
 
-## 3b. Multi-tenant isolation foundations (HOST-004 / HOST-006)
+## 3b. HOST-003 — Serve wiring: Obtain → Jenkins client
+
+When `--gateway` and provider **Ready**, Jenkins HTTP credentials come **only**
+from `CredentialProvider.Obtain` for the **bound caller** (captured at attach
+time). There is **no** keyring / static / shared-SA fallthrough after Ready.
+
+| Step | Behavior |
+|------|----------|
+| Provider Ready | `attachGatewayObtainAuthProvider` installs per-request Obtain AuthProvider |
+| Static residual | `clearGatewayLocalSessionCredentials` clears client User/Token after attach |
+| Session-start identity | `verifyGatewayObtainWhoAmI` runs whoAmI with Obtain credentials; mismatch / anonymous / Obtain fail → serve fails closed |
+| Obtain failure | AuthProvider returns error; request not sent; never another subject’s credential |
+| ConsentRequired (Mode C) | Surfaces auth URL + session id only (`AsConsentRequired`) |
+| Provider !Ready | Residual local session (Mode C default Live=false) |
+
+Mode A Ready → Basic personal vault token. Mode B Ready → Bearer from JWT vault
+(HOST-010 offline). Mode C Ready (Live opt-in) → Bearer access token.
+
+**Bootstrap residual:** serve still loads a local profile/keyring session for
+process startup (AUTH-004) before Obtain wire. When Ready, Obtain whoAmI must
+match the bound Jenkins principal (env label and/or bootstrap whoAmI). Full
+multi-user gateway without a local bootstrap session is HOST-001 residual —
+never a shared SA substitute.
+
+## 3c. Multi-tenant isolation foundations (HOST-004 / HOST-006)
 
 **Scope:** single-process MVP. Multi-replica / shared durable cache is **HOST-008 residual**.
 
@@ -88,28 +138,17 @@ configured Jenkins API audience (wrong-audience residual fail-closed).
 | Resource | Isolation key | Behavior |
 |----------|---------------|----------|
 | Token cache (`MemoryTokenCache`) | `CacheKey{Tenant,User,Workload,Profile}` via `Caller.CacheKey()` | Cross-user / cross-tenant Get is a miss |
-| Vault (`APITokenVault`) | `SubjectKey` = `tenant\|subject\|profile` | Cross-subject Get → not found |
+| Vault (`APITokenVault` / JWT vault) | `SubjectKey` = `tenant\|subject\|profile` | Cross-subject Get → not found |
 | List `page_token` | Filter fingerprint **bound** with subject via `jenkins.BindSubjectToPageFilter` / `*WithSubject` helpers | Alice's token rejected for Bob (`invalid_argument`) |
 
 Stable namespace: `gateway.SubjectKey(Caller)` / `Caller.SubjectKey()` /
 `SubjectKeyHash` for filesystem-safe names. **Never** derive keys from tool args.
 
-```go
-// Multi-tenant list pagination (call sites in gateway mode):
-fp := jenkins.FilterFingerprint(folder, name)
-tok := jenkins.EncodePageTokenWithSubject(offset, limit, fp, gateway.SubjectKey(caller))
-off, lim, err := jenkins.ResolveListPaginationWithSubject(pageToken, …, fp, gateway.SubjectKey(caller))
-```
-
 Empty `subjectKey` leaves page tokens unbound (stdio single-user pilot). Gateway
 mode should always pass a non-empty subject key.
 
-**Residual (HOST-004 serve wire):** list tools under `internal/jenkins` /
-`internal/tools` still use unbound `ResolveListPagination` by default. Package
-APIs + tests are ready; wiring subject from `RegisterOptions.Subject` /
-gateway binding into every list tool is a follow-up (same PR optional; not
-required for foundation). Support-bundle/doctor remain secret-free (no tokens
-in keys or Status).
+**Residual (HOST-004 serve wire):** list tools still use unbound
+`ResolveListPagination` by default; package APIs + tests are ready.
 
 ### HOST-006 — per-subject concurrent budgets
 
@@ -119,32 +158,8 @@ in keys or Status).
 | `Hold` / `WithSubjectSlot` | Acquire → work → Release (prefer over bare Acquire) |
 | `StatusMap` | Non-secret doctor summary (`ha_multi_replica: false`) |
 
-Defaults: **8** concurrent per subject, **64** process-wide (clamped to abs
-ceilings **64** / **256**). Excess → `CodeQuota` (fail closed). Empty subjectKey
-→ `invalid_argument`. Policy may only **reduce** caps (construction clamps to
-absolute ceilings; never silent elevation past abs).
-
-```go
-lim := gateway.NewSubjectLimiter(8, 64)
-release, err := lim.Hold(gateway.SubjectKey(caller))
-if err != nil { /* CodeQuota */ }
-defer release()
-// … tool work …
-```
-
-**Fair-share policy (documented + tested):** each subject gets up to
-`maxPerSubject` until `processMax` binds. Subject A filling its cap does not
-consume subject B's slots while process headroom remains.
-
-**Residual (HOST-006 serve wire):** limiter API is exported for AuthGate-adjacent
-middleware; full `tools.Register` / `addTool` integration is optional. Concurrent
-limiting is **not** a pure `AuthGate` (`Check` without `Release`) — use `Hold`.
-Mutation confirm tokens already bind profile+principal (cannot replay across
-subjects). HOST-008 multi-process HA out of scope.
-
-```bash
-go test ./internal/gateway/ ./internal/jenkins/ -count=1 -run 'HOST004|SubjectLimiter|PageToken_Subject|TwoUser'
-```
+Defaults: **8** concurrent per subject, **64** process-wide (abs ceilings **64** / **256**).
+Excess → `CodeQuota`. **Residual:** full `tools.Register` middleware wire optional.
 
 ---
 
@@ -234,7 +249,8 @@ Enable gateway mode with any of:
 | `JENKINS_MCP_AGENTCORE_CLIENT_ID` | Public client id (secret → keyring later) |
 | `JENKINS_MCP_AGENTCORE_MODE` | `authorization_code` or `token_exchange` |
 | `JENKINS_MCP_AGENTCORE_AUTH_ENDPOINT` | Optional authorize URL |
-| `JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT` | Optional token URL |
+| `JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT` | Optional token URL; **required** when `JENKINS_MCP_GATEWAY_LIVE=1` |
+| `JENKINS_MCP_GATEWAY_LIVE` | Mode C only: `1`/`true` enables `HTTPTokenFetcher` Live wire (default off) |
 
 **Identity env (non-secret labels for foundation binding):**
 
@@ -256,20 +272,25 @@ Missing identity env fields → bind fails closed at serve start.
 
 | Residual | Track |
 |----------|--------|
-| **Live Entra / AgentCore network acquisition pin** | GWY-003 / OAUTH-010 — offline mock + `HTTPTokenFetcher` only prove contracts |
+| **Live Entra / AgentCore network acquisition pin** | GWY-003 / OAUTH-010 — Live opt-in + `HTTPTokenFetcher` prove wire contracts only; not production AgentCore |
 | AgentCore Identity/Token Vault (durable) | GWY-001 completion (process memory cache is not a vault) |
-| Serve wiring that injects `HTTPTokenFetcher` + Live | Operator config residual; default remains fail-closed (HOST-003) |
+| Full GWY-001 DoD (3LO browser UX, refresh/revocation isolation SLOs) | GWY-001 / GWY-003 — **Live opt-in foundation only** (not fully Done) |
 | Packaging near-source gateway image (signed prod) | GWY-004 residual — scaffold in `deploy/gateway/` + [deployment.md](deployment.md) |
 | Live AgentCore sidecar pin | GWY-003 / GWY-004 residual |
+| Mode B jwt_rs_bearer Live obtain | HOST-010 residual |
+| Mid-session subject rebind | HOST-003 / GWY-002 residual |
 | Custom Jenkins authorization-server plugin | ADR 0011 / OAUTH-011 **default no-go** |
 | Shared Jenkins service account for interactive users | **Never** |
 | Real client secret storage | keyring / vault (not profile JSON) |
 | Streamable HTTP gateway transport hardening | GWY-004 residual (HOST-001 / HOST-002) |
 | **Program path to team-hosted** | [roadmap/server-team-hosted.md](../roadmap/server-team-hosted.md) |
 
-Until live AgentCore is pinned, local **API token + keyring** remains the Jenkins
-HTTP credential path when serve still starts. Default `CredentialProvider.Obtain`
-stays fail-closed (`Live=false`) so no shared SA is substituted for gateway credentials.
+**HOST-003 wiring (Ready path):** closed for Mode A and Mode C Live-opt-in foundation
+(Obtain AuthProvider, clear static, whoAmI via Obtain, ConsentRequired metadata,
+no other-subject fallthrough). When Obtain is **not** Ready, local API token /
+keyring / OIDC remains the residual Jenkins HTTP path so serve can still start.
+Default Mode C `CredentialProvider.Obtain` stays fail-closed (`Live=false`) so no
+shared SA is substituted for gateway credentials.
 
 ---
 
@@ -417,7 +438,9 @@ Obtain:
 | `HTTPTokenFetcher` | Optional production-shaped HTTPS token POST (https-only, no redirects, body cap, never log tokens). **Not** attached by `NewAgentCoreProvider` |
 | Mock AS (`httptest` TLS in tests) | Returns JSON `access_token` + `expires_in` + optional `audience` / `jenkins_principal`; consent via 401 + auth URL/session |
 
-`NewAgentCoreProvider` always starts **Live=false**, **Fetcher=nil**. Tests (or future operators) inject a fetcher and set `Live=true` explicitly. **No real Entra** is called from default serve wiring.
+`NewAgentCoreProvider` always starts **Live=false**, **Fetcher=nil**. Serve may
+opt in via `JENKINS_MCP_GATEWAY_LIVE` + token endpoint (`EnableLiveHTTPFetcher`).
+**No real Entra** unless that opt-in is configured (AgentCore pin still residual).
 
 Consent metadata (`ConsentInfo`) may carry **authorization URL + session id** only —
 never access tokens, refresh tokens, client secrets, or auth codes.
@@ -427,5 +450,7 @@ Token cache: in-memory, keyed by `(user, workload, profile)`, TTL-bounded.
 
 When the token JSON includes `audience` / `resource`, it must **exactly** match
 configured Jenkins API audience (wrong-audience residual fail-closed).
+
+See §3 Live opt-in and §3b HOST-003 for serve wiring details.
 
 ---
