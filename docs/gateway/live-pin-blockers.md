@@ -251,7 +251,7 @@ Raise Deployment `replicas` > 1 **only** when every row is met with org-owned de
 | 1a | Shared vault path + flock (same host / shared FS) | **Done\* lite** — not multi-pod alone |
 | 1b | **Durable shared token vault** (external / AgentCore Identity / multi-pod RWX) | **Residual** |
 | 2 | Session affinity **or** shared session store | Scaffold affinity only; durable store residual |
-| 3 | No reliance on **memory** Obtain cache alone | Residual (`MemoryTokenCache`) |
+| 3 | No reliance on **memory** Obtain cache alone | **Done\* lite** same-host `FileTokenCache` (`JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH`, flock + 0600); multi-pod external Obtain cache still **residual** |
 | 4 | Shared or carefully partitioned cache / archive policy | Residual (STO / HOST-004) |
 | 5 | Audit aggregation (central sink) | Residual |
 | 6 | Sticky or shared consent / Obtain correlation | Residual (Mode C progressive consent) |

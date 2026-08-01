@@ -75,9 +75,19 @@ func ConfigFromEnviron(jenkinsBaseURL string) AgentCoreConfig {
 // When cfg is incomplete (missing AS/audience), returns an error — gateway mode
 // fails closed rather than starting without a provider (GWY-002).
 //
+// Uses process-local MemoryTokenCache. For optional FileTokenCache via
+// JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH use CredentialProviderFromEnviron (Mode C)
+// or RequireGatewaySetupWithCache.
+//
 // For Mode A (api_token_vault) use RequireAPITokenVaultSetup or
 // CredentialProviderFromEnviron instead — AgentCore AS is not required for Mode A.
 func RequireGatewaySetup(cfg AgentCoreConfig) (CredentialProvider, error) {
+	return RequireGatewaySetupWithCache(cfg, nil)
+}
+
+// RequireGatewaySetupWithCache is RequireGatewaySetup with an explicit TokenCache.
+// nil cache → MemoryTokenCache (same as NewAgentCoreProvider).
+func RequireGatewaySetupWithCache(cfg AgentCoreConfig, cache TokenCache) (CredentialProvider, error) {
 	if !cfg.Configured() {
 		return nil, apperr.New(apperr.CodeCapabilityMissing,
 			"gateway mode requires agentcore provider config (AS URL + audience); not_configured")
@@ -85,7 +95,7 @@ func RequireGatewaySetup(cfg AgentCoreConfig) (CredentialProvider, error) {
 	if err := ValidateProviderConfig(cfg); err != nil {
 		return nil, err
 	}
-	p, err := NewAgentCoreProvider(cfg, NewMemoryTokenCache(0))
+	p, err := NewAgentCoreProvider(cfg, cache)
 	if err != nil {
 		return nil, err
 	}
@@ -281,6 +291,8 @@ func CredentialProviderFromEnviron(jenkinsBaseURL string, getenv func(string) st
 	case CredentialModeAgentCore:
 		// Mode C: AgentCore path. Default Live=false / Fetcher=nil (no network).
 		// Opt-in Live: JENKINS_MCP_GATEWAY_LIVE=1 + token endpoint → HTTPTokenFetcher.
+		// Optional Obtain cache path: JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH →
+		// FileTokenCache (HOST-008 same-host lite); empty → MemoryTokenCache.
 		// Use injected getenv so tests do not depend on process env pollution.
 		cfg := AgentCoreConfig{
 			AuthorizationServerBaseURL: strings.TrimSpace(getenv(EnvAgentCoreASURL)),
@@ -291,7 +303,11 @@ func CredentialProviderFromEnviron(jenkinsBaseURL string, getenv func(string) st
 			Mode:                       Mode(strings.TrimSpace(getenv(EnvAgentCoreMode))),
 			JenkinsBaseURL:             strings.TrimSpace(jenkinsBaseURL),
 		}
-		p, err := RequireGatewaySetup(cfg)
+		cache, err := TokenCacheFromEnviron(getenv, 0)
+		if err != nil {
+			return nil, err
+		}
+		p, err := RequireGatewaySetupWithCache(cfg, cache)
 		if err != nil {
 			return nil, err
 		}

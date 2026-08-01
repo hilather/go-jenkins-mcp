@@ -96,6 +96,13 @@ func (t CachedToken) String() string {
 
 // TokenCache stores short-lived access tokens keyed by (user, workload, profile).
 // Implementations must never log token bytes.
+//
+// HOST-008 residual:
+//   - MemoryTokenCache — process-local only (StatusMap shared_token_cache=false).
+//   - FileTokenCache — optional same-host multi-process lite via flock + 0600 file
+//     (StatusMap shared_token_cache_file=true). Not multi-pod external Redis/HA.
+//
+// Multi-replica shared Obtain cache remains residual until an external store exists.
 type TokenCache interface {
 	Get(key CacheKey) (CachedToken, bool)
 	Set(key CacheKey, token CachedToken)
@@ -106,6 +113,8 @@ type TokenCache interface {
 
 // MemoryTokenCache is a process-local TTL token cache (GWY-001 foundation).
 // Not shared across processes; not a durable vault.
+// HOST-008: multi-pod / multi-process shared Obtain cache residual — use
+// FileTokenCache only for same-host lite (not multi-pod external).
 type MemoryTokenCache struct {
 	mu      sync.Mutex
 	entries map[CacheKey]CachedToken
@@ -195,4 +204,21 @@ func (c *MemoryTokenCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries = make(map[CacheKey]CachedToken)
+}
+
+// StatusMap is a non-secret doctor/status summary (HOST-008 residual honesty).
+// Never includes tokens, keys, or subject inventory dumps.
+func (c *MemoryTokenCache) StatusMap() map[string]any {
+	entries := 0
+	if c != nil {
+		c.mu.Lock()
+		entries = len(c.entries)
+		c.mu.Unlock()
+	}
+	return map[string]any{
+		"kind":               "memory",
+		"shared_token_cache": false, // HOST-008: process-local only
+		"entries":            entries,
+		"ha_multi_replica":   false, // HOST-008 residual
+	}
 }

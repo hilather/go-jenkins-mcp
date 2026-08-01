@@ -83,7 +83,8 @@ token endpoint is configured (still contract-shaped HTTP; AgentCore pin residual
 
 ```text
 Mode C serve provider:
-  default                         → Live=false, Fetcher=nil, Ready=false
+  default                         → Live=false, Fetcher=nil, Ready=false; MemoryTokenCache
+  TOKEN_CACHE_PATH set            → FileTokenCache (same-host flock lite; fail closed if invalid)
   LIVE=1 without token endpoint   → serve start error (capability_missing / not_configured)
   LIVE=1 + token endpoint         → HTTPTokenFetcher, Live=true, Ready=true
   LIVE=1 on Mode A / Mode B       → start error (no silent cross-mode)
@@ -261,7 +262,7 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 
 | Resource | Isolation key | Behavior |
 |----------|---------------|----------|
-| Token cache (`MemoryTokenCache`) | `CacheKey{Tenant,User,Workload,Profile}` via `Caller.CacheKey()` | Cross-user / cross-tenant Get is a miss |
+| Token cache (`MemoryTokenCache` default; optional `FileTokenCache`) | `CacheKey{Tenant,User,Workload,Profile}` via `Caller.CacheKey()` | Cross-user / cross-tenant Get is a miss; file lite via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` (HOST-008 same-host flock; multi-pod external residual) |
 | Principal cache (`PrincipalCache`) | `SubjectKey` = `tenant\|subject\|profile` | Non-secret Jenkins principal only; Binding fallback; never tokens |
 | Vault (`APITokenVault` / JWT vault) | `SubjectKey` = `tenant\|subject\|profile` | Cross-subject Get → not found |
 | List `page_token` | Filter fingerprint **bound** with subject via `jenkins.BindSubjectToPageFilter` / `*WithSubject` helpers | Alice's token rejected for Bob (`invalid_argument`) |
@@ -447,6 +448,7 @@ Enable gateway mode with any of:
 | `JENKINS_MCP_AGENTCORE_AUTH_ENDPOINT` | Optional authorize URL |
 | `JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT` | Optional token URL; **required** when `JENKINS_MCP_GATEWAY_LIVE=1` |
 | `JENKINS_MCP_GATEWAY_LIVE` | Mode C only: `1`/`true` enables `HTTPTokenFetcher` Live wire (default off) |
+| `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` | Optional Mode C Obtain cache file (`FileTokenCache`, flock + 0600). Empty → `MemoryTokenCache`. HOST-008 same-host lite only — **not** multi-pod Redis/HA. Invalid path fails start |
 
 **Identity env (non-secret labels for foundation binding):**
 

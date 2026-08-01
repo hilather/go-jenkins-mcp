@@ -370,7 +370,7 @@ Obtain Ready and Streamable HTTP mTLS hardening remain residuals.
 | Kustomize / compose | **`replicas: 1`** (`deploy/gateway/kustomize/deployment.yaml`) |
 | Service sticky (scaffold) | **`sessionAffinity: ClientIP`** + `sessionAffinityConfig` on `deploy/gateway/kustomize/service.yaml` (**Done* scaffold** only — does not enable multi-replica runtime) |
 | Token / JWT vault | File vault: process-local mutex + **flock** on `path.lock` (HOST-008 **Done* lite** multi-process **same host / shared FS**). Memory vault process-local only. **Not multi-pod** without shared FS + remaining checklist |
-| Token Obtain cache | In-process `MemoryTokenCache` only |
+| Token Obtain cache | Default in-process `MemoryTokenCache` (`shared_token_cache: false`). Optional **same-host** `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` (flock + 0600; `shared_token_cache_file: true`). **Not** multi-pod external Redis/HA |
 | Subject limiter / rate | Process-local (`SubjectLimiter` / `SubjectRateLimiter.StatusMap` → `ha_multi_replica: false`) |
 | Audit | Local file / sink per process |
 | Operator readiness | `GET /readyz` + `gateway_ready` on **this** process only |
@@ -401,7 +401,7 @@ Raise replicas **only** when every row is satisfied (org-owned design):
 | 1a | **Shared vault path + flock (same host / shared FS)** | CLI + serve (or multi-process lab) on one vault file without corrupt load-modify-save | **Done* lite** — `FileAPITokenVault` / `FileJWTVault` use process mutex + `syscall.Flock` on `path.lock` (unix/Tier-1 Linux). **Honesty:** multi-process same host / shared FS only — **not** multi-pod alone |
 | 1b | **Durable shared token vault** (external / AgentCore Identity / multi-pod) | Memory vaults and emptyDir file vaults are not multi-pod safe | **Residual** (HOST-008 / GWY-001) |
 | 2 | **Session affinity** (sticky sessions) **or** shared session store | Subject bind / confirm tokens must not split-brain across pods | **Done* scaffold / residual runtime** — kustomize Service `sessionAffinity: ClientIP` + `sessionAffinityConfig.clientIP.timeoutSeconds` (default 10800). Affinity is optional packaging for operators who later scale; **does not** close multi-replica HA without 1b + 3–8. Shared durable session store still residual |
-| 3 | **No reliance on memory token cache alone** | In-process Obtain cache must be shared or disabled under multi-replica | **Residual** (`MemoryTokenCache` only today) |
+| 3 | **No reliance on memory token cache alone** | In-process Obtain cache must be shared or disabled under multi-replica | **Done\* lite** same-host: optional `FileTokenCache` (`JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH`, flock + 0600; `StatusMap` `shared_token_cache_file: true`). Default remains `MemoryTokenCache` (`shared_token_cache: false`). **Multi-pod external** Obtain cache (Redis/etc.) still **residual** — not multi-replica Done |
 | 4 | Shared or carefully partitioned **cache / archive** policy | Avoid cross-pod archive handle / pin confusion | **Residual** (STO / HOST-004) |
 | 5 | **Audit aggregation** (central sink) | Per-pod files are not a fleet audit plane | **Residual** — per-process JSONL may carry multi-user `externalSubject` / `subjectKeyHash` (opaque correlation foundation; see `docs/observability.md`); fleet merge / multi-pod timeline still residual |
 | 6 | Sticky or shared Obtain / consent correlation | Refresh/consent must not double-mint unsafely | **Residual** (Mode C progressive consent) |
@@ -420,7 +420,7 @@ When (and only if) org design closes 1b–8 and operators set `replicas` > 1:
 
 1. Keep **Service** sticky (`sessionAffinity: ClientIP` scaffold) **or** deploy a shared session store.  
 2. Mount a **shared vault path** (ReadWriteMany / external vault) — flock alone is same-host lite; emptyDir is wrong.  
-3. Treat process-local **rate / Obtain cache** as residual until externalized.  
+3. Treat process-local **rate** and memory-only Obtain cache as residual until externalized; optional `FileTokenCache` is same-host lite only (needs shared FS if multi-process across pods — still not multi-pod Done).  
 4. Aggregate **audit** outside per-pod files.  
 5. Re-run doctor / release-evidence; `ha_multi_replica` / `haMultiReplica` stay **false** until runtime multi-replica is implemented.
 
