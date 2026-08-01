@@ -2547,17 +2547,40 @@ Map trusted AgentCore/Entra subject, tenant, groups/roles, workload identity, an
 ## GWY-003 - Run gateway 3LO/OBO security and performance qualification
 
 **Priority:** P2  
-**Dependencies:** GWY-002, OAUTH-009
+**Dependencies:** GWY-002, OAUTH-009  
+**Status:** **Partial Done*** (offline qualify expanded) — **not** live Entra / AgentCore / jwt-auth-filter production pin
 
 **Objective**
 
-Prove AgentCore mode meets identity, consent, latency, availability, isolation, and audit requirements across user-delegated 3LO and OBO/token exchange.
+Prove AgentCore mode meets identity, consent, latency, availability, isolation, and audit requirements across user-delegated 3LO and OBO/token exchange. Qualify HOST-011 modes **A/B/C** (evidence or residual per mode).
 
 **Implementation**
 
 Load/chaos-test authorization-code consent and session binding, OBO/token exchange, access/refresh-token vault hits/misses, force reauthentication, IdP/JWKS outages, revocation, concurrency, cross-user/workload isolation, gateway retries, Jenkins fallback behavior, and end-to-end audit. Compare user-delegated 3LO, OBO/token exchange, and exact-Jenkins-audience JWT passthrough. Document the selected production mode and why the alternatives are disabled or retained only for testing.
 
-**Acceptance criteria**
+**Offline Done* (this slice)**
+
+- [x] Offline suite `internal/gateway/qualify` + `jenkins-mcp gateway qualify --offline` (no network)
+- [x] Mode A row: vault Obtain → Basic; cross-subject miss; secret canary (`mode_a_vault_obtain_basic`)
+- [x] Mode B row: JWT vault Obtain → Bearer; ID token reject; wrong subject miss (`mode_b_jwt_vault_bearer`)
+- [x] Mode C row: Live=false not_configured; Live+mock Fetcher Bearer; wrong audience; ConsentRequired metadata only (`mode_c_agentcore_live_matrix`)
+- [x] HOST-011 no silent fallthrough invoked from qualify suite (`host011_no_silent_fallthrough`; also package `TestHOST011_*`)
+- [x] Docs: [`docs/gateway/qualification.md`](gateway/qualification.md) modes matrix + oauth-lab residual run notes
+- [x] Opt-in stub: `go test -tags=live_oauth ./internal/gateway/qualify/` (skips unless lab up; not default `make test`)
+
+**Still open (full DoD — do not claim live Entra Done)**
+
+- [ ] No cross-user/workload token reuse, consent replay, cache leakage, or shared-account behavior occurs **under live Entra/AgentCore**.
+- [ ] P95/P99 token acquisition and cache-hit latency fit the tool SLO and include provider/vault/Jenkins breakdowns (**live**).
+- [ ] IdP, JWKS, vault, gateway, and Jenkins outages fail safely without identity downgrade (**live** pin).
+- [ ] Generic-token passthrough is disabled in production; exact-audience passthrough requires a specific approved exception and remains more restrictive than OBO.
+- [ ] Tests prove missing/invalid bearer cannot downgrade into Basic, API-token, session-cookie, anonymous, or shared-service authentication on OAuth-required routes (**live RS / jwt-auth-filter**).
+- [ ] Runbook covers consent/provider/vault/JWKS/Entra/Jenkins incidents and user reauthorization (offline runbook rows exist; live ops evidence residual).
+- [ ] Live AgentCore sidecar / Entra network acquisition pin + signed production mode selection record.
+
+**Residual lab (opt-in, not production):** `testdata/oauth-lab/` + `make live-oauth-*` (HOST-012…015). Mode A: `make live-jenkins-*`. See qualification.md §7.
+
+**Acceptance criteria** (full task — check only with live evidence)
 
 - [ ] No cross-user/workload token reuse, consent replay, cache leakage, or shared-account behavior occurs.
 - [ ] P95/P99 token acquisition and cache-hit latency fit the tool SLO and include provider/vault/Jenkins breakdowns.
@@ -2828,9 +2851,9 @@ Configure and qualify **all three** modes. No silent cross-mode fallthrough.
 **Acceptance criteria**
 
 - [ ] Explicit config for enabled modes: `api_token_vault`, `jwt_rs_bearer`, `agentcore_3lo_obo`.
-- [ ] Offline matrix row per mode: Obtain → correct auth header shape (Basic vs Bearer).
-- [ ] Disabled/failed mode does not use another subject’s or another mode’s credential.
-- [ ] GWY-003/host qualify documents evidence or residual per mode.
+- [x] Offline matrix row per mode: Obtain → correct auth header shape (Basic vs Bearer). — package `TestHOST011_*` + qualify `mode_a_*` / `mode_b_*` / `mode_c_*`
+- [x] Disabled/failed mode does not use another subject’s or another mode’s credential. — `TestHOST011_ObtainAuthMatrixOffline` + qualify `host011_no_silent_fallthrough`
+- [x] GWY-003/host qualify documents evidence or residual per mode. — offline Done*; live residual in `docs/gateway/qualification.md` (GWY-003 full DoD still open)
 - [ ] Operator guide: when to choose A vs B vs C; never shared SA.
 - [ ] Admin residual lists enabled modes (secret-free).
 

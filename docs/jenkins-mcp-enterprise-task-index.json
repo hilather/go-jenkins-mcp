@@ -3568,7 +3568,11 @@
         "Runbook covers consent/provider/vault/JWKS/Entra/Jenkins incidents and user reauthorization."
       ],
       "acceptance_criteria_count": 6,
-      "evidence_tests": [],
+      "evidence_tests": [
+        "go test ./internal/gateway/ ./internal/gateway/qualify/ -count=1",
+        "jenkins-mcp gateway qualify --offline"
+      ],
+      "status_note": "Partial Done* offline modes A/B/C + HOST-011 fallthrough in qualify; live Entra/AgentCore/jwt-auth-filter residual. docs/gateway/qualification.md",
       "source_line": 2396,
       "dependency_depth": 16,
       "dependents": [

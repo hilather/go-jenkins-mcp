@@ -19,12 +19,13 @@ func TestRunOffline_AllPass(t *testing.T) {
 	if sum.Suite != "offline" {
 		t.Fatalf("suite %q", sum.Suite)
 	}
-	if sum.Passed < 12 {
-		t.Fatalf("expected >= 12 cases, got %d", sum.Passed)
+	if sum.Passed < 16 {
+		t.Fatalf("expected >= 16 cases (incl. mode A/B/C + HOST-011), got %d", sum.Passed)
 	}
-	// Residuals must document live AgentCore gap and offline vault/IdP Done*.
+	// Residuals must document live AgentCore gap and offline vault/IdP/mode matrix Done*.
 	foundLive := false
 	foundOfflineDone := false
+	foundOAuthLab := false
 	for _, r := range sum.Residuals {
 		low := strings.ToLower(r)
 		if strings.Contains(low, "agentcore") || strings.Contains(low, "live") {
@@ -33,12 +34,18 @@ func TestRunOffline_AllPass(t *testing.T) {
 		if strings.Contains(low, "vault hit/miss") && strings.Contains(low, "done") {
 			foundOfflineDone = true
 		}
+		if strings.Contains(low, "oauth-lab") || strings.Contains(low, "live-oauth") {
+			foundOAuthLab = true
+		}
 	}
 	if !foundLive {
 		t.Fatal("expected live AgentCore residual note")
 	}
 	if !foundOfflineDone {
 		t.Fatal("expected residual noting offline vault hit/miss Done*")
+	}
+	if !foundOAuthLab {
+		t.Fatal("expected residual noting oauth-lab / live-oauth opt-in")
 	}
 	// JSON summary must never include canary token.
 	raw, err := json.Marshal(sum)
@@ -64,6 +71,10 @@ func TestRunOffline_SecurityCaseNames(t *testing.T) {
 		"vault_hit_miss":                      false,
 		"idp_outage_chaos":                    false,
 		"jwks_key_rotation_lite":              false,
+		"mode_a_vault_obtain_basic":           false,
+		"mode_b_jwt_vault_bearer":             false,
+		"mode_c_agentcore_live_matrix":        false,
+		"host011_no_silent_fallthrough":       false,
 		"concurrent_obtain_stub_under_budget": false,
 		"fail_closed_obtain_latency":          false,
 	}
