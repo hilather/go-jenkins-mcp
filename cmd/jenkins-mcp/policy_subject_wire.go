@@ -41,7 +41,7 @@ func policySubjectFromGatewayCtx(ctx context.Context) (policy.Subject, bool) {
 
 // policySubjectFromGatewayCtxWithCache is the injectable variant for tests
 // (private PrincipalCache). Production wire uses ProcessPrincipalCache.
-func policySubjectFromGatewayCtxWithCache(ctx context.Context, cache *gateway.PrincipalCache) (policy.Subject, bool) {
+func policySubjectFromGatewayCtxWithCache(ctx context.Context, cache gateway.PrincipalStore) (policy.Subject, bool) {
 	if ctx == nil {
 		return policy.Subject{}, false
 	}

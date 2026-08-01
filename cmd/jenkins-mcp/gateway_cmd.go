@@ -189,10 +189,12 @@ const subjectInvalidateDoc = "docs/gateway/README.md § force re-auth residual l
 //
 // Alias: gateway invalidate-subject
 //
-// Clears ProcessPrincipalCache for the key in THIS process. When
+// Clears principals for the subject key: ProcessPrincipalCache in THIS process,
+// or FilePrincipalCache when JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH is set
+// (same-host flock lite shared with serve). When
 // JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH is set, also deletes matching
-// FileTokenCache entries (same-host flock lite). Serve process-local
-// MemoryTokenCache is not reachable from this CLI — residual note says so.
+// FileTokenCache entries. Serve process-local MemoryTokenCache is not reachable
+// from this CLI unless path is shared — residual note says so.
 // Never tokens; never live Entra revocation; multi-pod residual remains.
 func runGatewaySubjectInvalidate(args []string) error {
 	fs := flag.NewFlagSet("gateway subject-invalidate", flag.ContinueOnError)
@@ -233,10 +235,20 @@ func runGatewaySubjectInvalidate(args []string) error {
 		return err
 	}
 
-	// Principal cache: process-local to THIS CLI process only.
-	// Serve process principal entries are residual unless an in-process admin
-	// path calls InvalidateSubjectLocal / provider.Invalidate.
-	principals := gateway.ProcessPrincipalCache()
+	// Principal cache: process-local ProcessPrincipalCache, or FilePrincipalCache
+	// when PRINCIPAL_CACHE_PATH is set (same-host share with serve).
+	var principals gateway.PrincipalStore
+	principalPath := strings.TrimSpace(os.Getenv(gateway.EnvGatewayPrincipalCachePath))
+	principalPathConfigured := principalPath != ""
+	if principalPathConfigured {
+		fpc, ferr := gateway.NewFilePrincipalCache(principalPath)
+		if ferr != nil {
+			return apperr.Wrap(apperr.CodeInvalidArgument, "gateway subject-invalidate principal cache path", ferr)
+		}
+		principals = fpc
+	} else {
+		principals = gateway.ProcessPrincipalCache()
+	}
 
 	// Optional same-host FileTokenCache when env path is set.
 	var tokens gateway.TokenCache
@@ -258,13 +270,18 @@ func runGatewaySubjectInvalidate(args []string) error {
 	out := res.StatusMap()
 	out["doc"] = subjectInvalidateDoc
 	out["token_cache_path_configured"] = tokenPathConfigured
-	// Never print path contents of the cache file; only whether env was set.
+	out["principal_cache_path_configured"] = principalPathConfigured
+	// Never print path values; only whether env was set.
 	if !tokenPathConfigured {
-		out["token_cache_cli_note"] = "JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH unset — principal cleared in this process only; serve MemoryTokenCache not reachable from CLI"
+		out["token_cache_cli_note"] = "JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH unset — serve MemoryTokenCache not reachable from CLI"
 	} else {
 		out["token_cache_cli_note"] = "FileTokenCache subject-namespace purge attempted (same-host flock lite; multi-pod residual)"
 	}
-	out["principal_process_note"] = "PrincipalCache clear is process-local to this CLI invocation; live serve process principal entries require in-process Invalidate (or future admin path)"
+	if principalPathConfigured {
+		out["principal_process_note"] = "FilePrincipalCache Delete attempted (same-host flock lite shared with serve when path matches; multi-pod residual)"
+	} else {
+		out["principal_process_note"] = "PrincipalCache clear is process-local to this CLI invocation; set JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH to share with serve (HOST-008 lite)"
+	}
 
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

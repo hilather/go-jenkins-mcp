@@ -252,6 +252,7 @@ rate knobs keep admin health names `rateEnabled` / `ratePerMinute` / `rateBurst`
   "shared_subject_rate_file": false,
   "principal_cache_entries": 0,
   "principal_cache_process_note": "principal_cache_entries is count for this process only (CLI/admin ≠ serve MemoryTokenCache/PrincipalCache unless shared file caches)",
+  "shared_principal_cache_file": false,
   "residual_note": "unified gateway residual snapshot … see docs/gateway/live-pin-blockers.md",
   "doc": "docs/gateway/live-pin-blockers.md"
 }
@@ -278,6 +279,9 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 | `shared_subject_rate_file` | `true` only when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` set (HOST-008 same-host lite); path never returned |
 | `principal_cache_entries` | Principal cache **count** for **this process only** (CLI or admin BFF — not remote MCP serve unless shared file caches) |
 | `principal_cache_process_note` | Secret-free honesty sentence for process-local count scope |
+| `shared_subject_rate_file` | `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` set (path never returned) |
+| `principal_cache_entries` | Principal cache **count** only (memory or file; never inventory) |
+| `shared_principal_cache_file` | `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` set (HOST-008 same-host `FilePrincipalCache` lite; path never returned; never tokens) |
 | `residual_note` / `doc` | Honesty sentence + pointer to [live-pin-blockers.md](../gateway/live-pin-blockers.md) |
 
 **SPA:** Overview card “Gateway residual status” loads this route; **404 hides the

@@ -84,7 +84,7 @@ func attachGatewayObtainAuthProviderDynamicWithCache(
 	prov gateway.CredentialProvider,
 	defaultCaller gateway.Caller,
 	requireContextCaller bool,
-	principalCache *gateway.PrincipalCache,
+	principalCache gateway.PrincipalStore,
 ) {
 	if client == nil || prov == nil {
 		return
@@ -131,7 +131,7 @@ func obtainAndRememberPrincipal(
 	ctx context.Context,
 	p gateway.CredentialProvider,
 	caller gateway.Caller,
-	cache *gateway.PrincipalCache,
+	cache gateway.PrincipalStore,
 ) (user, secret string, sch jenkins.AuthScheme, err error) {
 	if p == nil {
 		return "", "", "", apperr.New(apperr.CodeAuthentication, "gateway credential provider is nil")

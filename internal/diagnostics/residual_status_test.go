@@ -47,6 +47,9 @@ func TestBuildGatewayResidualStatus_SecretFreeAndModeBId(t *testing.T) {
 	if out["multi_pod_vault_residual"] != true {
 		t.Fatal("multi_pod_vault_residual always true")
 	}
+	if out["shared_principal_cache_file"] != false {
+		t.Fatalf("shared_principal_cache_file default false: %+v", out["shared_principal_cache_file"])
+	}
 	if _, ok := out["principal_cache_entries"].(int); !ok {
 		// Len() returns int
 		if _, ok2 := out["principal_cache_entries"].(int64); !ok2 {

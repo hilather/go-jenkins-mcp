@@ -36,17 +36,17 @@ type SubjectInvalidateResult struct {
 }
 
 // subjectInvalidateResidualNote is the stable offline honesty sentence.
-const subjectInvalidateResidualNote = "force re-auth residual lite (GWY-002/HOST-003): process-local PrincipalCache + optional TokenCache only — not live Entra/AgentCore revocation, not multi-pod fan-out; CLI principal clear affects this process only unless serve shares FileTokenCache via JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH"
+const subjectInvalidateResidualNote = "force re-auth residual lite (GWY-002/HOST-003): PrincipalCache + optional TokenCache only — not live Entra/AgentCore revocation, not multi-pod fan-out; CLI principal clear is process-local unless serve shares FilePrincipalCache via JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH (and FileTokenCache via JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH)"
 
 // InvalidateSubjectLocal clears process-local multi-user caches for a validated
 // caller so the next Obtain / Binding path re-fetches (logout / revoke companion).
 //
-//   - principals: PrincipalCache.Delete(SubjectKey(caller)); nil → skip principal
+//   - principals: PrincipalStore.Delete(SubjectKey(caller)); nil → skip principal
 //   - tokens: prefer DeleteBySubjectKey when available (all workloads); else
 //     TokenCache.Delete(caller.CacheKey()); nil → residual note only
 //
 // Secret-free: never logs or returns token bytes. Safe for tests and CLI.
-func InvalidateSubjectLocal(caller Caller, principals *PrincipalCache, tokens TokenCache) SubjectInvalidateResult {
+func InvalidateSubjectLocal(caller Caller, principals PrincipalStore, tokens TokenCache) SubjectInvalidateResult {
 	sk := SubjectKey(caller)
 	res := SubjectInvalidateResult{
 		SubjectKey:               sk,
@@ -102,7 +102,7 @@ func InvalidateSubjectLocal(caller Caller, principals *PrincipalCache, tokens To
 // (tenant|subject|profile). Optional workload is used only for exact CacheKey
 // fallback when the cache does not support DeleteBySubjectKey.
 // Fail closed on empty/invalid subjectKey.
-func InvalidateSubjectKeyLocal(subjectKey, workload string, principals *PrincipalCache, tokens TokenCache) (SubjectInvalidateResult, error) {
+func InvalidateSubjectKeyLocal(subjectKey, workload string, principals PrincipalStore, tokens TokenCache) (SubjectInvalidateResult, error) {
 	sk := strings.TrimSpace(subjectKey)
 	if err := ValidateSubjectKey(sk); err != nil {
 		return SubjectInvalidateResult{}, err
