@@ -191,6 +191,47 @@ func TestParseHTTPJWKSRefreshTTL(t *testing.T) {
 	}
 }
 
+func TestParseHTTPJWKSMaxStale(t *testing.T) {
+	t.Parallel()
+	d, err := parseHTTPJWKSMaxStale(func(string) string { return "" })
+	if err != nil || d != 0 {
+		t.Fatalf("default unlimited: %v err=%v", d, err)
+	}
+	d, err = parseHTTPJWKSMaxStale(func(k string) string {
+		if k == EnvHTTPJWKSMaxStale {
+			return "15m"
+		}
+		return ""
+	})
+	if err != nil || d != 15*time.Minute {
+		t.Fatalf("15m: %v err=%v", d, err)
+	}
+	_, err = parseHTTPJWKSMaxStale(func(k string) string {
+		if k == EnvHTTPJWKSMaxStale {
+			return "30s"
+		}
+		return ""
+	})
+	if err == nil {
+		t.Fatal("below min must fail closed at serve start")
+	}
+	_, err = parseHTTPJWKSMaxStale(func(k string) string {
+		if k == EnvHTTPJWKSMaxStale {
+			return "48h"
+		}
+		return ""
+	})
+	if err == nil {
+		t.Fatal("above max must fail closed at serve start")
+	}
+	if formatJWKSMaxStaleLog(0) != "unlimited" {
+		t.Fatal("log helper unlimited")
+	}
+	if formatJWKSMaxStaleLog(15*time.Minute) != (15 * time.Minute).String() {
+		t.Fatal("log helper duration")
+	}
+}
+
 func TestNewHTTPJWKSSource_RefreshRotateKid(t *testing.T) {
 	t.Parallel()
 	key1, err := authlab.GenerateLabKey()
@@ -229,7 +270,7 @@ func TestNewHTTPJWKSSource_RefreshRotateKid(t *testing.T) {
 	}
 	// Short TTL; use ForceRefresh path via Get after advancing is internal —
 	// newHTTPJWKSSource starts background; we ForceRefresh after swapping doc.
-	src, err := newHTTPJWKSSource(context.Background(), srv.Client(), cfg, 30*time.Second)
+	src, err := newHTTPJWKSSource(context.Background(), srv.Client(), cfg, 30*time.Second, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,9 +340,95 @@ func TestNewHTTPJWKSSource_RefreshRotateKid(t *testing.T) {
 	}
 
 	// Unconfigured → nil source.
-	nilSrc, err := newHTTPJWKSSource(context.Background(), srv.Client(), httpJWTEnv{}, 30*time.Second)
+	nilSrc, err := newHTTPJWKSSource(context.Background(), srv.Client(), httpJWTEnv{}, 30*time.Second, 0)
 	if err != nil || nilSrc != nil {
 		t.Fatalf("unconfigured: %v err=%v", nilSrc, err)
+	}
+}
+
+func TestNewHTTPJWKSSource_MaxStaleWired(t *testing.T) {
+	t.Parallel()
+	key, err := authlab.GenerateLabKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	key.Kid = "max-stale-wire"
+	doc, err := key.JWKS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	fail := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		shouldFail := fail
+		mu.Unlock()
+		if shouldFail {
+			http.Error(w, "down", http.StatusBadGateway)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(doc)
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := httpJWTEnv{
+		JWKSURL:  srv.URL,
+		Issuer:   "https://issuer.example",
+		Audience: "jenkins-api",
+	}
+	// Wire with max stale via newHTTPJWKSSource (same path as serve).
+	// Use library constructor with clock for age control after wiring check.
+	srcWire, err := newHTTPJWKSSource(context.Background(), srv.Client(), cfg, 30*time.Second, 2*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srcWire.StopBackground)
+	if srcWire.MaxStaleAge() != 2*time.Minute {
+		t.Fatalf("wired MaxStaleAge=%v", srcWire.MaxStaleAge())
+	}
+	if srcWire.TTL() != 30*time.Second {
+		t.Fatalf("wired TTL=%v", srcWire.TTL())
+	}
+
+	// Controllable clock path: max stale exceeded → Get fails closed.
+	var clockMu sync.Mutex
+	now := time.Unix(1_700_200_000, 0)
+	src, err := auth.NewRefreshingJWKS(context.Background(), auth.RefreshingJWKSConfig{
+		Client:      srv.Client(),
+		URI:         cfg.JWKSURL,
+		TTL:         30 * time.Second,
+		MaxStaleAge: 2 * time.Minute,
+		Now: func() time.Time {
+			clockMu.Lock()
+			defer clockMu.Unlock()
+			return now
+		},
+		Logf: func(string, ...any) {},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	fail = true
+	mu.Unlock()
+	// Within window: stale-if-error still works.
+	clockMu.Lock()
+	now = now.Add(40 * time.Second)
+	clockMu.Unlock()
+	got, err := src.Get(context.Background())
+	if err != nil || got == nil || len(got.Keys) == 0 {
+		t.Fatalf("within max stale window: err=%v", err)
+	}
+	// Exceeded: fail closed (resolver will 401).
+	clockMu.Lock()
+	now = now.Add(3 * time.Minute)
+	clockMu.Unlock()
+	_, err = src.Get(context.Background())
+	if err == nil {
+		t.Fatal("max stale exceeded must fail closed")
+	}
+	if n := strings.TrimSpace(doc.Keys[0].N); n != "" && strings.Contains(err.Error(), n) {
+		t.Fatalf("Regression: key material in max-stale error: %v", err)
 	}
 }
 

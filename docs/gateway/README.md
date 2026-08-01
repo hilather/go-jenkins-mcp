@@ -332,14 +332,16 @@ Streamable HTTP JWT subject validation uses a **refreshable JWKS source**
 |----------|--------|
 | Initial fetch | Fail-closed at serve start |
 | Refresh TTL | Default **5m**; env `JENKINS_MCP_HTTP_JWKS_REFRESH_TTL` (Go duration; min **30s**, max **1h**; fail closed out of bounds) |
+| Max stale age | Default **0 = unlimited** stale-if-error; env `JENKINS_MCP_HTTP_JWKS_MAX_STALE` (Go duration; min **1m**, max **24h** when set; empty/`0`/`0s` = unlimited; invalid → fail closed at serve start). After a failed refresh, if last good snapshot age exceeds max, `Get` fails closed (process-local clock). |
 | On demand + background | `Get(ctx)` refreshes when TTL elapsed (singleflight); optional ticker also started for serve |
-| Refresh failure | **Stale-if-error** (keep last good); non-secret log line only |
+| Refresh failure | **Stale-if-error** (keep last good) unless max stale exceeded; non-secret log line only |
 | Validation | IdentityResolver calls `jwksSource.Get` **each** request so rotated `kid`s work after refresh |
-| Secret-free | JWKS URL must not embed credentials; never log tokens / key material |
+| Secret-free | JWKS URL must not embed credentials; never log tokens / key material (including max-stale fail-closed logs) |
 
-**Residual (do not claim multi-region HA):** multi-instance shared JWKS cache;
-fail-closed max-stale age operator wiring (`MaxStaleAge` exists in library, not
-env-wired); live Entra JWKS under load / multi-replica session store (HOST-008).
+**Residual (do not claim multi-region HA):** multi-instance shared JWKS cache
+(`MaxStaleAge` / `JENKINS_MCP_HTTP_JWKS_MAX_STALE` is **process-local** only — each
+replica tracks its own last-good age); live Entra JWKS under load / multi-replica
+session store (HOST-008).
 
 ---
 

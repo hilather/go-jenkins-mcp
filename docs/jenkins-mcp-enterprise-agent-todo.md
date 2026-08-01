@@ -2657,7 +2657,7 @@ Authenticated individual subjects on MCP HTTP in gateway mode (shared secret alo
 - [x] Tokens never in logs/errors/metrics/support bundles (canaries).
 - [x] Gateway mode cannot enable anonymous multi-user; local KD-008 residual remains explicit for non-gateway.
 
-**Residual:** multi-instance / under-load JWKS HA (process-local TTL refresh + stale-if-error foundation landed); optional max-stale fail-closed operator wire; live Entra / jwt-auth-filter; durable multi-replica session store.
+**Residual:** multi-instance / under-load JWKS HA (process-local TTL refresh + stale-if-error + optional `JENKINS_MCP_HTTP_JWKS_MAX_STALE` fail-closed landed; multi-instance shared JWKS still residual); live Entra / jwt-auth-filter; durable multi-replica session store.
 
 ---
 

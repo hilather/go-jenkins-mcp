@@ -284,6 +284,9 @@ JENKINS_MCP_HTTP_JWKS_URL + JENKINS_MCP_HTTP_JWT_ISSUER +
 JENKINS_MCP_HTTP_JWT_AUDIENCE (secret-free); optional JENKINS_MCP_HTTP_JWT_REQUIRED=1
 implies require-subject. JWKS refreshes on TTL (default 5m;
 JENKINS_MCP_HTTP_JWKS_REFRESH_TTL, min 30s max 1h) with stale-if-error.
+Optional JENKINS_MCP_HTTP_JWKS_MAX_STALE (Go duration; empty/0 = unlimited;
+min 1m max 24h) fails closed after last good JWKS age exceeds the bound
+(process-local; multi-instance shared JWKS residual).
 Shared transport secret is never treated as subject.
 Request body cap defaults to
 4 MiB; raise with --http-max-body-bytes / JENKINS_MCP_HTTP_MAX_BODY_BYTES
@@ -1995,14 +1998,19 @@ func runServe(args []string) error {
 			if ttlErr != nil {
 				return ttlErr
 			}
-			src, srcErr := newHTTPJWKSSource(serveCtx, nil, jwtEnv, refreshTTL)
+			maxStale, staleErr := parseHTTPJWKSMaxStale(os.Getenv)
+			if staleErr != nil {
+				return staleErr
+			}
+			src, srcErr := newHTTPJWKSSource(serveCtx, nil, jwtEnv, refreshTTL, maxStale)
 			if srcErr != nil {
 				return srcErr
 			}
 			jwksSource = src
 			if src != nil {
-				log.Printf("HTTP JWT JWKS source ready refresh_ttl=%s uri_host_set=%v (stale-if-error; multi-instance cache residual)",
-					src.TTL(), strings.TrimSpace(jwtEnv.JWKSURL) != "")
+				// Secret-free: durations + boolean only (never JWKS URL credentials or keys).
+				log.Printf("HTTP JWT JWKS source ready refresh_ttl=%s max_stale=%s uri_host_set=%v (stale-if-error process-local; multi-instance cache residual)",
+					src.TTL(), formatJWKSMaxStaleLog(src.MaxStaleAge()), strings.TrimSpace(jwtEnv.JWKSURL) != "")
 			}
 		}
 		cfg.IdentityResolver = newHTTPIdentityResolver(cfg.LabIdentity, token, jwksSource, auth.AccessTokenParams{

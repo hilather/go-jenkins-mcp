@@ -32,6 +32,11 @@ const (
 	// auth.DefaultJWKSRefreshTTL (5m); min 30s max 1h (fail closed via ParseJWKSRefreshTTL).
 	// Alias of auth.EnvHTTPJWKSRefreshTTL for cmd package discoverability.
 	EnvHTTPJWKSRefreshTTL = auth.EnvHTTPJWKSRefreshTTL
+	// EnvHTTPJWKSMaxStale is max age of last good JWKS after a failed refresh.
+	// Empty/zero → unlimited stale-if-error (default residual). When set: min 1m,
+	// max 24h (fail closed via ParseJWKSMaxStaleAge). Process-local only.
+	// Alias of auth.EnvHTTPJWKSMaxStale for cmd package discoverability.
+	EnvHTTPJWKSMaxStale = auth.EnvHTTPJWKSMaxStale
 )
 
 // resolveHTTPRequireSubject combines --http-require-subject, --gateway (caller
@@ -154,20 +159,41 @@ func parseHTTPJWKSRefreshTTL(getenv func(string) string) (time.Duration, error) 
 	return auth.ParseJWKSRefreshTTL(getenv(EnvHTTPJWKSRefreshTTL))
 }
 
+// parseHTTPJWKSMaxStale loads EnvHTTPJWKSMaxStale via auth.ParseJWKSMaxStaleAge.
+// getenv nil uses os.Getenv. Empty/zero → 0 (unlimited stale-if-error residual).
+// Invalid / out-of-bounds values fail closed at serve start.
+func parseHTTPJWKSMaxStale(getenv func(string) string) (time.Duration, error) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	return auth.ParseJWKSMaxStaleAge(getenv(EnvHTTPJWKSMaxStale))
+}
+
+// formatJWKSMaxStaleLog is a secret-free log helper (duration or "unlimited").
+func formatJWKSMaxStaleLog(d time.Duration) string {
+	if d <= 0 {
+		return "unlimited"
+	}
+	return d.String()
+}
+
 // newHTTPJWKSSource builds a refreshable JWKS source for HTTP JWT subject validation.
 // Initial fetch is fail-closed. Refresh on TTL (default 5m) with stale-if-error.
 // client nil → DefaultClient with DefaultJWKSTimeout. refreshTTL 0 → default.
+// maxStaleAge 0 → unlimited stale-if-error; non-zero fails closed after last good
+// snapshot age exceeds the bound (process-local; multi-instance shared residual).
 // Unconfigured jwtEnv → nil source (no error).
 //
-// Residual (HOST-001 honesty): multi-instance / multi-region shared JWKS cache,
-// fail-closed max stale age after prolonged IdP outage (optional MaxStaleAge
-// exists but is not operator-wired yet), and live Entra JWKS under load are not
-// claimed. Mid-session *subject* rebind remains mcpserver fingerprint (separate).
+// Residual (HOST-001 honesty): multi-instance / multi-region shared JWKS cache
+// and live Entra JWKS under load are not claimed. MaxStaleAge is process-local
+// only (JENKINS_MCP_HTTP_JWKS_MAX_STALE). Mid-session *subject* rebind remains
+// mcpserver fingerprint (separate).
 func newHTTPJWKSSource(
 	ctx context.Context,
 	client *http.Client,
 	cfg httpJWTEnv,
 	refreshTTL time.Duration,
+	maxStaleAge time.Duration,
 ) (*auth.RefreshingJWKS, error) {
 	if !cfg.Configured() {
 		return nil, nil
@@ -179,9 +205,10 @@ func newHTTPJWKSSource(
 		refreshTTL = auth.DefaultJWKSRefreshTTL
 	}
 	src, err := auth.NewRefreshingJWKS(ctx, auth.RefreshingJWKSConfig{
-		Client: client,
-		URI:    cfg.JWKSURL,
-		TTL:    refreshTTL,
+		Client:      client,
+		URI:         cfg.JWKSURL,
+		TTL:         refreshTTL,
+		MaxStaleAge: maxStaleAge,
 		// Logf nil → log.Printf inside auth (non-secret refresh errors only).
 	})
 	if err != nil {

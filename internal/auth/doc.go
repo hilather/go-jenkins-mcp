@@ -43,9 +43,10 @@
 // on whoAmI. Live RS lab remains OAUTH-005/009 residual.
 //
 // HOST-001 JWKS refresh foundation: JWKSSource / RefreshingJWKS (TTL refresh,
-// stale-if-error, per-validation Get). Env JENKINS_MCP_HTTP_JWKS_REFRESH_TTL
-// (default 5m, min 30s max 1h). Residual: multi-instance cache, max-stale operator
-// wire, live Entra under load.
+// stale-if-error, optional MaxStaleAge fail-closed, per-validation Get).
+// Env JENKINS_MCP_HTTP_JWKS_REFRESH_TTL (default 5m, min 30s max 1h);
+// JENKINS_MCP_HTTP_JWKS_MAX_STALE (default 0 unlimited, min 1m max 24h when set;
+// process-local). Residual: multi-instance shared JWKS cache, live Entra under load.
 //
 // OAUTH-009 (offline expand): rs_qualification fallthrough classifier (status +
 // WWW-Authenticate + body class), JWKS outage fail-closed pure contracts,

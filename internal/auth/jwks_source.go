@@ -13,8 +13,10 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// JWKS refresh TTL bounds for HOST-001 continuous rotation foundation.
-// Default 5m; env JENKINS_MCP_HTTP_JWKS_REFRESH_TTL (cmd) feeds ParseJWKSRefreshTTL.
+// JWKS refresh TTL and max-stale bounds for HOST-001 continuous rotation foundation.
+// Default refresh 5m; env JENKINS_MCP_HTTP_JWKS_REFRESH_TTL feeds ParseJWKSRefreshTTL.
+// Max-stale default 0 (unlimited stale-if-error); env JENKINS_MCP_HTTP_JWKS_MAX_STALE
+// feeds ParseJWKSMaxStaleAge (process-local; multi-instance shared JWKS residual).
 const (
 	// DefaultJWKSRefreshTTL is used when refresh TTL is empty/zero.
 	DefaultJWKSRefreshTTL = 5 * time.Minute
@@ -22,19 +24,30 @@ const (
 	MinJWKSRefreshTTL = 30 * time.Second
 	// MaxJWKSRefreshTTL is the longest allowed refresh interval (fail closed above).
 	MaxJWKSRefreshTTL = time.Hour
+	// MinJWKSMaxStaleAge is the shortest allowed max-stale when set (fail closed below).
+	// Zero remains valid as "unlimited" (default residual).
+	MinJWKSMaxStaleAge = time.Minute
+	// MaxJWKSMaxStaleAge is the longest allowed max-stale (fail closed above).
+	MaxJWKSMaxStaleAge = 24 * time.Hour
 )
 
 // EnvHTTPJWKSRefreshTTL is the serve env for HTTP JWKS refresh TTL
 // (secret-free duration string, e.g. "5m", "30s").
 const EnvHTTPJWKSRefreshTTL = "JENKINS_MCP_HTTP_JWKS_REFRESH_TTL"
 
+// EnvHTTPJWKSMaxStale is the serve env for HTTP JWKS max stale age after a
+// failed refresh (secret-free Go duration). Empty/zero → unlimited stale-if-error
+// (default residual). When set (min 1m, max 24h), Get fails closed once the last
+// good snapshot age exceeds the bound. Process-local only.
+const EnvHTTPJWKSMaxStale = "JENKINS_MCP_HTTP_JWKS_MAX_STALE"
+
 // JWKSSource supplies a JWKS snapshot for each JWT validation.
 // Implementations may refresh; callers must call Get on every validation so
 // rotated kids are visible after refresh (HOST-001 foundation).
 //
-// Residual: multi-region / multi-instance shared JWKS cache, fail-closed max
-// stale age after prolonged IdP outage, and live Entra JWKS under load are not
-// claimed by this offline foundation.
+// Residual: multi-region / multi-instance shared JWKS cache and live Entra JWKS
+// under load are not claimed. MaxStaleAge is process-local (operator-wired via
+// JENKINS_MCP_HTTP_JWKS_MAX_STALE); it does not coordinate across replicas.
 type JWKSSource interface {
 	Get(ctx context.Context) (*JWKS, error)
 }
@@ -76,12 +89,13 @@ type jwksSnapshot struct {
 //
 // Optional MaxStaleAge: when >0 and last successful fetch is older than that
 // age after a failed refresh, Get fails closed. Zero (default) means unlimited
-// stale-if-error (residual: operators may want a hard max-stale later).
+// stale-if-error. Age is process-local (last good snapshot in this process);
+// multi-instance shared JWKS remains residual.
 type RefreshingJWKS struct {
 	client *http.Client
 	uri    string
 	ttl    time.Duration
-	// MaxStaleAge optional fail-closed after prolonged outage (0 = unlimited stale).
+	// maxStale optional fail-closed after prolonged outage (0 = unlimited stale).
 	maxStale time.Duration
 
 	nowFn func() time.Time
@@ -104,6 +118,8 @@ type RefreshingJWKSConfig struct {
 	// values should be rejected by ParseJWKSRefreshTTL before construction.
 	TTL time.Duration
 	// MaxStaleAge optional; 0 keeps last good forever on refresh failure.
+	// Non-zero must be in [MinJWKSMaxStaleAge, MaxJWKSMaxStaleAge] (ParseJWKSMaxStaleAge).
+	// Process-local only — does not share age across replicas.
 	MaxStaleAge time.Duration
 	// Now overrides time.Now (tests).
 	Now func() time.Time
@@ -149,6 +165,45 @@ func ParseJWKSRefreshTTL(raw string) (time.Duration, error) {
 	return d, nil
 }
 
+// ParseJWKSMaxStaleAge parses a Go duration for JWKS max stale age.
+//
+// Rules (fail closed — never clamp silently):
+//   - empty / whitespace → 0 (unlimited stale-if-error residual)
+//   - unparseable → error
+//   - zero duration → 0 (unlimited)
+//   - negative → error
+//   - non-zero < MinJWKSMaxStaleAge (1m) → error
+//   - > MaxJWKSMaxStaleAge (24h) → error
+//
+// Secret-free: raw value is a duration string only (never tokens/key material).
+func ParseJWKSMaxStaleAge(raw string) (time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, apperr.New(apperr.CodeInvalidArgument,
+			"invalid JWKS max stale age (use Go duration, e.g. 1m, 15m, 24h; empty/0 = unlimited): "+raw)
+	}
+	if d < 0 {
+		return 0, apperr.New(apperr.CodeInvalidArgument,
+			"JWKS max stale age must not be negative")
+	}
+	if d == 0 {
+		return 0, nil
+	}
+	if d < MinJWKSMaxStaleAge {
+		return 0, apperr.New(apperr.CodeInvalidArgument,
+			"JWKS max stale age is below minimum "+MinJWKSMaxStaleAge.String()+" (got "+d.String()+")")
+	}
+	if d > MaxJWKSMaxStaleAge {
+		return 0, apperr.New(apperr.CodeInvalidArgument,
+			"JWKS max stale age exceeds maximum "+MaxJWKSMaxStaleAge.String()+" (got "+d.String()+")")
+	}
+	return d, nil
+}
+
 // NewRefreshingJWKS performs the initial JWKS fetch (fail closed) and returns
 // a source that refreshes on TTL with stale-if-error.
 func NewRefreshingJWKS(ctx context.Context, cfg RefreshingJWKSConfig) (*RefreshingJWKS, error) {
@@ -173,12 +228,23 @@ func NewRefreshingJWKS(ctx context.Context, cfg RefreshingJWKSConfig) (*Refreshi
 			"JWKS refresh TTL out of bounds (min "+MinJWKSRefreshTTL.String()+
 				" max "+MaxJWKSRefreshTTL.String()+")")
 	}
+	maxStale := cfg.MaxStaleAge
+	if maxStale < 0 {
+		return nil, apperr.New(apperr.CodeInvalidArgument,
+			"JWKS max stale age must not be negative")
+	}
+	// Non-zero max-stale must stay in documented bounds (caller may skip Parse).
+	if maxStale > 0 && (maxStale < MinJWKSMaxStaleAge || maxStale > MaxJWKSMaxStaleAge) {
+		return nil, apperr.New(apperr.CodeInvalidArgument,
+			"JWKS max stale age out of bounds (min "+MinJWKSMaxStaleAge.String()+
+				" max "+MaxJWKSMaxStaleAge.String()+"; 0 = unlimited)")
+	}
 
 	r := &RefreshingJWKS{
 		client:   client,
 		uri:      uri,
 		ttl:      ttl,
-		maxStale: cfg.MaxStaleAge,
+		maxStale: maxStale,
 		nowFn:    cfg.Now,
 		logf:     cfg.Logf,
 	}
@@ -208,6 +274,14 @@ func (r *RefreshingJWKS) TTL() time.Duration {
 		return DefaultJWKSRefreshTTL
 	}
 	return r.ttl
+}
+
+// MaxStaleAge returns the configured max stale age (0 = unlimited stale-if-error).
+func (r *RefreshingJWKS) MaxStaleAge() time.Duration {
+	if r == nil {
+		return 0
+	}
+	return r.maxStale
 }
 
 // URI returns the configured JWKS URL (secret-free).
@@ -291,11 +365,14 @@ func (r *RefreshingJWKS) Get(ctx context.Context) (*JWKS, error) {
 			return nil, apperr.Wrap(apperr.CodeCancelled, "jwks get cancelled", cerr)
 		}
 		// Stale-if-error: keep last good unless max stale exceeded.
-		r.logf("jwks refresh failed (stale-if-error; no secrets): %v", err)
+		// Logs are secret-free: no tokens, no JWKS n/e material, no URI query secrets.
 		if r.maxStale > 0 && age > r.maxStale {
+			r.logf("jwks refresh failed and max stale age exceeded (fail closed; no secrets): age=%s max=%s err=%v",
+				age.Round(time.Second), r.maxStale, err)
 			return nil, apperr.Wrap(apperr.CodeAuthentication,
 				"jwks refresh failed and max stale age exceeded", err)
 		}
+		r.logf("jwks refresh failed (stale-if-error; no secrets): %v", err)
 		// Return last good snapshot (still non-nil from pre-check).
 		return s.set, nil
 	}
