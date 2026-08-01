@@ -139,7 +139,7 @@ func TestLive_SweepFixtureHTTP(t *testing.T) {
 		probe{
 			name: "sample-pipeline:testReport",
 			fn: func(ctx context.Context) error {
-			 bn, err := lastBuildNumber(ctx, c, "sample-pipeline")
+				bn, err := lastBuildNumber(ctx, c, "sample-pipeline")
 				if err != nil {
 					return err
 				}
@@ -149,7 +149,7 @@ func TestLive_SweepFixtureHTTP(t *testing.T) {
 		probe{
 			name: "mock-inv-long-log:testReport",
 			fn: func(ctx context.Context) error {
-			 bn, err := lastBuildNumber(ctx, c, "mock-inv-long-log")
+				bn, err := lastBuildNumber(ctx, c, "mock-inv-long-log")
 				if err != nil {
 					return err
 				}
@@ -159,7 +159,7 @@ func TestLive_SweepFixtureHTTP(t *testing.T) {
 		probe{
 			name: "mock-inv-unstable:testReport",
 			fn: func(ctx context.Context) error {
-			 bn, err := lastBuildNumber(ctx, c, "mock-inv-unstable")
+				bn, err := lastBuildNumber(ctx, c, "mock-inv-unstable")
 				if err != nil {
 					return err
 				}
@@ -169,7 +169,7 @@ func TestLive_SweepFixtureHTTP(t *testing.T) {
 		probe{
 			name: "buildGraph:mock-inv-build-graph-downstream",
 			fn: func(ctx context.Context) error {
-			 bn, err := lastBuildNumber(ctx, c, "mock-inv-build-graph-downstream")
+				bn, err := lastBuildNumber(ctx, c, "mock-inv-build-graph-downstream")
 				if err != nil {
 					return err
 				}
