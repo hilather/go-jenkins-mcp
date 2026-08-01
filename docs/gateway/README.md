@@ -127,12 +127,8 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 - **Not** multi-replica shared store; sticky sessions / shared AgentCore vault remain residual.
 
 ```bash
-<<<<<<< HEAD
-jenkins-mcp gateway consent-residual   # secret-free JSON residual + last consent_sessions if file present
-=======
 jenkins-mcp gateway residual-status    # unified secret-free residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count)
-jenkins-mcp gateway consent-residual   # progressive consent residual only (subset)
->>>>>>> integrate/gateway-residual-status
+jenkins-mcp gateway consent-residual   # progressive consent residual + last consent_sessions if file present
 jenkins-mcp gateway qualify --offline  # includes progressive_consent_residual case + residual note
 jenkins-mcp doctor --offline           # gateway_status progressive_consent_* fields when Mode C
 ```
