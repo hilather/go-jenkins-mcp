@@ -2847,8 +2847,9 @@ serve restart.
 - [x] Sticky session Service scaffold (**Done* scaffold**). — kustomize Service `sessionAffinity: ClientIP`; deployment scale comments. **Not** multi-replica runtime Done
 - [x] Explicit non-goal until multi-pod durable vault + affinity exist. — do not claim multi-replica Done from affinity alone
 - [x] Secret-free residual surfaces: doctor + admin health/vault (`multiUserEnabled`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst`)
+- [x] Multi-pod residual detection (honest residual, not multi-replica Done): doctor `gateway_status` always `multi_pod_vault_residual=true`; `KUBERNETES_SERVICE_HOST` / emptyDir-ish vault path / residual `REPLICAS`>1 → warn + checklist (sticky, shared vault, rate, Obtain cache); admin health/vault residual + `multiPodVaultResidual` / `kubernetesEnvDetected`; cross-link [deployment.md §9](gateway/deployment.md)
 
-**Status:** **Done*** lite for same-host shared file vault flock + sticky Service scaffold + docs residual + secret-free status fields. **No multi-replica runtime** (shared Obtain cache, multi-pod vault, shared rate, audit aggregation still residual).
+**Status:** **Done*** lite for same-host shared file vault flock + sticky Service scaffold + docs residual + secret-free status fields + multi-pod residual detection honesty. **No multi-replica runtime** (shared Obtain cache, multi-pod vault, shared rate, audit aggregation still residual).
 
 ---
 

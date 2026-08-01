@@ -96,10 +96,12 @@ Current process authentication state and console role. **Never includes the toke
   "gatewayReady": false,
   "haMultiReplica": false,
   "sessionAffinityRecommended": false,
+  "multiPodVaultResidual": true,
+  "kubernetesEnvDetected": false,
   "rateEnabled": true,
   "ratePerMinute": 30,
   "rateBurst": 10,
-  "residual": "subject rate knobs are process-local (HOST-006); multi-replica shared rate residual (HOST-008); never tokens"
+  "residual": "subject rate knobs are process-local (HOST-006); multi-replica shared rate residual (HOST-008); multiPodVaultResidual=true (multi-pod vault residual); never tokens"
 }
 ```
 
@@ -113,10 +115,12 @@ Current process authentication state and console role. **Never includes the toke
 | `gatewayReady` | Always **`false` on admin BFF** (separate process from MCP serve). Live Obtain Ready is `GET /readyz` on the gateway serve process. |
 | `haMultiReplica` | Always **`false`** (HOST-008 Tier A single-replica default; multi-replica runtime not implemented). |
 | `sessionAffinityRecommended` | **HOST-008 residual:** `true` when multi-user env is set. Recommends kustomize Service sticky scaffold (`sessionAffinity: ClientIP`) if replicas are ever scaled — **not** multi-replica Done. Scaffold packaging only. |
+| `multiPodVaultResidual` | Always **`true`** (HOST-008 multi-pod durable vault residual honesty). Parity with doctor `gateway_status.multi_pod_vault_residual`. **Not** multi-replica Done. See [gateway/deployment.md §9](../gateway/deployment.md). |
+| `kubernetesEnvDetected` | **`true`** when `KUBERNETES_SERVICE_HOST` is set (in-cluster residual). Residual string then includes multi-pod checklist summary (sticky, shared vault, rate, Obtain cache). Never tokens. |
 | `rateEnabled` | **HOST-006 / HOST-008 residual:** `true` when subject rate env would enable process-local limiting (empty `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` → default on; explicit `0` → false). **Not** multi-replica shared rate. Never tokens. |
 | `ratePerMinute` | **HOST-006 residual knob:** resolved bootstrap tools/min via `gateway.SubjectRateConfigFromEnviron` (package default **30**; **0** when disabled). Process-local only. Never tokens. |
 | `rateBurst` | **HOST-006 residual knob:** resolved bootstrap burst (package default **10**; **0** when rate off). Process-local only. Never tokens. |
-| `residual` | Secret-free honesty note (never tokens). Process-local subject-rate residual + HOST-008 multi-replica residual; multi-user env also notes foundation residual + sticky scaffold honesty. |
+| `residual` | Secret-free honesty note (never tokens). Process-local subject-rate residual + HOST-008 multi-replica / multi-pod vault residual; multi-user env notes foundation + sticky scaffold; k8s env notes multi-pod checklist (not HA Done). |
 
 ## GET /admin/v1/gateway/vault
 
@@ -131,13 +135,15 @@ Authorization headers, or raw subject keys.
   "multiUserEnabled": false,
   "haMultiReplica": false,
   "sessionAffinityRecommended": false,
+  "multiPodVaultResidual": true,
+  "kubernetesEnvDetected": false,
   "rateEnabled": true,
   "ratePerMinute": 30,
   "rateBurst": 10,
   "vaultConfigured": true,
   "entryCount": 1,
   "subjects": ["a1b2c3…"],
-  "residual": "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser); subject rate knobs process-local (HOST-006); multi-replica shared rate residual (HOST-008)"
+  "residual": "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser); subject rate knobs process-local (HOST-006); multi-replica shared rate residual (HOST-008); multiPodVaultResidual=true"
 }
 ```
 
@@ -148,13 +154,15 @@ Authorization headers, or raw subject keys.
 | `multiUserEnabled` | `JENKINS_MCP_GATEWAY_MULTI_USER` truthy parse (foundation residual; not production GO) |
 | `haMultiReplica` | Always `false` (HOST-008 Tier A; multi-replica not implemented) |
 | `sessionAffinityRecommended` | `true` when multi-user env set (HOST-008 sticky Service scaffold honesty; not multi-replica Done) |
+| `multiPodVaultResidual` | Always `true` (HOST-008 multi-pod vault residual; parity with doctor `multi_pod_vault_residual`) |
+| `kubernetesEnvDetected` | `true` when `KUBERNETES_SERVICE_HOST` set; residual notes multi-pod checklist (not HA Done) |
 | `rateEnabled` | HOST-006 env residual (process-local rate would be enabled; not multi-replica shared rate) |
 | `ratePerMinute` | Resolved bootstrap tools/min (default or `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE`); **0** when disabled. Process-local residual only. Never tokens. |
 | `rateBurst` | Resolved bootstrap burst (default or `JENKINS_MCP_SUBJECT_RATE_BURST`); **0** when rate disabled. Process-local residual only. Never tokens. |
 | `vaultConfigured` | Whether the Mode A vault file exists |
 | `entryCount` | Number of subject entries |
 | `subjects` | **SubjectKeyHash** values only (never raw keys or tokens) |
-| `residual` | Operator notes (CLI-only write; Mode B/C residuals; HOST-006 process-local rate residual; multi-user honesty when env set) |
+| `residual` | Operator notes (CLI-only write; Mode B/C residuals; HOST-006 process-local rate residual; multi-user / k8s honesty when env set) |
 
 Writes remain CLI-only. SPA Overview may display this status; provision/rotate/revoke
 is not available from the browser.

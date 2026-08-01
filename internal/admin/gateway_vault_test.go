@@ -21,6 +21,7 @@ func TestHealth_EnabledModesSecretFree(t *testing.T) {
 	t.Setenv(gateway.EnvGatewayEnabledModes, "api_token_vault,jwt_rs_bearer")
 	t.Setenv(gateway.EnvGatewayMultiUser, "")
 	t.Setenv(gateway.EnvGatewayVaultPath, filepath.Join(t.TempDir(), "unused.json"))
+	t.Setenv("KUBERNETES_SERVICE_HOST", "")
 
 	cfg := admin.DefaultConfig()
 	cfg.Addr = "127.0.0.1:0"
@@ -59,6 +60,12 @@ func TestHealth_EnabledModesSecretFree(t *testing.T) {
 	}
 	if m["haMultiReplica"] != false {
 		t.Fatalf("HOST-008 haMultiReplica must be false: %v", m["haMultiReplica"])
+	}
+	if m["multiPodVaultResidual"] != true {
+		t.Fatalf("HOST-008 multiPodVaultResidual must be true: %v", m["multiPodVaultResidual"])
+	}
+	if m["kubernetesEnvDetected"] != false {
+		t.Fatalf("kubernetesEnvDetected want false: %v", m["kubernetesEnvDetected"])
 	}
 	if m["sessionAffinityRecommended"] != false {
 		t.Fatalf("sessionAffinityRecommended want false when multi_user off: %v", m["sessionAffinityRecommended"])
@@ -165,6 +172,7 @@ func TestHealth_MultiUserResidualNote(t *testing.T) {
 	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAgentCore))
 	t.Setenv(gateway.EnvGatewayMultiUser, "true")
 	t.Setenv(gateway.EnvGatewayVaultPath, filepath.Join(t.TempDir(), "unused.json"))
+	t.Setenv("KUBERNETES_SERVICE_HOST", "")
 
 	cfg := admin.DefaultConfig()
 	cfg.Addr = "127.0.0.1:0"
@@ -196,12 +204,67 @@ func TestHealth_MultiUserResidualNote(t *testing.T) {
 	if m["haMultiReplica"] != false {
 		t.Fatalf("haMultiReplica=%v", m["haMultiReplica"])
 	}
+	// HOST-008 multi-pod residual honesty (always; not multi-replica Done).
+	if m["multiPodVaultResidual"] != true {
+		t.Fatalf("multiPodVaultResidual want true: %v", m["multiPodVaultResidual"])
+	}
 	// HOST-008: multi-user env → recommend sticky Service affinity (scaffold only).
 	if m["sessionAffinityRecommended"] != true {
 		t.Fatalf("sessionAffinityRecommended want true when multi_user: %v", m["sessionAffinityRecommended"])
 	}
 	if !strings.Contains(res, "sessionAffinityRecommended") && !strings.Contains(strings.ToLower(res), "session affinity") {
 		t.Fatalf("want sessionAffinity residual honesty in note: %q", res)
+	}
+}
+
+// HOST-008: KUBERNETES_SERVICE_HOST → health residual multi-pod checklist (secret-free).
+func TestHealth_KubernetesEnvMultiPodResidual(t *testing.T) {
+	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAPITokenVault))
+	t.Setenv(gateway.EnvGatewayMultiUser, "")
+	t.Setenv(gateway.EnvGatewayVaultPath, filepath.Join(t.TempDir(), "unused.json"))
+	t.Setenv("KUBERNETES_SERVICE_HOST", "10.96.0.1")
+	t.Setenv("JENKINS_MCP_FAKE_TOKEN", vaultCanaryToken)
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleViewer
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/admin/v1/health", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	raw := rr.Body.String()
+	if strings.Contains(raw, vaultCanaryToken) {
+		t.Fatal("Regression: canary in k8s residual health")
+	}
+	var m map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["kubernetesEnvDetected"] != true {
+		t.Fatalf("kubernetesEnvDetected=%v", m["kubernetesEnvDetected"])
+	}
+	if m["multiPodVaultResidual"] != true {
+		t.Fatalf("multiPodVaultResidual=%v", m["multiPodVaultResidual"])
+	}
+	if m["haMultiReplica"] != false {
+		t.Fatalf("haMultiReplica must stay false: %v", m["haMultiReplica"])
+	}
+	res, _ := m["residual"].(string)
+	if !strings.Contains(res, "kubernetes") && !strings.Contains(res, "KUBERNETES_SERVICE_HOST") {
+		t.Fatalf("want k8s residual note: %q", res)
+	}
+	for _, want := range []string{"sticky", "vault", "rate"} {
+		if !strings.Contains(strings.ToLower(res), want) {
+			t.Fatalf("residual checklist missing %q: %q", want, res)
+		}
+	}
+	if strings.Contains(res, vaultCanaryToken) {
+		t.Fatal("canary in residual")
 	}
 }
 

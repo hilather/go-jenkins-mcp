@@ -3,10 +3,120 @@ package diagnostics
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 )
+
+// Kubernetes injects KUBERNETES_SERVICE_HOST into every pod (secret-free env residual).
+const envKubernetesServiceHost = "KUBERNETES_SERVICE_HOST"
+
+// Residual-only replicas env names (not product knobs). When set to an integer > 1,
+// doctor surfaces multi-pod honesty (still ha_multi_replica=false).
+var multiPodReplicasEnvKeys = []string{
+	"JENKINS_MCP_GATEWAY_REPLICAS",
+	"REPLICAS",
+}
+
+// multiPodResidualChecklist is the secret-free operator summary for HOST-008 Tier B.
+// Never embed vault paths, subjects, or tokens.
+const multiPodResidualChecklist = "multi-pod residual checklist (HOST-008): sticky sessions or shared session store; durable shared vault (not emptyDir); shared subject rate; shared Obtain/token cache; ha_multi_replica=false until runtime HA — see docs/gateway/deployment.md §9"
+
+// MultiPodResidual is secret-free HOST-008 multi-pod residual posture (env/heuristic only).
+// MultiPodVaultResidual is always true: multi-pod durable vault is residual (never Done from
+// flock lite, sticky Service scaffold, or k8s env alone).
+type MultiPodResidual struct {
+	// MultiPodVaultResidual is always true (honesty: multi-pod vault not implemented).
+	MultiPodVaultResidual bool
+	// KubernetesEnvDetected is true when KUBERNETES_SERVICE_HOST is non-empty.
+	KubernetesEnvDetected bool
+	// VaultEmptyDirHeuristic is true when Mode A/B vault path looks emptyDir-ish
+	// (/tmp, /var/run, /dev/shm, or path segment "emptydir"). Heuristic residual only.
+	VaultEmptyDirHeuristic bool
+	// ReplicasEnvResidual is true when a residual replicas-like env parses as int > 1.
+	ReplicasEnvResidual bool
+	// Checklist is a secret-free residual summary when any multi-pod signal is present.
+	Checklist string
+}
+
+// MultiPodResidualFromEnviron reports HOST-008 multi-pod residual posture from env.
+// getenv nil → os.Getenv. Never returns tokens, vault bytes, or full vault paths.
+func MultiPodResidualFromEnviron(getenv func(string) string) MultiPodResidual {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	out := MultiPodResidual{
+		// Always true: multi-pod durable vault remains residual (HOST-008 honesty).
+		MultiPodVaultResidual: true,
+	}
+	if strings.TrimSpace(getenv(envKubernetesServiceHost)) != "" {
+		out.KubernetesEnvDetected = true
+	}
+	if vaultPathEmptyDirHeuristic(gateway.VaultPathFromEnviron(getenv)) ||
+		vaultPathEmptyDirHeuristic(gateway.JWTVaultPathFromEnviron(getenv)) {
+		out.VaultEmptyDirHeuristic = true
+	}
+	if replicasEnvResidual(getenv) {
+		out.ReplicasEnvResidual = true
+	}
+	if out.KubernetesEnvDetected || out.VaultEmptyDirHeuristic || out.ReplicasEnvResidual {
+		out.Checklist = multiPodResidualChecklist
+	}
+	return out
+}
+
+// pathHasDirPrefix reports whether p is exactly dir or a path under dir/ (slash form).
+func pathHasDirPrefix(p, dir string) bool {
+	return p == dir || strings.HasPrefix(p, dir+"/")
+}
+
+// vaultPathEmptyDirHeuristic is a path-shape residual only (no FS mount inspection).
+// True for common pod-local / emptyDir-ish locations. Does not prove volume type.
+func vaultPathEmptyDirHeuristic(path string) bool {
+	p := filepath.Clean(strings.TrimSpace(path))
+	if p == "" || p == "." {
+		return false
+	}
+	// Normalize to slash for portable prefix / segment checks.
+	// Use path-boundary prefixes so "/tmpfoo" does not match "/tmp".
+	slash := filepath.ToSlash(p)
+	lower := strings.ToLower(slash)
+	if pathHasDirPrefix(slash, "/tmp") || pathHasDirPrefix(slash, "/var/run") ||
+		pathHasDirPrefix(slash, "/dev/shm") {
+		return true
+	}
+	// Windows residual labs (not Tier-1): temp-like prefixes.
+	if pathHasDirPrefix(lower, "c:/windows/temp") || pathHasDirPrefix(lower, "c:/temp") {
+		return true
+	}
+	for _, seg := range strings.Split(lower, "/") {
+		if seg == "emptydir" || seg == "empty_dir" {
+			return true
+		}
+	}
+	return false
+}
+
+// replicasEnvResidual is true when a residual replicas-like env is an int > 1.
+// Not a product scale knob; honesty only if operators set these by mistake or lab.
+func replicasEnvResidual(getenv func(string) string) bool {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	for _, key := range multiPodReplicasEnvKeys {
+		raw := strings.TrimSpace(getenv(key))
+		if raw == "" {
+			continue
+		}
+		n, err := strconv.Atoi(raw)
+		if err == nil && n > 1 {
+			return true
+		}
+	}
+	return false
+}
 
 // checkGatewayStatus reports secret-free gateway/multi-user residual fields from
 // process env (HOST-008 doctor residual). Never tokens, vault bytes, or subjects.
@@ -17,6 +127,8 @@ import (
 // is always false (Tier A single-replica default; multi-replica not implemented).
 // session_affinity_recommended is true when multi-user env is set (HOST-008
 // sticky scaffold honesty — not multi-replica Done).
+// multi_pod_vault_residual is always true (multi-pod durable vault residual).
+// When KUBERNETES_SERVICE_HOST is set, status is warn with multi-pod checklist.
 //
 // Mode B residual: offline vault only (OAUTH-009 live pin open).
 // Mode C residual: offline Live=false / mock Fetcher (OAUTH-010 live pin open).
@@ -66,6 +178,8 @@ func checkGatewayStatus(getenv func(string) string) Check {
 		modeResidual = "mode matrix invalid or incomplete — fix JENKINS_MCP_GATEWAY_CREDENTIAL_MODE / ENABLED_MODES; live mode pins residual"
 	}
 
+	mp := MultiPodResidualFromEnviron(getenv)
+
 	details := map[string]any{
 		"multi_user_enabled": multiUser,
 		"gateway_ready":      false, // offline residual: Ready only on serve /readyz
@@ -74,10 +188,15 @@ func checkGatewayStatus(getenv func(string) string) Check {
 		// HOST-008: recommend sticky Service affinity when multi-user lab env is set
 		// (scaffold honesty only — multi-replica runtime still residual).
 		"session_affinity_recommended": multiUser,
-		"gateway_live_env":             liveEnv,
-		"mode_a_enabled":               modeA,
-		"mode_b_enabled":               modeB,
-		"mode_c_enabled":               modeC,
+		// HOST-008 multi-pod vault residual: always true (honest residual, not multi-replica Done).
+		"multi_pod_vault_residual":      mp.MultiPodVaultResidual,
+		"kubernetes_env_detected":       mp.KubernetesEnvDetected,
+		"vault_path_emptydir_heuristic": mp.VaultEmptyDirHeuristic,
+		"replicas_env_residual":         mp.ReplicasEnvResidual,
+		"gateway_live_env":              liveEnv,
+		"mode_a_enabled":                modeA,
+		"mode_b_enabled":                modeB,
+		"mode_c_enabled":                modeC,
 		// Aliases for residual test / older check consumers.
 		"gateway_mode_c_enabled": modeC,
 		// Offline never claims live pins (unified residual honesty).
@@ -85,6 +204,9 @@ func checkGatewayStatus(getenv func(string) string) Check {
 		"mode_b_live_rs_qualified":        false,
 		"mode_c_live_agentcore_qualified": false,
 		"oauth009_offline_only":           true, // oauth009_offline residual id (REL lite)
+	}
+	if mp.Checklist != "" {
+		details["multi_pod_residual_checklist"] = mp.Checklist
 	}
 	if modeResidual != "" {
 		details["mode_matrix_residual"] = modeResidual
@@ -105,7 +227,7 @@ func checkGatewayStatus(getenv func(string) string) Check {
 		details["progressive_consent_surfaces"] = pc.Surfaces
 	}
 
-	msg := fmt.Sprintf("multi_user=%v credential_mode=%s modes_a/b/c=%v/%v/%v gateway_ready=false ha_multi_replica=false",
+	msg := fmt.Sprintf("multi_user=%v credential_mode=%s modes_a/b/c=%v/%v/%v gateway_ready=false ha_multi_replica=false multi_pod_vault_residual=true",
 		multiUser, nonEmpty(mode, "(default/unset)"), modeA, modeB, modeC)
 	if multiUser {
 		msg += " (multi-user env set: foundation residual, not production GO; session_affinity_recommended=true scaffold only; no tokens in this check)"
@@ -140,6 +262,26 @@ func checkGatewayStatus(getenv func(string) string) Check {
 			msg += "; GATEWAY_LIVE set (HTTPTokenFetcher wire only — not production AgentCore)"
 		}
 	}
+
+	// HOST-008 multi-pod residual: k8s env, emptyDir-ish vault path, or replicas>1 residual env.
+	// Always multi_pod_vault_residual=true in details; warn when any multi-pod signal fires.
+	if mp.KubernetesEnvDetected || mp.VaultEmptyDirHeuristic || mp.ReplicasEnvResidual {
+		status = StatusWarn
+		parts := []string{}
+		if mp.KubernetesEnvDetected {
+			parts = append(parts, "KUBERNETES_SERVICE_HOST set (in-cluster residual)")
+		}
+		if mp.VaultEmptyDirHeuristic {
+			// Path shape only — never embed the vault path (secret-free residual).
+			parts = append(parts, "vault path emptyDir-ish heuristic")
+		}
+		if mp.ReplicasEnvResidual {
+			parts = append(parts, "replicas-like env >1 residual")
+		}
+		msg += "; multi-pod residual: " + strings.Join(parts, ", ") +
+			" — sticky/shared vault/rate/Obtain cache residual (ha_multi_replica=false; not multi-replica Done; see deployment.md §9)"
+	}
+
 	return SanitizeCheck(Check{
 		Name:    name,
 		Status:  status,
