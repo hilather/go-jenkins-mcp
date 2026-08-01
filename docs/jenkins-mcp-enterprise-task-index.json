@@ -4645,7 +4645,7 @@
       "dependency_text": "HOST-001",
       "parallel_safe": null,
       "objective": "Safe reverse-proxy and non-loopback placement for gateway HTTP.",
-      "implementation": "Document TLS/path-prefix/Host/Origin matrix; fail closed empty allow lists.",
+      "implementation": "Document TLS/path-prefix/Host/Origin matrix; fail closed empty allow lists; offline Host/Origin fixtures residual lite; live edge residual.",
       "acceptance_criteria": [
         "Documented deployment shapes without CORS wildcard.",
         "Empty AllowedHosts/Origins fail closed for non-local.",
@@ -4653,7 +4653,11 @@
         "Health does not leak secrets without auth."
       ],
       "acceptance_criteria_count": 4,
-      "evidence_tests": [],
+      "evidence_tests": [
+        "TestHOST002_PathPrefixOriginPinFixtureMatrix",
+        "TestHOST002_StreamableHTTPOriginHostMatrix",
+        "TestHOST002_TrustedProxyTrueStillIgnoresXForwarded"
+      ],
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": []

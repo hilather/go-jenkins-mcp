@@ -2706,10 +2706,11 @@ Safe placement behind site reverse-proxy (TLS, path prefix, Host/Origin).
 - [x] Empty AllowedHosts / AllowedOrigins fail closed for non-local. — existing mcpserver tests + HOST-002 wildcard fixture
 - [x] Path-prefix reverse-proxy support (app strip). — `HTTPConfig.PathPrefix` / `--http-path-prefix` / `JENKINS_MCP_HTTP_PATH_PREFIX`; MCP only under prefix; dual `/healthz`+`{prefix}/healthz`; fail-closed validation; offline unit tests
 - [x] Path-prefix + origin pin **offline** fixture matrix. — `TestHOST002_PathPrefixOriginPinFixtureMatrix`: exact Origin under prefix; wrong Origin 403; Host allow-list non-local+prefix; health root + `{prefix}/healthz` unauth; `X-Forwarded-Host`/`X-Forwarded-Prefix` not trusted (`TrustedProxy` default false residual)
-- [ ] Path-prefix origin pin **live** matrix (NET-001 residual). — offline fixtures + docs matrix ship; **live edge container Host/Origin/X-Forwarded rewrite residual**; `TrustedProxy=true` trust path residual (still fail-closed)
+- [x] Streamable HTTP Host/Origin **offline** matrix residual lite expand. — `TestHOST002_StreamableHTTPOriginHostMatrix`: missing Origin on non-GET (policy allow); wrong Origin 403; exact AllowedOrigins accept; Host not in AllowedHosts 403; `X-Forwarded-Host`/`X-Forwarded-Origin` ignored (`TrustedProxy` false **and** true no-op honesty); PathPrefix strip does not weaken Origin/Host; secret-free error body canaries
+- [ ] Path-prefix origin pin **live** matrix (NET-001 residual). — offline fixtures + docs matrix ship (**Done\*** expanded); **live edge container Host/Origin/X-Forwarded rewrite residual**; `TrustedProxy=true` trust path residual (still fail-closed / ignore-all)
 - [x] Health endpoints do not leak secrets or broad inventory without auth. — `/healthz` `/readyz` secret-free exact-path (+ prefixed when PathPrefix set); unit canaries
 
-**Status:** **Partial / Done*** for docs + code fail-closed matrix + path-prefix strip + offline origin pin fixtures + `TrustedProxy` residual (default false). Live reverse-proxy edge origin pin matrix remains residual.
+**Status:** **Partial / Done*** for docs + code fail-closed matrix + path-prefix strip + offline origin pin fixtures + expanded Host/Origin offline matrix residual lite + `TrustedProxy` residual (default false; true still ignore-all). Live reverse-proxy edge origin pin matrix remains residual — no live edge claim.
 
 ---
 
