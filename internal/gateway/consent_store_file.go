@@ -48,6 +48,10 @@ func ConsentSessionPathFromEnviron(getenv func(string) string) string {
 // NewFileBackedConsentSessionStore builds a memory store that persists metadata
 // to path (crash recovery residual). path required. Parent dirs 0700; file 0600.
 // Loads existing file when present. Never stores tokens.
+//
+// Same-host multi-process honesty (OAUTH-010 Done* lite): every mutation
+// reloads under flock before applying and writing so CLI consent-purge cannot
+// be resurrected by a live serve Put of stale memory. Not multi-pod HA.
 func NewFileBackedConsentSessionStore(ttl time.Duration, path string) (*MemoryConsentSessionStore, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -104,10 +108,77 @@ func OpenConsentSessionStoreForPurge(pathOverride string, getenv func(string) st
 	return NewFileBackedConsentSessionStore(0, path)
 }
 
-// persistLocked writes metadata-only JSON when FilePath is set.
-// Caller must hold s.mu. Uses flock for multi-process safety on the same path
-// (HOST-008 lite; not multi-pod HA).
-func (s *MemoryConsentSessionStore) persistLocked() error {
+// mutateAndPersistLocked reloads disk truth (when FilePath set), runs mut, then
+// writes under a single flock. Caller must hold s.mu.
+//
+// OAUTH-010 same-host multi-process Done* lite: CLI consent-purge mutates the
+// file; live serve must not rewrite stale in-memory maps that resurrect purged
+// sessions. Memory-only stores (empty FilePath) just run mut.
+func (s *MemoryConsentSessionStore) mutateAndPersistLocked(mut func()) error {
+	if s == nil {
+		return apperr.New(apperr.CodeInternal, "consent session store is nil")
+	}
+	path := strings.TrimSpace(s.FilePath)
+	if path == "" {
+		mut()
+		return nil
+	}
+	return withVaultFileLock(path, func() error {
+		if err := s.reloadMemoryFromDiskLocked(); err != nil {
+			return err
+		}
+		mut()
+		return s.writeMemoryToDiskLocked()
+	})
+}
+
+// syncFromDiskLocked reloads file into memory under flock when FilePath is set.
+// Caller must hold s.mu. Used by Get/List so serve sees CLI purge without a
+// mutation. Exclusive flock is OK for lite (same primitive as vault).
+func (s *MemoryConsentSessionStore) syncFromDiskLocked() error {
+	if s == nil || strings.TrimSpace(s.FilePath) == "" {
+		return nil
+	}
+	path := s.FilePath
+	return withVaultFileLock(path, func() error {
+		return s.reloadMemoryFromDiskLocked()
+	})
+}
+
+// syncMutateWriteLocked reloads, optionally mutates, and writes under one flock
+// when FilePath is set. used by Get paths that may prune expired entries.
+// Caller must hold s.mu. mut may be nil (reload-only). write is skipped when
+// needWrite is false after mut.
+func (s *MemoryConsentSessionStore) syncMutateWriteLocked(mut func() (needWrite bool)) error {
+	if s == nil {
+		return apperr.New(apperr.CodeInternal, "consent session store is nil")
+	}
+	path := strings.TrimSpace(s.FilePath)
+	if path == "" {
+		if mut != nil {
+			_ = mut()
+		}
+		return nil
+	}
+	return withVaultFileLock(path, func() error {
+		if err := s.reloadMemoryFromDiskLocked(); err != nil {
+			return err
+		}
+		needWrite := false
+		if mut != nil {
+			needWrite = mut()
+		}
+		if !needWrite {
+			return nil
+		}
+		return s.writeMemoryToDiskLocked()
+	})
+}
+
+// writeMemoryToDiskLocked serializes in-memory sessions to FilePath.
+// Caller must hold s.mu and the vault flock for path (when multi-process).
+// No nested flock.
+func (s *MemoryConsentSessionStore) writeMemoryToDiskLocked() error {
 	if s == nil || strings.TrimSpace(s.FilePath) == "" {
 		return nil
 	}
@@ -134,24 +205,28 @@ func (s *MemoryConsentSessionStore) persistLocked() error {
 			ExpiresAt:        rec.ExpiresAt.UTC().Format(time.RFC3339Nano),
 		}
 	}
-	return withVaultFileLock(path, func() error {
-		return writeConsentFile(path, doc)
-	})
+	return writeConsentFile(path, doc)
 }
 
-// loadLocked reads metadata-only JSON from FilePath into memory.
+// loadLocked reads metadata-only JSON from FilePath into memory under flock.
 // Caller must hold s.mu.
 func (s *MemoryConsentSessionStore) loadLocked() error {
 	if s == nil || strings.TrimSpace(s.FilePath) == "" {
 		return nil
 	}
 	path := s.FilePath
-	var doc consentFileDoc
-	err := withVaultFileLock(path, func() error {
-		var loadErr error
-		doc, loadErr = readConsentFile(path)
-		return loadErr
+	return withVaultFileLock(path, func() error {
+		return s.reloadMemoryFromDiskLocked()
 	})
+}
+
+// reloadMemoryFromDiskLocked reads FilePath into memory maps.
+// Caller must hold s.mu and the vault flock. No nested flock.
+func (s *MemoryConsentSessionStore) reloadMemoryFromDiskLocked() error {
+	if s == nil || strings.TrimSpace(s.FilePath) == "" {
+		return nil
+	}
+	doc, err := readConsentFile(s.FilePath)
 	if err != nil {
 		return err
 	}
@@ -161,9 +236,10 @@ func (s *MemoryConsentSessionStore) loadLocked() error {
 	if s.bySubject == nil {
 		s.bySubject = make(map[string]string)
 	}
-	// Replace in-memory view with file contents (crash recovery).
-	// Keep expired entries so PurgeExpired / Get can remove them and rewrite
-	// the file (OAUTH-010 consent-purge). List/Get still treat expired as missing.
+	// Replace in-memory view with file contents (disk is source of truth under
+	// flock). Keep expired entries so PurgeExpired / Get can remove them and
+	// rewrite the file (OAUTH-010 consent-purge). List/Get still treat expired
+	// as missing.
 	s.bySession = make(map[string]ConsentSessionRecord, len(doc.Entries))
 	s.bySubject = make(map[string]string)
 	for sid, e := range doc.Entries {

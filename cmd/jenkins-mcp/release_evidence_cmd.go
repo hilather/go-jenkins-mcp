@@ -170,7 +170,7 @@ func knownReleaseResiduals() []releaseResidual {
 			// Progressive consent metadata path Done*; browser 3LO not automated (OAUTH-010 / GWY-001).
 			ID:      "progressive_consent_offline",
 			GateIDs: []string{"REL-002.compat.auth", "REL-002.sec.oauth", "REL-002.compat.modes", "REL-002.compat.gateway"},
-			Message: "Done*: progressive consent metadata path (authorization_url + session_id only; qualify progressive_consent_residual); process-local consent metadata store Done* (optional file; never tokens; not multi-replica); browser 3LO not automated; multi-replica consent correlation residual (OAUTH-010 / GWY-001) — offline only, not live consent UX GO",
+			Message: "Done*: progressive consent metadata path (authorization_url + session_id only; qualify progressive_consent_residual); process-local consent metadata store Done* (optional file; never tokens; same-host reload-before-persist flock lite; not multi-replica); browser 3LO not automated; multi-pod consent correlation residual (OAUTH-010 / GWY-001 / HOST-008) — offline only, not live consent UX GO",
 		},
 		{
 			// HOST-008 Tier A single-replica honesty (scaffold replicas:1).

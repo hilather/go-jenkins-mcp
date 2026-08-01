@@ -109,12 +109,13 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 | `ConsentRequired` → auth URL + session id only (Obtain / AuthProvider / `mapToolErr`) | **Done\*** |
 | Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway residual-status`, admin `GET /admin/v1/gateway/residual-status`, `gateway consent-residual`, `gateway consent-purge`, `gateway subject-invalidate`) | **Done\*** (env/static honesty; subject-invalidate is force re-auth residual lite) |
 | Process-local consent metadata store (TTL; optional file under XDG data) | **Done\*** — auth URL + session id + timestamps only; never tokens |
-| Consent metadata purge/expire CLI (`gateway consent-purge` / `consent-expire`) | **Done\*** — TTL purge / `--session-id` / `--all`; secret-free summary; never tokens |
+| Same-host multi-process file honesty (reload-under-flock before mutate/write) | **Done\* lite** — CLI `consent-purge` not resurrected by live serve `Put` of stale memory; reads resync for freshness |
+| Consent metadata purge/expire CLI (`gateway consent-purge` / `consent-expire`) | **Done\*** — TTL purge / `--session-id` / `--all`; secret-free summary; never tokens; same-host file lite |
 | Browser 3LO interactive UX automation | **Residual** — not automated; operator/agent opens `authorization_url` out-of-band |
 | AgentCore durable consent / token vault | **Residual** (not this process-local metadata store) |
-| Multi-replica consent correlation | **Residual** (HOST-008) — process-local / single-node file only |
+| Multi-replica / multi-pod consent correlation | **Residual** (HOST-008) — same-host file flock only; not multi-pod shared store |
 
-**Process-local consent metadata store** (`internal/gateway/consent_store.go`):
+**Process-local consent metadata store** (`internal/gateway/consent_store.go` + `consent_store_file.go`):
 
 - When Obtain returns `ConsentRequired`, metadata is remembered in a process-local
   TTL store (default 30m), keyed by session id and optional SubjectKey.
@@ -122,6 +123,12 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
   `$XDG_DATA_HOME/jenkins-mcp/gateway/consent_sessions.json` (override
   `JENKINS_MCP_CONSENT_STORE_PATH`). Mode 0600; schema is metadata only
   (no `access_token` / `refresh_token` / `client_secret` fields — load rejects them).
+- **Same-host multi-process Done\* lite:** every mutation (`Put` / `Delete` /
+  `PurgeExpired` / `Clear`) with `FilePath` set takes flock → **reload disk** →
+  apply mutation → write. Reads (`Get` / `List` / …) resync under flock so CLI
+  purge is visible without waiting for a Put. Prevents the prior last-writer-wins
+  resurrection of purged sessions when serve rewrote full memory to the file.
+  StatusMap exposes `same_host_reload_before_persist: true` when file-backed.
 - API: `Get` / `GetBySubjectKey` / `List` / `Delete` / `Clear` / `PurgeExpired`;
   `StatusMap` / `String` are secret-free (host + truncated session; never full
   authorize query dump in status maps).
@@ -129,7 +136,8 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
   defaults to TTL expire; `--session-id` deletes one entry; `--all` clears all
   (explicit flag required). Summary: `deleted_count`, `remaining_count`, path
   basename residual only — never tokens or full authorize URLs.
-- **Not** multi-replica shared store; sticky sessions / shared AgentCore vault remain residual.
+- **Not** multi-replica / multi-pod shared store; sticky sessions / shared
+  AgentCore vault remain residual (HOST-008).
 
 ```bash
 jenkins-mcp gateway residual-status    # unified secret-free residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count + process note)
@@ -782,7 +790,8 @@ never access tokens, refresh tokens, client secrets, or auth codes.
 Tool path: `mapToolErr` surfaces progressive `authorization_url` + `session_id`
 (**Done\*** metadata path; browser 3LO not automated — GWY-003 / OAUTH-010 residual).
 Process-local consent metadata store (optional XDG file) remembers metadata only
-when Obtain returns `ConsentRequired` — not multi-replica shared store.
+when Obtain returns `ConsentRequired` — same-host reload-before-persist flock lite
+(**Done\***); not multi-replica / multi-pod shared store (HOST-008 residual).
 See §3 progressive consent residual table; CLI: `jenkins-mcp gateway consent-residual`,
 `jenkins-mcp gateway consent-purge` (TTL expire / `--session-id` / `--all`).
 

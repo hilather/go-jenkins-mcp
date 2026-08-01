@@ -101,13 +101,16 @@ func RequireGatewaySetupWithCache(cfg AgentCoreConfig, cache TokenCache) (Creden
 	}
 	// Process-local consent metadata store (OAUTH-010 residual): optional file
 	// under XDG data for crash recovery of auth URL + session id only — never
-	// tokens. Not multi-replica shared store. Corrupt file fails closed.
+	// tokens. Same-host multi-process Done* lite: reload-under-flock before
+	// mutate/write so CLI consent-purge is not resurrected by serve Put.
+	// Not multi-replica / multi-pod shared store (HOST-008). Corrupt file fails closed.
 	if store, err := NewFileBackedConsentSessionStore(0, ConsentSessionPathFromEnviron(os.Getenv)); err == nil {
 		p.ConsentStore = store
 		SetProcessConsentSessionStore(store)
 	} else {
 		// Missing/empty path should not happen with default XDG; corrupt residual
 		// file must not block serve — fall back to memory-only (still metadata only).
+		// Memory-only: CLI purge of a file path does not affect this process.
 		p.ConsentStore = NewMemoryConsentSessionStore(0, "")
 	}
 	return p, nil
