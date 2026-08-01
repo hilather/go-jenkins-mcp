@@ -43,6 +43,11 @@ type ReloadInfo struct {
 	// MaxResultBytes is overlay max_result_bytes when set and positive (0 = unset).
 	// Wave 25/31: serve OnSuccess may SetWithinCeiling on tools.LiveHardMax.
 	MaxResultBytes int
+	// MaxToolsPerMinute is overlay max_tools_per_minute when set and positive (0 = unset).
+	// HOST-006: serve OnSuccess may gateway.SubjectRateLimiter.LowerRate (lower only).
+	MaxToolsPerMinute int
+	// MaxToolsBurst is overlay max_tools_burst when set and positive (0 = unset).
+	MaxToolsBurst int
 	// Version is the overlay schema version.
 	Version int
 	// PathBase is filepath.Base of the policy path (model/log safe).
@@ -88,10 +93,12 @@ type reloadSnapshot struct {
 	denyArtPaths   int
 	denyBranchNms  int
 	mode           PolicyMode
-	forceRO        bool
-	maxResultBytes int
-	version        int
-	pathBase       string
+	forceRO           bool
+	maxResultBytes    int
+	maxToolsPerMinute int
+	maxToolsBurst     int
+	version           int
+	pathBase          string
 }
 
 // ReloadableDenyOnly is a thread-safe PolicyEvaluator that can hot-reload the
@@ -105,13 +112,16 @@ type reloadSnapshot struct {
 //
 // Residuals (not hot-reloaded until process restart):
 //   - Raising max_result_bytes above the serve-bootstrap LiveHardMax ceiling
+//   - Raising max_tools_per_minute / max_tools_burst above serve-bootstrap rate
+//     (HOST-006 LowerRate is lower-only; raise needs restart with higher env)
 //   - Mutation tools omitted without AllowMutations stay unregistered for the process
 //
-// Hot-applied on successful reload (Wave 24/25/28/30/31/35/36/37, via serve OnSuccess + live holders):
+// Hot-applied on successful reload (Wave 24/25/28/30/31/35/36/37 + HOST-006, via serve OnSuccess + live holders):
 //   - deny_tools / deny_job_prefixes / deny_node_names / deny_view_names /
 //     deny_artifact_paths / deny_branch_names / mode (this evaluator; ListTools live filter Wave 28)
 //   - force_read_only → DynamicForce.Set (dispatch + ListTools mutation visibility)
 //   - max_result_bytes → tools.LiveHardMax.SetWithinCeiling (raise/lower ≤ ceiling)
+//   - max_tools_per_minute / max_tools_burst → SubjectRateLimiter.LowerRate (lower only)
 //   - AllowMutations + force clear re-lists mutations when registered under opt-in (Wave 30)
 type ReloadableDenyOnly struct {
 	cfg     ReloadableConfig
@@ -345,6 +355,8 @@ func (r *ReloadableDenyOnly) reloadLocked() error {
 			Mode:                   string(snap.mode),
 			ForceReadOnly:          snap.forceRO,
 			MaxResultBytes:         snap.maxResultBytes,
+			MaxToolsPerMinute:      snap.maxToolsPerMinute,
+			MaxToolsBurst:          snap.maxToolsBurst,
 			Version:                snap.version,
 			PathBase:               snap.pathBase,
 			ContentHash:            snap.contentHash,
@@ -374,6 +386,12 @@ func snapshotFromResult(res LoadResult, path string) *reloadSnapshot {
 	}
 	if n, ok := ov.EffectiveMaxResultBytes(); ok {
 		snap.maxResultBytes = n
+	}
+	if n, ok := ov.EffectiveMaxToolsPerMinute(); ok {
+		snap.maxToolsPerMinute = n
+	}
+	if n, ok := ov.EffectiveMaxToolsBurst(); ok {
+		snap.maxToolsBurst = n
 	}
 	if ov.DenyTools != nil {
 		snap.denyTools = len(ov.DenyTools)
@@ -414,7 +432,8 @@ func samePolicyGeneration(a, b *reloadSnapshot) bool {
 	}
 	// Deep compare deny sets via document fields when counts match.
 	da, db := a.eval.Document(), b.eval.Document()
-	if da.ForceReadOnly != db.ForceReadOnly || da.Mode != db.Mode || da.MaxResultBytes != db.MaxResultBytes {
+	if da.ForceReadOnly != db.ForceReadOnly || da.Mode != db.Mode || da.MaxResultBytes != db.MaxResultBytes ||
+		da.MaxToolsPerMinute != db.MaxToolsPerMinute || da.MaxToolsBurst != db.MaxToolsBurst {
 		return false
 	}
 	if len(da.DenyTools) != len(db.DenyTools) {

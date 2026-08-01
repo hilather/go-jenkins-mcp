@@ -210,7 +210,9 @@ Optional JSON under the policy path can **only restrict** privileges further (fo
   "deny_view_names": ["secret-view"],
   "deny_artifact_paths": ["secrets/**", "*.pem"],
   "deny_branch_names": ["release/*", "main"],
-  "max_result_bytes": 65536
+  "max_result_bytes": 65536,
+  "max_tools_per_minute": 15,
+  "max_tools_burst": 5
 }
 ```
 
@@ -224,6 +226,8 @@ Optional JSON under the policy path can **only restrict** privileges further (fo
 | `deny_artifact_paths` | Call-time deny for relative artifact `path` / `artifact_path` (e.g. `jenkins_get_artifact_text`; Wave 36). Same pattern language as jobs |
 | `deny_branch_names` | Call-time deny for `branch_name` / seed `branch` (Wave 37). Also omits matching `kind=branch` / `matrix_child` rows from `jenkins_list_jobs` (`policy_filtered` / `policy_omitted_count`; Wave 39 collect+filter+repaginate; Wave 40 policy-bound page tokens). Same pattern language as jobs |
 | `max_result_bytes` | Bounds hard MCP result budget; mid-serve raise/lower ≤ serve-bootstrap ceiling (Wave 31) |
+| `max_tools_per_minute` | Per-subject tools/min cap under `--gateway` (HOST-006); **lower only** vs env bootstrap; omitted = no change. Admin SPA editor residual. |
+| `max_tools_burst` | Per-subject burst cap (HOST-006 LowerRate; lower only). Admin SPA residual. |
 
 **Signed fleets (MGR-001):** prefer `overlay.bundle.json` + Ed25519 public keys under `policy/trusted_keys/` (or `JENKINS_MCP_POLICY_TRUSTED_KEYS`). Invalid, expired, untrusted, or rolled-back bundles fail closed. Operator guide: [`../security/policy-bundles.md`](../security/policy-bundles.md).
 
@@ -239,7 +243,7 @@ jenkins-mcp policy verify \
 
 # Secret-free effective policy for a profile
 jenkins-mcp policy show-effective --profile corp --json
-# Prints force_read_only, deny_tools, deny_job_prefixes, deny_node_names, deny_view_names, deny_artifact_paths, deny_branch_names, max_result_bytes, signature_state
+# Prints force_read_only, deny_tools, deny_job_prefixes, deny_node_names, deny_view_names, deny_artifact_paths, deny_branch_names, max_result_bytes, max_tools_per_minute, max_tools_burst, signature_state
 
 # DEV ONLY — requires JENKINS_MCP_POLICY_SIGN_DEV=1; never commit private keys
 export JENKINS_MCP_POLICY_SIGN_DEV=1

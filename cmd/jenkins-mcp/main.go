@@ -1334,8 +1334,10 @@ func runServe(args []string) error {
 	}
 	// Wave 25: DynamicForce so force_read_only hot-applies on Reloadable OnSuccess.
 	// Without an overlay, leave Force nil (no enterprise force source).
+	// HOST-006: concrete rate limiter pointer for OnSuccess LowerRate (filled under --gateway).
 	var dynForce *policy.DynamicForce
 	var enterpriseForce policy.EnterpriseForce
+	var liveSubjectRate *gateway.SubjectRateLimiter
 	if polRes.Overlay != nil {
 		dynForce = policy.NewDynamicForceFromOverlay(polRes.Overlay)
 		enterpriseForce = dynForce
@@ -1473,11 +1475,12 @@ func runServe(args []string) error {
 			Path: polRes.Path,
 			OnSuccess: func(info policy.ReloadInfo) {
 				// Counts + bundle_seq only — never signature bytes or key material.
-				log.Printf("Enterprise policy reloaded deny_tools=%d deny_job_prefixes=%d deny_node_names=%d deny_view_names=%d deny_artifact_paths=%d deny_branch_names=%d bundle_seq=%d signature_state=%s mode=%s force_read_only=%v max_result_bytes=%d",
+				log.Printf("Enterprise policy reloaded deny_tools=%d deny_job_prefixes=%d deny_node_names=%d deny_view_names=%d deny_artifact_paths=%d deny_branch_names=%d bundle_seq=%d signature_state=%s mode=%s force_read_only=%v max_result_bytes=%d max_tools_per_minute=%d max_tools_burst=%d",
 					info.DenyToolsCount, info.DenyJobPrefixesCount,
 					info.DenyNodeNamesCount, info.DenyViewNamesCount, info.DenyArtifactPathsCount,
 					info.DenyBranchNamesCount,
-					info.BundleSeq, info.SignatureState, info.Mode, info.ForceReadOnly, info.MaxResultBytes)
+					info.BundleSeq, info.SignatureState, info.Mode, info.ForceReadOnly, info.MaxResultBytes,
+					info.MaxToolsPerMinute, info.MaxToolsBurst)
 				// Wave 25: hot-apply force_read_only into the live gate Force.
 				if dynForce != nil {
 					dynForce.Set(info.ForceReadOnly, true)
@@ -1489,6 +1492,16 @@ func runServe(args []string) error {
 					if liveHardMax.SetWithinCeiling(info.MaxResultBytes) {
 						log.Printf("Enterprise policy set result hard max to %d bytes (requested=%d ceiling=%d)",
 							liveHardMax.Get(), info.MaxResultBytes, liveHardMax.Ceiling())
+					}
+				}
+				// HOST-006: overlay max_tools_per_minute / max_tools_burst may only
+				// LowerRate (never raise). 0 = field omitted → no change. liveSubjectRate
+				// is nil without --gateway or when rate disabled (explicit 0).
+				if liveSubjectRate != nil && (info.MaxToolsPerMinute > 0 || info.MaxToolsBurst > 0) {
+					if liveSubjectRate.LowerRate(info.MaxToolsPerMinute, info.MaxToolsBurst) {
+						log.Printf("Enterprise policy lowered subject rate rate_per_minute=%d burst=%d (requested_rate=%d requested_burst=%d)",
+							liveSubjectRate.RatePerMinute(), liveSubjectRate.Burst(),
+							info.MaxToolsPerMinute, info.MaxToolsBurst)
 					}
 				}
 			},
@@ -1939,11 +1952,32 @@ func runServe(args []string) error {
 				return rerr
 			}
 			if rateRPM > 0 {
-				serveSubjectRateLimiter = gateway.NewSubjectRateLimiter(
+				rateLim := gateway.NewSubjectRateLimiter(
 					rateRPM, rateBurst, 0, 0, // process caps → package defaults
 				)
+				// HOST-006: overlay may only lower bootstrap rate (never raise).
+				// Empty/omitted overlay fields leave env bootstrap unchanged.
+				if polRes.Overlay != nil {
+					ovRPM, ovRPMOk := polRes.Overlay.EffectiveMaxToolsPerMinute()
+					ovBurst, ovBurstOk := polRes.Overlay.EffectiveMaxToolsBurst()
+					if ovRPMOk || ovBurstOk {
+						reqRPM, reqBurst := 0, 0
+						if ovRPMOk {
+							reqRPM = ovRPM
+						}
+						if ovBurstOk {
+							reqBurst = ovBurst
+						}
+						if rateLim.LowerRate(reqRPM, reqBurst) {
+							log.Printf("HOST-006 subject rate lowered by overlay rate_per_minute=%d burst=%d (bootstrap_rate=%d bootstrap_burst=%d)",
+								rateLim.RatePerMinute(), rateLim.Burst(), rateRPM, rateBurst)
+						}
+					}
+				}
+				liveSubjectRate = rateLim
+				serveSubjectRateLimiter = rateLim
 				log.Printf("HOST-006 subject rate limiter: rate_per_minute=%d burst=%d multi_user=%v",
-					rateRPM, rateBurst, gatewayMultiUser)
+					rateLim.RatePerMinute(), rateLim.Burst(), gatewayMultiUser)
 			} else {
 				log.Printf("HOST-006 subject rate limiter: disabled (rate_per_minute=0 residual)")
 			}

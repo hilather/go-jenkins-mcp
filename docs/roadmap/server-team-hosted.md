@@ -455,8 +455,9 @@ Prevent one user from exhausting process-wide budgets for others.
 **Serve wire Done*:** `SubjectSlotLimiter` + `SubjectRateLimiter`; Allow then Hold;
 `MutationBindingFromContext` prefers Valid PolicySubject PrincipalID (HTTP claim)
 else Caller + PrincipalCache (Obtain) else process principal. **Done\*** Obtain→
-Binding principal via PrincipalCache. **Residual:** HOST-008 multi-replica; policy
-overlay rate reduction; Obtain still does not rewrite policy.Subject on ctx mid-call.
+Binding via PrincipalCache + policy rate `LowerRate` foundation.
+**Residual:** HOST-008 multi-replica; admin SPA subject-rate knobs; Obtain does
+not rewrite policy.Subject on ctx mid-call.
 
 ---
 

@@ -62,7 +62,8 @@ verify:
   Multi-sig threshold: JENKINS_MCP_POLICY_MIN_SIGNATURES (default 1; set 2 for dual-control).
 
 show-effective:
-  Prints force_read_only, deny_tools, max_result_bytes, signature_state, and
+  Prints force_read_only, deny_tools, max_result_bytes, max_tools_per_minute,
+  max_tools_burst, signature_state, and
   effective read-only sources for a profile. Secret-free.
 
 sign (DEV ONLY):
@@ -210,6 +211,12 @@ func runPolicyShowEffective(args []string) error {
 	fmt.Printf("  force_read_only=%v mode=%s\n", ex.ForceReadOnly, ex.Mode)
 	if ex.MaxResultBytes != nil {
 		fmt.Printf("  max_result_bytes=%d\n", *ex.MaxResultBytes)
+	}
+	if ex.MaxToolsPerMinute != nil {
+		fmt.Printf("  max_tools_per_minute=%d\n", *ex.MaxToolsPerMinute)
+	}
+	if ex.MaxToolsBurst != nil {
+		fmt.Printf("  max_tools_burst=%d\n", *ex.MaxToolsBurst)
 	}
 	if len(ex.DenyTools) > 0 {
 		fmt.Printf("  deny_tools=%s\n", strings.Join(ex.DenyTools, ","))

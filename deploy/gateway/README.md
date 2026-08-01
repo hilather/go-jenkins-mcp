@@ -75,7 +75,8 @@ make build
 | Lab flag | Meaning | Residual |
 |----------|---------|----------|
 | `JENKINS_MCP_GATEWAY_MULTI_USER=1` | Per-request multi-user Obtain foundation | Not multi-replica HA (HOST-008) |
-| `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` / `_PROCESS_MAX_CONCURRENT` | Concurrency slots (not token-bucket rate yet) | HOST-006 residual for rate |
+| `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` / `_PROCESS_MAX_CONCURRENT` | Concurrency slots | HOST-006 Done* with rate env + overlay LowerRate |
+| `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` / `_RATE_BURST` | Token-bucket rate bootstrap (0 = rate off) | Overlay `max_tools_*` lower-only; multi-replica residual |
 | `JENKINS_MCP_HTTP_PATH_PREFIX` | MCP mount under reverse proxy | Live path-prefix matrix residual |
 | `JENKINS_MCP_HTTP_JWKS_MAX_STALE` | Process-local JWKS stale-if-error cap | Multi-instance shared JWKS residual |
 | `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` | Fail closed without trusted signed policy | Needs keys on volume; HSM residual |

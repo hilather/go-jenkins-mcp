@@ -297,10 +297,19 @@ Rate limiter is wired under `--gateway` when `rate_per_minute > 0` after resolve
 (default enabled). Explicit `0` leaves `SubjectRateLimiter` nil (unlimited rate;
 concurrency still applies).
 
-**Residual:** multi-replica shared rate/slots (HOST-008); policy-driven rate
-reduction beyond env. **Done\*** Binding PrincipalID from PrincipalCache after
-Obtain (not on request ctx). **Residual:** policy.Subject mid-call still not
-rewritten by Obtain (HTTP claim remains policy JenkinsUserID source).
+**Policy-driven rate reduction (HOST-006 Done\* foundation):** serve constructs
+`SubjectRateLimiter` from env bootstrap, then optional overlay fields may only
+**lower** via `SubjectRateLimiter.LowerRate` (absolute floors 1; never raise):
+
+| Overlay field | Role |
+|---------------|------|
+| `max_tools_per_minute` | Upper bound on per-subject sustained tools/min (lower only) |
+| `max_tools_burst` | Upper bound on per-subject burst (lower only) |
+
+**Done\*** Binding PrincipalID from PrincipalCache after Obtain (not on request
+ctx). **Residual:** multi-replica shared rate/slots (HOST-008); policy.Subject
+mid-call still not rewritten by Obtain (HTTP claim remains policy JenkinsUserID);
+admin SPA subject-rate knobs.
 
 ---
 

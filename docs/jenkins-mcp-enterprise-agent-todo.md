@@ -2800,9 +2800,10 @@ process-local `PrincipalCache` (Mode A vault username; Binding-only). **Serve
 wire Done*:** `tools.SubjectSlotLimiter` + `tools.SubjectRateLimiter`; `addTool`
 Allow then Hold under `--gateway`; env concurrent + rate/burst
 (`JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` 0 = rate disabled).
-**Residual:** multi-replica (HOST-008); policy overlay rate reduction; Obtain
-still does not rewrite `policy.Subject` on request ctx mid-call (policy RBAC
-uses HTTP claim).
+**Policy rate reduction Done\* foundation:** overlay optional
+`max_tools_per_minute` / `max_tools_burst` → `SubjectRateLimiter.LowerRate`
+(lower only). **Residual:** multi-replica (HOST-008); admin SPA subject-rate
+knobs; Obtain does not rewrite `policy.Subject` on request ctx mid-call.
 
 ---
 

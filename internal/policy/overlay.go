@@ -65,7 +65,9 @@ const (
 //	  "deny_view_names": ["secret-view"],
 //	  "deny_artifact_paths": ["secrets/**", "*.pem"],
 //	  "deny_branch_names": ["release/*", "main"],
-//	  "max_result_bytes": 65536
+//	  "max_result_bytes": 65536,
+//	  "max_tools_per_minute": 15,
+//	  "max_tools_burst": 5
 //	}
 type Overlay struct {
 	// Version is the schema version (required; must equal CurrentOverlayVersion).
@@ -126,6 +128,15 @@ type Overlay struct {
 	// MaxResultBytes when set is an upper bound that can only lower the
 	// process hard max (never raise server limits). nil means no overlay cap.
 	MaxResultBytes *int `json:"max_result_bytes,omitempty"`
+
+	// MaxToolsPerMinute when set is an upper bound that can only lower the
+	// serve-bootstrap per-subject tool rate (HOST-006; gateway.SubjectRateLimiter.LowerRate).
+	// Never raises rate. nil / omitted means no overlay rate cap (env/bootstrap unchanged).
+	MaxToolsPerMinute *int `json:"max_tools_per_minute,omitempty"`
+
+	// MaxToolsBurst when set can only lower per-subject token-bucket burst
+	// (HOST-006 LowerRate). nil / omitted means no overlay burst cap.
+	MaxToolsBurst *int `json:"max_tools_burst,omitempty"`
 
 	// Signature is a legacy stub field on plain overlays (CFG-002 pilot).
 	// Signed production bundles use BundleEnvelope.Signature instead; this
@@ -325,6 +336,16 @@ func (o *Overlay) Validate() error {
 	if o.MaxResultBytes != nil {
 		if *o.MaxResultBytes <= 0 {
 			return apperr.New(apperr.CodeInvalidArgument, "max_result_bytes must be positive when set")
+		}
+	}
+	if o.MaxToolsPerMinute != nil {
+		if *o.MaxToolsPerMinute <= 0 {
+			return apperr.New(apperr.CodeInvalidArgument, "max_tools_per_minute must be positive when set")
+		}
+	}
+	if o.MaxToolsBurst != nil {
+		if *o.MaxToolsBurst <= 0 {
+			return apperr.New(apperr.CodeInvalidArgument, "max_tools_burst must be positive when set")
 		}
 	}
 	return nil
@@ -542,6 +563,24 @@ func (o *Overlay) EffectiveMaxResultBytes() (int, bool) {
 	return *o.MaxResultBytes, true
 }
 
+// EffectiveMaxToolsPerMinute returns the overlay per-subject tools/min cap when
+// set and positive (HOST-006; serve applies via SubjectRateLimiter.LowerRate only).
+func (o *Overlay) EffectiveMaxToolsPerMinute() (int, bool) {
+	if o == nil || o.MaxToolsPerMinute == nil || *o.MaxToolsPerMinute <= 0 {
+		return 0, false
+	}
+	return *o.MaxToolsPerMinute, true
+}
+
+// EffectiveMaxToolsBurst returns the overlay per-subject burst cap when set and
+// positive (HOST-006 LowerRate only).
+func (o *Overlay) EffectiveMaxToolsBurst() (int, bool) {
+	if o == nil || o.MaxToolsBurst == nil || *o.MaxToolsBurst <= 0 {
+		return 0, false
+	}
+	return *o.MaxToolsBurst, true
+}
+
 // DenyToolSet returns a set of denied tool names for O(1) lookup.
 func (o *Overlay) DenyToolSet() map[string]struct{} {
 	if o == nil || len(o.DenyTools) == 0 {
@@ -624,6 +663,12 @@ func (r LoadResult) StatusMap() map[string]any {
 		if n, ok := r.Overlay.EffectiveMaxResultBytes(); ok {
 			m["max_result_bytes"] = n
 		}
+		if n, ok := r.Overlay.EffectiveMaxToolsPerMinute(); ok {
+			m["max_tools_per_minute"] = n
+		}
+		if n, ok := r.Overlay.EffectiveMaxToolsBurst(); ok {
+			m["max_tools_burst"] = n
+		}
 	}
 	if r.BundleSeq > 0 {
 		m["bundle_seq"] = r.BundleSeq
@@ -652,12 +697,14 @@ type EffectivePolicyExplain struct {
 	DenyViewNames     []string       `json:"deny_view_names,omitempty"`
 	DenyArtifactPaths []string       `json:"deny_artifact_paths,omitempty"`
 	DenyBranchNames   []string       `json:"deny_branch_names,omitempty"`
-	MaxResultBytes    *int           `json:"max_result_bytes,omitempty"`
-	BundleSeq         int64          `json:"bundle_seq,omitempty"`
-	KeyID             string         `json:"key_id,omitempty"`
-	ContentHash       string         `json:"content_hash,omitempty"`
-	ReadOnly          map[string]any `json:"read_only,omitempty"`
-	Notes             []string       `json:"notes,omitempty"`
+	MaxResultBytes     *int           `json:"max_result_bytes,omitempty"`
+	MaxToolsPerMinute  *int           `json:"max_tools_per_minute,omitempty"`
+	MaxToolsBurst      *int           `json:"max_tools_burst,omitempty"`
+	BundleSeq          int64          `json:"bundle_seq,omitempty"`
+	KeyID              string         `json:"key_id,omitempty"`
+	ContentHash        string         `json:"content_hash,omitempty"`
+	ReadOnly           map[string]any `json:"read_only,omitempty"`
+	Notes              []string       `json:"notes,omitempty"`
 }
 
 // ExplainEffective builds EffectivePolicyExplain from a load result + RO gate inputs.
@@ -694,6 +741,12 @@ func ExplainEffective(profileID string, res LoadResult, ro Inputs) EffectivePoli
 		}
 		if n, ok := res.Overlay.EffectiveMaxResultBytes(); ok {
 			ex.MaxResultBytes = &n
+		}
+		if n, ok := res.Overlay.EffectiveMaxToolsPerMinute(); ok {
+			ex.MaxToolsPerMinute = &n
+		}
+		if n, ok := res.Overlay.EffectiveMaxToolsBurst(); ok {
+			ex.MaxToolsBurst = &n
 		}
 	}
 	st := ComputeEffectiveReadOnly(ro)

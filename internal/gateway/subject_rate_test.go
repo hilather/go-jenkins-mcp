@@ -252,3 +252,126 @@ func TestSubjectRateLimiter_AbsoluteCeilingsClamped(t *testing.T) {
 		t.Fatal("process burst abs not clamped")
 	}
 }
+
+// HOST-006 residual: policy/overlay may only lower serve-bootstrap rate.
+func TestSubjectRateLimiter_LowerRateOnlyLowers(t *testing.T) {
+	t.Parallel()
+	l := gateway.NewSubjectRateLimiter(30, 10, 300, 60)
+	if l.RatePerMinute() != 30 || l.Burst() != 10 {
+		t.Fatalf("bootstrap rpm=%d burst=%d", l.RatePerMinute(), l.Burst())
+	}
+
+	// Lower both dimensions.
+	if !l.LowerRate(15, 4) {
+		t.Fatal("LowerRate to 15/4 should change")
+	}
+	if l.RatePerMinute() != 15 || l.Burst() != 4 {
+		t.Fatalf("after lower: rpm=%d burst=%d", l.RatePerMinute(), l.Burst())
+	}
+
+	// Cannot raise back (policy never elevates).
+	if l.LowerRate(30, 10) {
+		t.Fatal("LowerRate must not raise rate/burst")
+	}
+	if l.RatePerMinute() != 15 || l.Burst() != 4 {
+		t.Fatalf("still lowered: rpm=%d burst=%d", l.RatePerMinute(), l.Burst())
+	}
+
+	// Cannot raise above absolute ceilings via huge request.
+	if l.LowerRate(10_000, 10_000) {
+		t.Fatal("request above abs must not raise")
+	}
+	if l.RatePerMinute() != 15 || l.Burst() != 4 {
+		t.Fatalf("abs request left live: rpm=%d burst=%d", l.RatePerMinute(), l.Burst())
+	}
+
+	// Equal values are no-ops (strictly smaller only).
+	if l.LowerRate(15, 4) {
+		t.Fatal("equal LowerRate must be no-op")
+	}
+
+	// Empty / non-positive = no change for that dimension.
+	if l.LowerRate(0, 0) {
+		t.Fatal("empty LowerRate must be no-op")
+	}
+	if l.LowerRate(-1, -5) {
+		t.Fatal("negative LowerRate must be no-op")
+	}
+	if l.RatePerMinute() != 15 || l.Burst() != 4 {
+		t.Fatal("empty must leave live values")
+	}
+
+	// Rate-only lower; burst arg empty keeps burst.
+	if !l.LowerRate(10, 0) {
+		t.Fatal("rate-only lower")
+	}
+	if l.RatePerMinute() != 10 || l.Burst() != 4 {
+		t.Fatalf("rate-only: rpm=%d burst=%d", l.RatePerMinute(), l.Burst())
+	}
+	// Burst-only lower; rate empty keeps rate.
+	if !l.LowerRate(0, 2) {
+		t.Fatal("burst-only lower")
+	}
+	if l.RatePerMinute() != 10 || l.Burst() != 2 {
+		t.Fatalf("burst-only: rpm=%d burst=%d", l.RatePerMinute(), l.Burst())
+	}
+
+	// Absolute floor: request below min clamps to min, then applies if below current.
+	if !l.LowerRate(1, 1) {
+		t.Fatal("lower to floor")
+	}
+	// Further request still at/below floor cannot go under min or change when already min.
+	if l.LowerRate(1, 1) {
+		t.Fatal("already at floor equal is no-op")
+	}
+	// Request that clamps to min when already at min is no-op.
+	if l.LowerRate(gateway.MinSubjectRatePerMinute, gateway.MinSubjectRateBurst) {
+		t.Fatal("min equal is no-op")
+	}
+	if l.RatePerMinute() != gateway.MinSubjectRatePerMinute || l.Burst() != gateway.MinSubjectRateBurst {
+		t.Fatalf("floor: rpm=%d burst=%d", l.RatePerMinute(), l.Burst())
+	}
+
+	// Nil receiver.
+	var nilL *gateway.SubjectRateLimiter
+	if nilL.LowerRate(1, 1) {
+		t.Fatal("nil LowerRate")
+	}
+
+	// Process ceilings unchanged by LowerRate.
+	l2 := gateway.NewSubjectRateLimiter(30, 10, 300, 60)
+	procRPM, procBurst := l2.ProcessRatePerMinute(), l2.ProcessBurst()
+	_ = l2.LowerRate(5, 2)
+	if l2.ProcessRatePerMinute() != procRPM || l2.ProcessBurst() != procBurst {
+		t.Fatal("LowerRate must not touch process ceilings")
+	}
+}
+
+// LowerRate updates existing subject buckets so tighter caps bind immediately.
+func TestSubjectRateLimiter_LowerRateUpdatesBuckets(t *testing.T) {
+	t.Parallel()
+	l := gateway.NewSubjectRateLimiter(60, 5, 600, 60)
+	key := gateway.SubjectKeyParts("t", "u", "p")
+	// Consume 1 token from burst 5 → 4 remaining.
+	if err := l.Allow(key); err != nil {
+		t.Fatal(err)
+	}
+	// Lower burst to 2: remaining tokens must clamp from 4 → 2 (not leave 4).
+	if !l.LowerRate(0, 2) {
+		t.Fatal("LowerRate burst")
+	}
+	if err := l.Allow(key); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Allow(key); err != nil {
+		t.Fatal(err)
+	}
+	// Third post-lower allow must fail: without clamp would still have room.
+	err := l.Allow(key)
+	if err == nil {
+		t.Fatal("after LowerRate burst clamp, further allow must fail closed")
+	}
+	if apperr.CodeOf(err) != apperr.CodeQuota {
+		t.Fatalf("code=%s want quota", apperr.CodeOf(err))
+	}
+}
