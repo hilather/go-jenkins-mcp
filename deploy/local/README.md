@@ -225,7 +225,45 @@ make local-docker-config
 | SPA assets in image | May show placeholder unless admin-ui embedded at image build (UI-008); BFF JSON still works |
 | Production gateway | Use `deploy/gateway/` + HOST/GWY tasks — not this stack |
 | OAuth/JWT labs | Separate `testdata/oauth-lab` / HOST-012…015 |
+| Multi-user / file caches | Optional knobs in `.env.example` are **same-host lite only** — not multi-pod HA; not live Entra (see below) |
 | Default CI | `local-docker-*` is **opt-in**; never required by `make test` / `make ci` |
+
+---
+
+## Residual gateway env knobs (optional opt-in)
+
+Default `make local-docker-up` is **admin BFF / support** only. Waves 8–11 landed optional
+same-host **file cache / subject rate** env names for gateway multi-user foundation.
+They are **commented** in [`.env.example`](./.env.example) so operators can opt in
+without inventing names. Compose passes them into `mcp` / `mcp-http` when set
+(`scripts/local-docker.sh` already uses `--env-file deploy/local/.env`).
+
+| Env (names only) | Meaning | Residual honesty |
+|------------------|---------|------------------|
+| `JENKINS_MCP_GATEWAY_MULTI_USER` | Per-request multi-user Obtain foundation | **Not** production multi-user GO / multi-replica HA |
+| `JENKINS_MCP_GATEWAY_CREDENTIAL_MODE` / `_ENABLED_MODES` | HOST-011 mode matrix ids | Mode ids only — never tokens |
+| `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` / `_PROCESS_MAX_CONCURRENT` | Concurrency slots | Process-local |
+| `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` / `_RATE_BURST` | Token-bucket rate | Process-local default; multi-pod residual |
+| `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` | Same-host `FileSubjectRateLimiter` | flock lite; **not** multi-pod shared rate |
+| `JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS` | Subject-map LRU max | Process-local / file-local only |
+| `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_MAX` / `_TTL` | PrincipalCache hygiene | Empty = unlimited / no expiry; multi-pod residual |
+| `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` | Same-host `FilePrincipalCache` | Never tokens; **not** multi-pod HA |
+| `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` | Same-host `FileTokenCache` | Path only — never put token values in `.env`; **not** multi-pod Redis |
+| `JENKINS_MCP_HTTP_JWKS_URL` / `_JWT_ISSUER` / `_JWT_AUDIENCE` / `JENKINS_MCP_HTTP_JWKS_MAX_STALE` / `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` | Process-local JWKS + optional public keys file | **Not** multi-pod external JWKS; **not** live Entra |
+
+Suggested lab paths under the `local-data` volume (see `.env.example`):
+
+`/home/nonroot/.local/share/jenkins-mcp/gateway/{subject_rate,principal_cache,token_cache,jwks_cache}.json`
+
+**Do not claim:** multi-pod HA, live Entra / jwt-auth-filter production pin, or
+production multi-user GO from enabling these flags in this stack.
+
+| Deeper residual tracker | Link |
+|-------------------------|------|
+| Live production pin blockers (OAUTH-009/010, HOST-008, multi-user GO) | [`docs/gateway/live-pin-blockers.md`](../../docs/gateway/live-pin-blockers.md) |
+| Gateway packaging + multi-user lab flags | [`deploy/gateway/README.md`](../gateway/README.md) · [`.env.example`](../gateway/.env.example) |
+| Deployment / HA residual | [`docs/gateway/deployment.md`](../../docs/gateway/deployment.md) |
+| Mock OAuth labs (not Entra) | [`testdata/oauth-lab/`](../../testdata/oauth-lab/) · HOST-012…015 |
 
 ---
 
@@ -234,6 +272,7 @@ make local-docker-config
 - Operator admin guide: [`../../docs/admin/README.md`](../../docs/admin/README.md)  
 - Packaging note: [`../../docs/packaging.md`](../../docs/packaging.md)  
 - Gateway scaffold: [`../gateway/README.md`](../gateway/README.md)  
+- Live pin blockers: [`../../docs/gateway/live-pin-blockers.md`](../../docs/gateway/live-pin-blockers.md)  
 - Live Jenkins lab only: [`../../testdata/jenkins-compose/README.md`](../../testdata/jenkins-compose/README.md)  
 - Server roadmap: [`../../docs/roadmap/server-team-hosted.md`](../../docs/roadmap/server-team-hosted.md)  
 - Agent policy (Docker scaffolds): root [`AGENTS.md`](../../AGENTS.md)  
