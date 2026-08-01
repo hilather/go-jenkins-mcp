@@ -264,7 +264,7 @@ Raise Deployment `replicas` > 1 **only** when every row is met with org-owned de
 | 5 | Audit aggregation (central sink) | Residual |
 | 6 | Sticky or shared consent / Obtain correlation | Residual (Mode C progressive consent) |
 | 7 | JWKS / identity multi-instance measured | Residual (process-local JWKS) |
-| 8 | Shared subject rate / concurrency limiters | Residual (process-local only) |
+| 8 | Shared subject rate / concurrency limiters | **Done\* lite** same-host `FileSubjectRateLimiter` (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`, flock + secret-free JSON 0600; `shared_subject_rate_file: true`); process-local default; multi-pod external shared rate still **residual**; concurrency slots still process-local |
 
 **Do not** treat `JENKINS_MCP_GATEWAY_MULTI_USER=1` as multi-replica HA.  
 **Do not** claim multi-replica Done from sticky YAML alone.

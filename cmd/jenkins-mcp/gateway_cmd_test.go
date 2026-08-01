@@ -480,6 +480,10 @@ func TestGatewayResidualStatus(t *testing.T) {
 	if _, ok := payload["rateEnabled"].(bool); !ok {
 		t.Fatalf("rateEnabled: %+v", payload["rateEnabled"])
 	}
+	// shared_subject_rate_file is env path residual (false when unset; HOST-008 lite).
+	if payload["shared_subject_rate_file"] != false {
+		t.Fatalf("shared_subject_rate_file default false: %+v", payload["shared_subject_rate_file"])
+	}
 	if _, ok := payload["ratePerMinute"].(float64); !ok {
 		// json numbers → float64
 		t.Fatalf("ratePerMinute: %+v", payload["ratePerMinute"])

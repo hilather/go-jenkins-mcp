@@ -24,8 +24,9 @@ import (
 // enabledModes is a secret-free HOST-011 listing (mode ids only; no tokens).
 // multiUserEnabled / credentialMode / haMultiReplica / gatewayReady /
 // sessionAffinityRecommended / multiPodVaultResidual / kubernetesEnvDetected /
-// rateEnabled / ratePerMinute / rateBurst / progressiveConsent* are secret-free
-// gateway residual posture (HOST-006 / HOST-008 / OAUTH-010); never tokens or subjects.
+// rateEnabled / ratePerMinute / rateBurst / sharedSubjectRateFile /
+// progressiveConsent* are secret-free gateway residual posture
+// (HOST-006 / HOST-008 / OAUTH-010); never tokens or subjects.
 // progressiveConsent* reuses gateway.ProgressiveConsentResidual (static only).
 type healthResponse struct {
 	Status       string   `json:"status"`
@@ -62,6 +63,10 @@ type healthResponse struct {
 	// RateBurst is the resolved bootstrap burst capacity (default or env).
 	// 0 when rate is disabled (burst ignored when rate off). Never tokens.
 	RateBurst int `json:"rateBurst"`
+	// SharedSubjectRateFile is true when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH is
+	// non-empty (HOST-008 same-host FileSubjectRateLimiter lite). Not multi-pod HA.
+	// Path value is never returned (bool only; secret-free).
+	SharedSubjectRateFile bool `json:"sharedSubjectRateFile"`
 	// ProgressiveConsentMetadataDoneStar is always true (ConsentRequired →
 	// authorization_url + session_id only path Done*; OAUTH-010 / GWY-001).
 	// Static residual from gateway.NewProgressiveConsentResidual — never tokens.
@@ -123,8 +128,12 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	multiUser := gateway.MultiUserEnabled(os.Getenv)
 	rateEnabled, ratePerMinute, rateBurst := gateway.SubjectRateConfigFromEnviron(os.Getenv)
 	mp := diagnostics.MultiPodResidualFromEnviron(os.Getenv)
-	// HOST-006 residual honesty: process-local rate knobs only (not multi-replica shared).
-	residual := "subject rate knobs are process-local (HOST-006); multi-replica shared rate residual (HOST-008); multiPodVaultResidual=true (multi-pod vault residual); never tokens"
+	// HOST-006 residual honesty: default process-local rate; optional same-host
+	// file share when path set; multi-pod shared rate still residual (HOST-008).
+	residual := "subject rate default process-local (HOST-006); optional same-host FileSubjectRateLimiter when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set (HOST-008 lite); multi-pod shared rate residual; multiPodVaultResidual=true; never tokens"
+	if gateway.SubjectRatePathConfiguredFromEnviron(os.Getenv) {
+		residual = "sharedSubjectRateFile=true (same-host file rate lite only — not multi-pod HA); " + residual
+	}
 	if multiUser {
 		// Secret-free honesty only (SPA reads residual; no SPA rebuild required for this string).
 		// multi_user_offline + host008_single_replica residual ids: release-evidence --offline.
@@ -159,6 +168,7 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		RateEnabled:                           rateEnabled,
 		RatePerMinute:                         ratePerMinute,
 		RateBurst:                             rateBurst,
+		SharedSubjectRateFile:                 gateway.SubjectRatePathConfiguredFromEnviron(os.Getenv),
 		ProgressiveConsentMetadataDoneStar:    pc.MetadataPathDoneStar,
 		ProgressiveConsentBrowser3loAutomated: pc.Browser3LOAutomated,
 		ProgressiveConsentResidual:            pcResidual,

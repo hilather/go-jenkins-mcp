@@ -1351,10 +1351,16 @@ func runServe(args []string) error {
 	}
 	// Wave 25: DynamicForce so force_read_only hot-applies on Reloadable OnSuccess.
 	// Without an overlay, leave Force nil (no enterprise force source).
-	// HOST-006: concrete rate limiter pointer for OnSuccess LowerRate (filled under --gateway).
+	// HOST-006: concrete rate limiter for OnSuccess LowerRate (filled under --gateway).
+	// Memory SubjectRateLimiter default; optional FileSubjectRateLimiter when
+	// JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH is set (HOST-008 same-host lite).
 	var dynForce *policy.DynamicForce
 	var enterpriseForce policy.EnterpriseForce
-	var liveSubjectRate *gateway.SubjectRateLimiter
+	var liveSubjectRate interface {
+		LowerRate(perMin, burst int) bool
+		RatePerMinute() int
+		Burst() int
+	}
 	if polRes.Overlay != nil {
 		dynForce = policy.NewDynamicForceFromOverlay(polRes.Overlay)
 		enterpriseForce = dynForce
@@ -1969,9 +1975,34 @@ func runServe(args []string) error {
 				return rerr
 			}
 			if rateRPM > 0 {
-				rateLim := gateway.NewSubjectRateLimiter(
-					rateRPM, rateBurst, 0, 0, // process caps → package defaults
-				)
+				// Optional same-host multi-process subject rate share (HOST-008 lite).
+				// Empty path → process-local SubjectRateLimiter. Path set → FileSubjectRateLimiter
+				// (flock + secret-free JSON). Multi-pod shared rate still residual.
+				ratePath := strings.TrimSpace(os.Getenv(gateway.EnvGatewaySubjectRatePath))
+				var rateLim interface {
+					Allow(subjectKey string) error
+					LowerRate(perMin, burst int) bool
+					RatePerMinute() int
+					Burst() int
+				}
+				if ratePath != "" {
+					fileLim, ferr := gateway.NewFileSubjectRateLimiter(
+						ratePath, rateRPM, rateBurst, 0, 0, // process caps → package defaults
+					)
+					if ferr != nil {
+						return ferr
+					}
+					rateLim = fileLim
+					log.Printf("HOST-006 subject rate limiter: file-backed same-host lite (shared_subject_rate_file=true; multi-pod residual) rate_per_minute=%d burst=%d multi_user=%v",
+						fileLim.RatePerMinute(), fileLim.Burst(), gatewayMultiUser)
+				} else {
+					memLim := gateway.NewSubjectRateLimiter(
+						rateRPM, rateBurst, 0, 0, // process caps → package defaults
+					)
+					rateLim = memLim
+					log.Printf("HOST-006 subject rate limiter: rate_per_minute=%d burst=%d multi_user=%v",
+						memLim.RatePerMinute(), memLim.Burst(), gatewayMultiUser)
+				}
 				// HOST-006: overlay may only lower bootstrap rate (never raise).
 				// Empty/omitted overlay fields leave env bootstrap unchanged.
 				if polRes.Overlay != nil {
@@ -1993,8 +2024,6 @@ func runServe(args []string) error {
 				}
 				liveSubjectRate = rateLim
 				serveSubjectRateLimiter = rateLim
-				log.Printf("HOST-006 subject rate limiter: rate_per_minute=%d burst=%d multi_user=%v",
-					rateLim.RatePerMinute(), rateLim.Burst(), gatewayMultiUser)
 			} else {
 				log.Printf("HOST-006 subject rate limiter: disabled (rate_per_minute=0 residual)")
 			}

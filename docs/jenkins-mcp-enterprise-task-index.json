@@ -4759,7 +4759,7 @@
       "dependency_text": "HOST-001",
       "parallel_safe": null,
       "objective": "Per-subject budgets so one user cannot exhaust process for others.",
-      "implementation": "Per-subject concurrent caps under process absolute ceilings.",
+      "implementation": "SubjectLimiter + SubjectRateLimiter (token-bucket); serve Allow then Hold; overlay LowerRate; optional same-host FileSubjectRateLimiter via JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH (HOST-008 lite).",
       "acceptance_criteria": [
         "Per-subject concurrent tool/preview caps.",
         "Process absolute ceilings remain.",
@@ -4768,9 +4768,11 @@
       ],
       "acceptance_criteria_count": 4,
       "evidence_tests": [
-        "internal/gateway/subject_limits_test.go"
+        "internal/gateway/subject_limits_test.go",
+        "internal/gateway/subject_rate_test.go",
+        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_CrossInstanceSharedBudget"
       ],
-      "status_note": "SubjectLimiter foundation + tests; residual full tools.Register wire and rate token-bucket",
+      "status_note": "Done* process-local rate + concurrent; Done* lite same-host FileSubjectRateLimiter; multi-pod shared rate residual (HOST-008)",
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": []
@@ -4816,24 +4818,28 @@
       "dependency_text": "HOST-003, HOST-004",
       "parallel_safe": null,
       "objective": "Define multi-replica only after durable vault.",
-      "implementation": "Single-replica Tier A default; multi-replica checklist; file vault flock Done* lite; optional FileTokenCache Obtain cache same-host lite (JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH); sticky Service sessionAffinity Done* scaffold (residual runtime). Multi-pod external Obtain cache / Redis still residual.",
+      "implementation": "Single-replica Tier A default; multi-replica checklist; file vault flock Done* lite; optional FileTokenCache Obtain cache same-host lite (JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH); optional FileSubjectRateLimiter same-host lite (JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH); sticky Service sessionAffinity Done* scaffold (residual runtime). Multi-pod external Obtain cache / shared rate / Redis still residual.",
       "acceptance_criteria": [
         "Single-replica Tier A default documented.",
         "Multi-replica checklist (vault, affinity, audit, Obtain cache).",
         "Shared vault path + flock multi-process lite (not multi-pod Done).",
         "Obtain FileTokenCache same-host flock lite (not multi-pod external Done).",
+        "Shared subject rate FileSubjectRateLimiter same-host flock lite (not multi-pod Done).",
         "Sticky session Service scaffold (ClientIP) Done* packaging only.",
         "Non-goal until multi-pod durable vault + sticky sessions exist."
       ],
-      "acceptance_criteria_count": 6,
+      "acceptance_criteria_count": 7,
       "evidence_tests": [
         "internal/gateway/file_token_cache_test.go:TestFileTokenCache_RoundTripIsolationTTL",
         "internal/gateway/file_token_cache_test.go:TestFileTokenCache_StatusMapSecretFree",
         "internal/gateway/file_token_cache_test.go:TestFileTokenCache_MultiInstanceConcurrentSetNoCorrupt",
         "internal/gateway/file_token_cache_test.go:TestCredentialProviderFromEnviron_ModeC_FileTokenCache",
-        "internal/gateway/file_token_cache_test.go:TestMemoryTokenCache_StatusMapSharedFalse"
+        "internal/gateway/file_token_cache_test.go:TestMemoryTokenCache_StatusMapSharedFalse",
+        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_CrossInstanceSharedBudget",
+        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_FileContentsSecretFree",
+        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_StatusMapSecretFree"
       ],
-      "status_note": "Done* lite same-host vault flock + FileTokenCache Obtain lite + sticky scaffold; multi-pod external residual (not multi-replica Done)",
+      "status_note": "Done* lite same-host vault flock + FileTokenCache Obtain lite + FileSubjectRateLimiter rate lite + sticky scaffold; multi-pod external residual (not multi-replica Done)",
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": []

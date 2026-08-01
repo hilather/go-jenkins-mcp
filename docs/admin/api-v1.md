@@ -101,9 +101,10 @@ Current process authentication state and console role. **Never includes the toke
   "rateEnabled": true,
   "ratePerMinute": 30,
   "rateBurst": 10,
+  "sharedSubjectRateFile": false,
   "progressiveConsentMetadataDoneStar": true,
   "progressiveConsentBrowser3loAutomated": false,
-  "residual": "subject rate knobs are process-local (HOST-006); multi-replica shared rate residual (HOST-008); multiPodVaultResidual=true (multi-pod vault residual); never tokens"
+  "residual": "subject rate default process-local (HOST-006); optional same-host FileSubjectRateLimiter when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set (HOST-008 lite); multi-pod shared rate residual; multiPodVaultResidual=true; never tokens"
 }
 ```
 
@@ -133,9 +134,10 @@ Mode C):
 | `sessionAffinityRecommended` | **HOST-008 residual:** `true` when multi-user env is set. Recommends kustomize Service sticky scaffold (`sessionAffinity: ClientIP`) if replicas are ever scaled — **not** multi-replica Done. Scaffold packaging only. |
 | `multiPodVaultResidual` | Always **`true`** (HOST-008 multi-pod durable vault residual honesty). Parity with doctor `gateway_status.multi_pod_vault_residual`. **Not** multi-replica Done. See [gateway/deployment.md §9](../gateway/deployment.md). **SPA Overview** displays this bool on Health and Gateway vault cards. |
 | `kubernetesEnvDetected` | **`true`** when `KUBERNETES_SERVICE_HOST` is set (in-cluster residual). Residual string then includes multi-pod checklist summary (sticky, shared vault, rate, Obtain cache). Never tokens. **SPA Overview** shows a multi-pod residual checklist card when true (secret-free; not multi-replica Done). |
-| `rateEnabled` | **HOST-006 / HOST-008 residual:** `true` when subject rate env would enable process-local limiting (empty `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` → default on; explicit `0` → false). **Not** multi-replica shared rate. Never tokens. |
-| `ratePerMinute` | **HOST-006 residual knob:** resolved bootstrap tools/min via `gateway.SubjectRateConfigFromEnviron` (package default **30**; **0** when disabled). Process-local only. Never tokens. |
-| `rateBurst` | **HOST-006 residual knob:** resolved bootstrap burst (package default **10**; **0** when rate off). Process-local only. Never tokens. |
+| `rateEnabled` | **HOST-006 / HOST-008 residual:** `true` when subject rate env would enable limiting (empty `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` → default on; explicit `0` → false). Default process-local; optional same-host file when path set. **Not** multi-pod shared rate. Never tokens. |
+| `ratePerMinute` | **HOST-006 residual knob:** resolved bootstrap tools/min via `gateway.SubjectRateConfigFromEnviron` (package default **30**; **0** when disabled). Never tokens. |
+| `rateBurst` | **HOST-006 residual knob:** resolved bootstrap burst (package default **10**; **0** when rate off). Never tokens. |
+| `sharedSubjectRateFile` | **HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is non-empty (same-host `FileSubjectRateLimiter`). **Not** multi-pod HA. Path value never returned. Never tokens. |
 | `progressiveConsentMetadataDoneStar` | **OAUTH-010 / GWY-001 residual:** always **`true`**. ConsentRequired metadata path Done*. Static residual only — never embeds authorize URLs or secrets. |
 | `progressiveConsentBrowser3loAutomated` | **OAUTH-010 residual:** always **`false`** until browser 3LO is automated (GWY-003). |
 | `progressiveConsentResidual` | **OAUTH-010 residual note** when Mode C enabled. Omitted otherwise. Never tokens or authorize URL secrets. |
@@ -159,10 +161,11 @@ Authorization headers, or raw subject keys.
   "rateEnabled": true,
   "ratePerMinute": 30,
   "rateBurst": 10,
+  "sharedSubjectRateFile": false,
   "vaultConfigured": true,
   "entryCount": 1,
   "subjects": ["a1b2c3…"],
-  "residual": "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser); subject rate knobs process-local (HOST-006); multi-replica shared rate residual (HOST-008); multiPodVaultResidual=true"
+  "residual": "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser); subject rate default process-local (HOST-006); optional same-host FileSubjectRateLimiter when path set (HOST-008 lite); multi-pod shared rate residual; multiPodVaultResidual=true"
 }
 ```
 
@@ -175,9 +178,10 @@ Authorization headers, or raw subject keys.
 | `sessionAffinityRecommended` | `true` when multi-user env set (HOST-008 sticky Service scaffold honesty; not multi-replica Done) |
 | `multiPodVaultResidual` | Always `true` (HOST-008 multi-pod vault residual; parity with doctor `multi_pod_vault_residual`) |
 | `kubernetesEnvDetected` | `true` when `KUBERNETES_SERVICE_HOST` set; residual notes multi-pod checklist (not HA Done) |
-| `rateEnabled` | HOST-006 env residual (process-local rate would be enabled; not multi-replica shared rate) |
-| `ratePerMinute` | Resolved bootstrap tools/min (default or `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE`); **0** when disabled. Process-local residual only. Never tokens. |
-| `rateBurst` | Resolved bootstrap burst (default or `JENKINS_MCP_SUBJECT_RATE_BURST`); **0** when rate disabled. Process-local residual only. Never tokens. |
+| `rateEnabled` | HOST-006 env residual (rate would be enabled; default process-local; not multi-pod shared rate) |
+| `ratePerMinute` | Resolved bootstrap tools/min (default or `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE`); **0** when disabled. Never tokens. |
+| `rateBurst` | Resolved bootstrap burst (default or `JENKINS_MCP_SUBJECT_RATE_BURST`); **0** when rate disabled. Never tokens. |
+| `sharedSubjectRateFile` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` set (same-host file rate). **Not** multi-pod HA. Path never returned. Never tokens. |
 | `vaultConfigured` | Whether the Mode A vault file exists |
 | `entryCount` | Number of subject entries |
 | `subjects` | **SubjectKeyHash** values only (never raw keys or tokens) |

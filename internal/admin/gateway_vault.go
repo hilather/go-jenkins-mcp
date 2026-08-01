@@ -39,6 +39,9 @@ type gatewayVaultResponse struct {
 	RatePerMinute int `json:"ratePerMinute"`
 	// RateBurst is resolved bootstrap burst; 0 when rate disabled. Never tokens.
 	RateBurst int `json:"rateBurst"`
+	// SharedSubjectRateFile is true when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH is
+	// non-empty (HOST-008 same-host FileSubjectRateLimiter lite). Not multi-pod HA.
+	SharedSubjectRateFile bool `json:"sharedSubjectRateFile"`
 	// VaultConfigured is true when the Mode A vault file exists on disk.
 	VaultConfigured bool `json:"vaultConfigured"`
 	// EntryCount is the number of subject entries (0 when missing/unreadable).
@@ -79,11 +82,16 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 		SessionAffinityRecommended: multiUser,
 		MultiPodVaultResidual:      true, // HOST-008 multi-pod vault residual honesty
 		KubernetesEnvDetected:      mp.KubernetesEnvDetected,
-		RateEnabled:                rateEnabled,
-		RatePerMinute:              ratePerMinute,
-		RateBurst:                  rateBurst,
-		// HOST-006 rate knobs are process-local residual (not multi-replica shared).
-		Residual: "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser); subject rate knobs process-local (HOST-006); multi-replica shared rate residual (HOST-008); multiPodVaultResidual=true",
+		RateEnabled:           rateEnabled,
+		RatePerMinute:         ratePerMinute,
+		RateBurst:             rateBurst,
+		SharedSubjectRateFile: gateway.SubjectRatePathConfiguredFromEnviron(os.Getenv),
+		// HOST-006 rate: process-local default; optional same-host file when path set.
+		// Multi-pod shared rate residual (HOST-008). Never tokens.
+		Residual: "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser); subject rate default process-local (HOST-006); optional same-host FileSubjectRateLimiter when path set (HOST-008 lite); multi-pod shared rate residual; multiPodVaultResidual=true",
+	}
+	if resp.SharedSubjectRateFile {
+		resp.Residual = "sharedSubjectRateFile=true (same-host file rate lite only — not multi-pod HA); " + resp.Residual
 	}
 	if multiUser {
 		// Secret-free; SPA residual banner (no embed rebuild). host008_single_replica honesty.
