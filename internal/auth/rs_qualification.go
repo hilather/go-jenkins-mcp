@@ -369,14 +369,15 @@ func BuildOfflineRSProbe(authMethod string) RSProbeReport {
 	}
 	rep.OfflineAutomated = []string{
 		"FallthroughMustDeny + ClassifyFallthroughProbe (status/WWW-Authenticate/body class) Done*",
-		"OfflineFallthroughFixtures matrix (empty body, HTML error/login, Bearer WWW-Authenticate, authn fail-closed)",
+		"OfflineFallthroughFixtures matrix (empty/HTML/Bearer WWW-Authenticate; Basic+authn and anonymous 2xx fail-closed; 401 status wins)",
 		"Bearer claim fail-closed: wrong aud / exp / iss + ID token never API credential (ValidateAccessToken + simulated RS on RequiredMCPRoutes)",
+		"OAuth-required route fixtures: invalid Bearer never succeeds as Basic/anonymous (RequiredMCPRoutes + mock RS classifier)",
 		"JWKS outage fail-closed (EvaluateJWKSOutage* + ValidateAccessToken nil/empty JWKS)",
 		"RequiredMCPRoutes inventory (unique IDs, progressive_text OutsideAPIGlob)",
 		"RFC 9728 protected resource metadata parser + edge validation (fixture-only; no live fetch)",
 		"JWT iss/aud/alg multi-issuer contracts (ValidateAccessToken)",
 		"Simulated RS invalid Bearer + session → 401 (no Basic/session fallthrough)",
-		"Gateway Mode B Obtain → Bearer only; empty JWT vault never falls through to Basic (HOST-011 / GWY-003 qualify)",
+		"Gateway Mode B Obtain → Bearer only; empty JWT vault never falls through to Basic (HOST-011 / GWY-003 qualify); residual_id oauth009_offline",
 	}
 	rep.Notes = append(rep.Notes,
 		"jwt-auth-filter is a bearer resource server only (not an authorization server)",

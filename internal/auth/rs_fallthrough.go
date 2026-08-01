@@ -308,9 +308,11 @@ type FallthroughFixture struct {
 	Summary string
 }
 
-// OfflineFallthroughFixtures returns the expanded Wave 33 classifier matrix
-// (empty body, HTML error/login, WWW-Authenticate Bearer, authenticated fail-closed).
-// Contract: invalid-bearer success as authenticated → FallthroughDetected (fail closed).
+// OfflineFallthroughFixtures returns the expanded Wave 33 + OAUTH-009
+// classifier matrix (empty body, HTML error/login, WWW-Authenticate Bearer,
+// Basic/anonymous fallthrough fail-closed, status-wins deny).
+// Contract: invalid-bearer success as authenticated/Basic/anonymous →
+// FallthroughDetected (fail closed). Live jwt-auth-filter pin residual.
 func OfflineFallthroughFixtures() []FallthroughFixture {
 	return []FallthroughFixture{
 		{
@@ -372,6 +374,30 @@ func OfflineFallthroughFixtures() []FallthroughFixture {
 			Summary:    "401 + Basic WWW-Authenticate still deny (pass; scheme noted)",
 		},
 		{
+			// Status wins: 401 with whoAmI-authenticated-shaped body is still Denied
+			// (filter may leak body class; must not count as fallthrough success).
+			ID: "401_whoami_authn_body_still_deny",
+			Input: FallthroughProbeInput{
+				StatusCode:          http.StatusUnauthorized,
+				WWWAuthenticate:     `Bearer realm="Jenkins", error="invalid_token"`,
+				BodyClass:           BodyClassWhoAmIAuthenticated,
+				WhoAmIAuthenticated: true,
+			},
+			WantDenied: true,
+			Summary:    "401 + whoAmI authenticated-shaped body → still deny (status wins)",
+		},
+		{
+			ID: "401_whoami_anon_body_still_deny",
+			Input: FallthroughProbeInput{
+				StatusCode:      http.StatusUnauthorized,
+				WWWAuthenticate: `Bearer realm="Jenkins", error="invalid_token"`,
+				BodyClass:       BodyClassWhoAmIAnonymous,
+				WhoAmIAnonymous: true,
+			},
+			WantDenied: true,
+			Summary:    "401 + whoAmI anonymous-shaped body → still deny (status wins)",
+		},
+		{
 			ID: "200_whoami_authenticated_fail_closed",
 			Input: FallthroughProbeInput{
 				StatusCode:          http.StatusOK,
@@ -382,6 +408,19 @@ func OfflineFallthroughFixtures() []FallthroughFixture {
 			Summary:         "200 authenticated principal → fallthrough FAIL (must deny invalid bearer)",
 		},
 		{
+			// Anti-pattern: invalid Bearer accepted as Basic/session principal
+			// (Basic WWW-Authenticate remnant + authenticated whoAmI).
+			ID: "200_whoami_authenticated_basic_www",
+			Input: FallthroughProbeInput{
+				StatusCode:          http.StatusOK,
+				WWWAuthenticate:     `Basic realm="Jenkins"`,
+				BodyClass:           BodyClassWhoAmIAuthenticated,
+				WhoAmIAuthenticated: true,
+			},
+			WantFallthrough: true,
+			Summary:         "200 authenticated + Basic WWW-Authenticate → Basic fallthrough FAIL",
+		},
+		{
 			ID: "200_whoami_anonymous",
 			Input: FallthroughProbeInput{
 				StatusCode: http.StatusOK,
@@ -389,6 +428,18 @@ func OfflineFallthroughFixtures() []FallthroughFixture {
 			},
 			WantFallthrough: true,
 			Summary:         "200 anonymous whoAmI → fallthrough FAIL",
+		},
+		{
+			// Anonymous success after invalid Bearer (OAuth-required routes must deny).
+			ID: "200_whoami_anonymous_bearer_www",
+			Input: FallthroughProbeInput{
+				StatusCode:      http.StatusOK,
+				WWWAuthenticate: `Bearer realm="Jenkins"`,
+				BodyClass:       BodyClassWhoAmIAnonymous,
+				WhoAmIAnonymous: true,
+			},
+			WantFallthrough: true,
+			Summary:         "200 anonymous + Bearer WWW-Authenticate remnant → anon fallthrough FAIL",
 		},
 		{
 			ID: "200_empty_body",
@@ -434,6 +485,15 @@ func OfflineFallthroughFixtures() []FallthroughFixture {
 			},
 			WantFallthrough: true,
 			Summary:         "200 + error JSON → fallthrough FAIL",
+		},
+		{
+			// Login redirect after invalid Bearer is not a qualification pass.
+			ID: "302_html_login_inconclusive",
+			Input: FallthroughProbeInput{
+				StatusCode: http.StatusFound,
+				BodyClass:  BodyClassHTMLLogin,
+			},
+			Summary: "302 login redirect → inconclusive (not a pass for fallthrough qualification)",
 		},
 		{
 			ID: "502_inconclusive",

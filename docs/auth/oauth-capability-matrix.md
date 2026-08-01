@@ -141,7 +141,7 @@ Cross-links: [gateway/README.md](../gateway/README.md), [gateway/qualification.m
 |-------|----------------|----------|
 | Role | RS only — validates externally issued JWTs | — |
 | Does **not** | Issue codes, host consent, or act as 3LO AS | — |
-| `invalid_bearer_fallthrough` | `Done*` offline classifier (`OfflineFallthroughFixtures` + simulated RS); Wave 33 empty/HTML error/Bearer WWW-Authenticate | Must re-prove on real plugin |
+| `invalid_bearer_fallthrough` | `Done*` offline classifier (`OfflineFallthroughFixtures` + simulated RS + OAuth-required Basic/anon deny fixtures); Wave 33 empty/HTML/Bearer WWW-Authenticate + OAUTH-009 Basic/anon expand | Must re-prove on real plugin — **not live Entra Done** |
 | `incomplete_route_coverage` | **contract_tested** (`RequiredMCPRoutes`, inventory completeness, progressive OutsideAPIGlob) | Path includes in JCasC |
 | `multi_issuer` / `alg_none` | **contract_tested** (`ValidateAccessToken`) | RS must match |
 | `jwks_outage` | **contract_tested** (MCP fail-closed); **live residual** for Jenkins RS cache TTL | Fail-closed + cache TTL on controller |

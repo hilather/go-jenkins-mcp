@@ -838,17 +838,20 @@ func checkRSAuth(ctx context.Context, opts DoctorOptions, p *profile.Profile) Ch
 	}
 
 	// Mode B gateway: honest residual when jwt_rs_bearer primary/enabled.
+	// residual_id oauth009_offline links REL lite / pilot checklist residual.
 	modeB, modeResidual := gatewayModeBResidual(opts.Getenv)
 	details["gateway_mode_b_enabled"] = modeB
 	if modeB {
 		details["gateway_mode_matrix_residual"] = modeResidual
 		details["mode_b_live_rs_qualified"] = false // offline never claims live pin
+		details["residual_id"] = "oauth009_offline"
+		details["oauth009_offline"] = true
 		if status != StatusFail {
 			status = StatusWarn
-			msg = "gateway Mode B (jwt_rs_bearer) enabled: offline vault foundation only; live jwt-auth-filter / Entra pin residual (OAUTH-009)"
+			msg = "gateway Mode B (jwt_rs_bearer) enabled: offline vault foundation only; live jwt-auth-filter / Entra pin residual (oauth009_offline / OAUTH-009)"
 		}
 		details["residuals"] = append([]string{
-			"Mode B offline JWT vault Obtain → Bearer is not a live RS production pin",
+			"Mode B offline JWT vault Obtain → Bearer is not a live RS production pin (residual_id=oauth009_offline)",
 			"ID tokens must never be used as Jenkins API credentials",
 			"Re-prove wrong aud/exp/iss + invalid-bearer no fallthrough on live controller",
 			"Opt-in lab: make live-oauth-* (mock RS); production pin still open",

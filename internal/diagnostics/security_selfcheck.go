@@ -1058,6 +1058,9 @@ func checkRSQualificationResidual(p *profile.Profile, getenv func(string) string
 	if modeB {
 		details["gateway_mode_matrix_residual"] = modeResidual
 		details["mode_b_live_rs_qualified"] = false
+		// residual_id oauth009_offline links REL lite / pilot checklist residual.
+		details["residual_id"] = "oauth009_offline"
+		details["oauth009_offline"] = true
 	}
 
 	item := SelfCheckItem{
@@ -1105,7 +1108,7 @@ func checkRSQualificationResidual(p *profile.Profile, getenv func(string) string
 	}
 	if modeB {
 		item.Status = SelfCheckWarn
-		item.Message = baseMsg + "; gateway Mode B (jwt_rs_bearer) enabled — offline vault not live RS pin (OAUTH-009)"
+		item.Message = baseMsg + "; gateway Mode B (jwt_rs_bearer) enabled — offline vault not live RS pin (residual_id=oauth009_offline / OAUTH-009)"
 		return item
 	}
 

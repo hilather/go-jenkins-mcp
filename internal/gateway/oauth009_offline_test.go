@@ -86,6 +86,83 @@ func TestOAUTH009_ModeB_ObtainNoBasicFallthrough(t *testing.T) {
 		}
 	})
 
+	// Regression table: Mode B Obtain + Basic never mixed on the same request
+	// (scheme Bearer XOR Basic username; never both; never Mode A canary).
+	t.Run("obtain_basic_never_mixed_table", func(t *testing.T) {
+		t.Parallel()
+		type want struct {
+			scheme   string
+			username string
+			token    string
+			err      bool
+		}
+		cases := []struct {
+			name   string
+			putJWT string // empty = no put
+			want   want
+		}{
+			{
+				name:   "hit_bearer_only",
+				putJWT: canaryB + "-table",
+				want:   want{scheme: gateway.HTTPAuthSchemeBearer, username: "", token: canaryB + "-table"},
+			},
+			{
+				name:   "empty_fail_closed",
+				putJWT: "",
+				want:   want{err: true},
+			},
+		}
+		for _, tc := range cases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				jwtVault := gateway.NewMemoryJWTVault()
+				if tc.putJWT != "" {
+					if err := jwtVault.Put(context.Background(), gateway.SubjectKey(caller), tc.putJWT); err != nil {
+						t.Fatal(err)
+					}
+				}
+				pB, err := gateway.RequireJWTRSBearerSetup(jwtVault)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ha, err := gateway.ObtainHTTPAuth(context.Background(), pB, caller)
+				if tc.want.err {
+					if err == nil {
+						t.Fatalf("want error, got %+v", ha)
+					}
+					if ha.Scheme != "" || ha.Username != "" || ha.Token != "" {
+						t.Fatalf("error path must clear all auth fields: %+v", ha)
+					}
+					if strings.Contains(err.Error(), canaryA) {
+						t.Fatal("Mode A canary in error")
+					}
+					return
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Never mix Bearer scheme with Basic username on same HTTPAuth.
+				if ha.Scheme == gateway.HTTPAuthSchemeBearer && ha.Username != "" {
+					t.Fatalf("Regression: Bearer+Basic username mixed on same request: %+v", ha)
+				}
+				if ha.Scheme == gateway.HTTPAuthSchemeBasic {
+					t.Fatalf("Regression: Mode B Obtain must never emit Basic scheme: %+v", ha)
+				}
+				if ha.Scheme != tc.want.scheme || ha.Username != tc.want.username || ha.Token != tc.want.token {
+					t.Fatalf("got scheme=%q user=%q tok_match=%v want scheme=%q user=%q",
+						ha.Scheme, ha.Username, ha.Token == tc.want.token, tc.want.scheme, tc.want.username)
+				}
+				if ha.Token == canaryA {
+					t.Fatal("Mode A canary used as Mode B token")
+				}
+				if strings.Contains(ha.String(), ha.Token) || strings.Contains(ha.String(), canaryA) {
+					t.Fatal("HTTPAuth.String leaked material")
+				}
+			})
+		}
+	})
+
 	t.Run("id_token_never_api_credential", func(t *testing.T) {
 		t.Parallel()
 		jwtVault := gateway.NewMemoryJWTVault()
