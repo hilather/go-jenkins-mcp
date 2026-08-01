@@ -142,7 +142,8 @@ func envHTTPJWTConfigured() bool {
 
 // fetchHTTPJWKS loads JWKS from cfg.JWKSURL at serve start (fail closed).
 // client nil → DefaultClient with DefaultJWKSTimeout. Does not cache beyond
-// process lifetime; mid-session JWKS rebind / rotation under load is residual.
+// process lifetime; continuous JWKS rotation under load remains residual
+// (HOST-001 / HOST-014) — mid-session *subject* rebind is separate (mcpserver).
 func fetchHTTPJWKS(ctx context.Context, client *http.Client, cfg httpJWTEnv) (*auth.JWKS, error) {
 	if !cfg.Configured() {
 		return nil, nil
@@ -168,7 +169,9 @@ func fetchHTTPJWKS(ctx context.Context, client *http.Client, cfg httpJWTEnv) (*a
 // identity headers; transport secret alone is never a subject).
 //
 // Fail closed: invalid JWT → error (→ 401). Never logs tokens.
-// Residual: mid-session subject rebind / session fingerprint (HOST-001 AC).
+// Mid-session subject rebind is enforced in mcpserver.protectHandler via
+// Mcp-Session-Id + IdentityFingerprint (HOST-001). Residual: continuous JWKS
+// rotation under load (serve still fetches JWKS once at start).
 func newHTTPIdentityResolver(
 	labEnabled bool,
 	sharedSecret string,

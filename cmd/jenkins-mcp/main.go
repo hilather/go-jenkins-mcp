@@ -280,9 +280,9 @@ JENKINS_MCP_HTTP_JWT_AUDIENCE (secret-free); optional JENKINS_MCP_HTTP_JWT_REQUI
 implies require-subject. Shared transport secret is never treated as subject.
 Request body cap defaults to
 4 MiB; raise with --http-max-body-bytes / JENKINS_MCP_HTTP_MAX_BODY_BYTES
-(absolute fail-closed 16 MiB). Residual:
-mid-session subject rebind / JWKS rotation under load; prefer stdio for pilot
-(ADR 0002).
+(absolute fail-closed 16 MiB). Mid-session subject change on the same
+Mcp-Session-Id fails closed (HOST-001). Residual: continuous JWKS rotation
+under load; live Entra; prefer stdio for pilot (ADR 0002).
 
 TLS/proxy (NET-004): profile may set caBundlePath, proxyURL, noProxy, clientCertFile,
 clientKeyFile (paths only — never private keys in profile JSON). CLI --ca-bundle /
@@ -1909,7 +1909,7 @@ func runServe(args []string) error {
 		cfg.BearerToken = token
 		var jwks *auth.JWKS
 		if jwtEnv.Configured() {
-			// Fetch once at serve start (fail closed). Mid-session JWKS rebind residual.
+			// Fetch once at serve start (fail closed). Continuous JWKS rotation residual.
 			jwks, err = fetchHTTPJWKS(serveCtx, nil, jwtEnv)
 			if err != nil {
 				return err

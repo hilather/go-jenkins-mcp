@@ -62,12 +62,14 @@ const HeaderJenkinsMCPToken = "X-Jenkins-MCP-Token"
 //     non-health request must establish RequestIdentity from a trusted source
 //     (lab header when LabIdentity, or IdentityResolver e.g. JWT). Shared secret
 //     alone never satisfies subject requirements (HOST-001).
+//   - When RequireSubject is on, Mcp-Session-Id (when present) is bound to the
+//     first request's IdentityFingerprint; mid-session subject change → 401.
 //
 // Residual: empty BearerToken on loopback without RequireToken still leaves the
 // socket open to any local process (KD-008 pilot residual, non-gateway only).
 // Production multi-user JWT/OIDC validation is partial (lab header + resolver
-// hook foundation; full JWKS pin residual HOST-001 / HOST-014). Prefer stdio
-// for pilot (ADR 0002).
+// hook foundation; continuous JWKS rotation under load residual HOST-001 /
+// HOST-014). Prefer stdio for pilot (ADR 0002).
 type HTTPConfig struct {
 	// Addr is the listen address (e.g. "127.0.0.1:8765", "localhost:0").
 	Addr string
@@ -301,17 +303,25 @@ func NewHTTPHandler(server *mcp.Server, cfg HTTPConfig) (http.Handler, error) {
 	inner := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
 		return server
 	}, nil)
-	return &protectHandler{
+	requireSubject := HTTPSubjectRequired(cfg)
+	h := &protectHandler{
 		inner:            inner,
 		maxBody:          maxBody,
 		allowNonLocal:    cfg.AllowNonLocal,
 		allowedOrigins:   append([]string(nil), cfg.AllowedOrigins...),
 		allowedHosts:     append([]string(nil), cfg.AllowedHosts...),
 		bearerToken:      cfg.BearerToken,
-		requireSubject:   HTTPSubjectRequired(cfg),
+		requireSubject:   requireSubject,
 		labIdentity:      cfg.LabIdentity,
 		identityResolver: cfg.IdentityResolver,
-	}, nil
+	}
+	// HOST-001: session→fingerprint table only when subject is required
+	// (gateway / non-local / --http-require-subject). Pilot loopback without
+	// require-subject skips mid-session bind (KD-008 residual).
+	if requireSubject {
+		h.sessionBind = newSessionIdentityTable(DefaultMaxSessionIdentityBinds)
+	}
+	return h, nil
 }
 
 // validateHTTPHandlerPolicy is ValidateHTTPConfig without listen-address checks
@@ -470,6 +480,9 @@ type protectHandler struct {
 	requireSubject   bool
 	labIdentity      bool
 	identityResolver IdentityResolver
+	// sessionBind is non-nil when requireSubject: maps Mcp-Session-Id to
+	// IdentityFingerprint (mid-session subject swap → 401).
+	sessionBind *sessionIdentityTable
 }
 
 func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -510,6 +523,18 @@ func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if h.requireSubject && !reqID.Present() {
 			unauthorizedIdentity(w)
 			return
+		}
+		// Mid-session subject rebind: when RequireSubject and Mcp-Session-Id is
+		// present, first Present identity establishes fingerprint; mismatch → 401.
+		// Health paths never reach here. No session id (initialize) skips bind.
+		if h.requireSubject && reqID.Present() && h.sessionBind != nil {
+			sid := strings.TrimSpace(r.Header.Get(HeaderMCPSessionID))
+			if sid != "" {
+				if err := h.sessionBind.BindOrCheck(sid, IdentityFingerprint(reqID)); err != nil {
+					unauthorizedIdentity(w)
+					return
+				}
+			}
 		}
 		if reqID.Present() {
 			r = r.WithContext(ContextWithIdentity(r.Context(), reqID))

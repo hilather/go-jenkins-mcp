@@ -118,6 +118,7 @@ env labels + whoAmI principal.
 | Single group name > 256 bytes | Fail closed (never truncated short form) |
 | Tool args supply `subject` / `jenkins_user` / `tenant` / `as_user` / … | `RejectIdentityToolArgs` → `policy_denial` |
 | Mid-session claim fingerprint change | `Binding.Revalidate` fail closed |
+| Mid-session HTTP subject swap (same `Mcp-Session-Id`) | `mcpserver` session fingerprint table → 401 (HOST-001; no tokens in body) |
 | Binding TTL exceeded | Re-bind from claims; still fail closed on bind errors |
 
 **API shape:** `BindSubject(claims InboundClaims, opts)` — there is **no** tool-args
@@ -190,7 +191,8 @@ Missing identity env fields → bind fails closed at serve start.
 | Custom Jenkins authorization-server plugin | ADR 0011 / OAUTH-011 **default no-go** |
 | Shared Jenkins service account for interactive users | **Never** |
 | Real client secret storage | keyring / vault (not profile JSON) |
-| Streamable HTTP gateway transport hardening | GWY-004 residual (HOST-001 / HOST-002) |
+| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT resolver, `Mcp-Session-Id`→`IdentityFingerprint` fail closed; residual: continuous JWKS rotation under load, live Entra, HOST-002 proxy matrix |
+| Streamable HTTP reverse-proxy / non-loopback deploy matrix | GWY-004 residual (**HOST-002**) |
 | **Program path to team-hosted** | [roadmap/server-team-hosted.md](../roadmap/server-team-hosted.md) |
 
 Until live AgentCore is pinned, local **API token + keyring** remains the Jenkins
@@ -203,14 +205,15 @@ stays fail-closed (`Live=false`) so no shared SA is substituted for gateway cred
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"
-go test ./internal/gateway/ ./internal/gateway/qualify/ ./internal/auth/ ./internal/policy/ ./cmd/jenkins-mcp/ ./internal/depgraph/ -count=1
+go test ./internal/gateway/ ./internal/gateway/qualify/ ./internal/mcpserver/ ./internal/auth/ ./internal/policy/ ./cmd/jenkins-mcp/ ./internal/depgraph/ -count=1
 ```
 
 Coverage includes: Live=false not_configured; Live+nil Fetcher; cache hit
 (Fetcher once); wrong audience; ConsentRequired; token canary never in
 errors/Status/String; cancelled context; HTTPS-only HTTPTokenFetcher + mock AS;
 offline qualify vault hit/miss, IdP outage chaos, JWKS kid-lite (see
-[qualification.md](qualification.md)).
+[qualification.md](qualification.md)); HOST-001 `RequireSubject` + shared-secret
+not identity; mid-session `Mcp-Session-Id` subject swap 401.
 
 ---
 

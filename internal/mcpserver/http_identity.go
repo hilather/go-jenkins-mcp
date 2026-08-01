@@ -97,7 +97,10 @@ func ContextWithIdentity(ctx context.Context, id RequestIdentity) context.Contex
 }
 
 // IdentityFromContext returns RequestIdentity previously stored by the HTTP
-// protect layer. Present() is false when unset.
+// protect layer (HOST-001). Handlers and tool wiring may read the verified
+// subject labels from the request context after protectHandler accepts the
+// call. Present() is false when unset (health paths, or pilot without subject).
+// Never contains raw tokens.
 func IdentityFromContext(ctx context.Context) RequestIdentity {
 	if ctx == nil {
 		return RequestIdentity{}
