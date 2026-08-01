@@ -118,6 +118,22 @@ func TestRunDoctor_OfflineNoSecrets(t *testing.T) {
 			if c.Details["credential_mode"] != string(gateway.CredentialModeAPITokenVault) {
 				t.Fatalf("credential_mode=%v", c.Details["credential_mode"])
 			}
+			// Unified modes A/B/C residual honesty (Mode A only in this test).
+			if c.Details["mode_a_enabled"] != true || c.Details["mode_b_enabled"] != false || c.Details["mode_c_enabled"] != false {
+				t.Fatalf("modes A/B/C flags: %+v", c.Details)
+			}
+			if c.Details["mode_a_live_obtain_qualified"] != false ||
+				c.Details["mode_b_live_rs_qualified"] != false ||
+				c.Details["mode_c_live_agentcore_qualified"] != false {
+				t.Fatalf("offline must never claim live mode pins: %+v", c.Details)
+			}
+			if c.Details["oauth009_offline_only"] != true {
+				t.Fatalf("oauth009_offline_only residual: %+v", c.Details)
+			}
+			res, _ := c.Details["mode_matrix_residual"].(string)
+			if !strings.Contains(res, "mode_a") {
+				t.Fatalf("want mode_a residual honesty: %q", res)
+			}
 		}
 	}
 
@@ -182,6 +198,16 @@ func TestRunDoctor_GatewayStatus_MultiUserResidual(t *testing.T) {
 	if gs.Details["credential_mode"] != string(gateway.CredentialModeAgentCore) {
 		t.Fatalf("credential_mode=%v", gs.Details["credential_mode"])
 	}
+	if gs.Details["mode_c_enabled"] != true {
+		t.Fatalf("mode_c_enabled=%v", gs.Details["mode_c_enabled"])
+	}
+	if gs.Details["mode_c_live_agentcore_qualified"] != false {
+		t.Fatalf("must not claim live AgentCore pin offline: %+v", gs.Details)
+	}
+	res, _ := gs.Details["mode_matrix_residual"].(string)
+	if !strings.Contains(res, "mode_c") {
+		t.Fatalf("want mode_c residual honesty: %q", res)
+	}
 	// Canary: message/details never include vault tokens.
 	blob := gs.Message
 	for k, v := range gs.Details {
@@ -192,6 +218,59 @@ func TestRunDoctor_GatewayStatus_MultiUserResidual(t *testing.T) {
 	}
 	if strings.Contains(blob, doctorCanary) {
 		t.Fatal("canary in gateway_status")
+	}
+}
+
+// Unified offline residual honesty for gateway Mode B (OAUTH-009).
+func TestRunDoctor_GatewayStatus_ModeBResidualHonesty(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	t.Setenv(gateway.EnvGatewayMultiUser, "")
+	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeJWTRSBearer))
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		Version:     "test",
+		SkipNetwork: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gs *diagnostics.Check
+	for i := range rep.Checks {
+		if rep.Checks[i].Name == "gateway_status" {
+			gs = &rep.Checks[i]
+			break
+		}
+	}
+	if gs == nil {
+		t.Fatal("missing gateway_status")
+	}
+	if gs.Status != diagnostics.StatusWarn {
+		t.Fatalf("mode B residual should warn: %s %s", gs.Status, gs.Message)
+	}
+	if gs.Details["mode_b_enabled"] != true || gs.Details["mode_b_live_rs_qualified"] != false {
+		t.Fatalf("mode B residual fields: %+v", gs.Details)
+	}
+	res, _ := gs.Details["mode_matrix_residual"].(string)
+	if !strings.Contains(res, "OAUTH-009") || !strings.Contains(res, "mode_b") {
+		t.Fatalf("mode B residual honesty: %q", res)
+	}
+	if !strings.Contains(gs.Message, "OAUTH-009") && !strings.Contains(gs.Message, "jwt-auth-filter") {
+		t.Fatalf("message should note Mode B live residual: %s", gs.Message)
 	}
 }
 

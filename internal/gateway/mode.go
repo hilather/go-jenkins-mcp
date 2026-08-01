@@ -160,23 +160,27 @@ func ModeMatrixFromEnviron(getenv func(string) string) (ModeMatrix, error) {
 		return ModeMatrix{}, apperr.New(apperr.CodeInvalidArgument,
 			"gateway primary credential mode is not in JENKINS_MCP_GATEWAY_ENABLED_MODES")
 	}
+	// Unified modes A/B/C residual honesty (doctor / admin / release-evidence).
+	// Offline foundations are Done*; live pins remain residual — never claim production GO.
 	mx := ModeMatrix{Primary: primary, Enabled: enabled}
-	var residuals []string
+	mx.Residual = ModeMatrixResidualNote(primary, enabled)
+	return mx, nil
+}
+
+// ModeMatrixResidualNote returns a secret-free residual string for enabled modes
+// A/B/C (HOST-011 / OAUTH-009 / OAUTH-010 / GWY honesty).
+func ModeMatrixResidualNote(primary CredentialMode, enabled []CredentialMode) string {
+	var parts []string
+	if ModeEnabledIn(CredentialModeAPITokenVault, enabled, primary) {
+		parts = append(parts, "mode_a api_token_vault offline vault foundation (HOST-009); live multi-user Obtain residual")
+	}
 	if ModeEnabledIn(CredentialModeJWTRSBearer, enabled, primary) {
-		// Offline vault Obtain is HOST-010 foundation; live RS pin is residual.
-		residuals = append(residuals,
-			"jwt_rs_bearer offline vault (HOST-010); live IdP/jwt-auth-filter pin residual (OAUTH-009)")
+		parts = append(parts, "mode_b jwt_rs_bearer offline vault (HOST-010); live IdP/jwt-auth-filter pin residual (OAUTH-009)")
 	}
 	if ModeEnabledIn(CredentialModeAgentCore, enabled, primary) {
-		// Offline Live=false / mock Fetcher / consent matrix is OAUTH-010 Done*;
-		// live Entra 3LO/OBO + AgentCore Identity vault pin remains residual.
-		residuals = append(residuals,
-			"agentcore_3lo_obo offline Live=false/mock Fetcher/consent matrix (OAUTH-010); live Entra 3LO/OBO + AgentCore pin residual (not production)")
+		parts = append(parts, "mode_c agentcore_3lo_obo offline Live=false/mock Fetcher/consent matrix (OAUTH-010); live Entra 3LO/OBO + AgentCore pin residual (not production)")
 	}
-	if len(residuals) > 0 {
-		mx.Residual = strings.Join(residuals, "; ")
-	}
-	return mx, nil
+	return strings.Join(parts, "; ")
 }
 
 // VaultPathFromEnviron returns the Mode A vault file path from env or default

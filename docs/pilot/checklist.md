@@ -27,7 +27,11 @@ from offline qualify alone. Modes: **A** personal API-token vault,
 | Admin console (loopback / Docker) | | optional `local-docker-*` | localStorage token pilot-only |
 
 Modes **not** piloted: _____________  
-Gateway residual accepted (ticket/notes): _____________
+Gateway residual accepted (ticket/notes): _____________  
+
+**REL lite residual ids** (from `jenkins-mcp release-evidence --offline`; do not treat as live GO):  
+`multi_user_offline` · `oauth009_offline` · `host008_single_replica` · `gateway_modes_live`  
+See [release gates](../release/gates.md) residuals section.
 
 ## 1. Install
 

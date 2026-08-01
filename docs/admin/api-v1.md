@@ -107,7 +107,7 @@ Current process authentication state and console role. **Never includes the toke
 | `multiUserEnabled` | **HOST-008 residual:** `true` when `JENKINS_MCP_GATEWAY_MULTI_USER` is truthy. Foundation residual only — **not** production multi-user GO. |
 | `gatewayReady` | Always **`false` on admin BFF** (separate process from MCP serve). Live Obtain Ready is `GET /readyz` on the gateway serve process. |
 | `haMultiReplica` | Always **`false`** (HOST-008 Tier A single-replica default; multi-replica runtime not implemented). |
-| `residual` | Present when multi-user env is set (secret-free honesty note; never tokens). |
+| `residual` | Present when multi-user env is set (secret-free honesty note; never tokens). Mentions foundation residual + HOST-008 single-replica (`haMultiReplica` always false). |
 
 ## GET /admin/v1/gateway/vault
 

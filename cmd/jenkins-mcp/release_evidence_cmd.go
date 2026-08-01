@@ -149,6 +149,24 @@ func knownReleaseResiduals() []releaseResidual {
 			Message: "Live multi-user gateway modes A/B/C remain residual unless operator mode matrix records live pilot cohorts; offline gateway qualify + unit contracts are foundation only (see docs/pilot/checklist.md §0)",
 		},
 		{
+			// Multi-user Obtain foundation offline; not production multi-user GO.
+			ID:      "multi_user_offline",
+			GateIDs: []string{"REL-002.compat.modes", "REL-002.compat.gateway"},
+			Message: "Done*: JENKINS_MCP_GATEWAY_MULTI_USER opt-in + doctor/admin secret-free residual fields offline; not production multi-user GO or multi-replica HA (see docs/pilot/checklist.md §0, deploy/gateway/.env.example)",
+		},
+		{
+			// OAUTH-009 offline Bearer matrix / qualify case; live Entra pin open.
+			ID:      "oauth009_offline",
+			GateIDs: []string{"REL-002.compat.auth", "REL-002.sec.oauth", "REL-002.compat.modes"},
+			Message: "Done*: oauth009_offline_bearer_matrix + Mode B offline vault foundation; live Entra/jwt-auth-filter production pin residual (OAUTH-009; docs/auth/jwt-auth-filter-qualification.md)",
+		},
+		{
+			// HOST-008 Tier A single-replica honesty (scaffold replicas:1).
+			ID:      "host008_single_replica",
+			GateIDs: []string{"REL-002.compat.gateway", "REL-002.ops.doctor"},
+			Message: "HOST-008 Tier A: single-replica default (deploy/gateway kustomize replicas:1; doctor/admin ha_multi_replica=false); multi-replica HA residual until durable shared vault + sticky sessions",
+		},
+		{
 			// Done* inventory: offline binary smoke exists (Wave 25 make + Wave 26 optional CI job).
 			// Not merge-gate; does not close Cursor host CI — keep listed for honesty.
 			ID:      "stdio_binary_smoke",

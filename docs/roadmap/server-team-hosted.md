@@ -692,36 +692,40 @@ When implementing, agents may **close ACs on GWY-*/OAUTH-*** and mark HOST-* as 
 
 ## 9. Immediate next 30 / 60 / 90 days
 
-Assumptions: local pilot largely green; Phase 6 admin mid-flight (UI-008 done; UI-009 residual); leadership wants a **path** to team-hosted without pausing local value.
+Assumptions: local pilot largely green; Phase 6 admin mid-flight (UI-008/009 adversarial foundations landed; HOST-007 residual for non-loopback multi-operator). Leadership wants a **path** to team-hosted without pausing local value.
 
-### Days 0–30
+**Honesty (2026-08):** Offline **foundations landed** for modes A/B/C Obtain, multi-user opt-in, JWKS process-local refresh, packaging scaffold, doctor/admin residual fields, REL lite residual ids (`multi_user_offline`, `oauth009_offline`, `host008_single_replica`). **Live pins remain residual** — do not treat offline Done\* as live Entra / AgentCore / multi-replica GO.
 
-1. Socialize this roadmap; confirm **Tier A ships modes A+B+C** (site chooses default).  
-2. **HOST-012** Docker lab umbrella + Makefile opt-in targets (extend jenkins-compose).  
-3. **HOST-001** design + spike: per-user credentials on Streamable HTTP.  
-4. **HOST-009** (mode A) vault design — uses existing `live-jenkins` for Basic path.  
-5. Scaffold **HOST-014** mock OIDC + **HOST-013** JWT RS lab (mode B) — mocks before real Entra.  
-6. Scaffold **HOST-015** mock token/3LO peer (mode C).  
-7. Charter **OAUTH-010** + real Entra app reg (residual parallel to mocks).  
-8. Freeze anti-patterns (no shared SA, no Jenkins-as-AS).
+### Days 0–30 (foundations — largely Done\*)
 
-### Days 31–60
+| Item | State | Residual |
+|------|-------|----------|
+| Socialize Tier A ships modes A+B+C (site chooses) | **Ongoing** | Site enablement evidence |
+| **HOST-012…015** Docker lab umbrella + mock IdP/RS/token peers | **Done\*** opt-in (`make live-oauth-*`, jenkins-compose) | Not production Entra |
+| **HOST-001** Streamable HTTP subject + JWKS refresh | **Done\*** process-local | Multi-instance JWKS HA; live Entra under load |
+| **HOST-009** Mode A vault Obtain | **Done\*** offline + CLI vault | Live multi-user personal-token lab cohort |
+| **HOST-010** Mode B JWT vault + **OAUTH-009** offline matrix | **Done\*** | **Live** jwt-auth-filter / Entra pin |
+| **GWY-001** Mode C Live opt-in foundation | **Done\*** Live=false + mock Fetcher | Live AgentCore / Entra Obtain |
+| **HOST-011** mode matrix + no fallthrough | **Done\*** | Ops mode-switch evidence |
+| Anti-patterns freeze (no shared SA, no Jenkins-as-AS) | **Done** ADR 0003/0013 | OAUTH-011 formal sign-off residual |
 
-1. Land **HOST-009** offline + docker lab (mode A Obtain + HOST-003 Basic wire).  
-2. Land **OAUTH-009** + **HOST-010** against **HOST-013/014** compose; residual real Entra/RS pin.  
-3. Land **OAUTH-010** matrix; start **GWY-001** Live against **HOST-015** mock, then real AgentCore residual.  
-4. **GWY-002** live claim binding; **HOST-011** mode switch scaffold.  
-5. **HOST-001/002** HTTP multi-user hardening.  
-6. MGR-001 planning (keys, rollout).
+### Days 31–60 (live pins + pilot path)
 
-### Days 61–90
+1. **Live OAUTH-009** pin: jwt-auth-filter version + JCasC + route re-prove (wrong aud/exp/iss, no Basic fallthrough).  
+2. **Live HOST-009** multi-user Mode A cohort on lab Jenkins (personal tokens; no shared SA).  
+3. **OAUTH-010** / **GWY-001** Live against mock peer first, then real AgentCore residual.  
+4. **HOST-001/002** reverse-proxy path-prefix + mTLS non-local production pin.  
+5. **MGR-001** enterprise `REQUIRE_SIGNED_POLICY` roll-out with trusted keys (gateway hosts).  
+6. Team pilot checklist §0 mode matrix filled (REL-001); `release-evidence --offline` residual ids reviewed.
 
-1. **HOST-004** isolation green for all enabled modes.  
-2. **GWY-003** live qualify rows for **A, B, and C** (or residual honesty per mode).  
-3. **GWY-004** + **HOST-005** package runbook for one team.  
-4. Team pilot enabling ≥2 modes (recommend A + B or A + C).  
+### Days 61–90 (package + dual-mode pilot)
+
+1. **HOST-004** isolation green under live multi-user load for enabled modes.  
+2. **GWY-003** live qualify rows for **A, B, and/or C** (or residual honesty per mode — never invent GO).  
+3. **GWY-004** + **HOST-005** package runbook for one team (`deploy/gateway/` scaffold → signed image residual).  
+4. Team pilot enabling ≥2 modes (recommend A + B or A + C); record evidence paths.  
 5. **OAUTH-011** formal no-go (expected) for Jenkins-as-AS.  
-6. REL-001/002 evidence pack lists which modes were piloted.
+6. REL-001/002 evidence pack lists which modes were piloted; **host008_single_replica** residual explicit until durable vault HA.
 
 ---
 
@@ -783,4 +787,4 @@ Do not mark GWY-001…004 DoD complete without live evidence called out in backl
 | Docs index | `docs/README.md` |
 | Task graph | Prefer existing IDs; add HOST-* to todo/index when implementation starts |
 
-**Last updated:** 2026-08-01 — planning only; no gateway production claim.
+**Last updated:** 2026-08-01 — foundations landed offline; live pins residual; no gateway production claim.

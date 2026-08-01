@@ -42,6 +42,44 @@ Tune after measurement. Not a production SLO.
 
 Bodies are **secret-free** (no inventory, tokens, subjects). See deployment.md §3 / §7.
 
+Compose healthcheck uses `jenkins-mcp version` as process liveness (distroless has no curl). Prefer k8s HTTP probes in `kustomize/deployment.yaml`.
+
+## Operator quickstart — multi-user lab flags (optional)
+
+**Not production GO.** These flags enable foundation / lab posture only.
+Record residual honesty in [pilot checklist §0](../../docs/pilot/checklist.md).
+
+```bash
+# From repo root
+cp deploy/gateway/.env.example deploy/gateway/.env
+# Edit .env: profile, AgentCore AS/audience/client_id (public), subject labels.
+# Optional multi-user lab (foundation residual — not HA):
+#   JENKINS_MCP_GATEWAY_MULTI_USER=1
+#   JENKINS_MCP_SUBJECT_MAX_CONCURRENT=8
+#   JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT=64
+# Optional reverse-proxy path prefix:
+#   JENKINS_MCP_HTTP_PATH_PREFIX=/mcp
+# Optional process-local JWKS max stale (not multi-region HA):
+#   JENKINS_MCP_HTTP_JWKS_MAX_STALE=1h
+# Optional enterprise signed-policy pin (needs trusted keys on volume):
+#   JENKINS_MCP_REQUIRE_SIGNED_POLICY=1
+
+docker compose -f deploy/gateway/docker-compose.yml --env-file deploy/gateway/.env config
+# Offline qualify (no deploy required)
+export PATH="$HOME/.local/go/bin:$PATH"
+make build
+./bin/jenkins-mcp gateway qualify --offline
+./bin/jenkins-mcp release-evidence --offline | jq '.residual[] | select(.id|test("multi_user|oauth009|host008|gateway_modes"))'
+```
+
+| Lab flag | Meaning | Residual |
+|----------|---------|----------|
+| `JENKINS_MCP_GATEWAY_MULTI_USER=1` | Per-request multi-user Obtain foundation | Not multi-replica HA (HOST-008) |
+| `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` / `_PROCESS_MAX_CONCURRENT` | Concurrency slots (not token-bucket rate yet) | HOST-006 residual for rate |
+| `JENKINS_MCP_HTTP_PATH_PREFIX` | MCP mount under reverse proxy | Live path-prefix matrix residual |
+| `JENKINS_MCP_HTTP_JWKS_MAX_STALE` | Process-local JWKS stale-if-error cap | Multi-instance shared JWKS residual |
+| `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` | Fail closed without trusted signed policy | Needs keys on volume; HSM residual |
+
 ## Residuals (honest)
 
 | Residual | Track |
@@ -52,6 +90,7 @@ Bodies are **secret-free** (no inventory, tokens, subjects). See deployment.md �
 | Live reverse-proxy path-prefix matrix | HOST-002 / NET-001 |
 | Multi-replica HA | HOST-008 Tier B (docs residual only; replicas stay 1) |
 | Real Entra / jwt-auth-filter production pin | OAUTH-009 / OAUTH-010 |
+| Multi-user production GO | HOST multi-user foundation only (`MULTI_USER` ≠ production pin) |
 
 **Windows is out of scope** (ADR 0008).
 

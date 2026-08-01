@@ -35,7 +35,7 @@ Stable IDs emitted on `checks[].gate_id` and `residual[].gate_ids` in schema **v
 | `REL-002.compat.mcp-sdk` | Compatibility · MCP SDK | `mcp_sdk_pin` (+ residual `cursor_host_ci`) |
 | `REL-002.compat.gateway` | Compatibility · gateway | `gateway_qualify_offline` |
 | `REL-002.compat.auth` | Compatibility · auth | residual `live_entra` |
-| `REL-002.compat.modes` | Compatibility · modes A/B/C | residual `gateway_modes_live` (operator mode matrix) |
+| `REL-002.compat.modes` | Compatibility · modes A/B/C | residual `gateway_modes_live` + `multi_user_offline` + `oauth009_offline` (operator mode matrix) |
 | `REL-002.compat.os` | Compatibility · OS Tier-1 | residual `install_operator` |
 | `REL-002.sec.self-check` | Security · self-assessment | `security_self_check` |
 | `REL-002.sec.policy` | Security · read-only / deny-only | `policy_engine_self_test` |
@@ -186,6 +186,7 @@ make pilot-evidence PROFILE= SKIP_GO_TEST=1
 - `release-evidence --offline` and `make pilot-evidence` do **not** replace full `make test` / package / signing gates; attach those logs separately when claiming production GO.
 - Live Entra / jwt-auth-filter / AgentCore Obtain remain residual (offline contracts only).
 - **Gateway modes A/B/C live multi-user** remain residual unless the release evidence mode matrix records live pilot cohorts; offline `gateway_qualify` / unit contracts are foundation only (`gateway_modes_live`).
+- Structured lite residual ids (automation honesty): `multi_user_offline` (Done\* foundation; not production multi-user GO), `oauth009_offline` (Done\* Bearer matrix; live Entra pin open), `host008_single_replica` (Tier A replicas:1; multi-replica HA residual). See [pilot checklist §0](../pilot/checklist.md).
 - Cursor host stdio CI remains residual (offline MCP protocol matrix + Wave 25 binary stdio smoke + Wave 26 optional CI job `stdio-smoke`; not real Cursor). Residual ids: `stdio_binary_smoke` Done* vs `cursor_host_ci` open.
 - Live Rocky/Ubuntu pilot install evidence remains operator-owned (REL-001).
 - Code signing keys and HSM remain organization-owned (packaging placeholder).
