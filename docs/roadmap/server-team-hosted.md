@@ -449,9 +449,12 @@ Prevent one user from exhausting process-wide budgets for others.
 - [x] Mutation confirm cooldown tokens cannot be replayed across subjects.
 
 **Foundation (done):** `gateway.SubjectLimiter` + fair-share tests; mutation
-tokens already profile+principal bound. **Serve wire Done*:** `tools.SubjectSlotLimiter`
-+ `addTool` Hold under `--gateway`; optional subject max env caps. **Residual:**
-token-bucket rate (beyond concurrency); HOST-008 multi-replica; per-request rebind.
+`Binding` = profile + principal + ExternalSubject + tenant with multi-user
+`BindingFromContext` (Alice/Bob tests). **Serve wire Done*:**
+`tools.SubjectSlotLimiter` + `addTool` Hold under `--gateway`; optional subject
+max env caps; `MutationBindingFromContext` from `CallerFromContext` when
+multi-user. **Residual:** token-bucket rate (beyond concurrency); HOST-008
+multi-replica; per-request Jenkins principal on Binding.
 
 ---
 

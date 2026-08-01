@@ -1905,9 +1905,12 @@ func runServe(args []string) error {
 	// HOST-004 / HOST-006: process-level subject key + concurrent limiter when
 	// gateway mode is on. Multi-user: SubjectKeyFromContext derives key from
 	// gateway.Caller on tool ctx (same as Obtain). Empty key skips limiter.
+	// MutationBindingFromContext binds MUT-001 confirm tokens to ExternalSubject
+	// + tenant so Alice preview cannot confirm as Bob on a shared Manager.
 	var serveSubjectKey string
 	var serveSubjectLimiter tools.SubjectSlotLimiter
 	var serveSubjectKeyFromCtx func(ctx context.Context) string
+	var serveMutationBindingFromCtx func(ctx context.Context) (mutation.Binding, bool)
 	if useGateway {
 		serveSubjectKey = gateway.SubjectKey(gateway.CallerFromBoundSubject(subject))
 		if serveSubjectKey != "" {
@@ -1929,32 +1932,49 @@ func runServe(args []string) error {
 				}
 				return ""
 			}
+			// HOST-006 mutation confirm isolation: prefer Caller on ctx for
+			// ExternalSubject/Tenant/Profile; PrincipalID stays process Jenkins
+			// user until per-request Obtain principal is context-carried
+			// (residual: multi-user Jenkins principal hot-swap on Binding).
+			processPrincipal := strings.TrimSpace(subject.JenkinsUserID)
+			serveMutationBindingFromCtx = func(ctx context.Context) (mutation.Binding, bool) {
+				if c, ok := gateway.CallerFromContext(ctx); ok && c.Valid() {
+					return mutation.Binding{
+						ProfileID:       strings.TrimSpace(string(c.ProfileID)),
+						PrincipalID:     processPrincipal,
+						ExternalSubject: strings.TrimSpace(c.Subject),
+						Tenant:          strings.TrimSpace(c.Tenant),
+					}, true
+				}
+				return mutation.Binding{}, false
+			}
 		}
 	}
 	tools.Register(server, client, &tools.RegisterOptions{
-		Gate:                    gate,
-		Budgets:                 budgets,
-		LiveHardMax:             liveHardMax,
-		Policy:                  evaluator,
-		Subject:                 subject,
-		AuthGate:                authGate,
-		Audit:                   auditSink,
-		Metrics:                 metrics,
-		Logger:                  serveLogger,
-		ProfileID:               string(subject.ProfileID),
-		PrincipalID:             subject.JenkinsUserID,
-		LogSearch:               logSearch,
-		Logs:                    logAccess,
-		Meta:                    storeMeta, // durable survey compact cache when profile data dir open
-		EnableTraceRefs:         enableTraceRefs,
-		TraceExporter:           traceExporter,
-		ExternalLogs:            externalLogs,
-		EnableChangeCorrelation: enableChangeCorrelation,
-		WorkItemLookup:          workItemLookup,
-		Doctor:                  doctorFn,
-		SubjectKey:              serveSubjectKey,
-		SubjectKeyFromContext:   serveSubjectKeyFromCtx,
-		SubjectLimiter:          serveSubjectLimiter,
+		Gate:                       gate,
+		Budgets:                    budgets,
+		LiveHardMax:                liveHardMax,
+		Policy:                     evaluator,
+		Subject:                    subject,
+		AuthGate:                   authGate,
+		Audit:                      auditSink,
+		Metrics:                    metrics,
+		Logger:                     serveLogger,
+		ProfileID:                  string(subject.ProfileID),
+		PrincipalID:                subject.JenkinsUserID,
+		LogSearch:                  logSearch,
+		Logs:                       logAccess,
+		Meta:                       storeMeta, // durable survey compact cache when profile data dir open
+		EnableTraceRefs:            enableTraceRefs,
+		TraceExporter:              traceExporter,
+		ExternalLogs:               externalLogs,
+		EnableChangeCorrelation:    enableChangeCorrelation,
+		WorkItemLookup:             workItemLookup,
+		Doctor:                     doctorFn,
+		SubjectKey:                 serveSubjectKey,
+		SubjectKeyFromContext:      serveSubjectKeyFromCtx,
+		SubjectLimiter:             serveSubjectLimiter,
+		MutationBindingFromContext: serveMutationBindingFromCtx,
 	})
 	if *httpAddr != "" {
 		cfg := mcpserver.DefaultHTTPConfig()
