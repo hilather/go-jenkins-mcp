@@ -123,6 +123,7 @@ review findings unless the user explicitly accepts them.
 - Package boundaries (Jenkins client must not import MCP; tools must not raw-HTTP)  
 - Platform claims match the Tier-1 matrix (no accidental Windows support claims)  
 - **Admin console parity:** operator-relevant changes update BFF/SPA/api-v1 (or document residual)  
+- **Audit trail:** security-relevant actions emit AUD-001 events (or explicit residual) — see audit section below  
 - **Docker lab residual:** integration-facing work has compose/Makefile/docs scaffold or an explicit residual
 
 ---

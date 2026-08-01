@@ -3,6 +3,7 @@
 **Audience:** security, compliance, platform, implementers  
 **Related:** [observability.md](../observability.md) (AUD-001), [privacy-data-retention.md](privacy-data-retention.md), [threat-model.md](threat-model.md), [adapters/ext-logs.md](../adapters/ext-logs.md)  
 **Code:** `internal/audit`  
+**Agent policy:** Root [AGENTS.md](../../AGENTS.md) — *Non-negotiable: audit trails when security-relevant*  
 **Status:** Review snapshot 2026-08-01 — local privacy-preserving audit is **Done\*** for pilot; enterprise SIEM ship and several AU-* strengths remain residual.
 
 ---

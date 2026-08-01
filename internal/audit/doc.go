@@ -10,4 +10,9 @@
 // subject keys or vault material. Multi-pod audit aggregation remains residual.
 //
 // Audit emit failures are best-effort and never authorize mutations.
+//
+// Agent policy (AGENTS.md): when adding security-relevant paths (authz deny,
+// authn fail, mutations, admin destructive writes, vault/consent changes),
+// emit via Emit/existing wrappers in the same change or leave an explicit
+// AUD-T residual — never silent omission. See docs/security/audit-trail-review.md.
 package audit
