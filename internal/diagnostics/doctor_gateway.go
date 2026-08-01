@@ -73,6 +73,8 @@ func checkGatewayStatus(getenv func(string) string) Check {
 		"mode_a_enabled":     modeA,
 		"mode_b_enabled":     modeB,
 		"mode_c_enabled":     modeC,
+		// Aliases for residual test / older check consumers.
+		"gateway_mode_c_enabled": modeC,
 		// Offline never claims live pins (unified residual honesty).
 		"mode_a_live_obtain_qualified":    false,
 		"mode_b_live_rs_qualified":        false,
