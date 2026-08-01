@@ -192,11 +192,25 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), "set -euo pipefail") {
+	bodyStr := string(body)
+	if !strings.Contains(bodyStr, "set -euo pipefail") {
 		t.Fatal("scripts/pilot-evidence.sh must use set -euo pipefail")
 	}
-	if !strings.Contains(string(body), pilotEvidenceManifestSchema) {
+	if !strings.Contains(bodyStr, pilotEvidenceManifestSchema) {
 		t.Fatalf("script must emit schema %s", pilotEvidenceManifestSchema)
+	}
+	// Residual lite: pilot pack must capture residual-status + honesty canaries.
+	if !strings.Contains(bodyStr, "gateway residual-status") {
+		t.Fatal("scripts/pilot-evidence.sh must invoke gateway residual-status")
+	}
+	if !strings.Contains(bodyStr, "gateway-residual-status.json") {
+		t.Fatal("scripts/pilot-evidence.sh must write gateway-residual-status.json")
+	}
+	if !strings.Contains(bodyStr, "ha_multi_replica") {
+		t.Fatal("scripts/pilot-evidence.sh must assert ha_multi_replica honesty")
+	}
+	if !strings.Contains(bodyStr, "gateway consent-residual") {
+		t.Fatal("scripts/pilot-evidence.sh must optionally capture gateway consent-residual")
 	}
 
 	// Build binary into temp dir so we do not race with developer's bin/.
@@ -255,12 +269,90 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 		t.Fatal("canary in MANIFEST")
 	}
 	// version.json present when version artifact passed.
+	evidDir := filepath.Join(outRoot, entries[0].Name())
 	for _, a := range m.Artifacts {
 		if a.Name == "version" && a.Status == "pass" {
-			vpath := filepath.Join(outRoot, entries[0].Name(), a.Path)
+			vpath := filepath.Join(evidDir, a.Path)
 			if _, err := os.Stat(vpath); err != nil {
 				t.Fatalf("version artifact missing: %v", err)
 			}
+		}
+	}
+	// Residual lite: gateway_residual_status listed; when pass, JSON + honesty.
+	var residualArt *pilotEvidenceArtifact
+	for i := range m.Artifacts {
+		if m.Artifacts[i].Name == "gateway_residual_status" {
+			residualArt = &m.Artifacts[i]
+			break
+		}
+	}
+	if residualArt == nil {
+		t.Fatal("MANIFEST missing gateway_residual_status artifact (residual lite)")
+	}
+	switch residualArt.Status {
+	case "pass":
+		if residualArt.Path != "gateway-residual-status.json" {
+			t.Fatalf("gateway_residual_status path want gateway-residual-status.json got %q", residualArt.Path)
+		}
+		rsPath := filepath.Join(evidDir, residualArt.Path)
+		rsRaw, err := os.ReadFile(rsPath)
+		if err != nil {
+			t.Fatalf("gateway-residual-status.json: %v", err)
+		}
+		var rs map[string]any
+		if err := json.Unmarshal(rsRaw, &rs); err != nil {
+			t.Fatalf("parse residual-status: %v\n%s", err, rsRaw)
+		}
+		if ha, ok := rs["ha_multi_replica"].(bool); !ok || ha {
+			t.Fatalf("ha_multi_replica want false got %v", rs["ha_multi_replica"])
+		}
+		if o9, ok := rs["oauth009_offline"].(bool); !ok || !o9 {
+			t.Fatalf("oauth009_offline want true got %v", rs["oauth009_offline"])
+		}
+		ids, _ := rs["residual_ids"].([]any)
+		idSet := map[string]bool{}
+		for _, x := range ids {
+			idSet[fmt.Sprint(x)] = true
+		}
+		for _, need := range []string{
+			"multi_user_offline",
+			"oauth009_offline",
+			"oauth010_offline",
+			"progressive_consent_offline",
+			"host008_single_replica",
+			"gateway_modes_live",
+		} {
+			if !idSet[need] {
+				t.Fatalf("residual_ids missing %q in pilot pack residual-status", need)
+			}
+		}
+		// Secret-shaped material must not appear in residual-status artifact.
+		low := strings.ToLower(string(rsRaw))
+		for _, needle := range []string{"access_token=", "refresh_token=", "client_secret=", "authorization: bearer"} {
+			if strings.Contains(low, needle) {
+				t.Fatalf("secret-shaped material %q in gateway-residual-status.json", needle)
+			}
+		}
+	case "skip":
+		// Older binary without residual-status is acceptable.
+		t.Logf("gateway_residual_status skipped: %s", residualArt.Note)
+	case "fail":
+		t.Fatalf("gateway_residual_status failed on healthy binary: %+v\n%s", residualArt, out)
+	default:
+		t.Fatalf("gateway_residual_status unexpected status %q", residualArt.Status)
+	}
+	// Optional consent-residual may pass, skip, or warn — never secret material when file present.
+	for _, a := range m.Artifacts {
+		if a.Name != "gateway_consent_residual" || a.Status != "pass" || a.Path == "" {
+			continue
+		}
+		cpath := filepath.Join(evidDir, a.Path)
+		craw, err := os.ReadFile(cpath)
+		if err != nil {
+			t.Fatalf("gateway-consent-residual.json: %v", err)
+		}
+		if strings.Contains(strings.ToLower(string(craw)), "authorization: bearer") {
+			t.Fatal("secret-shaped material in gateway-consent-residual.json")
 		}
 	}
 }
