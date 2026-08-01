@@ -450,11 +450,14 @@ Prevent one user from exhausting process-wide budgets for others.
 
 **Foundation (done):** `gateway.SubjectLimiter` + fair-share tests; mutation
 `Binding` = profile + principal + ExternalSubject + tenant with multi-user
-`BindingFromContext` (Alice/Bob tests). **Serve wire Done*:**
-`tools.SubjectSlotLimiter` + `addTool` Hold under `--gateway`; optional subject
-max env caps; `MutationBindingFromContext` from `CallerFromContext` when
-multi-user. **Residual:** token-bucket rate (beyond concurrency); HOST-008
-multi-replica; per-request Jenkins principal on Binding.
+`BindingFromContext` (Alice/Bob tests). **Token-bucket rate Done* foundation:**
+`gateway.SubjectRateLimiter` (30/min + burst 10 default; process ceiling);
+Alice-at-cap does not block Bob. **Serve wire Done*:**
+`tools.SubjectSlotLimiter` + `tools.SubjectRateLimiter`; `addTool` Allow then
+Hold under `--gateway`; env rate/burst (0 rate = disabled residual);
+`MutationBindingFromContext` from `CallerFromContext` when multi-user.
+**Residual:** HOST-008 multi-replica; per-request Jenkins principal on Binding;
+policy overlay rate reduction.
 
 ---
 

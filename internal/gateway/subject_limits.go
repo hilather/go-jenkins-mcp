@@ -9,15 +9,16 @@ import (
 )
 
 // HOST-006: per-subject concurrent tool / preview caps under a process ceiling.
+// Companion: subject_rate.go (token-bucket rate; SubjectRateLimiter).
 //
 // Single-process MVP only (HOST-008 multi-replica residual). Policy may only
 // reduce these caps — never elevate past process absolute ceilings.
 //
 // Serve wire (Done*): cmd sets tools.RegisterOptions.SubjectLimiter to a
 // *SubjectLimiter and SubjectKey from SubjectKey(CallerFromBoundSubject) when
-// --gateway is on. tools.addTool Holds a slot around dispatch. AuthGate is
-// Check-only and cannot Release slots — do not model concurrent limiting as a
-// pure AuthGate.
+// --gateway is on. tools.addTool Holds a slot around dispatch (after optional
+// rate Allow). AuthGate is Check-only and cannot Release slots — do not model
+// concurrent limiting as a pure AuthGate.
 
 const (
 	// DefaultMaxConcurrentPerSubject is the default concurrent tool slots per

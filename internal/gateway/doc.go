@@ -1,13 +1,13 @@
 // Package gateway provides the optional managed-gateway / AgentCore foundation
 // (GWY-001/002) plus Mode A personal API token vault (HOST-009), Mode B
 // Jenkins-audience JWT bearer vault (HOST-010 offline), multi-tenant cache
-// namespace keys (HOST-004), and per-subject concurrent budgets (HOST-006):
+// namespace keys (HOST-004), and per-subject concurrent + rate budgets (HOST-006):
 // credential provider interfaces, config validation that never treats stock
 // Jenkins as an OAuth authorization server, token-cache contracts, consent URL
 // metadata, pluggable TokenFetcher (offline mock / HTTP), per-subject
-// APITokenVault / JWTVault (memory/file), SubjectLimiter (per-subject + process
-// ceilings), and binding of inbound claims to MCP policy subjects (including
-// OAUTH-006 group overage residual metadata).
+// APITokenVault / JWTVault (memory/file), SubjectLimiter (concurrent slots),
+// SubjectRateLimiter (token-bucket rate), and binding of inbound claims to MCP
+// policy subjects (including OAUTH-006 group overage residual metadata).
 //
 // Default construction is fail-closed: NewAgentCoreProvider sets Live=false and
 // Fetcher=nil (Obtain → not_configured). Mode A NewAPITokenVaultProvider and
