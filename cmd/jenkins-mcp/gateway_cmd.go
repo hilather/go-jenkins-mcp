@@ -84,17 +84,11 @@ func runGatewayQualify(args []string) error {
 	return nil
 }
 
-// residualStatusHonestyNote is the unified operator residual honesty sentence
-// (never tokens/subjects). Points operators at the live pin runbook.
-const residualStatusHonestyNote = "unified gateway residual snapshot (env/static honesty only): offline Mode A/B/C foundations Done*; optional same-host FileSubjectRateLimiter / FileTokenCache / vault flock lite when paths set; live Entra / jwt-auth-filter / AgentCore / multi-pod shared rate+vault HA residual — never production GO from this CLI; see docs/gateway/live-pin-blockers.md"
-
-// residualStatusDoc is the primary operator pointer for residual honesty.
-const residualStatusDoc = "docs/gateway/live-pin-blockers.md"
-
 // runGatewayResidualStatus prints one secret-free JSON snapshot combining mode
 // matrix residual (A/B/C), multi-user / HA / multi-pod residual, progressive
 // consent residual, subject-rate knobs, and principal_cache entry count.
 // Env/static only — no Obtain, vault open, or browser. Never tokens or subjects.
+// Shared assembly: diagnostics.BuildGatewayResidualStatus (admin BFF parity).
 //
 //	jenkins-mcp gateway residual-status
 func runGatewayResidualStatus(args []string) error {
@@ -112,136 +106,10 @@ func runGatewayResidualStatus(args []string) error {
 	return nil
 }
 
-// buildGatewayResidualStatus assembles the unified residual snapshot map.
-// getenv nil → os.Getenv. Secret-free: never vault bytes, tokens, or subjects.
+// buildGatewayResidualStatus is a thin CLI wrapper over the shared residual
+// snapshot (diagnostics.BuildGatewayResidualStatus). Kept for gateway_cmd tests.
 func buildGatewayResidualStatus(getenv func(string) string) map[string]any {
-	if getenv == nil {
-		getenv = os.Getenv
-	}
-
-	multiUser := gateway.MultiUserEnabled(getenv)
-	rateEnabled, ratePerMinute, rateBurst := gateway.SubjectRateConfigFromEnviron(getenv)
-	mp := diagnostics.MultiPodResidualFromEnviron(getenv)
-	pc := gateway.NewProgressiveConsentResidual()
-
-	modeA, modeB, modeC := false, false, false
-	modeResidual := ""
-	enabledIDs := []string{}
-	primary := ""
-	var modeMatrix map[string]any
-	if mx, err := gateway.ModeMatrixFromEnviron(getenv); err == nil {
-		primary = string(mx.Primary)
-		modeResidual = mx.Residual
-		for _, m := range mx.Enabled {
-			enabledIDs = append(enabledIDs, string(m))
-			switch m {
-			case gateway.CredentialModeAPITokenVault:
-				modeA = true
-			case gateway.CredentialModeJWTRSBearer:
-				modeB = true
-			case gateway.CredentialModeAgentCore:
-				modeC = true
-			}
-		}
-		modeMatrix = map[string]any{
-			"primary":  primary,
-			"enabled":  enabledIDs,
-			"residual": modeResidual,
-		}
-	} else {
-		// Soft residual when matrix invalid: still surface primary intent without secrets.
-		mode := string(gateway.CredentialModeFromEnviron(getenv))
-		if !gateway.CredentialMode(mode).Valid() {
-			mode = ""
-		}
-		primary = mode
-		switch gateway.CredentialMode(mode) {
-		case gateway.CredentialModeAPITokenVault:
-			modeA = true
-		case gateway.CredentialModeJWTRSBearer:
-			modeB = true
-		case gateway.CredentialModeAgentCore:
-			modeC = true
-		}
-		if mode != "" {
-			enabledIDs = []string{mode}
-		}
-		modeResidual = "mode matrix invalid or incomplete — fix JENKINS_MCP_GATEWAY_CREDENTIAL_MODE / ENABLED_MODES; live mode pins residual"
-		modeMatrix = map[string]any{
-			"primary":  primary,
-			"enabled":  enabledIDs,
-			"residual": modeResidual,
-			"valid":    false,
-		}
-	}
-
-	// Structured residual ids (REL lite honesty; never claim production GO).
-	// Mode B residual id oauth009_offline is always advertised for operator
-	// grepping; mode_b_enabled reflects env enablement only.
-	residualIDs := []string{
-		"multi_user_offline",
-		"oauth009_offline",
-		"oauth010_offline",
-		"progressive_consent_offline",
-		"host008_single_replica",
-		"gateway_modes_live",
-	}
-
-	out := map[string]any{
-		"mode_matrix":                     modeMatrix,
-		"mode_matrix_residual":            modeResidual,
-		"mode_a_enabled":                  modeA,
-		"mode_b_enabled":                  modeB,
-		"mode_c_enabled":                  modeC,
-		"mode_a_live_obtain_qualified":    false,
-		"mode_b_live_rs_qualified":        false,
-		"mode_c_live_agentcore_qualified": false,
-		// Mode B residual id (OAUTH-009) — offline foundation only.
-		"residual_id":                  "oauth009_offline",
-		"oauth009_offline":             true,
-		"oauth009_offline_only":        true,
-		"residual_ids":                 residualIDs,
-		"multi_user_enabled":           multiUser,
-		"gateway_ready":                false, // CLI residual: Ready only on serve /readyz
-		"ha_multi_replica":             false, // HOST-008 Tier A single-replica default
-		"session_affinity_recommended": multiUser,
-		// HOST-008 multi-pod residual (diagnostics helper; always vault residual true).
-		"multi_pod_vault_residual":      mp.MultiPodVaultResidual,
-		"kubernetes_env_detected":       mp.KubernetesEnvDetected,
-		"vault_path_emptydir_heuristic": mp.VaultEmptyDirHeuristic,
-		"replicas_env_residual":         mp.ReplicasEnvResidual,
-		// Progressive consent residual (OAUTH-010 / GWY-001).
-		"progressive_consent": pc.StatusMap(),
-		// HOST-006 subject rate knobs (admin health field names).
-		// shared_subject_rate_file=true only when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH
-		// set (HOST-008 same-host lite); multi-pod shared rate still residual.
-		"rateEnabled":              rateEnabled,
-		"ratePerMinute":            ratePerMinute,
-		"rateBurst":                rateBurst,
-		"shared_subject_rate_file": gateway.SubjectRatePathConfiguredFromEnviron(getenv),
-		// Process-local principal cache: entry count + optional hygiene knobs from env
-		// (never subjects/tokens/principal inventory). Multi-pod shared residual.
-		"principal_cache_entries": gateway.ProcessPrincipalCache().Len(),
-		"residual_note":           residualStatusHonestyNote,
-		"doc":                     residualStatusDoc,
-	}
-	// Optional PrincipalCache hygiene residual lite (env/static; empty = unlimited / no TTL).
-	if pcMax, pcTTL, err := gateway.PrincipalCacheConfigFromEnviron(getenv); err == nil {
-		if pcMax > 0 {
-			out["principal_cache_max_entries"] = pcMax
-		}
-		if pcTTL > 0 {
-			out["principal_cache_ttl_seconds"] = int(pcTTL / time.Second)
-		}
-	}
-	if mp.Checklist != "" {
-		out["multi_pod_residual_checklist"] = mp.Checklist
-	}
-	if modeC {
-		out["progressive_consent_residual"] = pc.ResidualNote
-		out["progressive_consent_surfaces"] = pc.Surfaces
-	}
-	return out
+	return diagnostics.BuildGatewayResidualStatus(getenv)
 }
 
 // runGatewayConsentResidual prints Mode C progressive consent residual honesty

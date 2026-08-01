@@ -107,7 +107,7 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 | Path | Status |
 |------|--------|
 | `ConsentRequired` → auth URL + session id only (Obtain / AuthProvider / `mapToolErr`) | **Done\*** |
-| Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway residual-status`, `gateway consent-residual`, `gateway subject-invalidate`) | **Done\*** (env/static honesty; subject-invalidate is force re-auth residual lite) |
+| Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway residual-status`, admin `GET /admin/v1/gateway/residual-status`, `gateway consent-residual`, `gateway consent-purge`, `gateway subject-invalidate`) | **Done\*** (env/static honesty; subject-invalidate is force re-auth residual lite) |
 | Process-local consent metadata store (TTL; optional file under XDG data) | **Done\*** — auth URL + session id + timestamps only; never tokens |
 | Consent metadata purge/expire CLI (`gateway consent-purge` / `consent-expire`) | **Done\*** — TTL purge / `--session-id` / `--all`; secret-free summary; never tokens |
 | Browser 3LO interactive UX automation | **Residual** — not automated; operator/agent opens `authorization_url` out-of-band |
@@ -133,6 +133,7 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 
 ```bash
 jenkins-mcp gateway residual-status    # unified secret-free residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count)
+# same map on admin BFF (HOST-007 SPA Overview): GET /admin/v1/gateway/residual-status
 jenkins-mcp gateway consent-residual   # progressive consent residual + last consent_sessions if file present
 jenkins-mcp gateway consent-purge      # purge TTL-expired metadata (or --session-id / --all); secret-free counts
 jenkins-mcp gateway subject-invalidate --subject-key tenant|sub|profile   # force re-auth residual lite (GWY-002/HOST-003)
@@ -174,13 +175,16 @@ jenkins-mcp gateway subject-invalidate --subject-key 'tenant|alice-sub|corp'
 `PrincipalCache` entry for `SubjectKey(caller)` are dropped so multi-user policy
 JenkinsUserID / mutation Binding re-resolve on the next tool call.
 
-**`gateway residual-status`** combines mode-matrix residual, `multi_user_enabled`,
+**`gateway residual-status`** (and admin **`GET /admin/v1/gateway/residual-status`**)
+combine mode-matrix residual, `multi_user_enabled`,
 `ha_multi_replica=false`, `session_affinity_recommended`, multi-pod residual fields,
-progressive consent residual, `rateEnabled` / `ratePerMinute` / `rateBurst`, and
-`principal_cache_entries` (count only) plus optional `principal_cache_max_entries` /
-`principal_cache_ttl_seconds` when hygiene env is set. Always advertises Mode B residual id
-`oauth009_offline` and points at [live-pin-blockers.md](live-pin-blockers.md).
-Never tokens or subjects (no principal inventory dump). Env/static only — not live Ready / production GO.
+progressive consent residual, `rateEnabled` / `ratePerMinute` / `rateBurst`,
+`shared_subject_rate_file`, and `principal_cache_entries` (count only) plus optional
+`principal_cache_max_entries` / `principal_cache_ttl_seconds` when hygiene env is set.
+Always advertises Mode B residual id `oauth009_offline` and points at
+[live-pin-blockers.md](live-pin-blockers.md). Shared assembly:
+`diagnostics.BuildGatewayResidualStatus`. Never tokens or subjects (no principal
+inventory dump). Env/static only — not live Ready / production GO.
 
 **Honesty:** metadata propagation alone does **not** close full GWY-001/003 DoD.
 When Obtain would return `ConsentRequired`, surfaces never include tokens,

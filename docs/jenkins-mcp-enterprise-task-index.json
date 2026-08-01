@@ -4790,15 +4790,16 @@
       "dependency_text": "UI-003",
       "parallel_safe": null,
       "objective": "Operator admin for team gateway without multi-tenant SaaS control plane.",
-      "implementation": "Document non-loopback admin; no vault material in browser; residual multi-operator sessions.",
+      "implementation": "Document non-loopback admin; no vault material in browser; residual multi-operator sessions; residual-status BFF/SPA (GET /admin/v1/gateway/residual-status).",
       "acceptance_criteria": [
         "Non-loopback admin documented with token/mTLS residual.",
         "No Jenkins tokens/vault in browser responses.",
         "Multi-operator residual or designed sessions.",
         "localStorage token pilot-only.",
-        "Enabled auth modes listed secret-free."
+        "Enabled auth modes listed secret-free.",
+        "Admin residual-status surface (BFF + SPA) parity with CLI gateway residual-status."
       ],
-      "acceptance_criteria_count": 5,
+      "acceptance_criteria_count": 6,
       "evidence_tests": [],
       "source_line": 0,
       "dependency_depth": 0,

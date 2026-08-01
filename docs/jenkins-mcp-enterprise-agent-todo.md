@@ -2841,8 +2841,9 @@ process-local; raise env bootstrap needs serve restart.
 - [x] Quarantine localStorage token UX for non-pilot. — documented pilot-only / quarantine for production (`web/admin/README.md` + admin HOST-007)
 - [x] CSP preserved under reverse-proxy; secret-free note of **enabled auth modes**. — CSP guidance; `enabledModes` on health + gateway/vault
 - [x] Secret-free multi-user residual note: no admin/`JENKINS_MCP_GATEWAY_MULTI_USER` production-ready pin; `enabledModes` is config enablement only.
+- [x] Admin residual-status surface: `GET /admin/v1/gateway/residual-status` + Overview SPA card (same secret-free map as CLI `gateway residual-status` via `diagnostics.BuildGatewayResidualStatus`; viewer ok; 404-hide on older BFF; never tokens/subjects; live-pin-blockers pointer). — BFF tests + docs/admin/api-v1.md
 
-**Status:** **Done*** for operator residual documentation + secret-free mode listing + multi-user honesty. Cookie sessions / multi-operator OIDC remain residual.
+**Status:** **Done*** for operator residual documentation + secret-free mode listing + multi-user honesty + residual-status BFF/SPA. Cookie sessions / multi-operator OIDC remain residual.
 
 ---
 

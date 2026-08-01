@@ -120,6 +120,7 @@ a multi-tenant end-user control plane or SaaS console.
 | Non-loopback bind | Only with **token required** (`--admin-allow-non-local` + `--require-token` / token env). Prefer reverse-proxy **mTLS or OIDC** residual design before exposing beyond loopback. |
 | Vault / Jenkins tokens | **Never** in browser JSON or SPA. Mode A vault inventory is hash-only subjects via `GET /admin/v1/gateway/vault`; writes remain CLI (`gateway vault-put` / `vault-delete`). |
 | Enabled auth modes | Secret-free mode **ids** on `GET /admin/v1/health` (`enabledModes`) and `GET /admin/v1/gateway/vault` (`mode` + `enabledModes`). No secrets, no vault material. |
+| Unified residual-status | **HOST-007:** `GET /admin/v1/gateway/residual-status` returns the same secret-free map as CLI `gateway residual-status` (`diagnostics.BuildGatewayResidualStatus`). Modes, multi_user, HA, multi-pod, consent, rate knobs, `principal_cache_entries` (count), `oauth009_offline`. SPA Overview card hides on 404 (older BFF). Pointer: [live-pin-blockers.md](../gateway/live-pin-blockers.md). Never tokens/subjects / production GO. |
 | Mode C progressive consent | **OAUTH-010 residual (static):** health always exposes `progressiveConsentMetadataDoneStar: true` and `progressiveConsentBrowser3loAutomated: false` via `gateway.NewProgressiveConsentResidual`. When Mode C is enabled, `progressiveConsentResidual` carries the secret-free residual note. **Never** `authorization_url` with query secrets, tokens, or client secrets. SPA Overview shows this card when Mode C / residual is present. |
 | Multi-operator sessions | **Residual: single process role** (`--admin-role`) for the whole BFF. No multi-user admin session table / CSRF cookies in v1. |
 | localStorage token UX | **Pilot / quarantine for production.** SPA may store admin Bearer in `localStorage` for loopback labs only — **not** a production multi-host authn story. Prefer httpOnly cookie + CSRF or reverse-proxy mTLS/OIDC residual (ADR 0014). |
@@ -128,7 +129,7 @@ a multi-tenant end-user control plane or SaaS console.
 | CSP under reverse-proxy | Prefer **same-origin** (SPA + `/admin/v1`). Do not strip CSP; re-apply if TLS terminates upstream. |
 | HA admin | Not multi-replica admin plane (HOST-008 Tier B). See [gateway/deployment.md §9](../gateway/deployment.md). |
 
-See also [`api-v1.md`](api-v1.md) health + gateway/vault; [`../gateway/deployment.md`](../gateway/deployment.md).
+See also [`api-v1.md`](api-v1.md) health + gateway/vault + gateway/residual-status; [`../gateway/deployment.md`](../gateway/deployment.md); [`../gateway/live-pin-blockers.md`](../gateway/live-pin-blockers.md).
 ---
 
 ## 1. Packaging (RPM / DEB / tar)

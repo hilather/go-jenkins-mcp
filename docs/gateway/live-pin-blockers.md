@@ -348,6 +348,7 @@ live pin complete without lab evidence.
 | `security self-check` | item `rs_qualification` (OAUTH-009 residual summary) | Warn on `oidc_bearer` or Mode B |
 | Admin `GET /admin/v1/health` / `gateway/vault` | `haMultiReplica=false`, `sessionAffinityRecommended`, mode ids only | Never tokens |
 | `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count) | Env/static honesty; Mode B id `oauth009_offline`; never tokens; **exercised by residual-smoke** |
+| Admin `GET /admin/v1/gateway/residual-status` | Same secret-free map as CLI (HOST-007 SPA Overview card) | Viewer read; 404 hides card on older BFF; never tokens |
 | `gateway consent-residual` | Progressive consent residual snapshot | Browser 3LO not automated; residual-smoke optional |
 | `gateway consent-purge` / `consent-expire` | Purge TTL-expired consent metadata (or `--session-id` / `--all`) | Metadata only; secret-free counts; not multi-replica HA |
 | `gateway subject-invalidate` | Force re-auth residual lite: process-local principal + optional FileTokenCache | Not live Entra revocation; multi-pod residual; CLI ≠ remote serve MemoryTokenCache |
