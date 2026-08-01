@@ -10,7 +10,7 @@ Fill-in form: [`evidence-template.md`](evidence-template.md)
 Offline CLI sample: `jenkins-mcp release-evidence --offline [--profile <id>] [--output dist/release-evidence.json]`  
 Schema: `jenkins-mcp.release-evidence.v2` (Wave 21 expand)  
 Offline pack automation: `make pilot-evidence` → `dist/pilot-evidence/<timestamp>/` (REL-001/002 lite)  
-**Residual honesty smoke (opt-in, offline only):** `make residual-smoke` (alias `make gateway-residual-smoke`) → `scripts/gateway-residual-smoke.sh` runs `gateway qualify --offline` + `release-evidence --offline` + **`gateway residual-status`** (Wave 8 CLI honesty: `ha_multi_replica=false`, Mode B residual id `oauth009_offline`, residual_ids list, progressive_consent Done\*) and optionally `gateway consent-residual`; **fails** if residual ids `multi_user_offline` · `oauth009_offline` · `oauth010_offline` · `progressive_consent_offline` · `host008_single_replica` · `gateway_modes_live` are missing from release-evidence or residual-status honesty fields fail. Artifacts under `dist/residual-smoke/<ts>/` (includes `gateway-residual-status.json`). **Not** part of default `make test` / `make ci`. Proves residual ids still advertised — **not** live multi-user / Entra / multi-pod GO. Operator runbook: [gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md).
+**Residual honesty smoke (opt-in, offline only):** `make residual-smoke` (alias `make gateway-residual-smoke`) → `scripts/gateway-residual-smoke.sh` runs `gateway qualify --offline` + `release-evidence --offline` (embeds full **`gateway_residual_status`** map from `BuildGatewayResidualStatus` — same honesty as CLI residual-status; no second CLI required for offline packs) + **`gateway residual-status`** (Wave 8 CLI honesty: `ha_multi_replica=false`, Mode B residual id `oauth009_offline`, residual_ids list, progressive_consent Done\*) and optionally `gateway consent-residual`; **fails** if residual ids `multi_user_offline` · `oauth009_offline` · `oauth010_offline` · `progressive_consent_offline` · `host008_single_replica` · `gateway_modes_live` are missing from release-evidence / nested `gateway_residual_status.residual_ids`, or residual-status honesty fields fail. Artifacts under `dist/residual-smoke/<ts>/` (includes `gateway-residual-status.json`). **Not** part of default `make test` / `make ci`. Proves residual ids still advertised — **not** live multi-user / Entra / multi-pod GO. Operator runbook: [gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md).
 
 ---
 
@@ -19,7 +19,7 @@ Offline pack automation: `make pilot-evidence` → `dist/pilot-evidence/<timesta
 1. Record artifact identity (`version --json`, `dist/BUILD_INFO`, `SHA256SUMS`).
 2. Run each gate command; attach logs/JSON under a release evidence directory.
 3. Optionally run **`make pilot-evidence PROFILE=<id>`** (or `PROFILE=` offline-only) to capture version, security self-check, gateway qualify, doctor/pilot-check into one secret-free bundle with `MANIFEST.json`.
-4. Run **`jenkins-mcp release-evidence --offline`** for the expanded lite JSON (version, security self-check, policy self-test, MCP SDK pin, LKG note, gateway offline qualify, structured residuals).
+4. Run **`jenkins-mcp release-evidence --offline`** for the expanded lite JSON (version, security self-check, policy self-test, MCP SDK pin, LKG note, gateway offline qualify, structured residuals, nested **`gateway_residual_status`** = full CLI residual-status map).
 5. Mark pass / fail / exception (with owner + ticket).
 6. Complete ownership sign-offs on the template.
 7. Decision: **GO** only if all mandatory rows are pass or approved exception.
@@ -118,7 +118,7 @@ Stable IDs emitted on `checks[].gate_id` and `residual[].gate_ids` in schema **v
 | doctor | `jenkins-mcp doctor --profile <id>` | |
 | pilot-check | `jenkins-mcp pilot-check --profile <id> [--offline]` | REL-001 JSON |
 | pilot-evidence pack | `make pilot-evidence PROFILE=<id>` or `scripts/pilot-evidence.sh` | Bundle + `MANIFEST.json` under `dist/pilot-evidence/` |
-| release-evidence lite | `jenkins-mcp release-evidence --offline [--output PATH]` | Schema v2: version, security self-check, policy self-test, MCP SDK pin, LKG, gateway offline, structured residual[] |
+| release-evidence lite | `jenkins-mcp release-evidence --offline [--output PATH]` | Schema v2: version, security self-check, policy self-test, MCP SDK pin, LKG, gateway offline, structured residual[], nested `gateway_residual_status` (CLI residual-status map embed) |
 | Residual honesty smoke (opt-in) | `make residual-smoke` / `scripts/gateway-residual-smoke.sh` | Asserts residual ids present; **not** default `make test`; does not close live pins |
 
 ### Ownership (mandatory names)
@@ -175,6 +175,7 @@ make pilot-evidence PROFILE= SKIP_GO_TEST=1
 | `security_self_check` | Compact QA-005 summary (`independent_review_required` always true) |
 | `update_lkg` | Present/absent note (+ version/channel when present) |
 | `gateway_qualify` | Offline GWY-003 suite counts |
+| `gateway_residual_status` | Full secret-free map from `diagnostics.BuildGatewayResidualStatus` (same as CLI `gateway residual-status` / doctor embed); offline honesty only — live `mode_*_qualified` stay false; pointer to [live-pin-blockers.md](../gateway/live-pin-blockers.md) |
 | `checks[]` | Rows with `id`, `gate_id`, `status`, `message`, optional `optional` |
 | `residual[]` | Structured known residuals (`id`, `gate_ids`, `message`) — live Entra, Cursor host CI, install operator, full suite, production sign-off |
 
@@ -189,7 +190,7 @@ make pilot-evidence PROFILE= SKIP_GO_TEST=1
 - Live Entra / jwt-auth-filter / AgentCore Obtain remain residual (offline contracts only).
 - **Gateway modes A/B/C live multi-user** remain residual unless the release evidence mode matrix records live pilot cohorts; offline `gateway_qualify` / unit contracts are foundation only (`gateway_modes_live`).
 - Structured lite residual ids (**offline automation honesty only**): `multi_user_offline` (Done\* foundation; not production multi-user GO), `oauth009_offline` (Done\* Bearer matrix; live Entra pin open), `oauth010_offline` (Done\* Mode C offline matrix; live Entra 3LO/OBO + AgentCore pin open), `progressive_consent_offline` (Done\* consent metadata path; browser 3LO not automated), `host008_single_replica` (Tier A replicas:1; multi-replica HA residual), `gateway_modes_live` (live modes residual). See [pilot checklist §0](../pilot/checklist.md).
-- **Verify residual honesty offline (opt-in):** `make residual-smoke` / `make gateway-residual-smoke` (`scripts/gateway-residual-smoke.sh`) — fails closed if those ids drop from `release-evidence --offline` or if `gateway residual-status` honesty fields fail (`ha_multi_replica=false`, `oauth009_offline`, residual_ids, progressive_consent Done\*). Unit contract: `go test ./cmd/jenkins-mcp/ -count=1 -run Residual`. **Not** live GO evidence.
+- **Verify residual honesty offline (opt-in):** `make residual-smoke` / `make gateway-residual-smoke` (`scripts/gateway-residual-smoke.sh`) — fails closed if those ids drop from `release-evidence --offline` residual[] **or** nested `gateway_residual_status`, or if `gateway residual-status` honesty fields fail (`ha_multi_replica=false`, `oauth009_offline`, residual_ids, progressive_consent Done\*). Unit contract: `go test ./cmd/jenkins-mcp/ -count=1 -run 'Residual|GatewayResidualStatus'`. **Not** live GO evidence.
 - Cursor host stdio CI remains residual (offline MCP protocol matrix + Wave 25 binary stdio smoke + Wave 26 optional CI job `stdio-smoke`; not real Cursor). Residual ids: `stdio_binary_smoke` Done* vs `cursor_host_ci` open.
 - Live Rocky/Ubuntu pilot install evidence remains operator-owned (REL-001).
 - Code signing keys and HSM remain organization-owned (packaging placeholder).

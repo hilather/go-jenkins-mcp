@@ -86,6 +86,19 @@ require (
 	if ev.GatewayQualify == nil || !ev.GatewayQualify.OK {
 		t.Fatalf("gateway qualify: %+v", ev.GatewayQualify)
 	}
+	// REL residual lite: full gateway residual-status map embedded offline.
+	if ev.GatewayResidualStatus == nil {
+		t.Fatal("gateway_residual_status missing on offline release-evidence")
+	}
+	if ev.GatewayResidualStatus["residual_id"] != "oauth009_offline" {
+		t.Fatalf("gateway_residual_status.residual_id=%v", ev.GatewayResidualStatus["residual_id"])
+	}
+	if ev.GatewayResidualStatus["ha_multi_replica"] != false {
+		t.Fatal("gateway_residual_status ha_multi_replica must be false")
+	}
+	if ev.GatewayResidualStatus["gateway_ready"] != false {
+		t.Fatal("gateway_ready must be false on residual-status embed (Ready only on serve /readyz)")
+	}
 
 	wantChecks := map[string]string{
 		"version_metadata":        "pass",
@@ -547,5 +560,222 @@ func TestKnownReleaseResidualsHonesty(t *testing.T) {
 	// Honesty: not claiming full production.
 	if !strings.Contains(joined, "not production sign-off") && !strings.Contains(joined, "go/no-go") {
 		t.Fatalf("residuals should deny production sign-off claim: %s", joined)
+	}
+}
+
+// TestBuildReleaseEvidence_GatewayResidualStatusEmbed asserts REL residual lite:
+// release-evidence --offline embeds the same secret-free map as CLI
+// `gateway residual-status` (diagnostics.BuildGatewayResidualStatus) under
+// gateway_residual_status. Offline only — not live multi-user / Entra GO.
+func TestBuildReleaseEvidence_GatewayResidualStatusEmbed(t *testing.T) {
+	oldV, oldC, oldB := version, commit, buildTime
+	version, commit, buildTime = "3.1.4", "piecommit", "2026-08-01T00:00:00Z"
+	defer func() { version, commit, buildTime = oldV, oldC, oldB }()
+
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv(update.EnvUpdateLKGPath, filepath.Join(t.TempDir(), "no-lkg.json"))
+
+	// Plant canaries that residual builder / scrub must never echo.
+	const canary = "REL_EVIDENCE_RESIDUAL_CANARY_super-secret-token-xyz"
+	t.Setenv("HOST_RELEASE_EVIDENCE_RESIDUAL_CANARY", canary)
+
+	// Closed getenv: Mode B multi-user offline honesty without ambient process noise.
+	getenv := func(k string) string {
+		switch k {
+		case "JENKINS_MCP_GATEWAY_MULTI_USER":
+			return "1"
+		case "JENKINS_MCP_GATEWAY_CREDENTIAL_MODE":
+			return "jwt_rs_bearer"
+		case "KUBERNETES_SERVICE_HOST", "JENKINS_MCP_GATEWAY_REPLICAS", "REPLICAS":
+			return ""
+		case "JENKINS_MCP_GATEWAY_VAULT_PATH", "JENKINS_MCP_GATEWAY_JWT_VAULT_PATH",
+			"JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH", "JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH",
+			"JENKINS_MCP_GATEWAY_JWKS_CACHE_PATH":
+			return ""
+		default:
+			return ""
+		}
+	}
+
+	goMod := `module github.com/simonfxr/go-jenkins-mcp
+
+require (
+	github.com/modelcontextprotocol/go-sdk v1.1.0
+)
+`
+	ev, err := buildReleaseEvidence(context.Background(), releaseEvidenceOptions{
+		Now:                func() time.Time { return time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC) },
+		GoModContent:       goMod,
+		SkipGatewayQualify: true,
+		Getenv:             getenv,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grs := ev.GatewayResidualStatus
+	if grs == nil {
+		t.Fatal("gateway_residual_status required on offline release-evidence")
+	}
+	if grs["residual_id"] != "oauth009_offline" {
+		t.Fatalf("residual_id=%v", grs["residual_id"])
+	}
+	if grs["oauth009_offline"] != true {
+		t.Fatalf("oauth009_offline=%v", grs["oauth009_offline"])
+	}
+	if grs["mode_b_enabled"] != true {
+		t.Fatalf("mode_b_enabled=%v", grs["mode_b_enabled"])
+	}
+	if grs["multi_user_enabled"] != true {
+		t.Fatalf("multi_user_enabled=%v", grs["multi_user_enabled"])
+	}
+	if grs["ha_multi_replica"] != false {
+		t.Fatal("ha_multi_replica must be false")
+	}
+	if grs["gateway_ready"] != false {
+		t.Fatal("gateway_ready must be false on residual embed")
+	}
+	if grs["mode_a_live_obtain_qualified"] != false ||
+		grs["mode_b_live_rs_qualified"] != false ||
+		grs["mode_c_live_agentcore_qualified"] != false {
+		t.Fatalf("live mode pins must stay false: %+v", grs)
+	}
+	if grs["multi_pod_vault_residual"] != true {
+		t.Fatal("multi_pod_vault_residual always true")
+	}
+	// residual_ids list honesty.
+	idSet := map[string]bool{}
+	switch v := grs["residual_ids"].(type) {
+	case []string:
+		for _, id := range v {
+			idSet[id] = true
+		}
+	case []any:
+		for _, id := range v {
+			if s, ok := id.(string); ok {
+				idSet[s] = true
+			}
+		}
+	default:
+		t.Fatalf("residual_ids type %T: %+v", grs["residual_ids"], grs["residual_ids"])
+	}
+	for _, want := range []string{
+		"multi_user_offline", "oauth009_offline", "oauth010_offline",
+		"progressive_consent_offline", "host008_single_replica", "gateway_modes_live",
+	} {
+		if !idSet[want] {
+			t.Errorf("residual_ids missing %q: %+v", want, grs["residual_ids"])
+		}
+	}
+	note, _ := grs["residual_note"].(string)
+	doc, _ := grs["doc"].(string)
+	if !strings.Contains(note, "live-pin-blockers") && !strings.Contains(doc, "live-pin-blockers") {
+		t.Fatalf("want live-pin-blockers pointer: note=%q doc=%q", note, doc)
+	}
+
+	// Secret-free canaries on full document + residual map (JSON marshal path).
+	scrubReleaseEvidence(ev)
+	blob, err := json.Marshal(ev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := assertReleaseEvidenceSecretFree(blob); err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	for _, bad := range []string{
+		canary,
+		"access_token=",
+		"refresh_token=",
+		"client_secret=",
+		"Authorization: Bearer",
+		"production go complete",
+		"BEGIN PRIVATE KEY",
+	} {
+		if strings.Contains(strings.ToLower(s), strings.ToLower(bad)) {
+			t.Fatalf("forbidden %q in release-evidence JSON (gateway_residual_status canary)", bad)
+		}
+	}
+	// Nested key must appear in JSON.
+	if !strings.Contains(s, `"gateway_residual_status"`) {
+		t.Fatal("JSON must include gateway_residual_status key")
+	}
+	if !strings.Contains(s, `"oauth009_offline"`) {
+		t.Fatal("JSON residual map must mention oauth009_offline")
+	}
+}
+
+// TestReleaseEvidenceCLI_GatewayResidualStatusJSON asserts the CLI path emits
+// gateway_residual_status under the offline evidence document (secret-free).
+func TestReleaseEvidenceCLI_GatewayResidualStatusJSON(t *testing.T) {
+	oldV, oldC, oldB := version, commit, buildTime
+	version, commit, buildTime = "3.1.4", "pie", "t"
+	defer func() { version, commit, buildTime = oldV, oldC, oldB }()
+	t.Setenv(update.EnvUpdateLKGPath, filepath.Join(t.TempDir(), "no-lkg.json"))
+
+	out := captureStdout(t, func() {
+		if err := runReleaseEvidence([]string{"--offline"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	var ev releaseEvidence
+	if err := json.Unmarshal([]byte(out), &ev); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if ev.GatewayResidualStatus == nil {
+		t.Fatal("CLI release-evidence must embed gateway_residual_status")
+	}
+	if ev.GatewayResidualStatus["ha_multi_replica"] != false {
+		t.Fatal("ha_multi_replica must be false")
+	}
+	if ev.GatewayResidualStatus["residual_id"] != "oauth009_offline" {
+		t.Fatalf("residual_id=%v", ev.GatewayResidualStatus["residual_id"])
+	}
+	if strings.Contains(strings.ToLower(out), "authorization: bearer") {
+		t.Fatal("must not contain bearer material")
+	}
+	if strings.Contains(out, "BEGIN PRIVATE KEY") {
+		t.Fatal("must not contain private key material")
+	}
+	if strings.Contains(strings.ToLower(out), "production go complete") {
+		t.Fatal("must not claim production GO complete")
+	}
+}
+
+// TestScrubResidualStatusMapDropsSecretKeys is a Regression: planted secret-shaped
+// keys and string canaries must not survive scrub before evidence write.
+func TestScrubResidualStatusMapDropsSecretKeys(t *testing.T) {
+	t.Parallel()
+	// Regression: residual embed scrub must drop secret keys and redact values.
+	in := map[string]any{
+		"residual_id":       "oauth009_offline",
+		"ha_multi_replica":  false,
+		"access_token":      "should-drop",
+		"client_secret":     "should-drop",
+		"authorization":     "Bearer drop-me",
+		"residual_note":     "see docs/gateway/live-pin-blockers.md",
+		"nested":            map[string]any{"password": "nope", "ok": "live-pin-blockers"},
+	}
+	out := scrubResidualStatusMap(in)
+	if _, ok := out["access_token"]; ok {
+		t.Fatal("access_token must be dropped")
+	}
+	if _, ok := out["client_secret"]; ok {
+		t.Fatal("client_secret must be dropped")
+	}
+	if _, ok := out["authorization"]; ok {
+		t.Fatal("authorization must be dropped")
+	}
+	if out["residual_id"] != "oauth009_offline" {
+		t.Fatalf("residual_id=%v", out["residual_id"])
+	}
+	nested, _ := out["nested"].(map[string]any)
+	if nested == nil {
+		t.Fatal("nested map missing")
+	}
+	if _, ok := nested["password"]; ok {
+		t.Fatal("nested password must be dropped")
+	}
+	if nested["ok"] != "live-pin-blockers" {
+		t.Fatalf("nested ok=%v", nested["ok"])
 	}
 }
