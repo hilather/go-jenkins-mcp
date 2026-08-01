@@ -494,6 +494,167 @@ func TestVerifyGatewayObtainWhoAmI_RequiresAuthProvider(t *testing.T) {
 	}
 }
 
+// Regression: multi-user AuthProviderCtx selects Alice vs Bob tokens with no cross leak.
+func TestAttachGatewayObtainAuthProviderDynamic_AliceBobNoCrossLeak(t *testing.T) {
+	t.Parallel()
+	v := gateway.NewMemoryAPITokenVault()
+	alice := host003Caller("alice-sub")
+	bob := host003Caller("bob-sub")
+	const aliceTok = host003WireCanary + "-alice-mu"
+	const bobTok = host003WireCanary + "-bob-mu"
+	if err := v.Put(context.Background(), gateway.SubjectKey(alice), "alice-j", aliceTok); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Put(context.Background(), gateway.SubjectKey(bob), "bob-j", bobTok); err != nil {
+		t.Fatal(err)
+	}
+	p, err := gateway.RequireAPITokenVaultSetup(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var gotUser, gotPass string
+	var gotOK bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUser, gotPass, gotOK = r.BasicAuth()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"` + gotUser + `","anonymous":false,"authenticated":true}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	// Process default = alice; Bob requests must rebind via context.
+	c := &jenkins.Client{
+		URL:    srv.URL,
+		User:   "stale",
+		Token:  host003WireCanary,
+		Client: srv.Client(),
+	}
+	attachGatewayObtainAuthProviderDynamic(c, p, alice)
+	clearGatewayLocalSessionCredentials(c)
+	if c.AuthProvider != nil {
+		t.Fatal("multi-user must clear fixed AuthProvider")
+	}
+	if c.AuthProviderCtx == nil {
+		t.Fatal("AuthProviderCtx not installed")
+	}
+
+	// Alice via context.
+	ctxAlice := gateway.ContextWithCaller(context.Background(), alice)
+	if _, err := c.WhoAmI(ctxAlice); err != nil {
+		t.Fatal(err)
+	}
+	if !gotOK || gotUser != "alice-j" || gotPass != aliceTok {
+		t.Fatalf("alice: ok=%v user=%q pass_ok=%v", gotOK, gotUser, gotPass == aliceTok)
+	}
+	if gotPass == bobTok {
+		t.Fatal("cross leak: bob token used for alice")
+	}
+	// Static must not be written by AuthProviderCtx.
+	if c.Token != "" || c.User != "" {
+		t.Fatalf("static write-back residual user=%q token_set=%v", c.User, c.Token != "")
+	}
+
+	// Bob via context — same Client instance, different ctx.
+	gotUser, gotPass, gotOK = "", "", false
+	ctxBob := gateway.ContextWithCaller(context.Background(), bob)
+	if _, err := c.WhoAmI(ctxBob); err != nil {
+		t.Fatal(err)
+	}
+	if !gotOK || gotUser != "bob-j" || gotPass != bobTok {
+		t.Fatalf("bob: ok=%v user=%q pass_ok=%v", gotOK, gotUser, gotPass == bobTok)
+	}
+	if gotPass == aliceTok {
+		t.Fatal("cross leak: alice token used for bob")
+	}
+
+	// Background (no Caller) → defaultCaller alice.
+	gotUser, gotPass, gotOK = "", "", false
+	if _, err := c.WhoAmI(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !gotOK || gotUser != "alice-j" || gotPass != aliceTok {
+		t.Fatalf("default: ok=%v user=%q pass_ok=%v", gotOK, gotUser, gotPass == aliceTok)
+	}
+}
+
+// Regression: multi-user Obtain miss fails closed; never returns other vault subject.
+func TestAttachGatewayObtainAuthProviderDynamic_MissingNoOtherSubject(t *testing.T) {
+	t.Parallel()
+	v := gateway.NewMemoryAPITokenVault()
+	alice := host003Caller("alice-sub")
+	bob := host003Caller("bob-sub")
+	if err := v.Put(context.Background(), gateway.SubjectKey(alice), "alice-j", host003WireCanary+"-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Put(context.Background(), gateway.SubjectKey(bob), "bob-j", host003WireCanary+"-b"); err != nil {
+		t.Fatal(err)
+	}
+	p, err := gateway.RequireAPITokenVaultSetup(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &jenkins.Client{User: "bob-j", Token: host003WireCanary + "-b"}
+	attachGatewayObtainAuthProviderDynamic(c, p, alice)
+	clearGatewayLocalSessionCredentials(c)
+
+	missing := host003Caller("missing-sub")
+	ctx := gateway.ContextWithCaller(context.Background(), missing)
+	user, secret, _, err := c.AuthProviderCtx(ctx)
+	if err == nil {
+		t.Fatalf("expected fail; got user=%q secret_set=%v", user, secret != "")
+	}
+	if user != "" || secret != "" {
+		t.Fatal("must not return credential fields on Obtain fail")
+	}
+	if secret == host003WireCanary+"-a" || secret == host003WireCanary+"-b" {
+		t.Fatal("must not return another subject's token")
+	}
+	if strings.Contains(err.Error(), host003WireCanary) {
+		t.Fatalf("canary leak: %v", err)
+	}
+}
+
+func TestAttachGatewayObtainAuthProviderDynamic_NilSafe(t *testing.T) {
+	t.Parallel()
+	attachGatewayObtainAuthProviderDynamic(nil, nil, gateway.Caller{})
+	c := &jenkins.Client{}
+	attachGatewayObtainAuthProviderDynamic(c, nil, gateway.Caller{})
+	if c.AuthProviderCtx != nil || c.AuthProvider != nil {
+		t.Fatal("nil provider must not install")
+	}
+}
+
+// Regression: multi-user off path still uses fixed AuthProvider (single-subject pin foundation).
+func TestAttachGatewayObtainAuthProvider_SingleSubjectStillFixed(t *testing.T) {
+	t.Parallel()
+	v := gateway.NewMemoryAPITokenVault()
+	alice := host003Caller("alice-sub")
+	bob := host003Caller("bob-sub")
+	if err := v.Put(context.Background(), gateway.SubjectKey(alice), "alice-j", host003WireCanary+"-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Put(context.Background(), gateway.SubjectKey(bob), "bob-j", host003WireCanary+"-b"); err != nil {
+		t.Fatal(err)
+	}
+	p, err := gateway.RequireAPITokenVaultSetup(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &jenkins.Client{}
+	attachGatewayObtainAuthProvider(c, p, alice)
+	if c.AuthProvider == nil {
+		t.Fatal("fixed AuthProvider required when multi-user off")
+	}
+	if c.AuthProviderCtx != nil {
+		t.Fatal("multi-user off must not leave AuthProviderCtx")
+	}
+	// Even with Bob in context, fixed AuthProvider ignores context → Alice only.
+	u, s, _, err := c.AuthProvider()
+	if err != nil || u != "alice-j" || s != host003WireCanary+"-a" {
+		t.Fatalf("fixed obtain: u=%q s_ok=%v err=%v", u, s == host003WireCanary+"-a", err)
+	}
+}
+
 // Regression: Ready attach + clear means AuthProvider nil would not have static fallback material.
 func TestAttachGatewayObtainAuthProvider_ReadyClearsStaticNoFallthrough(t *testing.T) {
 	t.Parallel()

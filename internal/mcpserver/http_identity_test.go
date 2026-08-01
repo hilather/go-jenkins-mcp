@@ -1,6 +1,7 @@
 package mcpserver_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -682,5 +683,56 @@ func TestNewHTTPHandler_ExpectedExternalSubjectPin(t *testing.T) {
 		if strings.Contains(body, leak) {
 			t.Fatalf("Regression: must not echo pin/subjects: %s", body)
 		}
+	}
+}
+
+// HOST multi-user: AfterIdentity enriches context; no ExpectedExternalSubject pin
+// allows distinct lab subjects on the same process.
+func TestNewHTTPHandler_AfterIdentityMultiUserNoPin(t *testing.T) {
+	t.Parallel()
+	srv := mcpserver.NewServer("test", "0.0.1")
+	cfg := mcpserver.DefaultHTTPConfig()
+	cfg.RequireSubject = true
+	cfg.LabIdentity = true
+	// Multi-user foundation: leave ExpectedExternalSubject empty.
+	type callerKey struct{}
+	var seenSubjects []string
+	cfg.AfterIdentity = func(ctx context.Context, id mcpserver.RequestIdentity) context.Context {
+		seenSubjects = append(seenSubjects, id.ExternalSubject)
+		return context.WithValue(ctx, callerKey{}, id.ExternalSubject)
+	}
+	// Capture context value from an identity-aware inner via resolver path:
+	// use a custom IdentityResolver that still returns lab-compatible ids and
+	// assert AfterIdentity ran for both alice and bob (no pin reject).
+	h, err := mcpserver.NewHTTPHandler(srv, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rrA := postLoopback(t, h, func(r *http.Request) {
+		r.Header.Set(mcpserver.HeaderLabSubject, "alice-mu")
+	})
+	if rrA.Code == http.StatusUnauthorized {
+		t.Fatalf("alice must pass without pin: %s", rrA.Body.String())
+	}
+	rrB := postLoopback(t, h, func(r *http.Request) {
+		r.Header.Set(mcpserver.HeaderLabSubject, "bob-mu")
+	})
+	if rrB.Code == http.StatusUnauthorized {
+		t.Fatalf("bob must pass without pin: %s", rrB.Body.String())
+	}
+	if len(seenSubjects) < 2 {
+		t.Fatalf("AfterIdentity hits=%v want alice+bob", seenSubjects)
+	}
+	foundA, foundB := false, false
+	for _, s := range seenSubjects {
+		if s == "alice-mu" {
+			foundA = true
+		}
+		if s == "bob-mu" {
+			foundB = true
+		}
+	}
+	if !foundA || !foundB {
+		t.Fatalf("AfterIdentity subjects=%v", seenSubjects)
 	}
 }

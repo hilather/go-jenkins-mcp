@@ -143,9 +143,19 @@ type HTTPConfig struct {
 	// RequestIdentity.ExternalSubject to match exactly (HOST-001 / HOST-003).
 	// Used by single-process gateway foundation: HTTP lab/JWT subjects must
 	// equal the process-bound gateway subject so multi-subject HTTP cannot
-	// share one Obtain caller. Empty = no pin (stdio pilot / multi-user residual).
+	// share one Obtain caller. Empty = no pin (stdio pilot / multi-user mode).
 	// Never log this value in errors. Compared trimmed exact match.
+	// When JENKINS_MCP_GATEWAY_MULTI_USER=1, serve leaves this empty and injects
+	// per-request Caller via AfterIdentity instead.
 	ExpectedExternalSubject string
+
+	// AfterIdentity optionally enriches the request context after a trusted
+	// RequestIdentity is established (HOST multi-user: inject gateway.Caller).
+	// Called only when id.Present(), after ContextWithIdentity. Must never log
+	// secrets. Nil = no-op (identity still stored via IdentityFromContext).
+	// Residual: tool-layer policy.Subject rebind still depends on MCP SDK
+	// propagating this request context to tool handlers.
+	AfterIdentity func(ctx context.Context, id RequestIdentity) context.Context
 
 	// Logger receives start/stop messages. Default: log.Default().
 	Logger *log.Logger
@@ -324,17 +334,18 @@ func NewHTTPHandler(server *mcp.Server, cfg HTTPConfig) (http.Handler, error) {
 	}, nil)
 	requireSubject := HTTPSubjectRequired(cfg)
 	h := &protectHandler{
-		inner:            inner,
-		maxBody:          maxBody,
-		allowNonLocal:    cfg.AllowNonLocal,
-		allowedOrigins:   append([]string(nil), cfg.AllowedOrigins...),
-		allowedHosts:     append([]string(nil), cfg.AllowedHosts...),
-		bearerToken:      cfg.BearerToken,
-		requireSubject:   requireSubject,
-		labIdentity:      cfg.LabIdentity,
-		identityResolver:         cfg.IdentityResolver,
-		readyCheck:               cfg.ReadyCheck,
-		expectedExternalSubject:  strings.TrimSpace(cfg.ExpectedExternalSubject),
+		inner:                   inner,
+		maxBody:                 maxBody,
+		allowNonLocal:           cfg.AllowNonLocal,
+		allowedOrigins:          append([]string(nil), cfg.AllowedOrigins...),
+		allowedHosts:            append([]string(nil), cfg.AllowedHosts...),
+		bearerToken:             cfg.BearerToken,
+		requireSubject:          requireSubject,
+		labIdentity:             cfg.LabIdentity,
+		identityResolver:        cfg.IdentityResolver,
+		readyCheck:              cfg.ReadyCheck,
+		expectedExternalSubject: strings.TrimSpace(cfg.ExpectedExternalSubject),
+		afterIdentity:           cfg.AfterIdentity,
 	}
 	// HOST-001: session→fingerprint table only when subject is required
 	// (gateway / non-local / --http-require-subject). Pilot loopback without
@@ -511,8 +522,10 @@ type protectHandler struct {
 	sessionBind *sessionIdentityTable
 	readyCheck  ReadyCheck
 	// expectedExternalSubject pins HTTP identity to process-bound subject
-	// (gateway single-caller foundation). Empty = no pin.
+	// (gateway single-caller foundation). Empty = no pin (multi-user).
 	expectedExternalSubject string
+	// afterIdentity optional context enrichment after trusted identity (multi-user).
+	afterIdentity func(ctx context.Context, id RequestIdentity) context.Context
 }
 
 func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -579,7 +592,13 @@ func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if reqID.Present() {
-			r = r.WithContext(ContextWithIdentity(r.Context(), reqID))
+			ctx := ContextWithIdentity(r.Context(), reqID)
+			if h.afterIdentity != nil {
+				if next := h.afterIdentity(ctx, reqID); next != nil {
+					ctx = next
+				}
+			}
+			r = r.WithContext(ctx)
 		}
 	}
 

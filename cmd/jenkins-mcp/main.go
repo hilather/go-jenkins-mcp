@@ -1232,33 +1232,45 @@ func runServe(args []string) error {
 	// Mid-serve credentials (HOST-003):
 	//   gateway + Ready → Obtain AuthProvider only (Mode A Basic / C Bearer);
 	//     clear static local session; whoAmI re-verify via Obtain; never keyring fallthrough
+	//   gateway + Ready + MULTI_USER → AuthProviderCtx dynamic Obtain (per-request Caller)
 	//   gateway + !Ready → residual local session (Mode C default Live=false / Mode B residual)
 	//   non-gateway → OIDC LiveSessionSource refresh; api_token leaves provider nil
 	var subject policy.Subject
 	var gatewayObtainWired bool
+	gatewayMultiUser := useGateway && gateway.MultiUserEnabled(os.Getenv)
 	if useGateway {
 		gwSubject, err := bindGatewaySubject(profileID, principal.ID)
 		if err != nil {
 			return err
 		}
 		subject = gwSubject
-		log.Printf("Gateway policy subject profile=%s external=%s jenkins=%s tenant_set=%v workload_set=%v verified=%v",
+		log.Printf("Gateway policy subject profile=%s external=%s jenkins=%s tenant_set=%v workload_set=%v verified=%v multi_user=%v",
 			subject.ProfileID, subject.ExternalSubject, subject.JenkinsUserID,
-			subject.Tenant != "", subject.WorkloadID != "", subject.Verified)
+			subject.Tenant != "", subject.WorkloadID != "", subject.Verified, gatewayMultiUser)
 		if gatewayObtainReady(gatewayProv) {
 			caller := gateway.CallerFromBoundSubject(subject)
-			// Capture caller at attach time; mid-serve tool args cannot rebind.
-			attachGatewayObtainAuthProvider(client, gatewayProv, caller)
+			if gatewayMultiUser {
+				// Per-request Obtain: Caller from HTTP context when present; else process default.
+				attachGatewayObtainAuthProviderDynamic(client, gatewayProv, caller)
+			} else {
+				// Single-subject foundation: capture caller at attach; tool args cannot rebind.
+				attachGatewayObtainAuthProvider(client, gatewayProv, caller)
+			}
 			// Refuse residual local session path once Ready path is selected.
 			clearGatewayLocalSessionCredentials(client)
-			// Session-start whoAmI with Obtain credentials for the bound caller.
+			// Session-start whoAmI with Obtain credentials for the bound (default) caller.
 			obtainWho, werr := verifyGatewayObtainWhoAmI(context.Background(), client, subject.JenkinsUserID)
 			if werr != nil {
 				return werr
 			}
 			gatewayObtainWired = true
-			log.Printf("Gateway Jenkins AuthProvider: Obtain mode=%s principal=%s (no keyring fallthrough)",
-				gatewayProv.Mode(), obtainWho.ID)
+			if gatewayMultiUser {
+				log.Printf("Gateway Jenkins AuthProviderCtx: multi-user Obtain mode=%s default_principal=%s (no keyring fallthrough; no subject pin)",
+					gatewayProv.Mode(), obtainWho.ID)
+			} else {
+				log.Printf("Gateway Jenkins AuthProvider: Obtain mode=%s principal=%s (no keyring fallthrough)",
+					gatewayProv.Mode(), obtainWho.ID)
+			}
 		} else {
 			// Mode C residual (Live=false) / Mode B residual: Obtain not Ready;
 			// keep local keyring/OIDC path only while Ready remains false.
@@ -1947,22 +1959,43 @@ func runServe(args []string) error {
 				return apperr.New(apperr.CodeInvalidArgument,
 					"gateway --http requires JENKINS_MCP_LAB_IDENTITY=1 and/or JENKINS_MCP_HTTP_JWKS_URL+ISSUER+AUDIENCE (no trusted subject source)")
 			}
-			// Single-process foundation: pin HTTP ExternalSubject to process-bound
-			// gateway subject so multi-lab/JWT callers cannot share one Obtain caller.
-			if ext := strings.TrimSpace(subject.ExternalSubject); ext != "" {
-				cfg.ExpectedExternalSubject = ext
+			if gatewayMultiUser && gatewayObtainWired {
+				// Multi-user Ready: no ExpectedExternalSubject pin; inject Caller
+				// from trusted RequestIdentity so AuthProviderCtx Obtains per subject.
+				defaultCaller := gateway.CallerFromBoundSubject(subject)
+				pid := subject.ProfileID
+				cfg.AfterIdentity = func(ctx context.Context, id mcpserver.RequestIdentity) context.Context {
+					in := gateway.HTTPInbound{
+						ExternalSubject:  id.ExternalSubject,
+						Tenant:           id.Tenant,
+						WorkloadID:       id.WorkloadID,
+						JenkinsPrincipal: id.JenkinsPrincipal,
+						Source:           string(id.Source),
+						Verified:         id.Verified,
+					}
+					c := gateway.MergeCallerDefaults(gateway.CallerFromHTTPInbound(in, pid), defaultCaller)
+					return gateway.ContextWithCaller(ctx, c)
+				}
+			} else if !gatewayMultiUser {
+				// Single-process foundation: pin HTTP ExternalSubject to process-bound
+				// gateway subject so multi-lab/JWT callers cannot share one Obtain caller.
+				if ext := strings.TrimSpace(subject.ExternalSubject); ext != "" {
+					cfg.ExpectedExternalSubject = ext
+				}
 			}
+			// multi-user + !Ready: residual local session; no pin and no Caller inject
+			// (Obtain not wired — avoid implying per-request vault credentials).
 			prov := gatewayProv
 			cfg.ReadyCheck = func() bool {
 				return gatewayObtainReady(prov)
 			}
 		}
 		// Never log token values — only required/configured bools and body cap.
-		log.Printf("http serve token policy: http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v http_jwt_configured=%v http_jwt_required=%v max_body_bytes=%d gateway_ready_probe=%v expected_subject_pin=%v",
+		log.Printf("http serve token policy: http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v http_jwt_configured=%v http_jwt_required=%v max_body_bytes=%d gateway_ready_probe=%v expected_subject_pin=%v multi_user=%v",
 			mcpserver.HTTPTokenRequired(cfg), cfg.BearerToken != "",
 			mcpserver.HTTPSubjectRequired(cfg), cfg.LabIdentity,
 			jwtEnv.Configured(), jwtEnv.Required, cfg.MaxBodyBytes, useGateway,
-			cfg.ExpectedExternalSubject != "")
+			cfg.ExpectedExternalSubject != "", gatewayMultiUser)
 		if err := mcpserver.RunHTTP(serveCtx, server, cfg); err != nil {
 			return err
 		}

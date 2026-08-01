@@ -11,7 +11,7 @@ import (
 
 // attachGatewayObtainAuthProvider installs a per-request AuthProvider that
 // obtains Jenkins credentials via gateway.CredentialProvider.Obtain for the
-// bound caller (HOST-003).
+// bound caller (HOST-003 single-subject foundation).
 //
 // Behavior:
 //   - Mode A (api_token_vault Ready): Basic username+token from vault for caller only
@@ -27,16 +27,77 @@ import (
 // After attach, callers should clearGatewayLocalSessionCredentials so residual
 // keyring/static material cannot be used if AuthProvider is ever cleared, and
 // verifyGatewayObtainWhoAmI so session-start identity uses Obtain credentials.
+//
+// For per-request multi-user Obtain (JENKINS_MCP_GATEWAY_MULTI_USER=1), use
+// attachGatewayObtainAuthProviderDynamic instead.
 func attachGatewayObtainAuthProvider(client *jenkins.Client, prov gateway.CredentialProvider, caller gateway.Caller) {
 	if client == nil || prov == nil {
 		return
 	}
 	p := prov
 	c := caller
+	// Single-subject path: clear any multi-user provider so pin + fixed caller win.
+	client.WithAuthProviderCtx(nil)
 	client.WithAuthProvider(func() (user, secret string, sch jenkins.AuthScheme, err error) {
 		ha, err := gateway.ObtainHTTPAuth(context.Background(), p, c)
 		if err != nil {
 			// Preserve ConsentRequired for progressive UX; never map to static SA.
+			return "", "", "", err
+		}
+		return httpAuthToJenkins(ha)
+	})
+}
+
+// attachGatewayObtainAuthProviderDynamic installs AuthProviderCtx that Obtains
+// credentials for the Caller on the request context when present and Valid,
+// otherwise the process defaultCaller (HOST multi-user foundation).
+//
+// Fail closed:
+//   - empty / invalid subject → error (never shared SA or ambient keyring)
+//   - Obtain error → error; never another subject's token
+//   - does not write secrets onto Client.User/Token (AuthProviderCtx path)
+//
+// No-op when client or provider is nil. defaultCaller is captured at attach
+// for session-start whoAmI and stdio residual when context has no Caller.
+//
+// Wire with JENKINS_MCP_GATEWAY_MULTI_USER=1 and HTTP AfterIdentity injecting
+// gateway.Caller from trusted RequestIdentity (never tool args).
+func attachGatewayObtainAuthProviderDynamic(client *jenkins.Client, prov gateway.CredentialProvider, defaultCaller gateway.Caller) {
+	if client == nil || prov == nil {
+		return
+	}
+	p := prov
+	def := defaultCaller
+	// Multi-user path: clear fixed AuthProvider so only context-scoped Obtain runs.
+	client.WithAuthProvider(nil)
+	client.WithAuthProviderCtx(func(ctx context.Context) (user, secret string, sch jenkins.AuthScheme, err error) {
+		if err := ctx.Err(); err != nil {
+			return "", "", "", apperr.Wrap(apperr.CodeCancelled, "gateway multi-user Obtain cancelled", err)
+		}
+		caller := def
+		if c, ok := gateway.CallerFromContext(ctx); ok {
+			// Only rebind when the context caller is Valid; otherwise fail closed
+			// rather than silently falling through to default for a partial spoof.
+			if c.Valid() {
+				caller = gateway.MergeCallerDefaults(c, def)
+			} else if strings.TrimSpace(c.Subject) != "" {
+				// Subject present but incomplete (e.g. missing profile) — try merge.
+				merged := gateway.MergeCallerDefaults(c, def)
+				if !merged.Valid() {
+					return "", "", "", apperr.New(apperr.CodeAuthentication,
+						"gateway multi-user caller subject and profile are required")
+				}
+				caller = merged
+			}
+			// else: no useful context caller → defaultCaller (session-start / no identity)
+		}
+		if !caller.Valid() {
+			return "", "", "", apperr.New(apperr.CodeAuthentication,
+				"gateway multi-user caller subject and profile are required")
+		}
+		ha, err := gateway.ObtainHTTPAuth(ctx, p, caller)
+		if err != nil {
+			// Preserve ConsentRequired; never map to static SA or other subject.
 			return "", "", "", err
 		}
 		return httpAuthToJenkins(ha)
@@ -57,16 +118,18 @@ func clearGatewayLocalSessionCredentials(client *jenkins.Client) {
 	client.Token = ""
 }
 
-// verifyGatewayObtainWhoAmI runs Jenkins whoAmI using the Obtain-wired AuthProvider
-// (HOST-003 session-start identity for Ready path).
+// verifyGatewayObtainWhoAmI runs Jenkins whoAmI using the Obtain-wired
+// AuthProvider or AuthProviderCtx (HOST-003 session-start identity for Ready path).
 //
 // Fail closed when:
-//   - client/AuthProvider missing
+//   - client / live Obtain provider missing
 //   - Obtain / whoAmI fails (including ConsentRequired)
 //   - principal anonymous / empty
 //   - expectedJenkinsUser non-empty and does not match whoAmI id
 //
 // Secrets never appear in returned errors (AuthProvider / WhoAmI discipline).
+// Multi-user: pass a context with gateway.Caller when verifying a non-default
+// subject; Background uses the process defaultCaller captured at attach.
 func verifyGatewayObtainWhoAmI(ctx context.Context, client *jenkins.Client, expectedJenkinsUser string) (jenkins.WhoAmI, error) {
 	if err := ctx.Err(); err != nil {
 		return jenkins.WhoAmI{}, apperr.Wrap(apperr.CodeCancelled, "gateway obtain whoAmI cancelled", err)
@@ -74,7 +137,7 @@ func verifyGatewayObtainWhoAmI(ctx context.Context, client *jenkins.Client, expe
 	if client == nil {
 		return jenkins.WhoAmI{}, apperr.New(apperr.CodeInternal, "jenkins client is nil for gateway obtain whoAmI")
 	}
-	if client.AuthProvider == nil {
+	if !client.HasLiveAuthProvider() {
 		return jenkins.WhoAmI{}, apperr.New(apperr.CodeCapabilityMissing,
 			"gateway Obtain AuthProvider is not installed; refuse local session whoAmI")
 	}

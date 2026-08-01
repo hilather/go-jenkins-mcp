@@ -1,8 +1,9 @@
 # Managed gateway / AgentCore foundation (GWY-001/002)
 
-**Status:** Foundation + offline mock obtain + **HOST-003 Ready wire** + **GWY-001 Live opt-in foundation** (`HTTPTokenFetcher`).  
-**Default:** `Live=false`, `Fetcher=nil` → fail-closed `not_configured` (no network).  
+**Status:** Foundation + offline mock obtain + **HOST-003 Ready wire** + **GWY-001 Live opt-in foundation** (`HTTPTokenFetcher`) + **HOST multi-user Obtain foundation** (`AuthProviderCtx` + `JENKINS_MCP_GATEWAY_MULTI_USER`).  
+**Default:** `Live=false`, `Fetcher=nil` → fail-closed `not_configured` (no network). Single-subject pin remains default when multi-user env is off.  
 **Live opt-in:** `JENKINS_MCP_GATEWAY_LIVE=1` + token endpoint → `EnableLiveHTTPFetcher` (Mode C only).  
+**Multi-user opt-in:** `JENKINS_MCP_GATEWAY_MULTI_USER=1` → per-request Caller → Obtain (see §3b).  
 **Real Entra / AgentCore Identity vault pin residual** (GWY-003 / OAUTH-010) — do **not** mark GWY-001 fully Done.  
 **GWY-004:** deployment **scaffold** (compose/kustomize/docs) only — no live AgentCore image.  
 **Related:** [deployment.md](deployment.md), [qualification.md](qualification.md), [auth-architecture.md](../auth-architecture.md) §2.3, [ADR 0003](../adr/0003-jenkins-not-oauth-authorization-server.md), [policy-rbac.md](../policy-rbac.md), architecture §§1–2 / §6.6, **[server/team-hosted roadmap](../roadmap/server-team-hosted.md)** (Tier A path, HOST-*, 30/60/90).
@@ -113,10 +114,11 @@ time). There is **no** keyring / static / shared-SA fallthrough after Ready.
 
 | Step | Behavior |
 |------|----------|
-| Provider Ready | `attachGatewayObtainAuthProvider` installs per-request Obtain AuthProvider |
+| Provider Ready (default) | `attachGatewayObtainAuthProvider` installs process-bound Obtain AuthProvider |
+| Provider Ready + MULTI_USER | `attachGatewayObtainAuthProviderDynamic` installs context-scoped AuthProviderCtx |
 | Static residual | `clearGatewayLocalSessionCredentials` clears client User/Token after attach |
-| Session-start identity | `verifyGatewayObtainWhoAmI` runs whoAmI with Obtain credentials; mismatch / anonymous / Obtain fail → serve fails closed |
-| Obtain failure | AuthProvider returns error; request not sent; never another subject’s credential |
+| Session-start identity | `verifyGatewayObtainWhoAmI` runs whoAmI with Obtain credentials (default caller); mismatch / anonymous / Obtain fail → serve fails closed |
+| Obtain failure | AuthProvider/AuthProviderCtx returns error; request not sent; never another subject’s credential |
 | ConsentRequired (Mode C) | Surfaces auth URL + session id only (`AsConsentRequired`) |
 | Provider !Ready | Residual local session (Mode C default Live=false) |
 
@@ -127,13 +129,41 @@ Mode A Ready → Basic personal vault token. Mode B Ready → Bearer from JWT va
 process startup (AUTH-004) before Obtain wire. When Ready, Obtain whoAmI must
 match the bound Jenkins principal (env label and/or bootstrap whoAmI).
 
-**HTTP subject pin (foundation):** with `--gateway --http`, serve requires lab
-and/or JWKS as a trusted subject source and sets
-`HTTPConfig.ExpectedExternalSubject` to the process-bound gateway
-`ExternalSubject`. Lab/JWT callers that present a **different** subject get
-401 — so multi-subject HTTP cannot share one Obtain caller until true
-per-request Obtain rebind lands. Residual: per-request multi-user Obtain +
-policy rebind (not single-process pin).
+**HTTP subject pin (single-user foundation, default):** with `--gateway --http`
+and multi-user **off**, serve requires lab and/or JWKS as a trusted subject
+source and sets `HTTPConfig.ExpectedExternalSubject` to the process-bound
+gateway `ExternalSubject`. Lab/JWT callers that present a **different** subject
+get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
+
+**Per-request multi-user Obtain (opt-in foundation):** set
+`JENKINS_MCP_GATEWAY_MULTI_USER=1` (truthy: `1`/`true`/`yes`/`on`). When
+`--gateway` and provider **Ready**:
+
+| Step | Behavior |
+|------|----------|
+| Auth | `attachGatewayObtainAuthProviderDynamic` installs `AuthProviderCtx` |
+| Context Caller | HTTP `AfterIdentity` maps trusted `RequestIdentity` → `gateway.Caller` (ExternalSubject→Subject; Tenant/Workload from identity; ProfileID from process) |
+| Obtain | `CallerFromContext` when Valid → Obtain for that caller; else process defaultCaller |
+| Subject pin | `ExpectedExternalSubject` is **not** set (distinct lab/JWT subjects allowed) |
+| Fail closed | empty subject / Obtain miss → error; never other subject's token; never shared SA |
+| Static fields | AuthProviderCtx does **not** write User/Token on the Client (race residual) |
+
+| Env | Role |
+|-----|------|
+| `JENKINS_MCP_GATEWAY_MULTI_USER` | Opt-in multi-user Obtain path (default off = single-subject pin) |
+
+**Residuals (honest):**
+
+- **Policy RBAC Subject hot-swap:** process-bound `tools.RegisterOptions.Subject`
+  is still used for deny-only MCP RBAC at tool dispatch. True per-request
+  `policy.Subject` rebind requires MCP tool context to carry the HTTP identity
+  (SDK propagation) and a tools middleware — **not** fully wired here.
+- **Live Entra / JWKS rotation / Mode C 3LO browser UX** remain GWY-003 /
+  OAUTH-010 residuals.
+- **MCP SDK context flow:** AuthProviderCtx only sees the request Caller when
+  CallJenkins/tool handlers receive the HTTP request context. Unit tests cover
+  AuthProviderCtx + ContextWithCaller; end-to-end Streamable HTTP tool path
+  depends on the SDK passing `r.Context()` into tool handlers.
 
 ## 3c. Multi-tenant isolation foundations (HOST-004 / HOST-006)
 
@@ -264,6 +294,7 @@ Enable gateway mode with any of:
 | Env | Constant | Meaning |
 |-----|----------|---------|
 | `JENKINS_MCP_GATEWAY_MODE` | `EnvGatewayModeVar` | `1` / `true` enables gateway mode |
+| `JENKINS_MCP_GATEWAY_MULTI_USER` | `EnvGatewayMultiUser` | `1` / `true` enables per-request multi-user Obtain (default off = single-subject pin) |
 | `JENKINS_MCP_GATEWAY_SUBJECT` | `EnvGatewaySubject` | Entra/OIDC sub (**required** in gateway mode) |
 | `JENKINS_MCP_GATEWAY_TENANT` | `EnvGatewayTenant` | Tenant id (**required**) |
 | `JENKINS_MCP_GATEWAY_WORKLOAD` | `EnvGatewayWorkload` | Workload id (**required**) |
