@@ -25,6 +25,66 @@ export const PRINCIPAL_CACHE_PROCESS_HONESTY =
 export const PRINCIPAL_CACHE_HYGIENE_HONESTY =
   "optional env hygiene (omit = unlimited / no TTL); process-local residual";
 
+/**
+ * Live mode pin + gateway_ready honesty on residual-status surfaces.
+ * residual-status always emits false; SPA must not claim production GO.
+ */
+export const LIVE_PIN_RESIDUAL_HONESTY =
+  "offline residual — not production GO";
+
+/** gateway_ready on residual-status is always false (Ready is serve /readyz). */
+export const GATEWAY_READY_RESIDUAL_HONESTY =
+  "residual-status always false; Ready only on serve /readyz";
+
+/** HOST-008 Tier A single-replica default (ha_multi_replica). */
+export const HA_MULTI_REPLICA_RESIDUAL_HONESTY =
+  "HOST-008 Tier A single-replica default";
+
+export interface ResidualLivePinFields {
+  /** Always false on residual-status (Mode A live Obtain pin residual). */
+  mode_a_live_obtain_qualified: boolean;
+  /** Always false on residual-status (Mode B live RS pin residual). */
+  mode_b_live_rs_qualified: boolean;
+  /** Always false on residual-status (Mode C live AgentCore pin residual). */
+  mode_c_live_agentcore_qualified: boolean;
+  /** Always false on residual-status (Ready is serve /readyz). */
+  gateway_ready: boolean;
+  /** Always false until multi-replica runtime (HOST-008 Tier A). */
+  ha_multi_replica: boolean;
+}
+
+/**
+ * Pick live pin / gateway_ready / ha_multi_replica residual bools.
+ * Defaults false when missing (fail-closed honesty; never invent true).
+ * Never tokens/subjects; never claims live GO.
+ */
+export function pickResidualLivePinFields(
+  data: GatewayResidualStatusResponse | null | undefined,
+): ResidualLivePinFields {
+  if (!data) {
+    return {
+      mode_a_live_obtain_qualified: false,
+      mode_b_live_rs_qualified: false,
+      mode_c_live_agentcore_qualified: false,
+      gateway_ready: false,
+      ha_multi_replica: false,
+    };
+  }
+  return {
+    // residual-status always emits false; treat missing as false (not live GO).
+    mode_a_live_obtain_qualified: data.mode_a_live_obtain_qualified === true,
+    mode_b_live_rs_qualified: data.mode_b_live_rs_qualified === true,
+    mode_c_live_agentcore_qualified: data.mode_c_live_agentcore_qualified === true,
+    gateway_ready: data.gateway_ready === true,
+    ha_multi_replica: data.ha_multi_replica === true,
+  };
+}
+
+/** Format a residual live-pin bool as no/false (preferred) or yes/true. */
+export function formatResidualBool(value: boolean): string {
+  return value ? "yes/true" : "no/false";
+}
+
 export interface ResidualRateCacheFields {
   /** Always present on residual-status (bool from Go map). */
   shared_subject_rate_file: boolean;

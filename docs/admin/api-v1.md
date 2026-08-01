@@ -282,7 +282,7 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 | Field | Meaning |
 |-------|---------|
 | `mode_*_enabled` | HOST-011 mode ids enabled in config (not live pin GO) |
-| `mode_*_live_*_qualified` | Always `false` until live pins land |
+| `mode_*_live_*_qualified` | Always `false` until live pins land; SPA Overview + Doctor residual cards show **no/false** with honesty *offline residual — not production GO* |
 | `residual_id` / `oauth009_offline` | Mode B residual pointer (always advertised) |
 | `residual_ids` | Structured residual ids for operator grepping |
 | `multi_user_enabled` | `JENKINS_MCP_GATEWAY_MULTI_USER` truthy parse (foundation residual) |

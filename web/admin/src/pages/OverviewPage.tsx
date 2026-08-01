@@ -25,6 +25,11 @@ import {
 } from "../lib/consentPurge";
 import {
   formatPrincipalCacheHygiene,
+  formatResidualBool,
+  GATEWAY_READY_RESIDUAL_HONESTY,
+  HA_MULTI_REPLICA_RESIDUAL_HONESTY,
+  LIVE_PIN_RESIDUAL_HONESTY,
+  pickResidualLivePinFields,
   pickResidualRateCacheFields,
   PRINCIPAL_CACHE_HYGIENE_HONESTY,
   PRINCIPAL_CACHE_PROCESS_HONESTY,
@@ -966,6 +971,7 @@ function SubjectInvalidateCard() {
 /** HOST-007 residual-status card body (snake_case CLI/BFF fields). */
 function ResidualStatusDl({ data }: { data: GatewayResidualStatusResponse }) {
   const rateCache = pickResidualRateCacheFields(data);
+  const livePins = pickResidualLivePinFields(data);
   const hygiene = formatPrincipalCacheHygiene(
     rateCache.principal_cache_max_entries,
     rateCache.principal_cache_ttl_seconds,
@@ -981,6 +987,26 @@ function ResidualStatusDl({ data }: { data: GatewayResidualStatusResponse }) {
         {" / "}
         {data.mode_c_enabled ? "C" : "—"}{" "}
         <span className="muted">(config enablement only; not live GO)</span>
+      </dd>
+      <dt>mode_a_live_obtain_qualified</dt>
+      <dd>
+        {formatResidualBool(livePins.mode_a_live_obtain_qualified)}{" "}
+        <span className="muted">({LIVE_PIN_RESIDUAL_HONESTY})</span>
+      </dd>
+      <dt>mode_b_live_rs_qualified</dt>
+      <dd>
+        {formatResidualBool(livePins.mode_b_live_rs_qualified)}{" "}
+        <span className="muted">({LIVE_PIN_RESIDUAL_HONESTY})</span>
+      </dd>
+      <dt>mode_c_live_agentcore_qualified</dt>
+      <dd>
+        {formatResidualBool(livePins.mode_c_live_agentcore_qualified)}{" "}
+        <span className="muted">({LIVE_PIN_RESIDUAL_HONESTY})</span>
+      </dd>
+      <dt>gateway_ready</dt>
+      <dd>
+        {formatResidualBool(livePins.gateway_ready)}{" "}
+        <span className="muted">({GATEWAY_READY_RESIDUAL_HONESTY})</span>
       </dd>
       <dt>mode_matrix</dt>
       <dd>
@@ -1003,8 +1029,8 @@ function ResidualStatusDl({ data }: { data: GatewayResidualStatusResponse }) {
       </dd>
       <dt>ha_multi_replica</dt>
       <dd>
-        {data.ha_multi_replica ? "yes" : "no"}{" "}
-        <span className="muted">(HOST-008 Tier A single-replica default)</span>
+        {formatResidualBool(livePins.ha_multi_replica)}{" "}
+        <span className="muted">({HA_MULTI_REPLICA_RESIDUAL_HONESTY})</span>
       </dd>
       <dt>session_affinity_recommended</dt>
       <dd>
