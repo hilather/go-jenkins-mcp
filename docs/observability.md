@@ -8,6 +8,10 @@ Build-metadata OTEL **correlation lite** is **INT-002** (`internal/otelx`, optio
 
 Package: `internal/audit`.
 
+**Agent rule:** security-relevant code paths must emit AUD-001 events (or document an
+**AUD-T-*** residual). See root `AGENTS.md` → *Non-negotiable: audit trails when
+security-relevant* and [security/audit-trail-review.md](security/audit-trail-review.md).
+
 | Sink | Use |
 |------|-----|
 | `Memory` | Tests (ordered in-memory events) |
@@ -462,6 +466,10 @@ HTTP request body oversize and forbidden Host/Origin return HTTP 4xx without pro
 ## Audit (AUD-001)
 
 Package: `internal/audit`.
+
+**Agent rule:** security-relevant code paths must emit AUD-001 events (or document an
+**AUD-T-*** residual). See root `AGENTS.md` → *Non-negotiable: audit trails when
+security-relevant* and [security/audit-trail-review.md](security/audit-trail-review.md).
 
 | Sink | Use |
 |------|-----|

@@ -168,7 +168,7 @@ if intentionally deferred — never silent drift).
 |----------------|--------------------------------------|
 | New/changed **policy / RO / deny-lists / signed bundles** | Effective/overlay APIs; Policy page; validate/apply rules; docs |
 | New/changed **metrics / telemetry / budgets / caps** | `GET /admin/v1/metrics` (or residual note); Metrics page; **ECharts** visualization for every metric surface (see chart rules below); honesty banners |
-| New/changed **audit event types or fields** | Audit list/filter; SPA columns/drawer; never secret fields |
+| New/changed **audit event types or fields** | **Emit sites** + Audit list/filter; SPA columns/drawer; never secret fields; canary tests |
 | New/changed **doctor / support-bundle / security self-check** | Doctor/ops endpoints; SPA; fail-closed online paths |
 | New/changed **cache / pin / quota / eviction** | Cache APIs; Cache page; operator-only destructive + confirm |
 | New/changed **profiles / config paths / packaging** | Profile list/show; asset packaging if operator-facing |
@@ -228,6 +228,68 @@ Before claiming a feature “done for operators,” ask: *Can an operator see or
 
 ---
 
+## Non-negotiable: audit trails when security-relevant (AUD-001)
+
+Privacy-preserving **security audit** is a first-class product control (`internal/audit`,
+[docs/observability.md](docs/observability.md), industry gaps/backlog in
+[docs/security/audit-trail-review.md](docs/security/audit-trail-review.md)).
+Agents **must** wire or extend audit when the change is security-relevant — not
+as a follow-up “nice to have.”
+
+### When an audit event is required (same change)
+
+Emit (or extend) an `audit.Event` via `audit.Emit` / the package’s wired helpers
+for **any new or changed path** that is security- or compliance-relevant, including:
+
+| Category | Examples (non-exhaustive) |
+|----------|---------------------------|
+| **Authentication / identity** | Login success/fail; serve bind; mid-serve re-verify fail; gateway subject bind fail; token/session invalidation |
+| **Authorization / policy** | Tool deny (RO, deny-lists, signed policy); admin RBAC deny; mutation preview/confirm/deny |
+| **Handler / safety failures** | Tool errors that are security-relevant (budget, subject limiter, invalid identity) — use `tool_error` / stable `reasonCode`, not free text |
+| **Mutations** | Start/stop/cancel and other write tools after policy allows — preview/confirm/deny already pattern |
+| **Admin / operator writes** | Policy validate/apply; cache destructive evict; vault put/delete/revoke; consent purge/clear_all; subject-invalidate; destructive admin confirm tokens |
+| **Serve lifecycle** | Serve start (and stop/shutdown if added) |
+
+If emit is **intentionally deferred**, leave an explicit residual with task id
+(**AUD-T-*** or AUD-001 coverage matrix) on the emit site comment + docs — **never
+silent omission** of security-relevant actions.
+
+### Rules (always)
+
+| Rule | Detail |
+|------|--------|
+| **Use the audit package** | Prefer `audit.Emit(ctx, sink, Event{...})` or existing wrappers (`internal/tools/audit_emit.go`, mutation manager, `cmd/.../audit_wire.go`). Do not invent parallel “security log” formats. |
+| **Stable types + reason codes** | Use `Type*` constants (`login_*`, `tool_deny`, `tool_error`, `auth_fail`, …) or add a new **low-cardinality** type in `event.go` + docs. `reasonCode` is machine-stable (policy reason, `apperr` code) — not user/error strings. |
+| **Secret-free forever** | Never put tokens, passwords, Authorization headers, prompts, full job parameters, log excerpts, or vault material in any Event field. Use `principalId` / redacted `externalSubject` / `subjectKeyHash` (`audit.HashOpaque`) / `targetHash`. Run or extend **canary** tests when adding fields or emit sites. |
+| **Best-effort emit** | Audit failures **must not** authorize work or fail-open security checks. Ignore or log emit errors without elevating privileges (existing pattern: `_ = audit.Emit(...)`). |
+| **Identity attribution** | Prefer effective multi-user identity on the event (`profileId`, `principalId`, optional `externalSubject` + `subjectKeyHash`) when SubjectKey / Binding is available — same as tool_deny/mutation patterns. |
+| **Sink wiring** | New long-lived processes (serve, admin serve, gateway) must have a sink when a profile data dir exists (`OpenProfileSink` / File). Tests may use `Memory` / `Nop`. Do not claim SIEM/syslog/Splunk ship without implementing **AUD-T-010…012**. |
+| **Schema / SPA / docs** | New event **types** or **fields** update: `internal/audit/event.go`, [docs/observability.md](docs/observability.md), admin Audit page filters/columns if operator-visible, and canary/unit tests in the **same change**. |
+| **Not a substitute for ext-logs** | Querying external log backends (INT-003) is not AUD-001. Shipping audit to SIEM is residual — see audit-trail-review. |
+
+### Quick map for agents
+
+| Path | Role |
+|------|------|
+| `internal/audit/` | Event schema, File/Memory/Multi sinks, sanitize, HashOpaque |
+| `internal/tools/audit_emit.go` | Tool deny / error / optional success emit |
+| `internal/mutation/manager.go` | Mutation preview/confirm/deny audit |
+| `cmd/jenkins-mcp/audit_wire.go` | Login / auth_fail wire helpers |
+| `docs/observability.md` | AUD-001 SoT for operators |
+| `docs/security/audit-trail-review.md` | Standards mapping + **AUD-T-*** backlog (SIEM residual) |
+
+### Pre-done checklist (agents)
+
+Before marking security-relevant work complete, answer **yes** or document residual:
+
+1. Does every **deny / fail-closed / destructive / auth** path emit an audit event (or residual id)?  
+2. Are events **secret-free** (canary or review of fields)?  
+3. Are **type** + **reasonCode** stable and documented?  
+4. Can an operator **see** the event via admin audit list when the console covers that domain (or residual stated)?  
+5. Did emit **failure** leave authorization fail-closed?
+
+---
+
 ## Non-negotiable: todo / backlog tracking and next steps
 
 **Work is tracked against the backlog.** Incomplete work must never be left
@@ -260,13 +322,14 @@ comment):
 1. Identify task ID(s) and re-read architecture + dependency tasks
 2. Implement within task scope
 3. Add/update tests (features + regression tests for fixes)
-4. If external-system/integration: add or extend Docker compose lab (opt-in Makefile) or residual TODO
-5. Update documentation and backlog/todo status
-6. If operator-relevant: update admin BFF/SPA/api-v1 (or explicit residual TODO)
-7. Run lint/tests/race as applicable; attach perf evidence if required
-8. Structured code review (/review); fix bug findings; re-test
-9. If incomplete: write next steps; do not mark DoD complete
-10. Commit code + tests + docs (+ admin + lab scaffolds) together when practical
+4. If security-relevant: wire **audit emit** (AUD-001) or explicit AUD-T residual — see audit section
+5. If external-system/integration: add or extend Docker compose lab (opt-in Makefile) or residual TODO
+6. Update documentation and backlog/todo status
+7. If operator-relevant: update admin BFF/SPA/api-v1 (or explicit residual TODO)
+8. Run lint/tests/race as applicable; attach perf evidence if required
+9. Structured code review (/review); fix bug findings; re-test
+10. If incomplete: write next steps; do not mark DoD complete
+11. Commit code + tests + docs (+ admin + lab scaffolds) together when practical
 ```
 
 ---
