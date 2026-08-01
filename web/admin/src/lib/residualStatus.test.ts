@@ -15,6 +15,8 @@ import {
   PRINCIPAL_CACHE_PROCESS_HONESTY,
   SHARED_JWKS_FILE_HONESTY,
   SHARED_SUBJECT_RATE_FILE_HONESTY,
+  SUBJECT_LIMITER_MAX_SUBJECTS_HONESTY,
+  SUBJECT_SLOTS_PROCESS_LOCAL_HONESTY,
 } from "./residualStatus";
 
 describe("pickResidualRateCacheFields", () => {
@@ -23,11 +25,13 @@ describe("pickResidualRateCacheFields", () => {
       shared_subject_rate_file: false,
       shared_principal_cache_file: false,
       shared_jwks_file: false,
+      subject_slots_process_local: false,
     });
     expect(pickResidualRateCacheFields(null)).toEqual({
       shared_subject_rate_file: false,
       shared_principal_cache_file: false,
       shared_jwks_file: false,
+      subject_slots_process_local: false,
     });
   });
 
@@ -37,6 +41,8 @@ describe("pickResidualRateCacheFields", () => {
       shared_principal_cache_file: true,
       shared_jwks_file: true,
       subject_rate_max_subjects: 64,
+      subject_limiter_max_subjects: 2048,
+      subject_slots_process_local: true,
       principal_cache_entries: 3,
       principal_cache_max_entries: 256,
       principal_cache_ttl_seconds: 7200,
@@ -50,6 +56,8 @@ describe("pickResidualRateCacheFields", () => {
       shared_principal_cache_file: true,
       shared_jwks_file: true,
       subject_rate_max_subjects: 64,
+      subject_limiter_max_subjects: 2048,
+      subject_slots_process_local: true,
       principal_cache_entries: 3,
       principal_cache_max_entries: 256,
       principal_cache_ttl_seconds: 7200,
@@ -61,20 +69,24 @@ describe("pickResidualRateCacheFields", () => {
     const data: GatewayResidualStatusResponse = {
       shared_subject_rate_file: false,
       shared_jwks_file: false,
+      subject_slots_process_local: true,
       principal_cache_entries: 0,
     };
     expect(pickResidualRateCacheFields(data)).toEqual({
       shared_subject_rate_file: false,
       shared_principal_cache_file: false,
       shared_jwks_file: false,
+      subject_slots_process_local: true,
       principal_cache_entries: 0,
     });
+    expect(pickResidualRateCacheFields(data).subject_limiter_max_subjects).toBeUndefined();
   });
 
   it("never invents subjects or path fields from residual map", () => {
     const data = {
       shared_subject_rate_file: true,
       shared_jwks_file: true,
+      subject_slots_process_local: true,
       principal_cache_entries: 1,
       // adversarial noise — must not surface as typed rate/cache fields
       subject: "tenant|alice|profile",
@@ -87,22 +99,25 @@ describe("pickResidualRateCacheFields", () => {
       shared_subject_rate_file: true,
       shared_principal_cache_file: false,
       shared_jwks_file: true,
+      subject_slots_process_local: true,
       principal_cache_entries: 1,
     });
     expect(JSON.stringify(picked)).not.toMatch(/canary|alice|token|path|secret\/path/i);
   });
 
-  it("only treats explicit boolean true as shared_*_file (never Boolean() truthy strings)", () => {
+  it("only treats explicit boolean true as shared_*_file / subject_slots (never Boolean() truthy strings)", () => {
     // Regression: Boolean("false") === true; residual honesty must fail closed.
     const noisy = {
       shared_subject_rate_file: "false",
       shared_principal_cache_file: "true",
       shared_jwks_file: 1,
+      subject_slots_process_local: "true",
     } as unknown as GatewayResidualStatusResponse;
     expect(pickResidualRateCacheFields(noisy)).toEqual({
       shared_subject_rate_file: false,
       shared_principal_cache_file: false,
       shared_jwks_file: false,
+      subject_slots_process_local: false,
     });
   });
 });
@@ -222,5 +237,14 @@ describe("honesty constants", () => {
     expect(GATEWAY_READY_RESIDUAL_HONESTY).toMatch(/readyz/i);
     expect(GATEWAY_READY_RESIDUAL_HONESTY).toMatch(/false/i);
     expect(HA_MULTI_REPLICA_RESIDUAL_HONESTY).toMatch(/HOST-008|single-replica/i);
+  });
+
+  it("subject slots honesty is process-local not multi-pod", () => {
+    expect(SUBJECT_SLOTS_PROCESS_LOCAL_HONESTY).toMatch(/process-local/i);
+    expect(SUBJECT_SLOTS_PROCESS_LOCAL_HONESTY).toMatch(/not multi-pod/i);
+    expect(SUBJECT_SLOTS_PROCESS_LOCAL_HONESTY).not.toMatch(/token|secret/i);
+    expect(SUBJECT_LIMITER_MAX_SUBJECTS_HONESTY).toMatch(/process-local/i);
+    expect(SUBJECT_LIMITER_MAX_SUBJECTS_HONESTY).toMatch(/unlimited/i);
+    expect(SUBJECT_LIMITER_MAX_SUBJECTS_HONESTY).not.toMatch(/token|secret/i);
   });
 });

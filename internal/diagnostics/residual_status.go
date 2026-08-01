@@ -180,6 +180,9 @@ func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 	if limMax, err := gateway.SubjectLimiterMaxSubjectsFromEnviron(getenv); err == nil && limMax > 0 {
 		out["subject_limiter_max_subjects"] = limMax
 	}
+	// HOST-007 / HOST-008 concurrency honesty: SubjectLimiter slots are always
+	// process-local (no multi-pod shared concurrency). Always true; secret-free.
+	out["subject_slots_process_local"] = true
 	if mp.Checklist != "" {
 		out["multi_pod_residual_checklist"] = mp.Checklist
 	}

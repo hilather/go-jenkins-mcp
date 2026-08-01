@@ -26,6 +26,17 @@ export const PRINCIPAL_CACHE_HYGIENE_HONESTY =
   "optional env hygiene (omit = unlimited / no TTL); process-local residual";
 
 /**
+ * SubjectLimiter concurrency slots are process-local (HOST-008 residual).
+ * residual-status always emits subject_slots_process_local=true; never multi-pod HA.
+ */
+export const SUBJECT_SLOTS_PROCESS_LOCAL_HONESTY =
+  "SubjectLimiter concurrency slots process-local only (HOST-008 residual; not multi-pod shared concurrency)";
+
+/** Optional SubjectLimiter MaxSubjects hygiene when env set; never subjects. */
+export const SUBJECT_LIMITER_MAX_SUBJECTS_HONESTY =
+  "optional map hygiene (JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS; omit = unlimited); process-local only";
+
+/**
  * Live mode pin + gateway_ready honesty on residual-status surfaces.
  * residual-status always emits false; SPA must not claim production GO.
  */
@@ -94,6 +105,16 @@ export interface ResidualRateCacheFields {
   shared_jwks_file: boolean;
   /** Present when MaxSubjects env > 0. */
   subject_rate_max_subjects?: number;
+  /**
+   * Present when SubjectLimiter MaxSubjects env > 0 (omit = unlimited).
+   * HOST-006 / HOST-007 residual lite.
+   */
+  subject_limiter_max_subjects?: number;
+  /**
+   * Always true on current residual-status (concurrency slots process-local).
+   * Explicit true only; missing/older BFF → false for fail-closed pick.
+   */
+  subject_slots_process_local: boolean;
   /** Process-local or file Len() count. */
   principal_cache_entries?: number;
   /** BFF honesty sentence when present. */
@@ -116,6 +137,7 @@ export function pickResidualRateCacheFields(
       shared_subject_rate_file: false,
       shared_principal_cache_file: false,
       shared_jwks_file: false,
+      subject_slots_process_local: false,
     };
   }
   // Fail-closed honesty: only explicit boolean true counts as shared-file lite.
@@ -124,9 +146,13 @@ export function pickResidualRateCacheFields(
     shared_subject_rate_file: data.shared_subject_rate_file === true,
     shared_principal_cache_file: data.shared_principal_cache_file === true,
     shared_jwks_file: data.shared_jwks_file === true,
+    subject_slots_process_local: data.subject_slots_process_local === true,
   };
   if (typeof data.subject_rate_max_subjects === "number") {
     out.subject_rate_max_subjects = data.subject_rate_max_subjects;
+  }
+  if (typeof data.subject_limiter_max_subjects === "number") {
+    out.subject_limiter_max_subjects = data.subject_limiter_max_subjects;
   }
   if (typeof data.principal_cache_entries === "number") {
     out.principal_cache_entries = data.principal_cache_entries;

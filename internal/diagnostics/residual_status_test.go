@@ -81,6 +81,13 @@ func TestBuildGatewayResidualStatus_SecretFreeAndModeBId(t *testing.T) {
 	if out["shared_jwks_file"] != false {
 		t.Fatalf("shared_jwks_file default false: %+v", out["shared_jwks_file"])
 	}
+	// HOST-007 / HOST-008: concurrency slots always process-local (never multi-pod claim).
+	if out["subject_slots_process_local"] != true {
+		t.Fatalf("subject_slots_process_local must always be true: %+v", out["subject_slots_process_local"])
+	}
+	if _, ok := out["subject_limiter_max_subjects"]; ok {
+		t.Fatalf("unlimited must omit subject_limiter_max_subjects: %+v", out["subject_limiter_max_subjects"])
+	}
 	note, _ := out["residual_note"].(string)
 	doc, _ := out["doc"].(string)
 	if !strings.Contains(note, "live-pin-blockers") && !strings.Contains(doc, "live-pin-blockers") {
@@ -253,5 +260,45 @@ func TestBuildGatewayResidualStatus_SharedJWKSFile(t *testing.T) {
 	clear := diagnostics.BuildGatewayResidualStatus(func(string) string { return "" })
 	if clear["shared_jwks_file"] != false {
 		t.Fatalf("shared_jwks_file default false: %+v", clear["shared_jwks_file"])
+	}
+	// Concurrency honesty still true when other paths unset.
+	if clear["subject_slots_process_local"] != true {
+		t.Fatalf("subject_slots_process_local always true: %+v", clear["subject_slots_process_local"])
+	}
+}
+
+// HOST-006/HOST-007 residual lite: subject_limiter_max_subjects when env set;
+// subject_slots_process_local always true (process-local concurrency honesty).
+func TestBuildGatewayResidualStatus_SubjectLimiterMaxSubjects(t *testing.T) {
+	t.Setenv(gateway.EnvGatewaySubjectLimiterMaxSubjects, "")
+	out := diagnostics.BuildGatewayResidualStatus(nil)
+	if _, ok := out["subject_limiter_max_subjects"]; ok {
+		t.Fatalf("unlimited must omit subject_limiter_max_subjects: %+v", out["subject_limiter_max_subjects"])
+	}
+	if out["subject_slots_process_local"] != true {
+		t.Fatalf("subject_slots_process_local: %+v", out["subject_slots_process_local"])
+	}
+
+	t.Setenv(gateway.EnvGatewaySubjectLimiterMaxSubjects, "2048")
+	out = diagnostics.BuildGatewayResidualStatus(nil)
+	if out["subject_limiter_max_subjects"] != 2048 {
+		t.Fatalf("subject_limiter_max_subjects: %+v", out["subject_limiter_max_subjects"])
+	}
+	if out["subject_slots_process_local"] != true {
+		t.Fatalf("subject_slots_process_local with max set: %+v", out["subject_slots_process_local"])
+	}
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	for _, bad := range []string{residualCanary, "access_token=", "refresh_token=", "client_secret=", "Bearer "} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q in residual-status with limiter max subjects", bad)
+		}
+	}
+	// Never claim multi-pod shared concurrency Done.
+	if strings.Contains(strings.ToLower(s), "multi-pod concurrency done") {
+		t.Fatal("must not claim multi-pod concurrency Done")
 	}
 }

@@ -563,6 +563,10 @@ func TestGatewayResidualStatus(t *testing.T) {
 	if payload["shared_jwks_file"] != false {
 		t.Fatalf("shared_jwks_file default false: %+v", payload["shared_jwks_file"])
 	}
+	// HOST-007/HOST-008: concurrency slots always process-local honesty.
+	if payload["subject_slots_process_local"] != true {
+		t.Fatalf("subject_slots_process_local must always be true: %+v", payload["subject_slots_process_local"])
+	}
 	if _, ok := payload["ratePerMinute"].(float64); !ok {
 		// json numbers → float64
 		t.Fatalf("ratePerMinute: %+v", payload["ratePerMinute"])
@@ -800,16 +804,23 @@ func TestGatewayResidualStatus_SubjectRateMaxSubjects(t *testing.T) {
 }
 
 // HOST-006 residual lite: subject_limiter_max_subjects surfaces when env set; omit when unlimited.
+// HOST-007: subject_slots_process_local always true (concurrency process-local honesty).
 func TestGatewayResidualStatus_SubjectLimiterMaxSubjects(t *testing.T) {
 	t.Setenv(gateway.EnvGatewaySubjectLimiterMaxSubjects, "")
 	out := buildGatewayResidualStatus(os.Getenv)
 	if _, ok := out["subject_limiter_max_subjects"]; ok {
 		t.Fatalf("unlimited must omit subject_limiter_max_subjects: %+v", out["subject_limiter_max_subjects"])
 	}
+	if out["subject_slots_process_local"] != true {
+		t.Fatalf("subject_slots_process_local must always be true: %+v", out["subject_slots_process_local"])
+	}
 	t.Setenv(gateway.EnvGatewaySubjectLimiterMaxSubjects, "2048")
 	out = buildGatewayResidualStatus(os.Getenv)
 	if out["subject_limiter_max_subjects"] != 2048 {
 		t.Fatalf("subject_limiter_max_subjects: %+v", out["subject_limiter_max_subjects"])
+	}
+	if out["subject_slots_process_local"] != true {
+		t.Fatalf("subject_slots_process_local still true when max set: %+v", out["subject_slots_process_local"])
 	}
 	blob, err := json.Marshal(out)
 	if err != nil {

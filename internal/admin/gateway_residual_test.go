@@ -123,6 +123,10 @@ func TestGatewayResidualStatus_SecretFreeAndCoreFields(t *testing.T) {
 	if body["shared_jwks_file"] != false {
 		t.Fatalf("shared_jwks_file default false: %+v", body["shared_jwks_file"])
 	}
+	// HOST-007/HOST-008: concurrency slots always process-local (not multi-pod HA).
+	if body["subject_slots_process_local"] != true {
+		t.Fatalf("subject_slots_process_local must always be true: %+v", body["subject_slots_process_local"])
+	}
 
 	// Progressive consent object.
 	pc, ok := body["progressive_consent"].(map[string]any)
