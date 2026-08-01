@@ -3,6 +3,7 @@ package auth_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -886,9 +887,239 @@ func TestRSQualificationDocPresent(t *testing.T) {
 		"OfflineFallthroughFixtures",
 		"Done*",
 		"live lab",
+		"wrong_aud",
+		"live-oauth",
+		"GWY-003",
+		"Mode B",
 	} {
 		if !strings.Contains(text, s) {
 			t.Errorf("qualification doc missing %q", s)
 		}
+	}
+}
+
+// OAUTH-009 expand: offline fail-closed Bearer claim matrix on Jenkins-shaped
+// paths (RequiredMCPRoutes). Wrong aud / exp / iss rejected; ID token never
+// accepted as API credential; invalid Bearer does not fall through to session.
+// Live jwt-auth-filter / Entra pin remains residual — this does not claim Done.
+func TestOAUTH009_OfflineBearerClaimMatrix_JenkinsShapedPaths(t *testing.T) {
+	t.Parallel()
+	priv, jwks := testRSAJWKS(t, "oauth009-kid")
+	now := time.Unix(1_700_100_000, 0)
+	const (
+		issuer = "https://idp.example.com/oauth009"
+		aud    = "api://jenkins-corp-resource"
+	)
+	params := auth.AccessTokenParams{
+		Issuer:   issuer,
+		Audience: aud,
+		Now:      func() time.Time { return now },
+	}
+	goodClaims := func(mut func(map[string]any)) string {
+		c := map[string]any{
+			"iss":       issuer,
+			"sub":       "alice-oauth009",
+			"aud":       aud,
+			"exp":       now.Add(time.Hour).Unix(),
+			"token_use": "access_token",
+		}
+		if mut != nil {
+			mut(c)
+		}
+		return mustSignRS256(t, priv, "oauth009-kid", c)
+	}
+	goodTok := goodClaims(nil)
+
+	// Claim-level fail-closed (MCP ValidateAccessToken for JWT-shaped tokens).
+	// Note: non-JWT "opaque" strings are intentionally accepted at MCP layer
+	// (whoAmI residual); simulated RS below still rejects non-JWT Bearer.
+	claimCases := []struct {
+		name string
+		tok  string
+	}{
+		{"wrong_aud", goodClaims(func(m map[string]any) { m["aud"] = "https://graph.microsoft.com" })},
+		{"wrong_iss", goodClaims(func(m map[string]any) { m["iss"] = "https://evil.example.com" })},
+		{"expired", goodClaims(func(m map[string]any) { m["exp"] = now.Add(-time.Hour).Unix() })},
+		{"id_token_use", goodClaims(func(m map[string]any) { m["token_use"] = "id_token" })},
+		{"empty", ""},
+		// Three-segment JWT shape with garbage signature/payload.
+		{"malformed_jwt", "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4In0.not-a-real-sig"},
+	}
+	for _, tc := range claimCases {
+		tc := tc
+		t.Run("validate_"+tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := auth.ValidateAccessToken(tc.tok, jwks, params)
+			if err == nil {
+				t.Fatalf("%s must fail closed", tc.name)
+			}
+			if strings.Contains(err.Error(), goodTok) || (tc.tok != "" && len(tc.tok) > 24 && strings.Contains(err.Error(), tc.tok[:24])) {
+				t.Fatalf("%s error leaked token material", tc.name)
+			}
+		})
+	}
+	// Good token accepted offline.
+	if _, err := auth.ValidateAccessToken(goodTok, jwks, params); err != nil {
+		t.Fatalf("good token: %v", err)
+	}
+
+	// Simulated JWT RS: only valid Jenkins-audience JWTs succeed; when Bearer is
+	// present and invalid/opaque/wrong-claim → 401 even with JSESSIONID (no fallthrough).
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		authz := r.Header.Get("Authorization")
+		if strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+			tok := strings.TrimSpace(authz[len("Bearer "):])
+			// jwt-auth-filter-shaped RS: Bearer present must be JWT and validate;
+			// opaque/garbage never fall through to session/Basic.
+			if auth.ClassifyAccessToken(tok) != auth.TokenFormJWT {
+				w.Header().Set("WWW-Authenticate", `Bearer realm="Jenkins", error="invalid_token"`)
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":"invalid_token"}`))
+				return
+			}
+			res, err := auth.ValidateAccessToken(tok, jwks, params)
+			if err != nil || res.Form != auth.TokenFormJWT {
+				// Fail closed: never consult Cookie or Basic after invalid Bearer.
+				w.Header().Set("WWW-Authenticate", `Bearer realm="Jenkins", error="invalid_token"`)
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":"invalid_token"}`))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"alice-oauth009","authenticated":true,"anonymous":false}`))
+			return
+		}
+		// No Bearer: optional UI session (not MCP OAuth path).
+		if c, err := r.Cookie("JSESSIONID"); err == nil && c.Value == "ui-session" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"bob-ui","authenticated":true,"anonymous":false}`))
+			return
+		}
+		if strings.HasPrefix(strings.ToLower(authz), "basic ") {
+			// Basic alone may work for non-OAuth pilot — but not as Bearer fallthrough.
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"basic-user","authenticated":true,"anonymous":false}`))
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	client := srv.Client()
+
+	// Every RequiredMCPRoutes example path: invalid claim tokens → 401, classifier Denied.
+	paths := make([]string, 0, len(auth.RequiredMCPRoutes))
+	for _, r := range auth.RequiredMCPRoutes {
+		paths = append(paths, r.ExamplePath)
+	}
+	// Ensure outside-api-glob routes present.
+	if len(auth.RequiredOutsideAPIGlobRoutes()) < 3 {
+		t.Fatal("outside api glob inventory too small")
+	}
+
+	badTokens := []struct {
+		name string
+		tok  string
+	}{
+		{"wrong_aud", goodClaims(func(m map[string]any) { m["aud"] = "https://graph.microsoft.com" })},
+		{"wrong_iss", goodClaims(func(m map[string]any) { m["iss"] = "https://evil.example.com" })},
+		{"expired", goodClaims(func(m map[string]any) { m["exp"] = now.Add(-time.Hour).Unix() })},
+		{"id_token", goodClaims(func(m map[string]any) { m["token_use"] = "id_token" })},
+		// Opaque non-JWT Bearer (RS must still 401 — no session fallthrough).
+		{"opaque_garbage", "totally-invalid-bearer"},
+		{"malformed_jwt", "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4In0.not-a-real-sig"},
+	}
+
+	for _, pth := range paths {
+		pth := pth
+		for _, bt := range badTokens {
+			bt := bt
+			name := "path_" + strings.ReplaceAll(strings.Trim(pth, "/"), "/", "_") + "_" + bt.name
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				req, err := http.NewRequest(http.MethodGet, srv.URL+pth, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				req.Header.Set("Authorization", "Bearer "+bt.tok)
+				// Tempt fallthrough: session + Basic must not rescue invalid Bearer.
+				req.AddCookie(&http.Cookie{Name: "JSESSIONID", Value: "ui-session"})
+				req.Header.Add("X-Lab-Basic-Hint", "admin:test") // not Authorization Basic
+				resp, err := client.Do(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer resp.Body.Close()
+				body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+				bc := auth.ClassifyResponseBodyClass(body)
+				eval := auth.ClassifyFallthroughProbe(auth.FallthroughProbeInput{
+					StatusCode:      resp.StatusCode,
+					WWWAuthenticate: resp.Header.Get("WWW-Authenticate"),
+					BodyClass:       bc,
+				})
+				if !eval.Denied || eval.FallthroughDetected {
+					t.Fatalf("Regression: invalid bearer (%s) on %s must deny without fallthrough: status=%d eval=%+v",
+						bt.name, pth, resp.StatusCode, eval)
+				}
+				if resp.StatusCode == http.StatusOK {
+					t.Fatalf("Regression: invalid bearer must not return 200 (session/Basic fallthrough) on %s", pth)
+				}
+			})
+		}
+	}
+
+	// Good token on progressive log path (outside /**/api/**) succeeds.
+	prog := "/job/demo/1/logText/progressiveText?start=0"
+	req, err := http.NewRequest(http.MethodGet, srv.URL+prog, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+goodTok)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("good bearer on progressive path: %d", resp.StatusCode)
+	}
+
+	// Contrast: Basic alone (no Bearer) may authenticate — proves fallthrough
+	// risk if RS ignored Bearer; classifier would flag 200 on invalid Bearer.
+	reqB, _ := http.NewRequest(http.MethodGet, srv.URL+"/whoAmI/api/json", nil)
+	reqB.Header.Set("Authorization", "Basic YWRtaW46dGVzdA==")
+	respB, err := client.Do(reqB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer respB.Body.Close()
+	if respB.StatusCode != http.StatusOK {
+		t.Fatalf("basic-only fixture: %d", respB.StatusCode)
+	}
+}
+
+// OfflineFallthroughFixtures rows must remain consistent with classifier (export used by doctor).
+func TestOfflineFallthroughFixtures_ExportedContract(t *testing.T) {
+	t.Parallel()
+	// Ensure BuildOfflineRSQualificationSummary still marks live residual.
+	sum := auth.BuildOfflineRSQualificationSummary("oidc_bearer")
+	if !sum.LiveLabStillRequired {
+		t.Fatal("offline must never clear live_lab_still_required")
+	}
+	foundClaim := false
+	for _, line := range sum.OfflineAutomated {
+		if strings.Contains(line, "wrong aud") || strings.Contains(strings.ToLower(line), "claim") {
+			foundClaim = true
+			break
+		}
+	}
+	if !foundClaim {
+		t.Fatalf("offline automated must mention claim matrix: %v", sum.OfflineAutomated)
+	}
+	// Mode B residual honesty in residuals.
+	joined := strings.Join(sum.LiveLabResiduals, " ")
+	if !strings.Contains(joined, "Mode B") && !strings.Contains(joined, "jwt-auth-filter") {
+		t.Fatalf("residuals must note Mode B / jwt-auth-filter: %v", sum.LiveLabResiduals)
 	}
 }

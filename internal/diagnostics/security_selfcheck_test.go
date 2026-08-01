@@ -907,3 +907,56 @@ func TestSecuritySelfCheck_ReportCanaryNeverInOutput(t *testing.T) {
 		t.Fatal("Regression: canary plant leaked into report text")
 	}
 }
+
+// OAUTH-009: Mode B env elevates rs_qualification warn with honest residual.
+func TestSecuritySelfCheck_ModeB_RSResidual(t *testing.T) {
+	t.Parallel()
+	getenv := func(k string) string {
+		if k == "JENKINS_MCP_GATEWAY_CREDENTIAL_MODE" {
+			return "jwt_rs_bearer"
+		}
+		return ""
+	}
+	rep, err := diagnostics.RunSecuritySelfCheck(context.Background(), diagnostics.SelfCheckOptions{
+		SkipSupportBundleCanary: true,
+		Getenv:                  getenv,
+		PolicyResult: &policy.LoadResult{
+			Present:        true,
+			SignatureState: policy.SigStateUnverifiedPilot,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rs diagnostics.SelfCheckItem
+	for _, it := range rep.Items {
+		if it.Name == "rs_qualification" {
+			rs = it
+			break
+		}
+	}
+	if rs.Name == "" {
+		t.Fatal("rs_qualification missing")
+	}
+	if rs.Status != diagnostics.SelfCheckWarn {
+		t.Fatalf("Mode B rs_qualification want warn: %+v", rs)
+	}
+	if rs.Control != "OAUTH-009" {
+		t.Fatalf("control %s", rs.Control)
+	}
+	if rs.Details["gateway_mode_b_enabled"] != true {
+		t.Fatalf("gateway_mode_b_enabled: %+v", rs.Details)
+	}
+	if rs.Details["mode_b_live_rs_qualified"] != false {
+		t.Fatalf("must not claim live qualified: %+v", rs.Details)
+	}
+	if rs.Details["live_lab_still_required"] != true {
+		t.Fatalf("live_lab_still_required: %+v", rs.Details)
+	}
+	if rs.Details["id_jwt_never_api_credential"] != true {
+		t.Fatalf("id_jwt note: %+v", rs.Details)
+	}
+	if !strings.Contains(rs.Message, "Mode B") && !strings.Contains(rs.Message, "jwt_rs_bearer") {
+		t.Fatalf("message: %s", rs.Message)
+	}
+}

@@ -895,3 +895,72 @@ func sha256SumDoctor(b []byte) string {
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
 }
+
+// OAUTH-009: when gateway Mode B (jwt_rs_bearer) is enabled, doctor rs_auth
+// must warn live RS residual (offline vault is not a production pin).
+func TestRunDoctor_ModeB_RSAuthResidual(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.ProfilesDir(), 0o700)
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	getenv := func(k string) string {
+		if k == "JENKINS_MCP_GATEWAY_CREDENTIAL_MODE" {
+			return "jwt_rs_bearer"
+		}
+		return ""
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true,
+		Version:     "test",
+		Getenv:      getenv,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rs diagnostics.Check
+	for _, c := range rep.Checks {
+		if c.Name == "rs_auth" {
+			rs = c
+			break
+		}
+	}
+	if rs.Name == "" {
+		t.Fatal("rs_auth missing")
+	}
+	if rs.Status != diagnostics.StatusWarn {
+		t.Fatalf("Mode B rs_auth want warn got %s %s", rs.Status, rs.Message)
+	}
+	if !strings.Contains(rs.Message, "Mode B") && !strings.Contains(rs.Message, "jwt_rs_bearer") {
+		t.Fatalf("message must note Mode B: %s", rs.Message)
+	}
+	if rs.Details["gateway_mode_b_enabled"] != true {
+		t.Fatalf("gateway_mode_b_enabled: %+v", rs.Details)
+	}
+	if rs.Details["mode_b_live_rs_qualified"] != false {
+		t.Fatalf("must not claim live RS qualified: %+v", rs.Details)
+	}
+	if rs.Details["id_jwt_never_api_credential"] != true {
+		t.Fatalf("id_jwt note: %+v", rs.Details)
+	}
+	if rs.Details["live_lab_still_required"] != true {
+		t.Fatalf("live_lab_still_required: %+v", rs.Details)
+	}
+	// Residual text secret-free.
+	if strings.Contains(rs.Message, doctorCanary) {
+		t.Fatal("canary in message")
+	}
+}

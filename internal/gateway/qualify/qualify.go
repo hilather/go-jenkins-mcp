@@ -2,9 +2,12 @@ package qualify
 
 import (
 	"context"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -69,9 +72,11 @@ func RunOffline(ctx context.Context) Summary {
 			// Offline vault hit/miss + mock IdP outage + JWKS kid-lite + mode A/B/C matrix are exercised below (Done*).
 			// Live Entra JWKS rotation under load / real IdP outage remain residual.
 			"Live Entra JWKS rotation under load and live IdP outage chaos remain residual (offline vault hit/miss + mock IdP outage + JWKS kid-lite + mode A/B/C matrix Done*)",
-			"Mode B live jwt-auth-filter / IdP pin residual (OAUTH-009); offline JWT vault Bearer matrix Done*",
+			"Mode B live jwt-auth-filter / IdP pin residual (OAUTH-009); offline JWT vault Bearer + claim fail-closed matrix Done*",
+			"OAUTH-009 offline: wrong aud/exp/iss rejected; ID token never API credential; Mode B Obtain never Basic fallthrough — live RS pin still open",
 			"Mode C live Entra 3LO/OBO + AgentCore Identity vault residual; offline Live=false / mock Fetcher / consent matrix Done*",
-			"Opt-in residual lab: testdata/oauth-lab + make live-oauth-* (not default make test; not production Entra)",
+			"Opt-in residual lab: testdata/oauth-lab + make live-oauth-* (HOST-012…015; not default make test; not production Entra / jwt-auth-filter)",
+			"Cross-link: docs/auth/jwt-auth-filter-qualification.md + docs/gateway/qualification.md (GWY-003)",
 			"P95/P99 live token acquisition SLOs require production pin evidence",
 			"Generic-token passthrough remains disabled; exact-audience exception is residual approval",
 		},
@@ -113,6 +118,8 @@ func RunOffline(ctx context.Context) Summary {
 	run("mode_b_jwt_vault_bearer", "security", caseModeBJWTVaultBearer)
 	run("mode_c_agentcore_live_matrix", "security", caseModeCAgentCoreLiveMatrix)
 	run("host011_no_silent_fallthrough", "security", caseHOST011NoSilentFallthrough)
+	// OAUTH-009 offline foundations (claim fail-closed + classifier + Mode B no Basic).
+	run("oauth009_offline_bearer_matrix", "security", caseOAUTH009OfflineBearerMatrix)
 
 	// --- Performance cases (mock) ---
 	run("concurrent_obtain_stub_under_budget", "performance", caseConcurrentObtain)
@@ -1068,6 +1075,157 @@ func caseHOST011NoSilentFallthrough(ctx context.Context) error {
 		return fmt.Errorf("primary-not-enabled code %v", apperr.CodeOf(err))
 	}
 	return nil
+}
+
+// caseOAUTH009OfflineBearerMatrix — OAUTH-009 offline foundations (GWY-003 qualify):
+// wrong aud / exp / iss rejected via ValidateAccessToken; ID token rejected;
+// OfflineFallthroughFixtures self-consistent; Mode B Obtain never Basic fallthrough.
+// Does not claim live jwt-auth-filter / Entra production pin.
+func caseOAUTH009OfflineBearerMatrix(ctx context.Context) error {
+	_ = ctx
+	// --- Claim fail-closed (MCP validator) ---
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return err
+	}
+	n := base64.RawURLEncoding.EncodeToString(priv.N.Bytes())
+	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(priv.E)).Bytes())
+	jwks := &auth.JWKS{Keys: []auth.JWK{{
+		Kty: "RSA", Kid: "gwy-oauth009", Use: "sig", Alg: "RS256", N: n, E: e,
+	}}}
+	now := time.Unix(1_700_200_000, 0)
+	const (
+		issuer = "https://idp.example.com/gwy-oauth009"
+		aud    = "api://jenkins-api"
+	)
+	params := auth.AccessTokenParams{
+		Issuer: issuer, Audience: aud,
+		Now: func() time.Time { return now },
+	}
+	sign := func(claims map[string]any) (string, error) {
+		return signRS256Compact(priv, "gwy-oauth009", claims)
+	}
+	good, err := sign(map[string]any{
+		"iss": issuer, "sub": "u1", "aud": aud,
+		"exp": now.Add(time.Hour).Unix(), "token_use": "access_token",
+	})
+	if err != nil {
+		return err
+	}
+	if _, err := auth.ValidateAccessToken(good, jwks, params); err != nil {
+		return fmt.Errorf("good token: %w", err)
+	}
+	for _, row := range []struct {
+		name   string
+		claims map[string]any
+	}{
+		{"wrong_aud", map[string]any{
+			"iss": issuer, "sub": "u1", "aud": "https://graph.microsoft.com",
+			"exp": now.Add(time.Hour).Unix(), "token_use": "access_token",
+		}},
+		{"wrong_iss", map[string]any{
+			"iss": "https://evil.example", "sub": "u1", "aud": aud,
+			"exp": now.Add(time.Hour).Unix(), "token_use": "access_token",
+		}},
+		{"expired", map[string]any{
+			"iss": issuer, "sub": "u1", "aud": aud,
+			"exp": now.Add(-time.Hour).Unix(), "token_use": "access_token",
+		}},
+		{"id_token", map[string]any{
+			"iss": issuer, "sub": "u1", "aud": aud,
+			"exp": now.Add(time.Hour).Unix(), "token_use": "id_token",
+		}},
+	} {
+		tok, serr := sign(row.claims)
+		if serr != nil {
+			return serr
+		}
+		_, verr := auth.ValidateAccessToken(tok, jwks, params)
+		if verr == nil {
+			return fmt.Errorf("%s must fail closed", row.name)
+		}
+		if strings.Contains(verr.Error(), good) || (len(tok) > 24 && strings.Contains(verr.Error(), tok[:24])) {
+			return fmt.Errorf("%s error leaked token material", row.name)
+		}
+	}
+
+	// --- Classifier fixtures ---
+	fixtures := auth.OfflineFallthroughFixtures()
+	if len(fixtures) < 12 {
+		return fmt.Errorf("OfflineFallthroughFixtures floor: %d", len(fixtures))
+	}
+	for _, f := range fixtures {
+		got := auth.ClassifyFallthroughProbe(f.Input)
+		if got.Denied != f.WantDenied || got.FallthroughDetected != f.WantFallthrough {
+			return fmt.Errorf("fixture %s mismatch denied=%v fall=%v", f.ID, got.Denied, got.FallthroughDetected)
+		}
+	}
+	// Invalid bearer authenticated success → FallthroughDetected.
+	ft := auth.ClassifyFallthroughProbe(auth.FallthroughProbeInput{
+		StatusCode: 200, BodyClass: auth.BodyClassWhoAmIAuthenticated, WhoAmIAuthenticated: true,
+	})
+	if !ft.FallthroughDetected {
+		return fmt.Errorf("authenticated success must be FallthroughDetected")
+	}
+
+	// --- Mode B Obtain: never Basic fallthrough to Mode A vault ---
+	caller := gateway.Caller{
+		Subject: "oauth009-qualify", Tenant: "t", ProfileID: contracts.ProfileID("corp"),
+	}
+	apiVault := gateway.NewMemoryAPITokenVault()
+	if err := apiVault.Put(context.Background(), gateway.SubjectKey(caller), "alice", CanaryToken+"-A"); err != nil {
+		return err
+	}
+	jwtVault := gateway.NewMemoryJWTVault()
+	pB, err := gateway.RequireJWTRSBearerSetup(jwtVault)
+	if err != nil {
+		return err
+	}
+	cred, err := pB.Obtain(context.Background(), caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("empty Mode B vault must fail closed (no Mode A fallthrough)")
+	}
+	if strings.Contains(err.Error(), CanaryToken) {
+		return fmt.Errorf("Mode A canary in Mode B Obtain error")
+	}
+	// Mode matrix residual honesty when Mode B primary.
+	env := map[string]string{
+		gateway.EnvGatewayCredentialMode: string(gateway.CredentialModeJWTRSBearer),
+	}
+	mx, err := gateway.ModeMatrixFromEnviron(func(k string) string { return env[k] })
+	if err != nil {
+		return err
+	}
+	if mx.Residual == "" || !strings.Contains(mx.Residual, "OAUTH-009") {
+		return fmt.Errorf("Mode B residual must note OAUTH-009: %q", mx.Residual)
+	}
+	// ID token never API credential.
+	idTok := compactJWTClaims(map[string]string{"sub": "u", "token_use": "id_token"})
+	if putErr := jwtVault.Put(context.Background(), gateway.SubjectKey(caller), idTok); putErr == nil {
+		return fmt.Errorf("id_token must be rejected at JWT vault Put")
+	}
+	return nil
+}
+
+// signRS256Compact signs claims as compact JWT for offline OAUTH-009 qualify.
+func signRS256Compact(priv *rsa.PrivateKey, kid string, claims map[string]any) (string, error) {
+	hdr, err := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT", "kid": kid})
+	if err != nil {
+		return "", err
+	}
+	pl, err := json.Marshal(claims)
+	if err != nil {
+		return "", err
+	}
+	h := base64.RawURLEncoding.EncodeToString(hdr)
+	p := base64.RawURLEncoding.EncodeToString(pl)
+	input := h + "." + p
+	sum := sha256.Sum256([]byte(input))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, priv, crypto.SHA256, sum[:])
+	if err != nil {
+		return "", err
+	}
+	return input + "." + base64.RawURLEncoding.EncodeToString(sig), nil
 }
 
 // compactJWTClaims builds an unsigned compact JWT for offline id_token /

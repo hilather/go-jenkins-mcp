@@ -19,8 +19,8 @@ func TestRunOffline_AllPass(t *testing.T) {
 	if sum.Suite != "offline" {
 		t.Fatalf("suite %q", sum.Suite)
 	}
-	if sum.Passed < 16 {
-		t.Fatalf("expected >= 16 cases (incl. mode A/B/C + HOST-011), got %d", sum.Passed)
+	if sum.Passed < 17 {
+		t.Fatalf("expected >= 17 cases (incl. mode A/B/C + HOST-011 + OAUTH-009 matrix), got %d", sum.Passed)
 	}
 	// Residuals must document live AgentCore gap and offline vault/IdP/mode matrix Done*.
 	foundLive := false
@@ -75,6 +75,7 @@ func TestRunOffline_SecurityCaseNames(t *testing.T) {
 		"mode_b_jwt_vault_bearer":             false,
 		"mode_c_agentcore_live_matrix":        false,
 		"host011_no_silent_fallthrough":       false,
+		"oauth009_offline_bearer_matrix":      false,
 		"concurrent_obtain_stub_under_budget": false,
 		"fail_closed_obtain_latency":          false,
 	}
