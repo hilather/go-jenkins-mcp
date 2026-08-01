@@ -32,7 +32,8 @@ Gateway residual accepted (ticket/notes): _____________
 **REL lite residual ids** (from `jenkins-mcp release-evidence --offline`; do not treat as live GO):  
 `multi_user_offline` · `oauth009_offline` · `host008_single_replica` · `gateway_modes_live`  
 See [release gates](../release/gates.md) residuals section.  
-Optional honesty automation (not default test): `make residual-smoke` → fails if those ids are missing from offline evidence.
+Optional honesty automation (not default test): `make residual-smoke` → fails if those ids are missing from offline evidence.  
+**Live production GO residual checklists** (what still blocks Mode B/C multi-user and multi-pod): [gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) — OAUTH-009 jwt-auth-filter pin, OAUTH-010 Entra/AgentCore, HOST-008 multi-pod; residual-smoke proves honesty **not** live Done.
 
 ## 1. Install
 

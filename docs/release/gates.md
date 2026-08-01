@@ -10,7 +10,7 @@ Fill-in form: [`evidence-template.md`](evidence-template.md)
 Offline CLI sample: `jenkins-mcp release-evidence --offline [--profile <id>] [--output dist/release-evidence.json]`  
 Schema: `jenkins-mcp.release-evidence.v2` (Wave 21 expand)  
 Offline pack automation: `make pilot-evidence` → `dist/pilot-evidence/<timestamp>/` (REL-001/002 lite)  
-**Residual honesty smoke (opt-in):** `make residual-smoke` (alias `make gateway-residual-smoke`) → `scripts/gateway-residual-smoke.sh` runs `gateway qualify --offline` + `release-evidence --offline` and **fails** if residual ids `multi_user_offline` · `oauth009_offline` · `host008_single_replica` · `gateway_modes_live` are missing. Artifacts under `dist/residual-smoke/<ts>/`. **Not** part of default `make test` / `make ci`.
+**Residual honesty smoke (opt-in):** `make residual-smoke` (alias `make gateway-residual-smoke`) → `scripts/gateway-residual-smoke.sh` runs `gateway qualify --offline` + `release-evidence --offline` and **fails** if residual ids `multi_user_offline` · `oauth009_offline` · `host008_single_replica` · `gateway_modes_live` are missing. Artifacts under `dist/residual-smoke/<ts>/`. **Not** part of default `make test` / `make ci`. Proves residual ids still advertised — **not** live multi-user / Entra / multi-pod GO. Operator runbook: [gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md).
 
 ---
 

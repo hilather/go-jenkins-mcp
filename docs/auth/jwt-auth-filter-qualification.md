@@ -1,7 +1,7 @@
 # jwt-auth-filter qualification (OAUTH-009)
 
 **Status:** Offline classifier + Bearer claim matrix `Done*` (Wave 33 + OAUTH-009 expand); **live Jenkins / Entra / jwt-auth-filter lab residual** for production pin — **do not claim live Entra Done**  
-**Related:** [oauth-capability-matrix.md](oauth-capability-matrix.md), [auth-architecture.md](../auth-architecture.md), [../gateway/qualification.md](../gateway/qualification.md) (GWY-003), architecture §6.8  
+**Related:** [oauth-capability-matrix.md](oauth-capability-matrix.md), [auth-architecture.md](../auth-architecture.md), [../gateway/qualification.md](../gateway/qualification.md) (GWY-003), **[../gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md)** (consolidated live production GO residual), architecture §6.8  
 **Code:** `internal/auth/rs_qualification.go` (+ `rs_fallthrough.go`, `rs_jwks_contract.go`, `rs_inventory.go`, `rs_prm.go`); `internal/gateway/oauth009_offline_test.go`; `internal/gateway/qualify` case `oauth009_offline_bearer_matrix`  
 **Tests:** `go test ./internal/auth ./internal/gateway ./internal/gateway/qualify -count=1` · `-run 'OAUTH009|Fallthrough|RS|OfflineFallthrough|ModeB'`  
 **CLI:** `jenkins-mcp oauth probe-rs --profile <id> [--offline]` · doctor check `rs_auth` · `jenkins-mcp security self-check` item `rs_qualification` · `jenkins-mcp gateway qualify --offline` (GWY-003)
@@ -322,6 +322,10 @@ Offline JWT vault **Ready** does **not** clear these residuals. Doctor
 ---
 
 ## 8. Residuals (explicit)
+
+**Consolidated operator runbook** (version/JCasC/routes/evidence + residual-smoke
+honesty + Mode C / multi-pod neighbors):
+[../gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) §2 (OAUTH-009).
 
 ### Live lab (not offline-automated) — still required for production pin
 
