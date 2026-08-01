@@ -121,7 +121,9 @@ type ConsentSessionStore interface {
 
 // MemoryConsentSessionStore is a process-local TTL consent metadata store.
 // Optional FilePath enables crash recovery of metadata only (JSON 0600 under
-// XDG data). Not multi-replica HA; browser 3LO is not automated.
+// XDG data) and same-host multi-process honesty (reload-under-flock before
+// every mutate/write; reads resync so CLI purge is visible). Not multi-replica
+// HA; browser 3LO is not automated.
 type MemoryConsentSessionStore struct {
 	mu        sync.Mutex
 	bySession map[string]ConsentSessionRecord // session id → record
@@ -132,6 +134,8 @@ type MemoryConsentSessionStore struct {
 	MaxEntries int
 	// FilePath when non-empty persists metadata-only JSON after mutations.
 	// Never holds tokens. Mode 0600; parent dir 0700.
+	// Mutations: flock → reload disk → apply → write (no purge resurrection).
+	// Reads: flock → reload for freshness (exclusive OK for lite).
 	FilePath string
 	// now is optional clock override for tests.
 	now func() time.Time
@@ -191,6 +195,8 @@ func (s *MemoryConsentSessionStore) maxEntries() int {
 }
 
 // Put implements ConsentSessionStore.
+// File-backed: under flock reloads disk, applies upsert, then writes so CLI
+// purge of other sessions is not resurrected (OAUTH-010 same-host lite).
 func (s *MemoryConsentSessionStore) Put(rec ConsentSessionRecord) error {
 	if s == nil {
 		return apperr.New(apperr.CodeInternal, "consent session store is nil")
@@ -220,22 +226,24 @@ func (s *MemoryConsentSessionStore) Put(rec ConsentSessionRecord) error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.bySession == nil {
-		s.bySession = make(map[string]ConsentSessionRecord)
-	}
-	if s.bySubject == nil {
-		s.bySubject = make(map[string]string)
-	}
-	s.purgeExpiredLocked(now)
-	s.bySession[sid] = rec
-	if rec.SubjectKey != "" {
-		s.bySubject[rec.SubjectKey] = sid
-	}
-	s.enforceMaxLocked(now)
-	return s.persistLocked()
+	return s.mutateAndPersistLocked(func() {
+		if s.bySession == nil {
+			s.bySession = make(map[string]ConsentSessionRecord)
+		}
+		if s.bySubject == nil {
+			s.bySubject = make(map[string]string)
+		}
+		s.purgeExpiredLocked(now)
+		s.bySession[sid] = rec
+		if rec.SubjectKey != "" {
+			s.bySubject[rec.SubjectKey] = sid
+		}
+		s.enforceMaxLocked(now)
+	})
 }
 
 // Get implements ConsentSessionStore.
+// File-backed: reloads under flock so CLI purge is visible without a Put.
 func (s *MemoryConsentSessionStore) Get(sessionID string) (ConsentSessionRecord, bool) {
 	if s == nil {
 		return ConsentSessionRecord{}, false
@@ -246,18 +254,31 @@ func (s *MemoryConsentSessionStore) Get(sessionID string) (ConsentSessionRecord,
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	rec, ok := s.bySession[sid]
-	if !ok || rec.expired(s.clock()) {
-		if ok {
-			s.deleteLocked(sid)
-			_ = s.persistLocked()
+	var result ConsentSessionRecord
+	var found bool
+	// Fail closed on IO/reload error: miss (never invent durable hit).
+	if err := s.syncMutateWriteLocked(func() bool {
+		rec, ok := s.bySession[sid]
+		if !ok || rec.expired(s.clock()) {
+			if ok {
+				s.deleteLocked(sid)
+				found = false
+				return true // persist prune
+			}
+			found = false
+			return false
 		}
+		result = rec
+		found = true
+		return false
+	}); err != nil {
 		return ConsentSessionRecord{}, false
 	}
-	return rec, true
+	return result, found
 }
 
 // GetBySubjectKey implements ConsentSessionStore.
+// File-backed: reloads under flock for same-host multi-process freshness.
 func (s *MemoryConsentSessionStore) GetBySubjectKey(subjectKey string) (ConsentSessionRecord, bool) {
 	if s == nil {
 		return ConsentSessionRecord{}, false
@@ -268,29 +289,46 @@ func (s *MemoryConsentSessionStore) GetBySubjectKey(subjectKey string) (ConsentS
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	sid, ok := s.bySubject[sk]
-	if !ok {
-		return ConsentSessionRecord{}, false
-	}
-	rec, ok := s.bySession[sid]
-	if !ok || rec.expired(s.clock()) {
-		delete(s.bySubject, sk)
-		if ok {
-			s.deleteLocked(sid)
-			_ = s.persistLocked()
+	var result ConsentSessionRecord
+	var found bool
+	if err := s.syncMutateWriteLocked(func() bool {
+		sid, ok := s.bySubject[sk]
+		if !ok {
+			found = false
+			return false
 		}
+		rec, ok := s.bySession[sid]
+		if !ok || rec.expired(s.clock()) {
+			delete(s.bySubject, sk)
+			if ok {
+				s.deleteLocked(sid)
+				found = false
+				return true
+			}
+			found = false
+			return false
+		}
+		result = rec
+		found = true
+		return false
+	}); err != nil {
 		return ConsentSessionRecord{}, false
 	}
-	return rec, true
+	return result, found
 }
 
 // List implements ConsentSessionStore.
+// File-backed: reloads under flock so CLI purge/delete is reflected.
 func (s *MemoryConsentSessionStore) List() []ConsentSessionRecord {
 	if s == nil {
 		return nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Best-effort sync; on IO error return empty (fail closed for residual list).
+	if err := s.syncFromDiskLocked(); err != nil {
+		return nil
+	}
 	now := s.clock()
 	s.purgeExpiredLocked(now)
 	out := make([]ConsentSessionRecord, 0, len(s.bySession))
@@ -309,6 +347,7 @@ func (s *MemoryConsentSessionStore) List() []ConsentSessionRecord {
 }
 
 // Delete implements ConsentSessionStore.
+// File-backed: reload → delete → write under flock (disk truth wins).
 func (s *MemoryConsentSessionStore) Delete(sessionID string) {
 	if s == nil {
 		return
@@ -319,41 +358,46 @@ func (s *MemoryConsentSessionStore) Delete(sessionID string) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.deleteLocked(sid)
-	_ = s.persistLocked()
+	_ = s.mutateAndPersistLocked(func() {
+		s.deleteLocked(sid)
+	})
 }
 
 // Clear implements ConsentSessionStore.
+// File-backed: reload is intentional then clear → write empty (CLI --all path).
 func (s *MemoryConsentSessionStore) Clear() {
 	if s == nil {
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.bySession = make(map[string]ConsentSessionRecord)
-	s.bySubject = make(map[string]string)
-	_ = s.persistLocked()
+	_ = s.mutateAndPersistLocked(func() {
+		s.bySession = make(map[string]ConsentSessionRecord)
+		s.bySubject = make(map[string]string)
+	})
 }
 
 // PurgeExpired implements ConsentSessionStore. Removes TTL-expired metadata
 // sessions and persists when file-backed. Returns deleted count only (never
 // session ids / URLs / tokens in the return path).
+// File-backed: reload → purge → write under flock.
 func (s *MemoryConsentSessionStore) PurgeExpired() int {
 	if s == nil {
 		return 0
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	n := s.purgeExpiredLocked(s.clock())
-	if n > 0 {
-		_ = s.persistLocked()
-	}
+	n := 0
+	_ = s.mutateAndPersistLocked(func() {
+		n = s.purgeExpiredLocked(s.clock())
+	})
 	return n
 }
 
 // DeleteSession removes a session by id (expired or live). Returns true when an
 // entry was present and removed. Secret-free bool only — never returns payload.
 // Prefer over Delete when the caller needs a deleted_count summary (CLI purge).
+// File-backed: reload → delete → write under flock.
 func (s *MemoryConsentSessionStore) DeleteSession(sessionID string) bool {
 	if s == nil {
 		return false
@@ -364,16 +408,21 @@ func (s *MemoryConsentSessionStore) DeleteSession(sessionID string) bool {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, ok := s.bySession[sid]
-	if !ok {
-		return false
-	}
-	s.deleteLocked(sid)
-	_ = s.persistLocked()
-	return true
+	deleted := false
+	_ = s.mutateAndPersistLocked(func() {
+		_, ok := s.bySession[sid]
+		if !ok {
+			return
+		}
+		s.deleteLocked(sid)
+		deleted = true
+	})
+	return deleted
 }
 
-// EntryCount returns total in-memory entries including expired (pre-purge).
+// EntryCount returns total entries including expired (pre-purge).
+// File-backed: reloads under flock for honest CLI --all deleted_count.
+// On reload IO error returns 0 (fail closed — do not invent a durable count).
 // Secret-free count for consent-purge --all deleted_count honesty.
 func (s *MemoryConsentSessionStore) EntryCount() int {
 	if s == nil {
@@ -381,6 +430,9 @@ func (s *MemoryConsentSessionStore) EntryCount() int {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.syncFromDiskLocked(); err != nil {
+		return 0
+	}
 	if s.bySession == nil {
 		return 0
 	}
@@ -393,6 +445,7 @@ func (s *MemoryConsentSessionStore) StatusMap() map[string]any {
 	file := ""
 	if s != nil {
 		s.mu.Lock()
+		_ = s.syncFromDiskLocked()
 		s.purgeExpiredLocked(s.clock())
 		n = len(s.bySession)
 		file = s.FilePath
@@ -407,6 +460,10 @@ func (s *MemoryConsentSessionStore) StatusMap() map[string]any {
 		"browser_3lo_automated":            false,
 		"durable_agentcore_vault_residual": true, // not AgentCore vault; residual honesty
 		"file_backed":                      file != "",
+		// OAUTH-010 / HOST-008 Done* lite: file-backed reload-before-persist
+		// under flock prevents same-host CLI purge resurrection. Not multi-pod.
+		"same_host_reload_before_persist": file != "",
+		"ha_multi_replica":                false,
 	}
 	if file != "" {
 		m["file_backed_present"] = true
@@ -423,13 +480,16 @@ func (s *MemoryConsentSessionStore) StatusMap() map[string]any {
 // String implements ConsentSessionStore (secret-free).
 func (s *MemoryConsentSessionStore) String() string {
 	n := 0
+	file := false
 	if s != nil {
 		s.mu.Lock()
+		_ = s.syncFromDiskLocked()
 		s.purgeExpiredLocked(s.clock())
 		n = len(s.bySession)
+		file = strings.TrimSpace(s.FilePath) != ""
 		s.mu.Unlock()
 	}
-	return fmt.Sprintf("consent_session_store entries=%d metadata_only=true multi_replica=false", n)
+	return fmt.Sprintf("consent_session_store entries=%d metadata_only=true multi_replica=false same_host_reload=%v", n, file)
 }
 
 // LoadFromFile reloads metadata-only entries from FilePath into memory.

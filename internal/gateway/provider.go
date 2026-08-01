@@ -124,7 +124,8 @@ type AgentCoreProvider struct {
 	// ConsentStore holds progressive consent metadata only when Obtain returns
 	// ConsentRequired (auth URL + session id; never tokens). nil → process-local
 	// default (ProcessConsentSessionStore). Optional file-backed path is residual
-	// crash recovery of metadata only — not multi-replica shared store.
+	// crash recovery of metadata only; same-host reload-before-persist flock lite —
+	// not multi-replica shared store.
 	ConsentStore ConsentSessionStore
 	// Principals is the optional companion PrincipalCache cleared on Invalidate
 	// (GWY-002 / HOST-003 force re-auth residual lite). When nil, Invalidate

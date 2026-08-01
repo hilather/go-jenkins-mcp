@@ -174,34 +174,48 @@ func TestMemoryConsentSessionStore_PurgeExpired_FileBacked(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "consent_sessions.json")
+	// Seed durable live + expired on disk (write path never persists already-expired
+	// Puts; real TTL expiry is "was live at write, now past ExpiresAt").
+	now := time.Now().UTC()
+	seed := fmt.Sprintf(`{
+  "version": 1,
+  "entries": {
+    "sess-file-live": {
+      "authorization_url": "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?state=live",
+      "session_id": "sess-file-live",
+      "stored_at": %q,
+      "expires_at": %q
+    },
+    "sess-file-exp": {
+      "authorization_url": "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?state=exp",
+      "session_id": "sess-file-exp",
+      "stored_at": %q,
+      "expires_at": %q
+    }
+  }
+}
+`, now.Add(-time.Hour).Format(time.RFC3339Nano), now.Add(time.Hour).Format(time.RFC3339Nano),
+		now.Add(-2*time.Hour).Format(time.RFC3339Nano), now.Add(-time.Minute).Format(time.RFC3339Nano))
+	if err := os.WriteFile(path, []byte(seed), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	s, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
 	if err != nil {
-		t.Fatal(err)
-	}
-	now := time.Now()
-	if err := s.Put(gateway.ConsentSessionRecord{
-		Info:      consentInfo("sess-file-live"),
-		ExpiresAt: now.Add(time.Hour),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Put(gateway.ConsentSessionRecord{
-		Info:      consentInfo("sess-file-exp"),
-		StoredAt:  now.Add(-time.Hour),
-		ExpiresAt: now.Add(-time.Minute),
-	}); err != nil {
 		t.Fatal(err)
 	}
 	if n := s.PurgeExpired(); n != 1 {
 		t.Fatalf("purge: %d", n)
 	}
-	// Reload: only live remains.
+	// Reload: only live remains; expired must not resurrect.
 	s2, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(s2.List()) != 1 || s2.List()[0].SessionID() != "sess-file-live" {
 		t.Fatalf("reload list: %+v", s2.List())
+	}
+	if _, ok := s2.Get("sess-file-exp"); ok {
+		t.Fatal("expired must stay purged")
 	}
 }
 
@@ -455,6 +469,283 @@ func TestOpenConsentSessionStoreForCLI_ListsMetadata(t *testing.T) {
 	if _, ok := row["authorization_url"]; ok {
 		t.Fatal("CLI StatusMap must not dump full authorization_url")
 	}
+}
+
+// OAUTH-010 same-host multi-process Done* lite: two handles on the same path;
+// B purges/deletes/clears; A Put of a different session must NOT resurrect the
+// purged session (reload-under-flock before write).
+func TestConsentSessionStore_NoResurrectionAfterPurge(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "consent_sessions.json")
+
+	serve, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cli, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A (serve) Puts two sessions.
+	if err := serve.Put(gateway.ConsentSessionRecord{
+		Info:       consentInfo("sess-purge-target"),
+		SubjectKey: "t|purge|p",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := serve.Put(gateway.ConsentSessionRecord{
+		Info:       consentInfo("sess-keep"),
+		SubjectKey: "t|keep|p",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// B (CLI) deletes the purge target from disk.
+	if !cli.DeleteSession("sess-purge-target") {
+		t.Fatal("CLI DeleteSession must find sess-purge-target")
+	}
+	// Serve still has stale memory until next mutate/read — but Put of a third
+	// session must reload disk first and not resurrect the purged id.
+	if err := serve.Put(gateway.ConsentSessionRecord{
+		Info:       consentInfo("sess-new"),
+		SubjectKey: "t|new|p",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Fresh handle: purged must stay gone; keep + new present.
+	check, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := check.Get("sess-purge-target"); ok {
+		t.Fatal("Regression: purged session resurrected after serve Put of another session")
+	}
+	if _, ok := check.Get("sess-keep"); !ok {
+		t.Fatal("want sess-keep retained")
+	}
+	if _, ok := check.Get("sess-new"); !ok {
+		t.Fatal("want sess-new present")
+	}
+	// Serve Get after reload must also miss purged (read-path sync).
+	if _, ok := serve.Get("sess-purge-target"); ok {
+		t.Fatal("serve Get must miss purged after disk delete (reload-before-read)")
+	}
+
+	// Clear path: A Put, B Clear, A Put other → nothing from before Clear.
+	if err := serve.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-pre-clear")}); err != nil {
+		t.Fatal(err)
+	}
+	cli2, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cli2.Clear()
+	if err := serve.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-post-clear")}); err != nil {
+		t.Fatal(err)
+	}
+	check2, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := check2.List()
+	if len(list) != 1 || list[0].SessionID() != "sess-post-clear" {
+		t.Fatalf("after Clear+Put want only sess-post-clear: %+v", list)
+	}
+	for _, rec := range list {
+		if rec.SessionID() == "sess-pre-clear" || rec.SessionID() == "sess-keep" || rec.SessionID() == "sess-new" {
+			t.Fatalf("Regression: Clear-then-Put resurrected %q", rec.SessionID())
+		}
+	}
+
+	// PurgeExpired path: plant expired on disk via B, A Put other must not
+	// rewrite expired back if B purged them.
+	now := time.Now()
+	if err := serve.Put(gateway.ConsentSessionRecord{
+		Info:      consentInfo("sess-live-for-purge"),
+		ExpiresAt: now.Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Seed expired entry through a second handle that Puts with past ExpiresAt
+	// then another handle PurgeExpired.
+	cli3, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cli3.Put(gateway.ConsentSessionRecord{
+		Info:      consentInfo("sess-exp-for-purge"),
+		StoredAt:  now.Add(-2 * time.Hour),
+		ExpiresAt: now.Add(-time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// EntryCount may include expired after Put; PurgeExpired on CLI.
+	if n := cli3.PurgeExpired(); n < 1 {
+		// Put of expired may already drop on write (writeMemory skips expired).
+		// Ensure file has no expired either way, then prove serve Put does not invent it.
+		t.Logf("PurgeExpired deleted=%d (expired may never have been durable)", n)
+	}
+	if err := serve.Put(gateway.ConsentSessionRecord{
+		Info:      consentInfo("sess-after-purge-exp"),
+		ExpiresAt: now.Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	if strings.Contains(body, "sess-exp-for-purge") {
+		t.Fatalf("Regression: expired session present after purge+Put:\n%s", body)
+	}
+	// Secret-free canary on multi-handle path.
+	low := strings.ToLower(body)
+	for _, bad := range []string{`"access_token"`, `"refresh_token"`, `"client_secret"`, consentStoreCanary} {
+		if strings.Contains(low, strings.ToLower(bad)) || strings.Contains(body, bad) {
+			t.Fatalf("file contained forbidden %q", bad)
+		}
+	}
+	sm := serve.StatusMap()
+	if sm["same_host_reload_before_persist"] != true {
+		t.Fatalf("StatusMap same_host flag: %+v", sm)
+	}
+	if sm["ha_multi_replica"] != false || sm["multi_replica_shared"] != false {
+		t.Fatalf("must not claim multi-replica: %+v", sm)
+	}
+	blob := serve.String() + " " + fmt.Sprint(sm)
+	for _, bad := range []string{consentStoreCanary, "access_token=", "refresh_token="} {
+		if strings.Contains(blob, bad) {
+			t.Fatalf("surface canary %q", bad)
+		}
+	}
+}
+
+// OAUTH-010: concurrent Put + Purge/Delete on same path must not corrupt JSON
+// and must not resurrect deleted sessions.
+func TestConsentSessionStore_ConcurrentPutPurgeNoCorrupt(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "consent_conc.json")
+
+	const workers = 8
+	const rounds = 20
+	errCh := make(chan error, workers*2)
+	done := make(chan struct{})
+
+	// Writer workers: Put distinct sessions.
+	for w := 0; w < workers; w++ {
+		w := w
+		go func() {
+			s, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			for i := 0; i < rounds; i++ {
+				sid := fmt.Sprintf("sess-w%d-r%d", w, i)
+				if err := s.Put(gateway.ConsentSessionRecord{
+					Info:       consentInfo(sid),
+					SubjectKey: fmt.Sprintf("t|w%d|p", w),
+				}); err != nil {
+					errCh <- err
+					return
+				}
+			}
+			errCh <- nil
+		}()
+	}
+	// Purger workers: Delete / PurgeExpired / occasional Clear (one clear at end-ish).
+	for w := 0; w < workers; w++ {
+		w := w
+		go func() {
+			s, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			for i := 0; i < rounds; i++ {
+				// Delete a writer session id that may or may not exist yet.
+				_ = s.DeleteSession(fmt.Sprintf("sess-w%d-r%d", w, i))
+				_ = s.PurgeExpired()
+			}
+			errCh <- nil
+		}()
+	}
+
+	for i := 0; i < workers*2; i++ {
+		if err := <-errCh; err != nil {
+			t.Fatalf("worker: %v", err)
+		}
+	}
+	close(done)
+
+	// File must be valid JSON metadata-only (not corrupt).
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		// Empty path if never written is OK only if all ops no-op; writers always Put.
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("corrupt JSON after concurrent Put+Purge: %v\n%s", err, raw)
+	}
+	low := strings.ToLower(string(raw))
+	for _, bad := range []string{`"access_token"`, `"refresh_token"`, `"client_secret"`, consentStoreCanary} {
+		if strings.Contains(low, strings.ToLower(bad)) {
+			t.Fatalf("token field in concurrent file: %q", bad)
+		}
+	}
+	// Reload must succeed (fail closed on poison).
+	final, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatalf("reload after concurrent: %v", err)
+	}
+	// Secret-free surfaces.
+	blob := final.String() + " " + fmt.Sprint(final.StatusMap())
+	for _, bad := range []string{consentStoreCanary, "access_token=", "refresh_token="} {
+		if strings.Contains(blob, bad) {
+			t.Fatalf("canary %q", bad)
+		}
+	}
+	// Delete all remaining then Put one — no resurrection of prior ids from stale memory.
+	final.Clear()
+	serve, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate serve that still had memory from an earlier open: open second handle
+	// that never saw Clear, Put a new id — must not resurrect pre-Clear entries.
+	// (serve was opened after Clear so memory is empty; use deliberate stale handle.)
+	stale, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Put one before clear into stale memory by loading pre-clear state:
+	// re-seed, open stale with that state, clear via other handle, Put via stale.
+	if err := serve.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-stale-seed")}); err != nil {
+		t.Fatal(err)
+	}
+	stale2, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// stale2 has sess-stale-seed in memory+disk. Clear via serve handle.
+	serve.Clear()
+	if err := stale2.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-after-concurrent-clear")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := stale2.Get("sess-stale-seed"); ok {
+		t.Fatal("Regression: concurrent-style clear resurrection of sess-stale-seed")
+	}
+	if _, ok := stale2.Get("sess-after-concurrent-clear"); !ok {
+		t.Fatal("want post-clear session")
+	}
+	_ = done
+	_ = stale
 }
 
 func TestOpenConsentSessionStoreForPurge_MissingAndPathOverride(t *testing.T) {

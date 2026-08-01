@@ -125,10 +125,13 @@ func NewConsentRequired(info ConsentInfo) error {
 // Done*: ConsentRequired → operator/model-visible authorization_url + session_id
 // only (tools.mapToolErr / AuthProvider preserve metadata; Error() stays host +
 // truncated session); process-local consent metadata store (optional file under
-// XDG data for crash recovery of metadata only — never tokens).
-// Residual: browser 3LO not automated; multi-replica shared consent correlation
-// (HOST-008); AgentCore durable vault (not this process-local metadata store).
-const ProgressiveConsentResidualNote = "Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; process-local consent metadata store Done* (optional file; never tokens; not multi-replica shared store); multi-replica consent correlation residual"
+// XDG data for crash recovery of metadata only — never tokens); same-host
+// multi-process file reload-before-persist under flock (CLI consent-purge not
+// resurrected by serve Put — OAUTH-010 Done* lite).
+// Residual: browser 3LO not automated; multi-replica / multi-pod shared consent
+// correlation (HOST-008); AgentCore durable vault (not this process-local
+// metadata store).
+const ProgressiveConsentResidualNote = "Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; process-local consent metadata store Done* (optional file; never tokens; same-host reload-before-persist flock lite; not multi-replica shared store); multi-pod consent correlation residual (HOST-008)"
 
 // ProgressiveConsentResidual is a secret-free residual snapshot for doctor,
 // qualify, and CLI surfaces when Mode C ConsentRequired would apply.

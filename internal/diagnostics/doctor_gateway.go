@@ -218,7 +218,7 @@ func checkGatewayStatus(getenv func(string) string) Check {
 	// Mode C progressive consent residual (OAUTH-010 / GWY-001): env/static only.
 	// When ConsentRequired would apply, only auth URL + session_id surface;
 	// browser 3LO is not automated (metadata path Done*); process-local consent
-	// metadata store Done* (not multi-replica shared store).
+	// metadata store Done* (same-host reload-before-persist lite; not multi-replica).
 	pc := gateway.NewProgressiveConsentResidual()
 	details["progressive_consent_browser_3lo_automated"] = pc.Browser3LOAutomated
 	details["progressive_consent_metadata_path_done_star"] = pc.MetadataPathDoneStar

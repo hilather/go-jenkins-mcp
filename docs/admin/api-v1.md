@@ -118,7 +118,7 @@ Mode C):
   "enabledModes": ["agentcore_3lo_obo"],
   "progressiveConsentMetadataDoneStar": true,
   "progressiveConsentBrowser3loAutomated": false,
-  "progressiveConsentResidual": "Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; process-local consent metadata store Done* (optional file; never tokens; not multi-replica shared store); multi-replica consent correlation residual"
+  "progressiveConsentResidual": "Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; process-local consent metadata store Done* (optional file; never tokens; same-host reload-before-persist flock lite; not multi-replica shared store); multi-pod consent correlation residual (HOST-008)"
 }
 ```
 
