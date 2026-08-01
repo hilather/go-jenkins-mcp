@@ -171,11 +171,12 @@ type HTTPConfig struct {
 	ExpectedExternalSubject string
 
 	// AfterIdentity optionally enriches the request context after a trusted
-	// RequestIdentity is established (HOST multi-user: inject gateway.Caller).
+	// RequestIdentity is established (HOST multi-user: inject gateway.Caller
+	// for Obtain and policy.Subject for deny-only RBAC rebind).
 	// Called only when id.Present(), after ContextWithIdentity. Must never log
 	// secrets. Nil = no-op (identity still stored via IdentityFromContext).
-	// Residual: tool-layer policy.Subject rebind still depends on MCP SDK
-	// propagating this request context to tool handlers.
+	// Tool-layer rebind depends on MCP SDK propagating this request context
+	// to tool handlers (serve wires SubjectFromContext = PolicySubjectFromContext).
 	AfterIdentity func(ctx context.Context, id RequestIdentity) context.Context
 
 	// Logger receives start/stop messages. Default: log.Default().

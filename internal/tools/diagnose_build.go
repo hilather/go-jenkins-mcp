@@ -873,7 +873,7 @@ func acquireDiagnoseLog(ctx context.Context, st regState, client *jenkins.Client
 	if st.fetchCache != nil {
 		if t, m, src, inc, ok := st.fetchCache.GetLogTail(job, build, maxLog); ok {
 			if st.policy != nil {
-				if perr := policy.CheckStoreRead(ctx, st.policy, st.subject, job); perr != nil {
+				if perr := policy.CheckStoreRead(ctx, st.policy, effectiveSubject(st, ctx), job); perr != nil {
 					return "", logMeta{}, "", false, perr
 				}
 			}
@@ -901,7 +901,7 @@ func acquireDiagnoseLog(ctx context.Context, st regState, client *jenkins.Client
 
 	if st.logs != nil {
 		// POL-004 before cache read.
-		if perr := policy.CheckStoreRead(ctx, st.policy, st.subject, job); perr != nil {
+		if perr := policy.CheckStoreRead(ctx, st.policy, effectiveSubject(st, ctx), job); perr != nil {
 			return "", logMeta{}, "", false, perr
 		}
 		if err := st.logs.EnsureMirrored(ctx, job, int64(build)); err != nil {

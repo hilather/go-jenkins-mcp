@@ -143,27 +143,34 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 |------|----------|
 | Auth | `attachGatewayObtainAuthProviderDynamic` installs `AuthProviderCtx` |
 | Context Caller | HTTP `AfterIdentity` maps trusted `RequestIdentity` → `gateway.Caller` (ExternalSubject→Subject; Tenant/Workload from identity; ProfileID from process) |
+| Context policy.Subject | Same `AfterIdentity` builds `policy.Subject` via `PolicySubjectFromHTTPInbound` (JenkinsPrincipal→JenkinsUserID; ProfileID from process; **Verified** only when lab/JWT verified **and** Jenkins principal present) and stores with `ContextWithCallerAndPolicySubject` |
 | Obtain | `CallerFromContext` when Valid → Obtain for that caller; else process defaultCaller |
+| Policy RBAC | `tools.RegisterOptions.SubjectFromContext` = `gateway.PolicySubjectFromContext`; `addTool` / `listToolsAllows` use `effectiveSubject` (ctx subject when present, else process Subject) |
 | Subject pin | `ExpectedExternalSubject` is **not** set (distinct lab/JWT subjects allowed) |
-| Fail closed | empty subject / Obtain miss → error; never other subject's token; never shared SA |
+| Fail closed | empty subject / Obtain miss → error; never other subject's token; never shared SA; tool args never rebind identity |
 | Static fields | AuthProviderCtx does **not** write User/Token on the Client (race residual) |
 
 | Env | Role |
 |-----|------|
-| `JENKINS_MCP_GATEWAY_MULTI_USER` | Opt-in multi-user Obtain path (default off = single-subject pin) |
+| `JENKINS_MCP_GATEWAY_MULTI_USER` | Opt-in multi-user Obtain + policy.Subject rebind path (default off = single-subject pin) |
 
 **Residuals (honest):**
 
-- **Policy RBAC Subject hot-swap:** process-bound `tools.RegisterOptions.Subject`
-  is still used for deny-only MCP RBAC at tool dispatch. True per-request
-  `policy.Subject` rebind requires MCP tool context to carry the HTTP identity
-  (SDK propagation) and a tools middleware — **not** fully wired here.
+- **Policy RBAC Subject rebind:** **Done\*** foundation — per-request
+  `policy.Subject` from trusted HTTP identity on context
+  (`ContextWithPolicySubject` / `SubjectFromContext` / `effectiveSubject`).
+  Process `RegisterOptions.Subject` remains the multi-user-off / missing-ctx
+  default. Tool args never supply identity (`RejectIdentityToolArgs`).
+- **Live Entra groups claim completeness** remains residual (OAUTH-010 /
+  GWY-003): lab/JWT path may leave `Groups` empty; binding helpers do not
+  inherit process groups for a different ExternalSubject.
 - **Live Entra / JWKS rotation / Mode C 3LO browser UX** remain GWY-003 /
   OAUTH-010 residuals.
-- **MCP SDK context flow:** AuthProviderCtx only sees the request Caller when
-  CallJenkins/tool handlers receive the HTTP request context. Unit tests cover
-  AuthProviderCtx + ContextWithCaller; end-to-end Streamable HTTP tool path
-  depends on the SDK passing `r.Context()` into tool handlers.
+- **MCP SDK context flow:** AuthProviderCtx / SubjectFromContext only see the
+  request Caller/Subject when CallJenkins/tool handlers receive the HTTP
+  request context. Unit tests cover ContextWithCaller + PolicySubjectFromContext
+  + tools `SubjectFromContext`; end-to-end Streamable HTTP tool path depends on
+  the SDK passing `r.Context()` into tool handlers.
 
 ## 3c. Multi-tenant isolation foundations (HOST-004 / HOST-006)
 
@@ -357,7 +364,7 @@ env-wired); live Entra JWKS under load / multi-replica session store (HOST-008).
 | Custom Jenkins authorization-server plugin | ADR 0011 / OAUTH-011 **default no-go** |
 | Shared Jenkins service account for interactive users | **Never** |
 | Real client secret storage | keyring / vault (not profile JSON) |
-| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT, session fingerprint, JWKS TTL refresh, multi-user Obtain opt-in; residual: multi-instance JWKS HA, live Entra, policy.Subject hot-swap |
+| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT, session fingerprint, JWKS TTL refresh, multi-user Obtain + **policy.Subject rebind foundation** (`SubjectFromContext` / `ContextWithPolicySubject`); residual: multi-instance JWKS HA, live Entra groups claim completeness |
 | Reverse-proxy non-local matrix | HOST-002 **Partial Done***: docs + `PathPrefix` strip + dual health; live edge origin pin residual; no CORS wildcards fail-closed |
 | Health/readiness envelope | HOST-005 **partial** — `/healthz` + `/readyz` + compose/k8s limits; Obtain Ready on `/readyz` when `--gateway` |
 | Multi-replica HA | HOST-008 Tier B residual (single-replica Tier A default) |

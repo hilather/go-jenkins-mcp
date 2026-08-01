@@ -1905,9 +1905,12 @@ func runServe(args []string) error {
 	// HOST-004 / HOST-006: process-level subject key + concurrent limiter when
 	// gateway mode is on. Multi-user: SubjectKeyFromContext derives key from
 	// gateway.Caller on tool ctx (same as Obtain). Empty key skips limiter.
+	// Multi-user policy.Subject rebind: SubjectFromContext reads trusted
+	// policy.Subject injected by HTTP AfterIdentity (never tool args).
 	var serveSubjectKey string
 	var serveSubjectLimiter tools.SubjectSlotLimiter
 	var serveSubjectKeyFromCtx func(ctx context.Context) string
+	var serveSubjectFromCtx func(ctx context.Context) (policy.Subject, bool)
 	if useGateway {
 		serveSubjectKey = gateway.SubjectKey(gateway.CallerFromBoundSubject(subject))
 		if serveSubjectKey != "" {
@@ -1929,6 +1932,8 @@ func runServe(args []string) error {
 				}
 				return ""
 			}
+			// Adapter: tools imports policy only (FND-004 — no tools→gateway).
+			serveSubjectFromCtx = gateway.PolicySubjectFromContext
 		}
 	}
 	tools.Register(server, client, &tools.RegisterOptions{
@@ -1937,6 +1942,7 @@ func runServe(args []string) error {
 		LiveHardMax:             liveHardMax,
 		Policy:                  evaluator,
 		Subject:                 subject,
+		SubjectFromContext:      serveSubjectFromCtx,
 		AuthGate:                authGate,
 		Audit:                   auditSink,
 		Metrics:                 metrics,
@@ -2021,8 +2027,10 @@ func runServe(args []string) error {
 			}
 			if gatewayMultiUser && gatewayObtainWired {
 				// Multi-user Ready: no ExpectedExternalSubject pin; inject Caller
-				// from trusted RequestIdentity so AuthProviderCtx Obtains per subject.
+				// (Obtain) + policy.Subject (RBAC) from trusted RequestIdentity.
+				// Never tool args. Verified only when lab/JWT verified path.
 				defaultCaller := gateway.CallerFromBoundSubject(subject)
+				processSubject := subject
 				pid := subject.ProfileID
 				cfg.AfterIdentity = func(ctx context.Context, id mcpserver.RequestIdentity) context.Context {
 					in := gateway.HTTPInbound{
@@ -2034,7 +2042,9 @@ func runServe(args []string) error {
 						Verified:         id.Verified,
 					}
 					c := gateway.MergeCallerDefaults(gateway.CallerFromHTTPInbound(in, pid), defaultCaller)
-					return gateway.ContextWithCaller(ctx, c)
+					// policy.Subject for deny-only RBAC rebind (same trust path).
+					ps := gateway.PolicySubjectFromHTTPInbound(in, pid, processSubject)
+					return gateway.ContextWithCallerAndPolicySubject(ctx, c, ps)
 				}
 			} else if !gatewayMultiUser {
 				// Single-process foundation: pin HTTP ExternalSubject to process-bound

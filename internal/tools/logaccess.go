@@ -129,7 +129,8 @@ func readLogsViaAccess(ctx context.Context, st regState, job string, build, offs
 		return jenkins.BuildLogs{}, false, nil
 	}
 	// POL-004: CheckStoreRead before serving cached/mirrored content.
-	if err := policy.CheckStoreRead(ctx, st.policy, st.subject, job); err != nil {
+	// Multi-user: per-request subject from context when wired.
+	if err := policy.CheckStoreRead(ctx, st.policy, effectiveSubject(st, ctx), job); err != nil {
 		return jenkins.BuildLogs{}, false, err
 	}
 	if err := st.logs.EnsureMirrored(ctx, job, int64(build)); err != nil {
@@ -168,7 +169,7 @@ func tailLogsViaAccess(ctx context.Context, st regState, job string, build, maxL
 	if st.logs == nil {
 		return jenkins.BuildLogs{}, false, nil
 	}
-	if err := policy.CheckStoreRead(ctx, st.policy, st.subject, job); err != nil {
+	if err := policy.CheckStoreRead(ctx, st.policy, effectiveSubject(st, ctx), job); err != nil {
 		return jenkins.BuildLogs{}, false, err
 	}
 	if err := st.logs.EnsureMirrored(ctx, job, int64(build)); err != nil {

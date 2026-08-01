@@ -229,8 +229,9 @@ func enforceSearchLogsJobPolicy(ctx context.Context, st regState, q search.Query
 	if build > 0 {
 		target.BuildNumber = build
 	}
+	subj := effectiveSubject(st, ctx)
 	d := st.policy.Evaluate(
-		st.subject,
+		subj,
 		policy.Action{ToolName: ToolSearchLogs, Class: policy.EffectRead},
 		target,
 	)
@@ -244,14 +245,14 @@ func enforceSearchLogsJobPolicy(ctx context.Context, st regState, q search.Query
 	}
 	// Wave 33: store PEP before any frame scan. Aligns L1 search with mirrored
 	// read/tail (logaccess). Tool Evaluate allow + store deny → still deny.
-	if err := policy.CheckStoreRead(ctx, st.policy, st.subject, job); err != nil {
+	if err := policy.CheckStoreRead(ctx, st.policy, subj, job); err != nil {
 		if apperr.IsCancelled(err) {
 			return err
 		}
 		reason := policy.ReasonExplicitDeny
 		// Re-evaluate store action for a stable audit reason (job pattern vs deny_tools).
 		sd := st.policy.Evaluate(
-			st.subject,
+			subj,
 			policy.Action{ToolName: policy.StoreReadAction, Class: policy.EffectRead},
 			target,
 		)

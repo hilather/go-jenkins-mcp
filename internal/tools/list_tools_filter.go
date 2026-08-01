@@ -58,7 +58,8 @@ func InstallListToolsPolicyFilter(s *mcp.Server, st regState) {
 				if tool == nil {
 					continue
 				}
-				if listToolsAllows(st, tool.Name) {
+				// Multi-user: ListTools middleware has request ctx — pass into filter.
+				if listToolsAllows(st, ctx, tool.Name) {
 					filtered = append(filtered, tool)
 				}
 			}
@@ -71,7 +72,8 @@ func InstallListToolsPolicyFilter(s *mcp.Server, st regState) {
 // listToolsAllows reports whether a registered tool may appear in ListTools
 // under the live RO gate and deny-only policy. Fail closed on deny.
 // AuthGate is checked once in InstallListToolsPolicyFilter before per-tool filter.
-func listToolsAllows(st regState, name string) bool {
+// Multi-user: uses effectiveSubject(st, ctx) when SubjectFromContext is wired.
+func listToolsAllows(st regState, ctx context.Context, name string) bool {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return false
@@ -89,7 +91,8 @@ func listToolsAllows(st regState, name string) bool {
 	if st.policy == nil {
 		return true
 	}
-	d := st.policy.Evaluate(st.subject, policy.Action{ToolName: name, Class: class}, policy.Target{})
+	subj := effectiveSubject(st, ctx)
+	d := st.policy.Evaluate(subj, policy.Action{ToolName: name, Class: class}, policy.Target{})
 	// Fail closed: any Denied decision (explicit deny, empty subject, etc.) omits.
 	return !d.Denied()
 }

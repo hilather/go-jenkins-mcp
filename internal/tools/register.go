@@ -63,7 +63,15 @@ type RegisterOptions struct {
 	// Subject is the trusted identity for Policy evaluation (POL-003).
 	// Must be built from verified/provisional process identity, never tool args.
 	// Empty subject causes Policy to deny when Policy is non-nil.
+	// Multi-user: process default; per-request rebind via SubjectFromContext.
 	Subject policy.Subject
+	// SubjectFromContext optionally derives policy.Subject per tool/list request
+	// (multi-user: gateway.PolicySubjectFromContext after HTTP AfterIdentity).
+	// When nil or returns ok=false, Subject process default is used.
+	// When ok=true, the returned subject is used even if !Valid (fail closed at
+	// Evaluate — never elevates to process default for a partial identity).
+	// Never tool args. tools does not import gateway (FND-004); cmd wires the adapter.
+	SubjectFromContext func(ctx context.Context) (policy.Subject, bool)
 	// AuthGate is optional session continuity (revocation / refresh fail / logout /
 	// AUTH-004 mid-serve whoAmI re-verify). When set, Check() runs before every
 	// tool handler (fail closed) and before tools/list filtering (Wave 29: empty
@@ -188,6 +196,9 @@ type regState struct {
 	subjectKey            string
 	subjectKeyFromContext func(ctx context.Context) string
 	subjectLimiter        SubjectSlotLimiter
+
+	// Multi-user: per-request policy.Subject from trusted context (gateway wire).
+	subjectFromContext func(ctx context.Context) (policy.Subject, bool)
 }
 
 // effectiveSubjectKey returns per-request SubjectKey when SubjectKeyFromContext
@@ -199,6 +210,20 @@ func effectiveSubjectKey(st regState, ctx context.Context) string {
 		}
 	}
 	return strings.TrimSpace(st.subjectKey)
+}
+
+// effectiveSubject returns per-request policy.Subject when SubjectFromContext
+// is set and returns ok=true; else process-bound st.subject.
+// When ok=true the subject is used even if !Valid so multi-user partial
+// identities fail closed at Evaluate instead of elevating to process default.
+// Never reads tool arguments.
+func effectiveSubject(st regState, ctx context.Context) policy.Subject {
+	if st.subjectFromContext != nil && ctx != nil {
+		if s, ok := st.subjectFromContext(ctx); ok {
+			return s
+		}
+	}
+	return st.subject
 }
 
 func resolveRegisterOptions(opts *RegisterOptions) regState {
@@ -245,6 +270,7 @@ func resolveRegisterOptions(opts *RegisterOptions) regState {
 	st.subjectKey = strings.TrimSpace(opts.SubjectKey)
 	st.subjectKeyFromContext = opts.SubjectKeyFromContext
 	st.subjectLimiter = opts.SubjectLimiter
+	st.subjectFromContext = opts.SubjectFromContext
 	// MUT-001: process-scoped manager so preview tokens survive until confirm.
 	// Create once when mutations may register and caller did not inject one.
 	// Wave 30: also create under AllowMutations opt-in while Effective RO so
@@ -669,13 +695,15 @@ func addTool[In, Out any](
 			}
 		}
 		// POL-002/003/004: deny-only RBAC re-check at dispatch (defense in depth).
-		// Subject is process-bound; tool arguments never choose the subject.
+		// Multi-user: effectiveSubject from trusted context; else process Subject.
+		// Tool arguments never choose the subject (GWY-002).
 		// Job-scoped Target is populated from args (job_name / build_number) so
 		// deny_job_prefixes apply before the handler; ListTools discovery uses
 		// empty Target (see InstallListToolsPolicyFilter / listToolsAllows).
 		if st.policy != nil {
 			target := policyTargetFromArgs(args)
-			d := st.policy.Evaluate(st.subject, policy.Action{ToolName: t.Name, Class: effect}, target)
+			subj := effectiveSubject(st, ctx)
+			d := st.policy.Evaluate(subj, policy.Action{ToolName: t.Name, Class: effect}, target)
 			if err := d.Err(); err != nil {
 				reason := d.ReasonCode
 				if reason == "" {
