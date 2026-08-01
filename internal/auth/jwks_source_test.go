@@ -3,6 +3,7 @@ package auth_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -322,6 +323,59 @@ func TestRefreshingJWKS_InitialFetchFailClosed(t *testing.T) {
 	}
 }
 
+func TestParseJWKSMaxStaleAge(t *testing.T) {
+	t.Parallel()
+	t.Run("empty_unlimited", func(t *testing.T) {
+		t.Parallel()
+		d, err := auth.ParseJWKSMaxStaleAge("")
+		if err != nil || d != 0 {
+			t.Fatalf("empty: %v err=%v", d, err)
+		}
+		d, err = auth.ParseJWKSMaxStaleAge("0")
+		if err != nil || d != 0 {
+			t.Fatalf("0: %v err=%v", d, err)
+		}
+		d, err = auth.ParseJWKSMaxStaleAge("0s")
+		if err != nil || d != 0 {
+			t.Fatalf("0s: %v err=%v", d, err)
+		}
+		d, err = auth.ParseJWKSMaxStaleAge("  ")
+		if err != nil || d != 0 {
+			t.Fatalf("whitespace: %v err=%v", d, err)
+		}
+	})
+	t.Run("min_max_ok", func(t *testing.T) {
+		t.Parallel()
+		d, err := auth.ParseJWKSMaxStaleAge(auth.MinJWKSMaxStaleAge.String())
+		if err != nil || d != auth.MinJWKSMaxStaleAge {
+			t.Fatalf("min: %v err=%v", d, err)
+		}
+		d, err = auth.ParseJWKSMaxStaleAge(auth.MaxJWKSMaxStaleAge.String())
+		if err != nil || d != auth.MaxJWKSMaxStaleAge {
+			t.Fatalf("max: %v err=%v", d, err)
+		}
+		d, err = auth.ParseJWKSMaxStaleAge("15m")
+		if err != nil || d != 15*time.Minute {
+			t.Fatalf("15m: %v err=%v", d, err)
+		}
+	})
+	t.Run("fail_closed_bounds", func(t *testing.T) {
+		t.Parallel()
+		if _, err := auth.ParseJWKSMaxStaleAge("59s"); err == nil {
+			t.Fatal("below min should fail")
+		}
+		if _, err := auth.ParseJWKSMaxStaleAge("25h"); err == nil {
+			t.Fatal("above max should fail")
+		}
+		if _, err := auth.ParseJWKSMaxStaleAge("-1m"); err == nil {
+			t.Fatal("negative should fail")
+		}
+		if _, err := auth.ParseJWKSMaxStaleAge("not-a-duration"); err == nil {
+			t.Fatal("garbage should fail")
+		}
+	})
+}
+
 func TestRefreshingJWKS_MaxStaleAgeFailClosed(t *testing.T) {
 	t.Parallel()
 	_, j1 := testRSAJWKS(t, "old")
@@ -346,6 +400,13 @@ func TestRefreshingJWKS_MaxStaleAgeFailClosed(t *testing.T) {
 		defer clockMu.Unlock()
 		return now
 	}
+	var logBuf strings.Builder
+	var logMu sync.Mutex
+	logf := func(format string, args ...any) {
+		logMu.Lock()
+		defer logMu.Unlock()
+		logBuf.WriteString(strings.TrimSpace(fmt.Sprintf(format, args...)) + "\n")
+	}
 
 	src, err := auth.NewRefreshingJWKS(context.Background(), auth.RefreshingJWKSConfig{
 		Client:      srv.Client(),
@@ -353,21 +414,33 @@ func TestRefreshingJWKS_MaxStaleAgeFailClosed(t *testing.T) {
 		TTL:         30 * time.Second,
 		MaxStaleAge: 2 * time.Minute,
 		Now:         nowFn,
-		Logf:        func(string, ...any) {},
+		Logf:        logf,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if src.MaxStaleAge() != 2*time.Minute {
+		t.Fatalf("MaxStaleAge accessor: %v", src.MaxStaleAge())
+	}
 	mu.Lock()
 	fail = true
 	mu.Unlock()
-	// Past TTL but within max stale → last good ok.
+	// Past TTL but within max stale → last good ok (stale-if-error still works).
 	clockMu.Lock()
 	now = now.Add(40 * time.Second)
 	clockMu.Unlock()
 	got, err := src.Get(context.Background())
 	if err != nil || got.Keys[0].Kid != "old" {
 		t.Fatalf("within max stale: %+v err=%v", got, err)
+	}
+	logMu.Lock()
+	withinLog := logBuf.String()
+	logMu.Unlock()
+	if !strings.Contains(withinLog, "stale-if-error") {
+		t.Fatalf("within window should log stale-if-error, got %q", withinLog)
+	}
+	if strings.Contains(withinLog, "max stale age exceeded") {
+		t.Fatalf("within window must not fail-closed log: %q", withinLog)
 	}
 	// Beyond max stale + still failing → fail closed.
 	clockMu.Lock()
@@ -376,5 +449,81 @@ func TestRefreshingJWKS_MaxStaleAgeFailClosed(t *testing.T) {
 	_, err = src.Get(context.Background())
 	if err == nil {
 		t.Fatal("max stale exceeded must fail closed")
+	}
+	if apperr.CodeOf(err) != apperr.CodeAuthentication {
+		t.Fatalf("want CodeAuthentication got %v err=%v", apperr.CodeOf(err), err)
+	}
+	if !strings.Contains(err.Error(), "max stale age exceeded") {
+		t.Fatalf("error should mention max stale: %v", err)
+	}
+	logMu.Lock()
+	logged := logBuf.String()
+	logMu.Unlock()
+	if !strings.Contains(logged, "max stale age exceeded") || !strings.Contains(logged, "fail closed") {
+		t.Fatalf("expected secret-free max-stale fail-closed log, got %q", logged)
+	}
+	// Canary: no JWKS key material in log.
+	if strings.Contains(logged, j1.Keys[0].N) || strings.Contains(logged, j1.Keys[0].E) {
+		t.Fatalf("Regression: JWKS key material in max-stale log: %q", logged)
+	}
+	// Unlimited (MaxStaleAge=0) still serves after a long outage window.
+	mu.Lock()
+	fail = false
+	mu.Unlock()
+	clock2 := time.Unix(1_700_100_000, 0)
+	var clock2Mu sync.Mutex
+	src2, err := auth.NewRefreshingJWKS(context.Background(), auth.RefreshingJWKSConfig{
+		Client: srv.Client(),
+		URI:    srv.URL,
+		TTL:    30 * time.Second,
+		// MaxStaleAge 0 = unlimited
+		Now: func() time.Time {
+			clock2Mu.Lock()
+			defer clock2Mu.Unlock()
+			return clock2
+		},
+		Logf: func(string, ...any) {},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	fail = true
+	mu.Unlock()
+	clock2Mu.Lock()
+	clock2 = clock2.Add(4 * time.Hour)
+	clock2Mu.Unlock()
+	got, err = src2.Get(context.Background())
+	if err != nil || got.Keys[0].Kid != "old" {
+		t.Fatalf("unlimited max stale should keep last good: %+v err=%v", got, err)
+	}
+}
+
+func TestNewRefreshingJWKS_MaxStaleAgeBounds(t *testing.T) {
+	t.Parallel()
+	_, j1 := testRSAJWKS(t, "k")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(j1)
+	}))
+	t.Cleanup(srv.Close)
+	_, err := auth.NewRefreshingJWKS(context.Background(), auth.RefreshingJWKSConfig{
+		Client:      srv.Client(),
+		URI:         srv.URL,
+		TTL:         30 * time.Second,
+		MaxStaleAge: 30 * time.Second, // below min
+		Logf:        func(string, ...any) {},
+	})
+	if err == nil {
+		t.Fatal("below min max-stale must fail at construction")
+	}
+	_, err = auth.NewRefreshingJWKS(context.Background(), auth.RefreshingJWKSConfig{
+		Client:      srv.Client(),
+		URI:         srv.URL,
+		TTL:         30 * time.Second,
+		MaxStaleAge: 48 * time.Hour, // above max
+		Logf:        func(string, ...any) {},
+	})
+	if err == nil {
+		t.Fatal("above max max-stale must fail at construction")
 	}
 }

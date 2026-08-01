@@ -62,7 +62,7 @@ jenkins-mcp gateway qualify --offline   # JSON summary, no secrets
 | Vault miss | `Invalidate` / `Cache.Clear` → fetch again; peer user cache intact | Live multi-instance vault |
 | IdP outage | Fetcher error / `DeadlineExceeded` / cancel → authentication/timeout/cancelled; no canary; empty cache | Live Entra outage under concurrent tool load |
 | IdP recovery | Healthy Fetcher after outage → Obtain + cache hit | Live recovery SLOs |
-| JWKS kid rotation | Multi-key `KeyByID` overlap; stale kid after removal fail closed; mock fetcher `key_id` version gate; process-local `RefreshingJWKS` TTL + stale-if-error (HOST-001 foundation) | Live Entra under load; multi-instance shared JWKS cache (GWY-003 full pin) |
+| JWKS kid rotation | Multi-key `KeyByID` overlap; stale kid after removal fail closed; mock fetcher `key_id` version gate; process-local `RefreshingJWKS` TTL + stale-if-error + optional `JENKINS_MCP_HTTP_JWKS_MAX_STALE` (HOST-001 foundation) | Live Entra under load; multi-instance shared JWKS cache (GWY-003 full pin) |
 
 ### HOST-011 modes A/B/C offline matrix (Done*)
 
