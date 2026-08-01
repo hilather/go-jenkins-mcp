@@ -136,9 +136,10 @@ jenkins-mcp doctor --offline           # gateway_status progressive_consent_* fi
 **`gateway residual-status`** combines mode-matrix residual, `multi_user_enabled`,
 `ha_multi_replica=false`, `session_affinity_recommended`, multi-pod residual fields,
 progressive consent residual, `rateEnabled` / `ratePerMinute` / `rateBurst`, and
-`principal_cache_entries` (count only). Always advertises Mode B residual id
+`principal_cache_entries` (count only) plus optional `principal_cache_max_entries` /
+`principal_cache_ttl_seconds` when hygiene env is set. Always advertises Mode B residual id
 `oauth009_offline` and points at [live-pin-blockers.md](live-pin-blockers.md).
-Never tokens or subjects. Env/static only — not live Ready / production GO.
+Never tokens or subjects (no principal inventory dump). Env/static only — not live Ready / production GO.
 
 **Honesty:** metadata propagation alone does **not** close full GWY-001/003 DoD.
 When Obtain would return `ConsentRequired`, surfaces never include tokens,
@@ -195,7 +196,7 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 | Obtain | `CallerFromContext` when Valid → Obtain for that caller; else process defaultCaller |
 | Policy RBAC | `tools.RegisterOptions.SubjectFromContext` = `policySubjectFromGatewayCtx` (cmd adapter; tools does not import gateway). JenkinsUserID preference: (1) **PrincipalCache** after Obtain, (2) HTTP/lab `PolicySubject.JenkinsUserID`, (3) empty fail-closed. `addTool` / `listToolsAllows` use `effectiveSubject` |
 | Mutation Binding | `MutationBindingFromContext` = `mutationBindingFromGatewayCtx`: Valid `PolicySubject` → PrincipalID=`JenkinsUserID` (HTTP/lab JenkinsPrincipal); else Caller + **PrincipalCache** (SubjectKey→Obtain/Mode A vault username) when set, else process principal |
-| Principal cache | Process-local `gateway.PrincipalCache` (`SubjectKey` → non-secret Jenkins principal). Multi-user `AuthProviderCtx` **Set**s after successful Obtain (Credential.JenkinsPrincipal or Basic username). **Never** tokens. Used by **policy SubjectFromContext** (JenkinsUserID rewrite after Obtain) and mutation Binding |
+| Principal cache | Process-local `gateway.PrincipalCache` (`SubjectKey` → non-secret Jenkins principal). Multi-user `AuthProviderCtx` **Set**s after successful Obtain (Credential.JenkinsPrincipal or Basic username). **Never** tokens. Used by **policy SubjectFromContext** (JenkinsUserID rewrite after Obtain) and mutation Binding. Optional **MaxEntries** (LRU eviction) + **TTL** hygiene for long-running multi-user serve (empty env = unlimited / no expiry; process-local only — multi-pod residual) |
 | Subject pin | `ExpectedExternalSubject` is **not** set (distinct lab/JWT subjects allowed) |
 | Fail closed | empty subject / Obtain miss → error; never other subject's token; never shared SA; tool args never rebind identity |
 | Static fields | AuthProviderCtx does **not** write User/Token on the Client (race residual); AuthProviderCtx cannot store Obtain principal **on request context** — mid-call rewrite is via process-local **PrincipalCache** (SubjectFromContext + Binding), not ctx value mutation |
@@ -203,6 +204,8 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 | Env | Role |
 |-----|------|
 | `JENKINS_MCP_GATEWAY_MULTI_USER` | Opt-in multi-user Obtain + policy.Subject rebind path (default off = single-subject pin) |
+| `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_MAX` | Optional PrincipalCache max entries (non-negative int; empty/`0` = unlimited). When full, LRU (oldest `lastAccess`) is evicted on Set. Wired at gateway serve start via `ConfigureProcessPrincipalCacheFromEnviron` |
+| `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_TTL` | Optional PrincipalCache entry TTL (Go duration, e.g. `1h`, `30m`; empty = no expiry). Expired keys miss on Get and are deleted. Fixed TTL from Set (not sliding) |
 
 **Residuals (honest):**
 
@@ -271,7 +274,7 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 | Resource | Isolation key | Behavior |
 |----------|---------------|----------|
 | Token cache (`MemoryTokenCache` default; optional `FileTokenCache`) | `CacheKey{Tenant,User,Workload,Profile}` via `Caller.CacheKey()` | Cross-user / cross-tenant Get is a miss; file lite via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` (HOST-008 same-host flock; multi-pod external residual) |
-| Principal cache (`PrincipalCache`) | `SubjectKey` = `tenant\|subject\|profile` | Non-secret Jenkins principal only; Binding fallback; never tokens |
+| Principal cache (`PrincipalCache`) | `SubjectKey` = `tenant\|subject\|profile` | Non-secret Jenkins principal only; Binding + policy RBAC fallback; never tokens. Optional `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_MAX` / `_TTL` (LRU + TTL hygiene; empty = unlimited / no expiry). Process-local only — multi-pod residual |
 | Vault (`APITokenVault` / JWT vault) | `SubjectKey` = `tenant\|subject\|profile` | Cross-subject Get → not found |
 | List `page_token` | Filter fingerprint **bound** with subject via `jenkins.BindSubjectToPageFilter` / `*WithSubject` helpers | Alice's token rejected for Bob (`invalid_argument`) |
 | Mutation `confirmation_token` | `mutation.Binding` = profile + principal + ExternalSubject + tenant | Alice preview rejected for Bob confirm (`binding_mismatch`) |

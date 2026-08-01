@@ -1253,6 +1253,20 @@ func runServe(args []string) error {
 	var gatewayObtainWired bool
 	gatewayMultiUser := useGateway && gateway.MultiUserEnabled(os.Getenv)
 	if useGateway {
+		// PrincipalCache hygiene residual lite (MaxEntries + optional TTL). Empty env =
+		// unlimited / no expiry (backward compatible). Fail closed on invalid env.
+		// Process-local only — multi-pod shared principal map remains residual.
+		// ConfigureProcessPrincipalCache mutates the process singleton in place
+		// (does not replace the pointer; private caches in tests stay isolated).
+		pcMax, pcTTL, pcErr := gateway.PrincipalCacheConfigFromEnviron(os.Getenv)
+		if pcErr != nil {
+			return pcErr
+		}
+		gateway.ConfigureProcessPrincipalCache(pcMax, pcTTL)
+		if pcMax > 0 || pcTTL > 0 {
+			// Secret-free operator log (counts/durations only; never principals/tokens).
+			log.Printf("principal_cache max_entries=%d ttl=%s (process-local; multi-pod residual)", pcMax, pcTTL)
+		}
 		gwSubject, err := bindGatewaySubject(profileID, principal.ID)
 		if err != nil {
 			return err

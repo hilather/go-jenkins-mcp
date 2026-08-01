@@ -76,6 +76,7 @@ make build
 | Lab flag | Meaning | Residual |
 |----------|---------|----------|
 | `JENKINS_MCP_GATEWAY_MULTI_USER=1` | Per-request multi-user Obtain foundation | Not multi-replica HA (HOST-008) |
+| `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_MAX` / `_TTL` | Optional PrincipalCache LRU max + TTL hygiene | Process-local only; empty = unlimited / no expiry; multi-pod residual |
 | `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` / `_PROCESS_MAX_CONCURRENT` | Concurrency slots | HOST-006 Done*; process-local |
 | `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` / `_RATE_BURST` | Token-bucket rate (0 = rate off) | Overlay `max_tools_*` lower-only; admin `rateEnabled`/`ratePerMinute`/`rateBurst`; multi-replica residual |
 | `JENKINS_MCP_HTTP_PATH_PREFIX` | MCP mount under reverse proxy | Live path-prefix matrix residual |
