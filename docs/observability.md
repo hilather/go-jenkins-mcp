@@ -43,12 +43,16 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
   (handler / budget / subject limiter failures): multi-user tool dispatch
   attributes `profileId` / `principalId` from **effective** subject when wired,
   plus optional `externalSubject` + `subjectKeyHash` (opaque) when SubjectKey /
-  ExternalSubject are available (same multi-user identity path as deny). Metrics tool_ok /
-  tool_deny / tool_error remain separate (OBS-001). `tool_error` audit reason is
-  the stable `apperr` code only (never ModelMessage / tokens).
+  ExternalSubject are available. Metrics tool_ok / tool_deny / tool_error remain
+  separate (OBS-001). `tool_error` audit reason is the stable `apperr` code only
+  (never ModelMessage / tokens).
 - Optional **tool_success** audit: residual/off by default; set
   `JENKINS_MCP_AUDIT_TOOL_OK=1` (truthy) to emit (high volume). Metrics
   `mcp_tool_ok` always record regardless.
+- **Mutation Manager** (`mutation_preview` / `mutation_confirm` / `mutation_deny`):
+  ProfileID/PrincipalID from effective `mutation.Binding`; when Binding has
+  ExternalSubject also `externalSubject` + `subjectKeyHash` =
+  `audit.HashOpaque(tenant|external|profile)`. Never confirmation tokens or raw keys.
 - Mid-serve **identity re-verify** fail-closed (`IdentityReverifyGate`, AUTH-004 / Wave 28):
   - `type=auth_fail`, `action=identity_reverify`, `decision=fail`
   - `reasonCode`: `identity_principal_drift` | `identity_reverify_fail` | `identity_unbound`
@@ -62,9 +66,14 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Surface | Status |
 |---------|--------|
 | Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+<<<<<<< HEAD
 | Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
 | Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
 | Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
+=======
+| Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only; mutation events do not cross pods |
+>>>>>>> integrate/mutation-audit-subject
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
 
 ### Rotation / retention
@@ -469,12 +478,16 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
   (handler / budget / subject limiter failures): multi-user tool dispatch
   attributes `profileId` / `principalId` from **effective** subject when wired,
   plus optional `externalSubject` + `subjectKeyHash` (opaque) when SubjectKey /
-  ExternalSubject are available (same multi-user identity path as deny). Metrics tool_ok /
-  tool_deny / tool_error remain separate (OBS-001). `tool_error` audit reason is
-  the stable `apperr` code only (never ModelMessage / tokens).
+  ExternalSubject are available. Metrics tool_ok / tool_deny / tool_error remain
+  separate (OBS-001). `tool_error` audit reason is the stable `apperr` code only
+  (never ModelMessage / tokens).
 - Optional **tool_success** audit: residual/off by default; set
   `JENKINS_MCP_AUDIT_TOOL_OK=1` (truthy) to emit (high volume). Metrics
   `mcp_tool_ok` always record regardless.
+- **Mutation Manager** (`mutation_preview` / `mutation_confirm` / `mutation_deny`):
+  ProfileID/PrincipalID from effective `mutation.Binding`; when Binding has
+  ExternalSubject also `externalSubject` + `subjectKeyHash` =
+  `audit.HashOpaque(tenant|external|profile)`. Never confirmation tokens or raw keys.
 - Mid-serve **identity re-verify** fail-closed (`IdentityReverifyGate`, AUTH-004 / Wave 28):
   - `type=auth_fail`, `action=identity_reverify`, `decision=fail`
   - `reasonCode`: `identity_principal_drift` | `identity_reverify_fail` | `identity_unbound`
@@ -488,9 +501,14 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Surface | Status |
 |---------|--------|
 | Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+<<<<<<< HEAD
 | Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
 | Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
 | Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
+=======
+| Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only; mutation events do not cross pods |
+>>>>>>> integrate/mutation-audit-subject
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
 
 ### Rotation / retention

@@ -66,6 +66,31 @@ func TestConfirmTokenRejectedAcrossSubjects_AliceBob(t *testing.T) {
 	}
 	assertDenyReason(t, mem, mutation.ReasonBindingMismatch)
 
+	// Binding mismatch deny must attribute Bob's ExternalSubject + SubjectKeyHash.
+	var sawMismatch bool
+	wantBobHash := audit.HashOpaque("tid-1|entra-bob|corp")
+	for _, e := range mem.Events() {
+		if e.ReasonCode != mutation.ReasonBindingMismatch {
+			continue
+		}
+		sawMismatch = true
+		if e.PrincipalID != "j-bob" {
+			t.Fatalf("mismatch deny PrincipalID want j-bob, got %q", e.PrincipalID)
+		}
+		if e.ExternalSubject != "entra-bob" {
+			t.Fatalf("mismatch deny ExternalSubject want entra-bob, got %q", e.ExternalSubject)
+		}
+		if e.SubjectKeyHash != wantBobHash {
+			t.Fatalf("mismatch deny SubjectKeyHash want %q, got %q", wantBobHash, e.SubjectKeyHash)
+		}
+		if strings.Contains(e.SubjectKeyHash, "|") {
+			t.Fatalf("SubjectKeyHash must be opaque (no raw key): %q", e.SubjectKeyHash)
+		}
+	}
+	if !sawMismatch {
+		t.Fatal("expected binding_mismatch deny audit with ExternalSubject")
+	}
+
 	// Alice can still confirm her own token after Bob's failed attempt.
 	mem.Reset()
 	bound, err := m.Confirm(aliceCtx, prev.ConfirmationToken, intent)
@@ -76,6 +101,7 @@ func TestConfirmTokenRejectedAcrossSubjects_AliceBob(t *testing.T) {
 		t.Fatalf("bound: %+v", bound)
 	}
 	// Audit attribution uses effective Alice subject (not process fallback).
+	wantAliceHash := audit.HashOpaque("tid-1|entra-alice|corp")
 	var sawConfirm bool
 	for _, e := range mem.Events() {
 		if e.Type == mutation.TypeConfirm {
@@ -84,12 +110,22 @@ func TestConfirmTokenRejectedAcrossSubjects_AliceBob(t *testing.T) {
 				t.Fatalf("confirm audit want alice attribution, got profile=%q principal=%q",
 					e.ProfileID, e.PrincipalID)
 			}
+			if e.ExternalSubject != "entra-alice" {
+				t.Fatalf("confirm audit ExternalSubject want entra-alice, got %q", e.ExternalSubject)
+			}
+			if e.SubjectKeyHash != wantAliceHash {
+				t.Fatalf("confirm audit SubjectKeyHash want %q, got %q", wantAliceHash, e.SubjectKeyHash)
+			}
 		}
 		// Canary: secrets must never appear in audit string fields.
-		for _, s := range []string{e.Type, e.Tool, e.ReasonCode, e.ProfileID, e.PrincipalID, e.Action, e.Decision, e.TargetHash, e.RequestID} {
+		for _, s := range []string{e.Type, e.Tool, e.ReasonCode, e.ProfileID, e.PrincipalID, e.ExternalSubject, e.SubjectKeyHash, e.Action, e.Decision, e.TargetHash, e.RequestID} {
 			if strings.Contains(s, "secret") || strings.Contains(s, "token-") || strings.Contains(s, "Bearer ") {
 				t.Fatalf("secret-like value in audit field: %q event=%+v", s, e)
 			}
+		}
+		// Canary: confirmation token and raw subject key shape must not appear in hash field.
+		if strings.Contains(e.SubjectKeyHash, prev.ConfirmationToken) || strings.Contains(e.SubjectKeyHash, "|") {
+			t.Fatalf("SubjectKeyHash must stay opaque: %q event=%+v", e.SubjectKeyHash, e)
 		}
 	}
 	if !sawConfirm {
@@ -231,7 +267,8 @@ func TestConfirmTokenRejectedAcrossTenant(t *testing.T) {
 	assertDenyReason(t, mem, mutation.ReasonBindingMismatch)
 }
 
-// Audit deny for binding mismatch uses Bob's effective PrincipalID (not Alice's).
+// Audit deny for binding mismatch uses Bob's effective PrincipalID/ExternalSubject
+// (not Alice's) and opaque SubjectKeyHash; secret canary free.
 func TestBindingMismatchAuditUsesEffectiveSubject_SecretCanary(t *testing.T) {
 	t.Parallel()
 	mem := &audit.Memory{}
@@ -263,26 +300,88 @@ func TestBindingMismatchAuditUsesEffectiveSubject_SecretCanary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Preview audit also carries Alice ExternalSubject + SubjectKeyHash.
+	wantAliceHash := audit.HashOpaque("t|sub-a|corp")
+	var sawPreview bool
+	for _, e := range mem.Events() {
+		if e.Type == mutation.TypePreview && e.ReasonCode == mutation.ReasonPreviewOK {
+			sawPreview = true
+			if e.ExternalSubject != "sub-a" || e.SubjectKeyHash != wantAliceHash {
+				t.Fatalf("preview audit subject: external=%q hash=%q want sub-a / %q",
+					e.ExternalSubject, e.SubjectKeyHash, wantAliceHash)
+			}
+		}
+	}
+	if !sawPreview {
+		t.Fatal("expected preview audit with ExternalSubject")
+	}
 	mem.Reset()
 	_, _ = m.Confirm(context.WithValue(context.Background(), bindKey{}, bob), prev.ConfirmationToken, intent)
 	events := mem.Events()
 	if len(events) == 0 {
 		t.Fatal("expected deny audit")
 	}
+	wantBobHash := audit.HashOpaque("t|sub-b|corp")
+	var sawMismatch bool
 	for _, e := range events {
 		if e.ReasonCode == mutation.ReasonBindingMismatch {
+			sawMismatch = true
 			if e.PrincipalID != "bob" {
 				t.Fatalf("deny audit should attribute bob (effective subject), got %q", e.PrincipalID)
 			}
+			if e.ExternalSubject != "sub-b" {
+				t.Fatalf("deny audit ExternalSubject want sub-b, got %q", e.ExternalSubject)
+			}
+			if e.SubjectKeyHash != wantBobHash {
+				t.Fatalf("deny audit SubjectKeyHash want %q, got %q", wantBobHash, e.SubjectKeyHash)
+			}
 		}
 		// Canary: raw secret string must never appear in any audit field.
-		blob := e.Type + e.ProfileID + e.PrincipalID + e.Tool + e.Action + e.Decision +
-			e.ReasonCode + e.TargetHash + e.RequestID
+		blob := e.Type + e.ProfileID + e.PrincipalID + e.ExternalSubject + e.SubjectKeyHash +
+			e.Tool + e.Action + e.Decision + e.ReasonCode + e.TargetHash + e.RequestID
 		if strings.Contains(blob, canary) {
 			t.Fatalf("canary secret leaked into audit: %+v", e)
 		}
 		if strings.Contains(blob, prev.ConfirmationToken) {
 			t.Fatalf("confirmation token must not appear in audit: %+v", e)
+		}
+		// Opaque hash only — never raw tenant|subject|profile.
+		if strings.Contains(e.SubjectKeyHash, "|") || strings.Contains(e.SubjectKeyHash, "t|sub") {
+			t.Fatalf("raw subject key leaked into SubjectKeyHash: %q", e.SubjectKeyHash)
+		}
+	}
+	if !sawMismatch {
+		t.Fatal("expected binding_mismatch with ExternalSubject")
+	}
+}
+
+// Single-user / empty ExternalSubject leaves ExternalSubject and SubjectKeyHash empty.
+func TestAuditSubjectFieldsEmptyWithoutExternalSubject(t *testing.T) {
+	t.Parallel()
+	mem := &audit.Memory{}
+	now, _ := testClock(time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC))
+	m := mutation.NewManager(mutation.Config{
+		Gate:            policy.NewReadOnlyGate(policy.Inputs{AllowMutations: true}),
+		Audit:           mem,
+		ProfileID:       "corp",
+		PrincipalID:     "alice",
+		ConfirmCooldown: -1,
+		Now:             now,
+	})
+	intent := mutation.Intent{Action: mutation.ActionStartJob, JobName: "demo"}
+	prev, err := m.Preview(context.Background(), intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Confirm(context.Background(), prev.ConfirmationToken, intent); err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range mem.Events() {
+		if e.ExternalSubject != "" || e.SubjectKeyHash != "" {
+			t.Fatalf("stdio residual must not set multi-user audit fields: %+v", e)
+		}
+		if e.ProfileID != "corp" || e.PrincipalID != "alice" {
+			t.Fatalf("still want profile/principal: %+v", e)
 		}
 	}
 }
@@ -364,6 +463,17 @@ func TestConfigExternalSubjectInBinding(t *testing.T) {
 	}
 	if _, err := m.Confirm(context.Background(), prev.ConfirmationToken, intent); err != nil {
 		t.Fatal(err)
+	}
+	// Config-path Binding still attributes ExternalSubject + SubjectKeyHash on audit.
+	wantHash := audit.HashOpaque("tid-1|entra-alice|corp")
+	for _, e := range mem.Events() {
+		if e.Type != mutation.TypePreview && e.Type != mutation.TypeConfirm {
+			continue
+		}
+		if e.ExternalSubject != "entra-alice" || e.SubjectKeyHash != wantHash {
+			t.Fatalf("Config ExternalSubject audit: external=%q hash=%q want entra-alice/%q event=%+v",
+				e.ExternalSubject, e.SubjectKeyHash, wantHash, e)
+		}
 	}
 	// Mismatch: construct token under alice external then Confirm under manager
 	// that has BindingFromContext returning different external — covered above.

@@ -141,6 +141,33 @@ func (b Binding) bindingKey() string {
 	return b.ProfileID + "\x00" + b.PrincipalID + "\x00" + b.ExternalSubject + "\x00" + b.Tenant
 }
 
+// subjectKey returns tenant|external|profile for multi-user audit correlation
+// when ExternalSubject is set; empty for stdio / API-token residual.
+// Same shape as gateway.SubjectKeyParts (never PrincipalID, tokens, or vault bytes).
+func (b Binding) subjectKey() string {
+	ext := strings.TrimSpace(b.ExternalSubject)
+	if ext == "" {
+		return ""
+	}
+	return strings.Join([]string{
+		strings.TrimSpace(b.Tenant),
+		ext,
+		strings.TrimSpace(b.ProfileID),
+	}, "|")
+}
+
+// auditSubjectFields returns ExternalSubject + SubjectKeyHash for audit events
+// from Binding. SubjectKeyHash is audit.HashOpaque(tenant|external|profile)
+// when ExternalSubject is set; both empty for single-user residual.
+// Never returns raw subject keys, tokens, or vault material.
+func (b Binding) auditSubjectFields() (externalSubject, subjectKeyHash string) {
+	externalSubject = strings.TrimSpace(b.ExternalSubject)
+	if sk := b.subjectKey(); sk != "" {
+		subjectKeyHash = audit.HashOpaque(sk)
+	}
+	return externalSubject, subjectKeyHash
+}
+
 // Config configures a Manager.
 type Config struct {
 	// Gate is the POL-001 read-only kill switch. Nil ⇒ fail-closed read-only.
@@ -334,17 +361,20 @@ func (m *Manager) Preview(ctx context.Context, intent Intent) (*PreviewResult, e
 		m.emitDeny(ctx, tool, string(norm.Action), ReasonInvalidIntent, th, start)
 		return nil, err
 	}
+	extSub, skHash := bind.auditSubjectFields()
 	m.emit(ctx, audit.Event{
-		Time:        start,
-		Type:        TypePreview,
-		ProfileID:   bind.ProfileID,
-		PrincipalID: bind.PrincipalID,
-		Tool:        tool,
-		Action:      string(norm.Action),
-		Decision:    audit.DecisionAllow,
-		ReasonCode:  ReasonPreviewOK,
-		TargetHash:  th,
-		Duration:    m.now().Sub(start),
+		Time:            start,
+		Type:            TypePreview,
+		ProfileID:       bind.ProfileID,
+		PrincipalID:     bind.PrincipalID,
+		ExternalSubject: extSub,
+		SubjectKeyHash:  skHash,
+		Tool:            tool,
+		Action:          string(norm.Action),
+		Decision:        audit.DecisionAllow,
+		ReasonCode:      ReasonPreviewOK,
+		TargetHash:      th,
+		Duration:        m.now().Sub(start),
 	})
 	secs := int(m.ttl.Seconds())
 	if secs < 1 {
@@ -469,18 +499,21 @@ func (m *Manager) Confirm(ctx context.Context, token string, expected Intent) (*
 	}
 	m.mu.Unlock()
 
+	extSub, skHash := bind.auditSubjectFields()
 	m.emit(ctx, audit.Event{
-		Time:        start,
-		Type:        TypeConfirm,
-		ProfileID:   bind.ProfileID,
-		PrincipalID: bind.PrincipalID,
-		Tool:        tool,
-		Action:      string(bound.Action),
-		Decision:    audit.DecisionAllow,
-		ReasonCode:  ReasonConfirmOK,
-		TargetHash:  bound.TargetHash,
-		RequestID:   bound.RequestID,
-		Duration:    m.now().Sub(start),
+		Time:            start,
+		Type:            TypeConfirm,
+		ProfileID:       bind.ProfileID,
+		PrincipalID:     bind.PrincipalID,
+		ExternalSubject: extSub,
+		SubjectKeyHash:  skHash,
+		Tool:            tool,
+		Action:          string(bound.Action),
+		Decision:        audit.DecisionAllow,
+		ReasonCode:      ReasonConfirmOK,
+		TargetHash:      bound.TargetHash,
+		RequestID:       bound.RequestID,
+		Duration:        m.now().Sub(start),
 	})
 	return bound, nil
 }
@@ -491,16 +524,19 @@ func (m *Manager) EmitExecuteFail(ctx context.Context, tool, action, reason, tar
 		return
 	}
 	bind := m.effectiveBinding(ctx)
+	extSub, skHash := bind.auditSubjectFields()
 	m.emit(ctx, audit.Event{
-		Time:        m.now(),
-		Type:        TypeDeny,
-		ProfileID:   bind.ProfileID,
-		PrincipalID: bind.PrincipalID,
-		Tool:        tool,
-		Action:      action,
-		Decision:    audit.DecisionFail,
-		ReasonCode:  reason,
-		TargetHash:  targetHash,
+		Time:            m.now(),
+		Type:            TypeDeny,
+		ProfileID:       bind.ProfileID,
+		PrincipalID:     bind.PrincipalID,
+		ExternalSubject: extSub,
+		SubjectKeyHash:  skHash,
+		Tool:            tool,
+		Action:          action,
+		Decision:        audit.DecisionFail,
+		ReasonCode:      reason,
+		TargetHash:      targetHash,
 	})
 }
 
@@ -510,17 +546,20 @@ func (m *Manager) EmitExecuteOK(ctx context.Context, tool, action, targetHash, r
 		return
 	}
 	bind := m.effectiveBinding(ctx)
+	extSub, skHash := bind.auditSubjectFields()
 	m.emit(ctx, audit.Event{
-		Time:        m.now(),
-		Type:        audit.TypeToolSuccess,
-		ProfileID:   bind.ProfileID,
-		PrincipalID: bind.PrincipalID,
-		Tool:        tool,
-		Action:      action,
-		Decision:    audit.DecisionSuccess,
-		ReasonCode:  "execute_ok",
-		TargetHash:  targetHash,
-		RequestID:   requestID,
+		Time:            m.now(),
+		Type:            audit.TypeToolSuccess,
+		ProfileID:       bind.ProfileID,
+		PrincipalID:     bind.PrincipalID,
+		ExternalSubject: extSub,
+		SubjectKeyHash:  skHash,
+		Tool:            tool,
+		Action:          action,
+		Decision:        audit.DecisionSuccess,
+		ReasonCode:      "execute_ok",
+		TargetHash:      targetHash,
+		RequestID:       requestID,
 	})
 }
 
@@ -611,17 +650,20 @@ func (m *Manager) purgeCooldownsLocked(now time.Time) {
 
 func (m *Manager) emitDeny(ctx context.Context, tool, action, reason, targetHash string, start time.Time) {
 	bind := m.effectiveBinding(ctx)
+	extSub, skHash := bind.auditSubjectFields()
 	m.emit(ctx, audit.Event{
-		Time:        start,
-		Type:        TypeDeny,
-		ProfileID:   bind.ProfileID,
-		PrincipalID: bind.PrincipalID,
-		Tool:        tool,
-		Action:      action,
-		Decision:    audit.DecisionDeny,
-		ReasonCode:  reason,
-		TargetHash:  targetHash,
-		Duration:    m.now().Sub(start),
+		Time:            start,
+		Type:            TypeDeny,
+		ProfileID:       bind.ProfileID,
+		PrincipalID:     bind.PrincipalID,
+		ExternalSubject: extSub,
+		SubjectKeyHash:  skHash,
+		Tool:            tool,
+		Action:          action,
+		Decision:        audit.DecisionDeny,
+		ReasonCode:      reason,
+		TargetHash:      targetHash,
+		Duration:        m.now().Sub(start),
 	})
 }
 
