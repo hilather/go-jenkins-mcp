@@ -882,7 +882,6 @@ PY
           HARD_FAIL=1
         fi
       fi
-    fi
 
 
       LIMITER_MAX_CANARY=64
@@ -934,6 +933,10 @@ if data.get("shared_jwks_file") is True:
     errors.append("shared_jwks_file must stay false without JWKS_CACHE_PATH")
 if data.get("shared_token_cache_file") is True:
     errors.append("shared_token_cache_file must stay false without TOKEN_CACHE_PATH")
+if data.get("shared_api_token_vault_file") is True:
+    errors.append("shared_api_token_vault_file must stay false without VAULT_PATH")
+if data.get("shared_jwt_vault_file") is True:
+    errors.append("shared_jwt_vault_file must stay false without JWT_VAULT_PATH")
 blob = json.dumps(data)
 low = blob.lower()
 for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
@@ -957,6 +960,8 @@ PY
           HARD_FAIL=1
         fi
       fi
+    fi
+
 
     if [[ $residual_status_ok -eq 1 ]]; then
       ARTIFACT_LINES+=("gateway_residual_status|gateway-residual-status.json|pass|0|")
