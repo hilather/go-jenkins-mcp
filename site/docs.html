@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Documentation — go-jenkins-mcp</title>
+    <meta name="description" content="Documentation hub for go-jenkins-mcp: user, admin, security, architecture, and pilot kits." />
+    <meta name="theme-color" content="#09090b" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container nav">
+        <a class="brand" href="index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16M4 12h10M4 17h14" stroke-linecap="round"/><circle cx="18" cy="12" r="2.2"/></svg>
+          </span>
+          <span class="brand-text">
+            <span class="brand-name">go-jenkins-mcp</span>
+            <span class="brand-tag">enterprise · v0.2.0</span>
+          </span>
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="index.html" data-nav="index.html">Overview</a>
+          <a href="getting-started.html" data-nav="getting-started.html">Start</a>
+          <a href="architecture.html" data-nav="architecture.html">Architecture</a>
+          <a href="security.html" data-nav="security.html">Security</a>
+          <a href="docs.html" data-nav="docs.html">Docs</a>
+        </nav>
+        <div class="nav-actions">
+          <a class="btn btn-primary" href="https://github.com/hilather/go-jenkins-mcp/tree/master/docs">docs/ on GitHub</a>
+          <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="false" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="mobile-nav" data-mobile-nav>
+        <a href="index.html" data-nav="index.html">Overview</a>
+        <a href="getting-started.html" data-nav="getting-started.html">Start</a>
+        <a href="architecture.html" data-nav="architecture.html">Architecture</a>
+        <a href="security.html" data-nav="security.html">Security</a>
+        <a href="docs.html" data-nav="docs.html">Docs</a>
+      </div>
+    </header>
+
+    <main>
+      <div class="page-hero">
+        <div class="container">
+          <div class="eyebrow"><span class="eyebrow-dot"></span> Source of truth in repo</div>
+          <h1>Documentation hub.</h1>
+          <p>Role-oriented entry points into the markdown tree. This site is the product surface; the GitHub docs tree remains the detailed SoT.</p>
+        </div>
+      </div>
+
+      <section class="section">
+        <div class="container">
+          <div class="doc-group">
+            <h2>Start by role</h2>
+            <div class="doc-links">
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/user/README.md"><span><strong>User guide</strong><span>Cursor stdio, profiles, login, RO default</span></span><span class="pill">pilot</span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/admin/README.md"><span><strong>Admin guide</strong><span>Packaging, policy CLI, gateway, admin SPA</span></span><span class="pill">ops</span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/deploy/local/README.md"><span><strong>Local Docker</strong><span>Disposable admin BFF/SPA + lab Jenkins</span></span><span class="pill">lab</span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/agent-usage.md"><span><strong>Agent usage</strong><span>Triage flow for coding agents</span></span><span class="pill">agents</span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/security/operator-guide.md"><span><strong>Operator security</strong><span>Keyring, secrets, support bundles</span></span><span class="pill">sec</span></a>
+            </div>
+          </div>
+
+          <div class="doc-group">
+            <h2>Core product</h2>
+            <div class="doc-links">
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/tool-contracts.md"><span><strong>Tool contracts</strong><span>Inventory, budgets, side effects</span></span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/policy-rbac.md"><span><strong>Policy & RBAC</strong><span>Deny-only overlays and schema</span></span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/auth-architecture.md"><span><strong>Auth architecture</strong><span>Surfaces; Jenkins is not a 3LO AS</span></span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/observability.md"><span><strong>Observability</strong><span>Metrics, doctor, telemetry</span></span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/packaging.md"><span><strong>Packaging</strong><span>RPM/DEB/tar, XDG, update-check</span></span></a>
+            </div>
+          </div>
+
+          <div class="doc-group">
+            <h2>Security & privacy</h2>
+            <div class="doc-links">
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/security/threat-model.md"><span><strong>Threat model</strong><span>Assets, actors, boundaries</span></span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/security/policy-bundles.md"><span><strong>Policy bundles</strong><span>Ed25519 envelopes</span></span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/security/privacy-data-retention.md"><span><strong>Privacy & retention</strong><span>QA-006 inventory</span></span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/security/fleet-telemetry.md"><span><strong>Fleet telemetry</strong><span>Opt-in privacy notes</span></span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/SECURITY.md"><span><strong>SECURITY.md</strong><span>Reporting policy</span></span></a>
+            </div>
+          </div>
+
+          <div class="doc-group">
+            <h2>Planning & release</h2>
+            <div class="doc-links">
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/jenkins-mcp-enterprise-architecture.md"><span><strong>Architecture SoT</strong><span>Enterprise architecture document</span></span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/phase2-progress.md"><span><strong>Phase 2 progress</strong><span>Waves 6–53 board</span></span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/release/gates.md"><span><strong>Release gates</strong><span>REL-002</span></span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/pilot/README.md"><span><strong>Pilot kit</strong><span>Limited RO evidence</span></span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/adr/README.md"><span><strong>ADR index</strong><span>Architecture decision records</span></span></a>
+              <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/KNOWN_DEFECTS.md"><span><strong>Known defects</strong><span>Seed defects expected to change</span></span></a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-bottom" style="border:0;padding:0">
+        <span><a href="index.html" style="color:var(--fg-muted)">← Overview</a></span>
+        <span>MIT · go-jenkins-mcp</span>
+      </div>
+    </footer>
+    <script src="assets/main.js"></script>
+  </body>
+</html>

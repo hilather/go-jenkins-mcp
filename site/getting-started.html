@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Getting started — go-jenkins-mcp</title>
+    <meta name="description" content="Install go-jenkins-mcp, login with Secret Service, and wire Cursor stdio read-only." />
+    <meta name="theme-color" content="#09090b" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container nav">
+        <a class="brand" href="index.html" data-nav="index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16M4 12h10M4 17h14" stroke-linecap="round"/><circle cx="18" cy="12" r="2.2"/></svg>
+          </span>
+          <span class="brand-text">
+            <span class="brand-name">go-jenkins-mcp</span>
+            <span class="brand-tag">enterprise · v0.2.0</span>
+          </span>
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="index.html" data-nav="index.html">Overview</a>
+          <a href="getting-started.html" data-nav="getting-started.html">Start</a>
+          <a href="architecture.html" data-nav="architecture.html">Architecture</a>
+          <a href="security.html" data-nav="security.html">Security</a>
+          <a href="docs.html" data-nav="docs.html">Docs</a>
+        </nav>
+        <div class="nav-actions">
+          <a class="btn btn-ghost" href="https://github.com/hilather/go-jenkins-mcp" target="_blank" rel="noreferrer">GitHub</a>
+          <a class="btn btn-primary" href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/user/README.md">Full user guide</a>
+          <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="false" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="mobile-nav" data-mobile-nav>
+        <a href="index.html" data-nav="index.html">Overview</a>
+        <a href="getting-started.html" data-nav="getting-started.html">Start</a>
+        <a href="architecture.html" data-nav="architecture.html">Architecture</a>
+        <a href="security.html" data-nav="security.html">Security</a>
+        <a href="docs.html" data-nav="docs.html">Docs</a>
+      </div>
+    </header>
+
+    <main>
+      <div class="page-hero">
+        <div class="container">
+          <div class="eyebrow"><span class="eyebrow-dot"></span> Tier-1 Linux pilot</div>
+          <h1>From zero to a read-only Cursor session.</h1>
+          <p>Rocky Linux or Ubuntu. Unlocked Secret Service. A personal Jenkins API token. No secrets in mcp.json — ever.</p>
+        </div>
+      </div>
+
+      <section class="section">
+        <div class="container grid-2">
+          <div class="prose">
+            <h2>1. Install the binary</h2>
+            <p>Prefer a checksum-verified package from your enterprise channel. Portable tarballs always ship from <code>make package</code>.</p>
+            <div class="pill-row" style="margin: 1rem 0 1.5rem">
+              <span class="pill">Rocky Linux</span>
+              <span class="pill">Ubuntu LTS</span>
+              <span class="pill">linux/amd64</span>
+              <span class="pill">Windows out of scope</span>
+            </div>
+          </div>
+          <div class="code-block">
+            <div class="code-toolbar">
+              <span>install.sh</span>
+              <button class="btn btn-ghost" type="button" data-copy="#install-code" style="min-height:32px;padding:0 10px">Copy</button>
+            </div>
+            <pre id="install-code"><code># Portable tarball
+tar -xzf jenkins-mcp_*_linux_amd64.tar.gz
+sudo install -m 0755 usr/bin/jenkins-mcp /usr/local/bin/jenkins-mcp
+
+jenkins-mcp version --json</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" style="padding-top:0">
+        <div class="container grid-2">
+          <div class="prose">
+            <h2>2. Profile + login</h2>
+            <p>Profiles store non-secret connection metadata. Interactive login verifies the token against Jenkins, then stores it in Secret Service. Success output prints identity only.</p>
+          </div>
+          <div class="code-block">
+            <div class="code-toolbar">
+              <span>login</span>
+              <button class="btn btn-ghost" type="button" data-copy="#login-code" style="min-height:32px;padding:0 10px">Copy</button>
+            </div>
+            <pre id="login-code"><code>jenkins-mcp profile add corp --url https://jenkins.example.corp/
+
+# Interactive: username + API token on the terminal
+jenkins-mcp login --profile corp
+
+jenkins-mcp status --profile corp
+jenkins-mcp doctor --profile corp --offline</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" style="padding-top:0">
+        <div class="container grid-2">
+          <div class="prose">
+            <h2>3. Cursor stdio (RO default)</h2>
+            <p>Read-only is the pilot and production default. Prefer explicit flags so hosts never rely on “forgot to set RO.” Mutations stay unregistered unless you opt in separately.</p>
+          </div>
+          <div class="code-block">
+            <div class="code-toolbar">
+              <span>mcp.json fragment</span>
+              <button class="btn btn-ghost" type="button" data-copy="#mcp-code" style="min-height:32px;padding:0 10px">Copy</button>
+            </div>
+            <pre id="mcp-code"><code>{
+  "mcpServers": {
+    "jenkins": {
+      "command": "jenkins-mcp",
+      "args": [
+        "serve",
+        "--profile",
+        "corp"
+      ]
+    }
+  }
+}</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" style="padding-top:0">
+        <div class="container">
+          <div class="section-head">
+            <div class="section-kicker">Never put secrets in</div>
+            <h2>Hard rules for pilot configs.</h2>
+          </div>
+          <div class="grid-3">
+            <article class="card"><h3>Cursor config</h3><p>No tokens in mcp.json command, args, or env. Login once; serve resolves credentials from the keyring.</p></article>
+            <article class="card"><h3>Shell history</h3><p>Do not paste <code>-auth user:token</code> or <code>JENKINS_MCP_AUTH</code> examples into durable scripts (seed defect KD-003).</p></article>
+            <article class="card"><h3>Profile JSON</h3><p>XDG config under <code>~/.config/jenkins-mcp/</code> is non-secret connection data only.</p></article>
+          </div>
+          <div class="callout" style="margin-top:1.5rem">
+            <strong>Optional OIDC path</strong>
+            <p>External-IdP OIDC login with PKCE is implemented offline. Live Jenkins LTS + jwt-auth-filter evidence remains residual — do not claim OAuth production readiness until that lab is closed.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" style="padding-top:0">
+        <div class="container">
+          <div class="cta">
+            <h2>Need the long form?</h2>
+            <p>User guide covers packaging paths, doctor checks, mutations preview, and pilot checklist handoff.</p>
+            <div class="cta-actions">
+              <a class="btn btn-primary" href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/user/README.md">docs/user/README.md</a>
+              <a class="btn btn-secondary" href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/pilot/README.md">Pilot kit</a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-bottom" style="border:0;padding:0">
+        <span><a href="index.html" style="color:var(--fg-muted)">← Overview</a></span>
+        <span>MIT · go-jenkins-mcp</span>
+      </div>
+    </footer>
+    <script src="assets/main.js"></script>
+  </body>
+</html>

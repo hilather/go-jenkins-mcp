@@ -5,13 +5,16 @@ managed-gateway path. Built from the community seed
 [`simonfxr/go-jenkins-mcp`](https://github.com/simonfxr/go-jenkins-mcp) as a
 **behavioral seed**, not the long-term architecture.
 
+**Product site:** [https://hilather.github.io/go-jenkins-mcp/](https://hilather.github.io/go-jenkins-mcp/)
+
 ## Status
 
 **Phase 0 — baseline and architecture lock** (in progress). See
-[`docs/phase0-progress.md`](docs/phase0-progress.md).
+[`docs/phase0-progress.md`](docs/phase0-progress.md). Latest release: **v0.2.0**.
 
 | Resource | Description |
 |----------|-------------|
+| [Product site](https://hilather.github.io/go-jenkins-mcp/) | Fancy overview, start guide, architecture, security, docs hub |
 | [`AGENTS.md`](AGENTS.md) | Mandatory agent policy (tests, review, docs, todos) |
 | [`docs/user/README.md`](docs/user/README.md) | User guide: Cursor stdio, profiles, login, RO default |
 | [`docs/admin/README.md`](docs/admin/README.md) | Admin: packaging, cache, SELinux/AppArmor, pilot-check |
@@ -43,6 +46,7 @@ internal/{auth,policy,…}/ # architecture packages (FND-004)
 internal/adapter/         # optional integrations (INT-001; default off)
 docs/                     # architecture + backlog
 docs/adr/                 # architecture decision records
+site/                     # GitHub Pages product site
 docs/perf-baseline.md     # PERF-001 progressive log baselines
 docs/perf-budgets.json    # QA-003 continuous regression budgets
 ```
@@ -71,6 +75,12 @@ make build
 Credentials via `-auth user:token` or `JENKINS_MCP_AUTH` remain a **known seed
 defect** (KD-003); prefer `jenkins-mcp login --profile` + Secret Service. Do not put
 tokens in shell history or committed config.
+
+## GitHub Pages
+
+Static product site lives in [`site/`](site/) and deploys via
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml) to
+[https://hilather.github.io/go-jenkins-mcp/](https://hilather.github.io/go-jenkins-mcp/).
 
 ## License
 
