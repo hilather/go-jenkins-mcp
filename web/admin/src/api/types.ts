@@ -45,6 +45,11 @@ export interface HealthResponse {
   /** Resolved bootstrap burst; 0 when rate disabled. Never tokens. */
   rateBurst?: number;
   /**
+   * HOST-008 Done* lite: true when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set
+   * (same-host FileSubjectRateLimiter). Not multi-pod HA. Path never returned.
+   */
+  sharedSubjectRateFile?: boolean;
+  /**
    * OAUTH-010 / GWY-001: ConsentRequired → authorization_url + session_id only
    * path Done* (always true). Static residual; never tokens or authorize query.
    */
@@ -374,6 +379,11 @@ export interface GatewayVaultResponse {
   ratePerMinute?: number;
   /** Resolved bootstrap burst; 0 when rate disabled. Never tokens. */
   rateBurst?: number;
+  /**
+   * HOST-008 Done* lite: true when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set
+   * (same-host file rate). Not multi-pod HA. Path never returned.
+   */
+  sharedSubjectRateFile?: boolean;
   vaultConfigured: boolean;
   entryCount: number;
   subjects: string[];
@@ -430,8 +440,27 @@ export interface GatewayResidualStatusResponse {
   rateEnabled?: boolean;
   ratePerMinute?: number;
   rateBurst?: number;
-  /** Process-local principal cache entry count only (never subjects). */
+  /**
+   * HOST-008 Done* lite: true when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set
+   * (same-host FileSubjectRateLimiter). Snake_case CLI/BFF residual-status key.
+   * Not multi-pod HA. Path value never returned.
+   */
+  shared_subject_rate_file?: boolean;
+  /**
+   * Process-local principal cache entry count only (never subjects).
+   * Count is for the process serving residual-status (admin BFF), not necessarily MCP serve.
+   */
   principal_cache_entries?: number;
+  /**
+   * Optional PrincipalCache max_entries hygiene when env > 0 (omit = unlimited).
+   * Snake_case; never subjects/tokens.
+   */
+  principal_cache_max_entries?: number;
+  /**
+   * Optional PrincipalCache TTL seconds when env > 0 (omit = no TTL).
+   * Snake_case; never subjects/tokens.
+   */
+  principal_cache_ttl_seconds?: number;
   residual_note?: string;
   /** Pointer e.g. docs/gateway/live-pin-blockers.md */
   doc?: string;
