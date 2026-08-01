@@ -411,7 +411,7 @@ consent session store opened via `OpenConsentSessionStoreForPurge`:
 
 | Source | Behavior |
 |--------|----------|
-| Body `path` | Optional override (wins over env) |
+| Body `path` | Optional absolute override; **must be a direct file under the configured consent store directory** (dir of env/XDG path). Wins over env when allowed. Outside that dir → **400** (path jail — no arbitrary file overwrite). Full path never returned. |
 | Env | `JENKINS_MCP_CONSENT_STORE_PATH` |
 | Default | XDG data `…/jenkins-mcp/gateway/consent_sessions.json` |
 
@@ -464,7 +464,7 @@ process is **not** cleared unless it shares the same file path.
 | `action` | optional | `purge_expired` (default) \| `delete_session` \| `clear_all` |
 | `session_id` | for delete | Consent session correlation id (metadata only; **not** echoed) |
 | `clear_all` | for clear | Explicit flag required for clear-all (mirrors CLI `--all`) |
-| `path` | optional | Consent metadata file path override |
+| `path` | optional | Absolute consent metadata file path under the configured store directory only (admin path jail). Relative / traversal / outside-dir → 400. Never echoed. |
 
 `clear_all` and `session_id` are **mutually exclusive** (400). Unknown body
 fields (e.g. `token`, `access_token`) are **ignored** — never treated as
@@ -495,7 +495,7 @@ credentials and never echoed.
 | HTTP | When |
 |------|------|
 | **200** | Purge attempted (counts describe outcome) |
-| **400** | Mutual exclusion, missing session_id, unknown action, unusable path |
+| **400** | Mutual exclusion, missing session_id, unknown action, path jail / unusable path |
 | **401** | Admin shared secret required and missing/wrong |
 | **403** | Role lacks `gateway_ops` (viewer) |
 | **405** | Method not POST |

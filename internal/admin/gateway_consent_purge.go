@@ -3,6 +3,7 @@ package admin
 import (
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
@@ -24,8 +25,10 @@ type consentPurgeRequest struct {
 	// ClearAll is the explicit flag required for clear_all (mirrors CLI --all).
 	// Also accepted when Action is "clear_all".
 	ClearAll bool `json:"clear_all"`
-	// Path optionally overrides JENKINS_MCP_CONSENT_STORE_PATH / XDG default.
-	// Never returned in full in the response (basename residual only).
+	// Path optionally overrides the basename under the configured consent store
+	// directory (JENKINS_MCP_CONSENT_STORE_PATH / XDG default). Absolute only;
+	// must stay under that directory (admin BFF path jail — fail closed). Never
+	// returned in full in the response (basename residual only).
 	Path string `json:"path"`
 }
 
@@ -37,6 +40,9 @@ type consentPurgeRequest struct {
 //   - purge_expired (default) | delete_session + session_id | clear_all (explicit)
 //   - Secret-free summary: deleted_count, remaining_count, residual notes
 //   - Never tokens; never echo session_id; never full path values
+//
+// Body path is jailed under the configured consent store directory so a
+// gateway_ops caller cannot use admin BFF to overwrite arbitrary files.
 //
 // Requires gateway_ops (operator or policy_admin). Same-host file
 // reload-before-persist Done* lite; multi-pod residual; browser 3LO not automated.
@@ -62,7 +68,13 @@ func (s *server) handleGatewayConsentPurge(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	store, err := gateway.OpenConsentSessionStoreForPurge(strings.TrimSpace(req.Path), os.Getenv)
+	pathOverride, err := validateConsentPurgePathOverride(req.Path, os.Getenv)
+	if err != nil {
+		writeAppErr(w, err)
+		return
+	}
+
+	store, err := gateway.OpenConsentSessionStoreForPurge(pathOverride, os.Getenv)
 	if err != nil {
 		writeAppErr(w, err)
 		return
@@ -110,11 +122,65 @@ func (s *server) handleGatewayConsentPurge(w http.ResponseWriter, r *http.Reques
 		// serve (no FilePath) is a separate process and is not cleared by admin BFF.
 		"residual_note": "consent metadata purge only (OAUTH-010 residual); never tokens; same-host file reload-before-persist Done* lite (admin/CLI purge not resurrected by serve Put); not multi-replica HA; browser 3LO not automated; memory-only serve process not cleared by admin BFF unless shared FilePath",
 		"doc":           consentPurgeDoc,
-		"admin_note":    "mirrors CLI gateway consent-purge; set JENKINS_MCP_CONSENT_STORE_PATH (or body path) to same file as MCP serve for same-host share (HOST-008 lite); multi-pod residual",
+		"admin_note":    "mirrors CLI gateway consent-purge; set JENKINS_MCP_CONSENT_STORE_PATH (or body path under that directory) to same file as MCP serve for same-host share (HOST-008 lite); multi-pod residual",
 	}
 	// Defense: never echo session_id (may be secret-shaped); CLI omits it too.
 
 	writeJSON(w, http.StatusOK, out)
+}
+
+// validateConsentPurgePathOverride jails optional admin body path under the
+// configured consent store directory (dir of JENKINS_MCP_CONSENT_STORE_PATH or
+// XDG default). Fail closed: relative paths, empty basename, and paths outside
+// the store directory are rejected. Empty override is allowed (use env/XDG).
+//
+// Security: OpenConsentSessionStoreForPurge + Clear/write can create/overwrite
+// files; without a jail, gateway_ops on non-local admin could point path at
+// arbitrary locations. Full path is never returned in error messages.
+func validateConsentPurgePathOverride(pathOverride string, getenv func(string) string) (string, error) {
+	path := strings.TrimSpace(pathOverride)
+	if path == "" {
+		return "", nil
+	}
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	clean := filepath.Clean(path)
+	if !filepath.IsAbs(clean) {
+		return "", apperr.New(apperr.CodeInvalidArgument,
+			"consent-purge: path must be absolute")
+	}
+	baseName := filepath.Base(clean)
+	if baseName == "" || baseName == "." || baseName == string(filepath.Separator) {
+		return "", apperr.New(apperr.CodeInvalidArgument,
+			"consent-purge: path must include a file basename")
+	}
+	// Root of jail: directory of the env/XDG configured consent store file.
+	// Operators set JENKINS_MCP_CONSENT_STORE_PATH for same-host share; body path
+	// may only select another basename (or the same file) under that directory.
+	configured := gateway.ConsentSessionPathFromEnviron(getenv)
+	root := filepath.Clean(filepath.Dir(configured))
+	if root == "" || root == "." || root == string(filepath.Separator) {
+		return "", apperr.New(apperr.CodeInvalidArgument,
+			"consent-purge: consent store directory is invalid")
+	}
+	rel, err := filepath.Rel(root, clean)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", apperr.New(apperr.CodeInvalidArgument,
+			"consent-purge: path must be under the configured consent store directory")
+	}
+	if rel == "." {
+		return "", apperr.New(apperr.CodeInvalidArgument,
+			"consent-purge: path must be a file under the consent store directory")
+	}
+	// Reject nested escapes via intermediate ".." segments that Clean already
+	// collapsed; Rel check above is authoritative. Also reject multi-segment
+	// relative paths that leave the immediate store dir (no subdirs).
+	if strings.Contains(rel, string(filepath.Separator)) {
+		return "", apperr.New(apperr.CodeInvalidArgument,
+			"consent-purge: path must be a direct file under the consent store directory")
+	}
+	return clean, nil
 }
 
 // resolveConsentPurgeAction maps body fields to a purge action.

@@ -344,7 +344,8 @@ func TestGatewayConsentPurge_PathOverride(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	// Env points elsewhere — body path must win.
+	// Env points at another basename in the same store dir — body path may select
+	// a sibling file under that directory (admin path jail).
 	t.Setenv(gateway.EnvConsentSessionStorePath, filepath.Join(dir, "other.json"))
 
 	cfg := admin.DefaultConfig()
@@ -387,6 +388,92 @@ func TestGatewayConsentPurge_PathOverride(t *testing.T) {
 	}
 	if len(reloaded.List()) != 0 {
 		t.Fatal("path clear_all must clear explicit file")
+	}
+}
+
+// Regression: body path outside the configured consent store directory must fail
+// closed (no arbitrary file overwrite via gateway_ops admin BFF).
+func TestGatewayConsentPurge_PathJailRejectsOutsideStoreDir(t *testing.T) {
+	storeDir := t.TempDir()
+	outsideDir := t.TempDir()
+	outside := filepath.Join(outsideDir, "not-consent.json")
+	// Plant a canary file that must not be rewritten by clear_all.
+	canary := []byte(`{"do_not_overwrite":true,"marker":"admin-consent-path-jail-CANARY"}`)
+	if err := os.WriteFile(outside, canary, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(gateway.EnvConsentSessionStorePath, filepath.Join(storeDir, "consent_sessions.json"))
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleOperator
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := map[string]any{"clear_all": true, "path": outside}
+	rawBody, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/admin/v1/gateway/consent-purge", bytes.NewReader(rawBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("want 400 path jail, got %d body %s", rr.Code, rr.Body.String())
+	}
+	raw := rr.Body.String()
+	// Never echo the full outside path or canary contents.
+	if strings.Contains(raw, outside) {
+		t.Fatal("Regression: outside path leaked in error body")
+	}
+	if strings.Contains(raw, "admin-consent-path-jail-CANARY") {
+		t.Fatal("Regression: canary leaked in error body")
+	}
+	// File must be unchanged (no clear/overwrite).
+	got, err := os.ReadFile(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(canary) {
+		t.Fatalf("Regression: outside file was modified: %s", got)
+	}
+}
+
+func TestGatewayConsentPurge_PathJailRejectsRelativeAndTraversal(t *testing.T) {
+	storeDir := t.TempDir()
+	t.Setenv(gateway.EnvConsentSessionStorePath, filepath.Join(storeDir, "consent_sessions.json"))
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleOperator
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name string
+		path string
+	}{
+		{name: "relative", path: "consent_sessions.json"},
+		{name: "dotdot_escape", path: filepath.Join(storeDir, "..", filepath.Base(t.TempDir()), "escape.json")},
+		{name: "nested_subdir", path: filepath.Join(storeDir, "nested", "deep.json")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := map[string]any{"action": "purge_expired", "path": tc.path}
+			rawBody, _ := json.Marshal(body)
+			req := httptest.NewRequest(http.MethodPost, "/admin/v1/gateway/consent-purge", bytes.NewReader(rawBody))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("want 400, got %d body %s", rr.Code, rr.Body.String())
+			}
+			// Fail closed: never echo absolute path override in error JSON.
+			if filepath.IsAbs(tc.path) && strings.Contains(rr.Body.String(), tc.path) {
+				t.Fatal("Regression: absolute path override leaked in error body")
+			}
+		})
 	}
 }
 
