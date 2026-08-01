@@ -2768,15 +2768,19 @@ from `gateway.SubjectKey` when `--gateway`; list tools (`list_jobs` / `get_jobs`
 per-subject + process ceilings, `Hold`/`WithSubjectSlot`, fair-share tests,
 `StatusMap` secret-free. Mutation confirms bound to
 `mutation.Binding` = profile + principal + ExternalSubject + tenant; multi-user
-`BindingFromContext` / serve `MutationBindingFromContext` from
-`CallerFromContext` so Alice preview cannot confirm as Bob; cooldown keys and
-audit ProfileID/PrincipalID use effective binding; Alice/Bob + secret-canary
-tests in `internal/mutation` + `internal/tools`. **Serve wire Done*:**
+`BindingFromContext` / serve `MutationBindingFromContext` via
+`mutationBindingFromGatewayCtx` (prefer Valid `PolicySubject` PrincipalID =
+JenkinsUserID from HTTP JenkinsPrincipal/lab header; else Caller + process
+principal) so Alice preview cannot confirm as Bob on ExternalSubject **or**
+PrincipalID; cooldown keys and audit ProfileID/PrincipalID use effective
+binding; Alice/Bob + PrincipalID-only + secret-canary tests in
+`internal/mutation` + `internal/tools` + `cmd/jenkins-mcp`. **Serve wire Done*:**
 `tools.SubjectSlotLimiter` interface + `addTool` Hold when `SubjectKey`
 non-empty; cmd wires `NewSubjectLimiter` under `--gateway`; optional
 `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` / `JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT`.
+**Done\*** per-request Jenkins principal on Binding (HTTP claim/lab).
 **Residual:** token-bucket rate (not only concurrency); multi-replica (HOST-008);
-per-request Jenkins principal on Binding (ExternalSubject isolation Done*).
+Obtain principal not re-injected onto ctx after whoAmI mid-call.
 
 ---
 

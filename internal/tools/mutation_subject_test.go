@@ -107,6 +107,72 @@ func TestMutationConfirm_SubjectBinding_AliceTokenRejectedForBob(t *testing.T) {
 	}
 }
 
+// Alice/Bob with distinct PrincipalID (process Manager principal is fallback only):
+// binding_mismatch and deny audit use Bob's effective PrincipalID.
+func TestMutationConfirm_PrincipalIDBinding_AliceTokenRejectedForBob(t *testing.T) {
+	t.Parallel()
+	mem := &audit.Memory{}
+	type bindKey struct{}
+	gate := policy.NewReadOnlyGate(policy.Inputs{AllowMutations: true})
+	st := regState{
+		gate:        gate,
+		audit:       mem,
+		profileID:   "corp",
+		principalID: "process-user",
+		subject: policy.Subject{
+			ProfileID:     "corp",
+			JenkinsUserID: "process-user",
+			Verified:      true,
+		},
+		mutationBindingFromContext: func(ctx context.Context) (mutation.Binding, bool) {
+			if b, ok := ctx.Value(bindKey{}).(mutation.Binding); ok {
+				return b, true
+			}
+			return mutation.Binding{}, false
+		},
+	}
+	st.mutations = newMutationManager(st)
+	// Same ExternalSubject: PrincipalID alone isolates (per-request Jenkins principal).
+	alice := mutation.Binding{
+		ProfileID: "corp", PrincipalID: "j-alice",
+		ExternalSubject: "shared-ext", Tenant: "tid-1",
+	}
+	bob := mutation.Binding{
+		ProfileID: "corp", PrincipalID: "j-bob",
+		ExternalSubject: "shared-ext", Tenant: "tid-1",
+	}
+	aliceCtx := context.WithValue(context.Background(), bindKey{}, alice)
+	bobCtx := context.WithValue(context.Background(), bindKey{}, bob)
+	mgr := ensureMutationManager(st)
+	intent := mutation.Intent{
+		Action: mutation.ActionStartJob, ToolName: policy.ToolStartJob, JobName: "demo",
+	}
+	prev, err := mgr.Preview(aliceCtx, intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mgr.Confirm(bobCtx, prev.ConfirmationToken, intent); err == nil {
+		t.Fatal("Alice token must be rejected for Bob (PrincipalID mismatch)")
+	}
+	var sawMismatch bool
+	for _, e := range mem.Events() {
+		if e.ReasonCode == mutation.ReasonBindingMismatch {
+			sawMismatch = true
+			if e.PrincipalID != "j-bob" {
+				t.Fatalf("deny audit effective principal want j-bob, got %q", e.PrincipalID)
+			}
+		}
+		blob := e.Type + e.ProfileID + e.PrincipalID + e.Tool + e.Action +
+			e.Decision + e.ReasonCode + e.TargetHash + e.RequestID
+		if strings.Contains(blob, prev.ConfirmationToken) {
+			t.Fatalf("confirmation token in audit: %+v", e)
+		}
+	}
+	if !sawMismatch {
+		t.Fatalf("want binding_mismatch; events=%+v", mem.Events())
+	}
+}
+
 // newMutationManager copies ExternalSubject/Tenant from Subject into Config.
 func TestNewMutationManager_BindsSubjectExternalAndTenant(t *testing.T) {
 	t.Parallel()

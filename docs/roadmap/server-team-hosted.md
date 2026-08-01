@@ -452,9 +452,12 @@ Prevent one user from exhausting process-wide budgets for others.
 `Binding` = profile + principal + ExternalSubject + tenant with multi-user
 `BindingFromContext` (Alice/Bob tests). **Serve wire Done*:**
 `tools.SubjectSlotLimiter` + `addTool` Hold under `--gateway`; optional subject
-max env caps; `MutationBindingFromContext` from `CallerFromContext` when
-multi-user. **Residual:** token-bucket rate (beyond concurrency); HOST-008
-multi-replica; per-request Jenkins principal on Binding.
+max env caps; `MutationBindingFromContext` prefers `PolicySubjectFromContext`
+(PrincipalID = Jenkins principal from HTTP claim/lab) when Valid, else
+Caller + process principal. **Done\*** per-request Jenkins principal on Binding
+via HTTP claim. **Residual:** token-bucket rate (beyond concurrency); HOST-008
+multi-replica; Obtain/`AuthProviderCtx` does not re-inject whoAmI principal onto
+ctx mid-call.
 
 ---
 

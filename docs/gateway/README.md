@@ -153,9 +153,10 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 | Context policy.Subject | Same `AfterIdentity` builds `policy.Subject` via `PolicySubjectFromHTTPInbound` (JenkinsPrincipal→JenkinsUserID; ProfileID from process; **Verified** only when lab/JWT verified **and** Jenkins principal present) and stores with `ContextWithCallerAndPolicySubject` |
 | Obtain | `CallerFromContext` when Valid → Obtain for that caller; else process defaultCaller |
 | Policy RBAC | `tools.RegisterOptions.SubjectFromContext` = `gateway.PolicySubjectFromContext`; `addTool` / `listToolsAllows` use `effectiveSubject` (ctx subject when present, else process Subject) |
+| Mutation Binding | `MutationBindingFromContext` = `mutationBindingFromGatewayCtx`: Valid `PolicySubject` → PrincipalID=`JenkinsUserID` (HTTP/lab JenkinsPrincipal); else Caller + process principal. Mode A vault multi-user: send lab/JWT JenkinsPrincipal matching vault username |
 | Subject pin | `ExpectedExternalSubject` is **not** set (distinct lab/JWT subjects allowed) |
 | Fail closed | empty subject / Obtain miss → error; never other subject's token; never shared SA; tool args never rebind identity |
-| Static fields | AuthProviderCtx does **not** write User/Token on the Client (race residual) |
+| Static fields | AuthProviderCtx does **not** write User/Token on the Client (race residual); AuthProviderCtx cannot store Obtain principal on ctx (HTTP claim is multi-user PrincipalID source) |
 
 | Env | Role |
 |-----|------|
@@ -168,6 +169,11 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
   (`ContextWithPolicySubject` / `SubjectFromContext` / `effectiveSubject`).
   Process `RegisterOptions.Subject` remains the multi-user-off / missing-ctx
   default. Tool args never supply identity (`RejectIdentityToolArgs`).
+- **Mutation Binding PrincipalID:** **Done\*** when HTTP/lab carries
+  JenkinsPrincipal (Valid PolicySubject). Mode A vault multi-user tests must
+  send `X-Jenkins-MCP-Lab-Jenkins-Principal` (or JWT preferred_username) matching
+  vault username. **Residual:** Obtain/`AuthProviderCtx` success does not
+  re-inject whoAmI principal onto request context mid-call.
 - **Live Entra groups claim completeness** remains residual (OAUTH-010 /
   GWY-003): lab/JWT path may leave `Groups` empty; binding helpers do not
   inherit process groups for a different ExternalSubject.
@@ -203,11 +209,16 @@ mode should always pass a non-empty subject key.
 List tools (`jenkins_list_jobs`, `jenkins_get_jobs`, `jenkins_list_builds`) resolve
 and mint page tokens with `*WithSubject` helpers. Empty `SubjectKey` (stdio)
 skips binding. **Multi-user (`JENKINS_MCP_GATEWAY_MULTI_USER`):**
-`SubjectKeyFromContext` + `MutationBindingFromContext` from
-`gateway.CallerFromContext`. **Residual:** durable L1/L2 archive namespace
-(STO / HOST-008); per-request Jenkins principal on mutation Binding (still
-process `JenkinsUserID` until Obtain principal is context-carried — ExternalSubject
-isolation is Done*).
+`SubjectKeyFromContext` from `gateway.CallerFromContext`;
+`MutationBindingFromContext` via `mutationBindingFromGatewayCtx` prefers
+`PolicySubjectFromContext` when **Valid** (PrincipalID = `JenkinsUserID` from
+HTTP `JenkinsPrincipal` / lab `X-Jenkins-MCP-Lab-Jenkins-Principal`) else
+Caller + process principal. **Done\*** per-request Jenkins principal on mutation
+Binding when the trusted HTTP claim/lab path carries JenkinsPrincipal (Mode A
+vault multi-user: send lab/JWT principal matching vault username). **Residual:**
+durable L1/L2 archive namespace (STO / HOST-008); Obtain/`AuthProviderCtx` does
+not re-inject whoAmI principal onto ctx mid-call (HTTP claim remains the
+multi-user PrincipalID source).
 
 ### HOST-006 — per-subject concurrent budgets
 
@@ -227,7 +238,9 @@ tools does not import gateway). `addTool` Holds a slot when both limiter and
 non-empty `SubjectKey` are set. Mutation Manager uses
 `MutationBindingFromContext` (multi-user) so confirm tokens and cooldowns cannot
 cross subjects; audit ProfileID/PrincipalID prefer the effective binding.
-Optional env:
+**Done\*** PrincipalID from per-request `policy.Subject` (HTTP JenkinsPrincipal
+claim / lab header) when Valid — Alice/Bob PrincipalID mismatch tests; else
+process principal + Caller ExternalSubject isolation. Optional env:
 
 | Env | Role |
 |-----|------|
@@ -235,7 +248,8 @@ Optional env:
 | `JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT` | Process-wide slots (empty → 64) |
 
 **Residual:** token-bucket rate (not only concurrency); multi-replica (HOST-008);
-per-request Jenkins principal on Binding (ExternalSubject isolation Done*).
+Obtain principal not re-injected onto request ctx after whoAmI mid-call
+(Binding PrincipalID uses HTTP claim / lab JenkinsPrincipal, not Obtain return).
 
 ---
 

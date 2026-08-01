@@ -97,6 +97,56 @@ func TestConfirmTokenRejectedAcrossSubjects_AliceBob(t *testing.T) {
 	}
 }
 
+// Same ExternalSubject+Tenant, different PrincipalID alone → binding_mismatch
+// (per-request Jenkins principal on Binding; not only ExternalSubject isolation).
+func TestConfirmTokenRejectedAcrossPrincipalID_Only(t *testing.T) {
+	t.Parallel()
+	mem := &audit.Memory{}
+	now, _ := testClock(time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC))
+	type bindKey struct{}
+	m := mutation.NewManager(mutation.Config{
+		Gate:            policy.NewReadOnlyGate(policy.Inputs{AllowMutations: true}),
+		Audit:           mem,
+		ProfileID:       "corp",
+		PrincipalID:     "process-fallback",
+		ConfirmCooldown: -1,
+		TTL:             time.Minute,
+		Now:             now,
+		BindingFromContext: func(ctx context.Context) (mutation.Binding, bool) {
+			if b, ok := ctx.Value(bindKey{}).(mutation.Binding); ok {
+				return b, true
+			}
+			return mutation.Binding{}, false
+		},
+	})
+	sharedExt := "shared-entra"
+	alice := mutation.Binding{
+		ProfileID: "corp", PrincipalID: "j-alice",
+		ExternalSubject: sharedExt, Tenant: "tid-1",
+	}
+	bob := mutation.Binding{
+		ProfileID: "corp", PrincipalID: "j-bob",
+		ExternalSubject: sharedExt, Tenant: "tid-1",
+	}
+	aliceCtx := context.WithValue(context.Background(), bindKey{}, alice)
+	bobCtx := context.WithValue(context.Background(), bindKey{}, bob)
+	intent := mutation.Intent{Action: mutation.ActionStartJob, JobName: "demo"}
+	prev, err := m.Preview(aliceCtx, intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Confirm(bobCtx, prev.ConfirmationToken, intent); err == nil {
+		t.Fatal("different PrincipalID alone must binding_mismatch")
+	}
+	assertDenyReason(t, mem, mutation.ReasonBindingMismatch)
+	// Audit deny attributes Bob's effective PrincipalID.
+	for _, e := range mem.Events() {
+		if e.ReasonCode == mutation.ReasonBindingMismatch && e.PrincipalID != "j-bob" {
+			t.Fatalf("deny audit PrincipalID want j-bob, got %q", e.PrincipalID)
+		}
+	}
+}
+
 // Config ExternalSubject/Tenant differentiate subjects without BindingFromContext
 // when Managers are process-pinned per user (or Config defaults differ).
 func TestConfirmTokenRejectedAcrossExternalSubject_ConfigOnly(t *testing.T) {

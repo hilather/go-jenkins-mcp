@@ -1938,19 +1938,12 @@ func runServe(args []string) error {
 			}
 			// Adapter: tools imports policy only (FND-004 — no tools→gateway).
 			serveSubjectFromCtx = gateway.PolicySubjectFromContext
-			// Mutation confirm isolation: ExternalSubject/Tenant/Profile from Caller;
-			// PrincipalID stays process Jenkins user until Obtain principal is ctx-carried.
+			// Mutation confirm isolation: prefer PolicySubject (JenkinsPrincipal→
+			// PrincipalID) when Valid; else Caller + process principal.
+			// AuthProviderCtx cannot write Obtain principal onto ctx (residual).
 			processPrincipal := strings.TrimSpace(subject.JenkinsUserID)
 			serveMutationBindingFromCtx = func(ctx context.Context) (mutation.Binding, bool) {
-				if c, ok := gateway.CallerFromContext(ctx); ok && c.Valid() {
-					return mutation.Binding{
-						ProfileID:       strings.TrimSpace(string(c.ProfileID)),
-						PrincipalID:     processPrincipal,
-						ExternalSubject: strings.TrimSpace(c.Subject),
-						Tenant:          strings.TrimSpace(c.Tenant),
-					}, true
-				}
-				return mutation.Binding{}, false
+				return mutationBindingFromGatewayCtx(ctx, processPrincipal)
 			}
 		}
 	}
