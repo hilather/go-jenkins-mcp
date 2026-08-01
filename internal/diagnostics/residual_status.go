@@ -15,6 +15,12 @@ const ResidualStatusHonestyNote = "unified gateway residual snapshot (env/static
 // ResidualStatusDoc is the primary operator pointer for residual honesty.
 const ResidualStatusDoc = "docs/gateway/live-pin-blockers.md"
 
+// PrincipalCacheProcessNote is a secret-free honesty sentence for
+// principal_cache_entries: the count is for this process only (CLI residual-status
+// or admin BFF), not a remote MCP serve MemoryTokenCache/PrincipalCache unless
+// operators share file caches. Never subjects/tokens.
+const PrincipalCacheProcessNote = "principal_cache_entries is count for this process only (CLI/admin ≠ serve MemoryTokenCache/PrincipalCache unless shared file caches)"
+
 // BuildGatewayResidualStatus assembles the unified secret-free residual snapshot
 // used by `jenkins-mcp gateway residual-status` and
 // GET /admin/v1/gateway/residual-status (HOST-007).
@@ -131,9 +137,13 @@ func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 		"shared_subject_rate_file": gateway.SubjectRatePathConfiguredFromEnviron(getenv),
 		// Process-local principal cache: entry count + optional hygiene knobs from env
 		// (never subjects/tokens/principal inventory). Multi-pod shared residual.
-		"principal_cache_entries": gateway.ProcessPrincipalCache().Len(),
-		"residual_note":           ResidualStatusHonestyNote,
-		"doc":                     ResidualStatusDoc,
+		// principal_cache_process_note: CLI/admin residual-status count is this
+		// process only — not remote serve MemoryTokenCache/PrincipalCache unless
+		// operators share file caches.
+		"principal_cache_entries":      gateway.ProcessPrincipalCache().Len(),
+		"principal_cache_process_note": PrincipalCacheProcessNote,
+		"residual_note":                ResidualStatusHonestyNote,
+		"doc":                          ResidualStatusDoc,
 	}
 	// Optional PrincipalCache hygiene residual lite (env/static; empty = unlimited / no TTL).
 	if pcMax, pcTTL, err := gateway.PrincipalCacheConfigFromEnviron(getenv); err == nil {

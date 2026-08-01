@@ -58,6 +58,21 @@ func TestBuildGatewayResidualStatus_SecretFreeAndModeBId(t *testing.T) {
 			}
 		}
 	}
+	// principal_cache_process_note: this-process honesty (CLI/admin ≠ remote serve).
+	pcNote, _ := out["principal_cache_process_note"].(string)
+	if pcNote == "" {
+		t.Fatal("principal_cache_process_note must be present")
+	}
+	if pcNote != diagnostics.PrincipalCacheProcessNote {
+		t.Fatalf("principal_cache_process_note: %q", pcNote)
+	}
+	if !strings.Contains(strings.ToLower(pcNote), "this process") {
+		t.Fatalf("principal_cache_process_note must state process-local count: %q", pcNote)
+	}
+	// shared_subject_rate_file default false when path unset.
+	if out["shared_subject_rate_file"] != false {
+		t.Fatalf("shared_subject_rate_file default false: %+v", out["shared_subject_rate_file"])
+	}
 	note, _ := out["residual_note"].(string)
 	doc, _ := out["doc"].(string)
 	if !strings.Contains(note, "live-pin-blockers") && !strings.Contains(doc, "live-pin-blockers") {
@@ -65,6 +80,35 @@ func TestBuildGatewayResidualStatus_SecretFreeAndModeBId(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(s), "production go complete") {
 		t.Fatal("must not claim production GO complete")
+	}
+}
+
+// shared_subject_rate_file=true when SUBJECT_RATE_PATH set; path never dumped.
+func TestBuildGatewayResidualStatus_SharedSubjectRateFile(t *testing.T) {
+	marker := "subject-rate-path-canary-NEVER-IN-JSON"
+	path := t.TempDir() + "/" + marker + ".dat"
+	t.Setenv(gateway.EnvGatewaySubjectRatePath, path)
+
+	out := diagnostics.BuildGatewayResidualStatus(nil)
+	if out["shared_subject_rate_file"] != true {
+		t.Fatalf("shared_subject_rate_file want true when path set: %+v", out["shared_subject_rate_file"])
+	}
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: SUBJECT_RATE_PATH leaked into residual-status JSON")
+	}
+	for _, bad := range []string{residualCanary, "access_token=", "refresh_token=", "client_secret="} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q in residual-status with rate path", bad)
+		}
+	}
+	// Process note still present alongside rate residual.
+	if _, ok := out["principal_cache_process_note"].(string); !ok {
+		t.Fatal("principal_cache_process_note required")
 	}
 }
 

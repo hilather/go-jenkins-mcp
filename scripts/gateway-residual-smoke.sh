@@ -12,6 +12,8 @@
 #   2. jenkins-mcp gateway qualify --offline  (must pass; no live network)
 #   3. jenkins-mcp release-evidence --offline (assert residual[] honesty)
 #   4. jenkins-mcp gateway residual-status (required Wave 8 honesty; JSON under OUT_DIR)
+#      - shared_subject_rate_file false by default; true when SUBJECT_RATE_PATH set (path never dumped)
+#      - principal_cache_process_note: principal_cache_entries is this-process only
 #   5. Optional: gateway consent-residual when subcommand exists (progressive consent residual)
 #   6. Optional: doctor --offline residual fields when PROFILE= is set
 #
@@ -513,6 +515,28 @@ if isinstance(pc, dict):
 else:
     errors.append("progressive_consent object missing")
 
+# HOST-008 lite: shared_subject_rate_file default false (or absent-as-false).
+# Path value never appears; only boolean residual.
+ssrf = data.get("shared_subject_rate_file")
+if ssrf is True:
+    errors.append("shared_subject_rate_file=true without SUBJECT_RATE_PATH (default must be false)")
+elif ssrf is not False and ssrf is not None:
+    errors.append(f"shared_subject_rate_file={ssrf!r} want false|absent")
+
+# principal_cache_entries is this-process count only (CLI/admin ≠ remote serve).
+pc_note = str(data.get("principal_cache_process_note") or "")
+note_blob = pc_note + " " + str(data.get("residual_note") or "")
+if pc_note:
+    low_pc = pc_note.lower()
+    if "this process" not in low_pc and "process only" not in low_pc:
+        errors.append("principal_cache_process_note missing process-local honesty")
+elif "process" not in note_blob.lower() and "principal_cache" not in note_blob.lower():
+    # Older binaries may omit the field; residual_note still carries honesty.
+    pass  # residual_note pointer checked below
+# Always require residual honesty pointer when process note absent.
+if not pc_note and not str(data.get("residual_note") or "").strip():
+    errors.append("missing principal_cache_process_note and residual_note")
+
 blob = json.dumps(data).lower()
 if "production go complete" in blob:
     errors.append("residual-status overclaims production GO complete")
@@ -530,7 +554,8 @@ if errors:
     sys.exit(1)
 print(
     "PASS: gateway residual-status honesty "
-    f"(oauth009_offline + ha_multi_replica=false + residual_ids={len(required)} + progressive_consent)"
+    f"(oauth009_offline + ha_multi_replica=false + residual_ids={len(required)} + "
+    "progressive_consent + shared_subject_rate_file=false default + principal_cache process note)"
 )
 sys.exit(0)
 PY
@@ -547,6 +572,66 @@ PY
         pass "gateway residual-status greppable honesty markers (no python3)"
       else
         fail_msg "gateway residual-status missing honesty markers (install python3 for deep assert)"
+      fi
+    fi
+
+    # Optional subtest: SUBJECT_RATE_PATH set → shared_subject_rate_file=true (path never dumped).
+    if [[ -f "$RESIDUAL_STATUS_JSON" ]] && command -v python3 >/dev/null 2>&1; then
+      echo "== gateway residual-status (SUBJECT_RATE_PATH canary) =="
+      RATE_TMP="$OUT_DIR/subject-rate-path-canary.dat"
+      : >"$RATE_TMP"
+      # Unique path marker used only to assert it is NOT echoed in JSON.
+      RATE_PATH_MARKER="subject-rate-path-CANARY-never-in-json-$$"
+      RATE_TMP_MARKED="$OUT_DIR/${RATE_PATH_MARKER}.dat"
+      : >"$RATE_TMP_MARKED"
+      RESIDUAL_STATUS_RATE_JSON="$OUT_DIR/gateway-residual-status-rate-path.json"
+      set +e
+      env JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH="$RATE_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_RATE_JSON" 2>"$OUT_DIR/gateway-residual-status-rate-path.stderr"
+      rrc=$?
+      set -e
+      if [[ $rrc -ne 0 ]]; then
+        fail_msg "gateway residual-status with SUBJECT_RATE_PATH exit $rrc"
+        if [[ -s "$OUT_DIR/gateway-residual-status-rate-path.stderr" ]]; then
+          head -n 20 "$OUT_DIR/gateway-residual-status-rate-path.stderr" >&2 || true
+        fi
+      else
+        assert_secret_free "$RESIDUAL_STATUS_RATE_JSON" "gateway-residual-status-rate-path.json" || true
+        export GRS_RATE_JSON="$RESIDUAL_STATUS_RATE_JSON"
+        export GRS_RATE_MARKER="$RATE_PATH_MARKER"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["GRS_RATE_JSON"]
+marker = os.environ["GRS_RATE_MARKER"]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_subject_rate_file") is not True:
+    errors.append(
+        f"shared_subject_rate_file={data.get('shared_subject_rate_file')!r} want true when SUBJECT_RATE_PATH set"
+    )
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("SUBJECT_RATE_PATH / marker leaked into residual-status JSON (path must never dump)")
+# secret-shaped canaries
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status SUBJECT_RATE_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print("PASS: residual-status shared_subject_rate_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          fail=1
+        fi
       fi
     fi
   fi

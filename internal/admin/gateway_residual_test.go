@@ -108,9 +108,17 @@ func TestGatewayResidualStatus_SecretFreeAndCoreFields(t *testing.T) {
 		t.Fatalf("rateBurst: %v", body["rateBurst"])
 	}
 
-	// principal_cache_entries count only.
+	// principal_cache_entries count only; process note states CLI/admin ≠ serve.
 	if _, ok := body["principal_cache_entries"].(float64); !ok {
 		t.Fatalf("principal_cache_entries: %T %v", body["principal_cache_entries"], body["principal_cache_entries"])
+	}
+	pcNote, _ := body["principal_cache_process_note"].(string)
+	if pcNote == "" || !strings.Contains(strings.ToLower(pcNote), "this process") {
+		t.Fatalf("principal_cache_process_note: %q", pcNote)
+	}
+	// shared_subject_rate_file default false when path unset.
+	if body["shared_subject_rate_file"] != false {
+		t.Fatalf("shared_subject_rate_file default false: %+v", body["shared_subject_rate_file"])
 	}
 
 	// Progressive consent object.
