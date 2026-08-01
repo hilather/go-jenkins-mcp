@@ -14,6 +14,8 @@
 //
 // Live Entra / AgentCore / jwt-auth-filter production pins remain residual.
 // Opt-in residual lab: testdata/oauth-lab + make live-oauth-* (HOST-015 mock-token
-// for Mode C; not default make test).
+// for Mode C; not default make test). go test -tags=live_oauth exercises Mode C
+// Live Obtain / HTTPTokenFetcher against mock-token when healthz is up (TLS test
+// shim → HTTP lab; not Entra Done).
 // See docs/gateway/qualification.md and docs/auth/oauth-capability-matrix.md §4.
 package qualify

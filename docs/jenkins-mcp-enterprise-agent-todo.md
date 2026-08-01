@@ -1484,7 +1484,7 @@ Bind inbound gateway subject and workload identity to the downstream token subje
 | `TestOAUTH010_ModeC_OfflinePrototypeMatrix` | Named offline suite: Live=false; Live=true nil Fetcher; auth_code consent; token_exchange Bearer; wrong aud; HTTPTokenFetcher mock AS; ModeMatrix residual |
 | qualify `oauth010_mode_c_offline_matrix` | GWY-003 qualify row (complements HOST-011 `mode_c_agentcore_live_matrix`) |
 | doctor `gateway_status` Mode C residual | `mode_c_live_agentcore_qualified=false`; warn when Mode C explicit / LIVE / multi-user |
-| `make live-oauth-*` HOST-015 | Opt-in mock-token peer (not production Entra; TLS residual) |
+| `make live-oauth-*` + `-tags=live_oauth` HOST-015 | Opt-in mock-token peer + Mode C Obtain residual (not production Entra; TLS test shim residual) |
 
 ---
 
@@ -2592,7 +2592,7 @@ Load/chaos-test authorization-code consent and session binding, OBO/token exchan
 - [x] Mode C row: Live=false not_configured; Live+mock Fetcher Bearer; wrong audience; ConsentRequired metadata only (`mode_c_agentcore_live_matrix`)
 - [x] HOST-011 no silent fallthrough invoked from qualify suite (`host011_no_silent_fallthrough`; also package `TestHOST011_*`)
 - [x] Docs: [`docs/gateway/qualification.md`](gateway/qualification.md) modes matrix + oauth-lab residual run notes
-- [x] Opt-in stub: `go test -tags=live_oauth ./internal/gateway/qualify/` (skips unless lab up; not default `make test`)
+- [x] Opt-in residual: `go test -tags=live_oauth ./internal/gateway/qualify/` (skips unless lab up; Mode C Obtain + HTTPTokenFetcher vs mock-token via TLS test shim when up; not default `make test`; **not** live Entra Done)
 
 **Still open (full DoD — do not claim live Entra Done)**
 
@@ -2983,6 +2983,7 @@ Mock OIDC authorization server (Keycloak, WireMock+fixtures, or small Go IdP con
 
 **Priority:** P0  
 **Dependencies:** HOST-012, GWY-001 offline mock, OAUTH-010  
+**Status:** **Scaffold Done\*** (mock peer + opt-in live_oauth Mode C Obtain residual) — **not** live Entra / AgentCore Identity vault
 
 **Objective**
 
@@ -2992,16 +2993,18 @@ Disposable HTTP peer that simulates AgentCore/Entra **token exchange / OBO / aut
 
 - Compose service implementing minimal token endpoint(s) used by `HTTPTokenFetcher` / mode C.  
 - Fixtures: success token (Jenkins audience), wrong audience, 5xx, slow response, consent-required metadata.  
-- Wire `gateway qualify` or `go test -tags=live_gateway` against compose network.  
+- Wire `gateway qualify` or `go test -tags=live_oauth` against compose network (TLS **test shim** → HTTP lab; production `HTTPTokenFetcher` is https-only).  
 - Never host “Jenkins AS”; AS base URL must not be the Jenkins origin (existing reject rules).
+
+**Evidence (mock residual only):** `testdata/oauth-lab/` + `make live-oauth-*`; `internal/gateway/qualify/live_oauth_stub_test.go` (`//go:build live_oauth`); docs residual in oauth-lab README + `docs/gateway/qualification.md` §7.
 
 **Acceptance criteria**
 
-- [ ] Obtain Live path against mock returns credential for correct subject/audience.
-- [ ] Wrong audience / error fixtures fail closed without shared SA fallthrough.
-- [ ] ConsentRequired-shaped response exposes auth URL metadata only (no tokens in logs).
-- [ ] Document residual vs real AgentCore Identity vault.
-- [ ] Opt-in Makefile target; secret-free compose.
+- [x] Obtain Live path against mock returns credential for correct subject/audience. — `TestLiveOAuth_ModeC_ObtainSuccess` (TLS shim residual)
+- [x] Wrong audience / error fixtures fail closed without shared SA fallthrough. — `TestLiveOAuth_ModeC_WrongAudienceFailClosed` + `TestLiveOAuth_ModeC_ServerErrorFailClosed`
+- [x] ConsentRequired-shaped response exposes auth URL metadata only (no tokens in logs). — `TestLiveOAuth_ModeC_ConsentMetadataOnly`
+- [x] Document residual vs real AgentCore Identity vault. — oauth-lab README + qualification §7 (TLS residual; not Entra Done)
+- [x] Opt-in Makefile target; secret-free compose. — `make live-oauth-*`
 
 ---
 

@@ -5011,7 +5011,7 @@
       "dependency_text": "GWY-001",
       "parallel_safe": null,
       "objective": "Mock token/3LO peer for gateway Obtain integration without live AgentCore.",
-      "implementation": "Docker Compose opt-in lab; not default make test. See docs/roadmap/server-team-hosted.md and AGENTS.md Docker scaffolds.",
+      "implementation": "Docker Compose opt-in lab; go test -tags=live_oauth Mode C Obtain via TLS test shim; not default make test; not live Entra Done. See docs/roadmap/server-team-hosted.md and AGENTS.md Docker scaffolds.",
       "acceptance_criteria": [
         "Obtain Live against mock returns correct audience credential.",
         "Wrong audience/errors fail closed without shared SA.",
@@ -5020,7 +5020,10 @@
         "Opt-in Makefile; secret-free compose."
       ],
       "acceptance_criteria_count": 5,
-      "evidence_tests": [],
+      "evidence_tests": [
+        "internal/gateway/qualify/live_oauth_stub_test.go (//go:build live_oauth)",
+        "make live-oauth-up/smoke/test/down"
+      ],
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": []

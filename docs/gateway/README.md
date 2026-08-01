@@ -496,7 +496,8 @@ HOST-001 `RequireSubject` + shared-secret not identity; mid-session
 AuthProviderCtx isolation (`TestMultiUserHTTP_ToolsCall_JSONRPC_*`, session-scoped);
 HOST-004 two-user token-cache + page_token subject isolation; HOST-006
 SubjectLimiter + SubjectRateLimiter fair-share. Opt-in Mode C mock peer:
-`make live-oauth-*` (HOST-015).
+`make live-oauth-*` + `go test -tags=live_oauth ./internal/gateway/qualify/`
+(HOST-015; TLS residual; not Entra Done).
 
 ---
 
