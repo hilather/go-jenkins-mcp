@@ -1986,9 +1986,24 @@ func runServe(args []string) error {
 			if lerr != nil {
 				return lerr
 			}
-			serveSubjectLimiter = gateway.NewSubjectLimiter(perSubj, procMax)
-			log.Printf("HOST-006 subject limiter: max_per_subject=%d process_max=%d multi_user=%v",
-				perSubj, procMax, gatewayMultiUser)
+			// Optional MaxSubjects map hygiene (HOST-006 residual lite): empty → unlimited.
+			// Process-local only — multi-pod shared concurrency residual.
+			limMaxSubjects, limMaxSubjErr := gateway.SubjectLimiterMaxSubjectsFromEnviron(os.Getenv)
+			if limMaxSubjErr != nil {
+				return limMaxSubjErr
+			}
+			subjLim := gateway.NewSubjectLimiter(perSubj, procMax)
+			if limMaxSubjects > 0 {
+				subjLim.SetMaxSubjects(limMaxSubjects)
+			}
+			serveSubjectLimiter = subjLim
+			if limMaxSubjects > 0 {
+				log.Printf("HOST-006 subject limiter: max_per_subject=%d process_max=%d max_subjects=%d multi_user=%v",
+					perSubj, procMax, limMaxSubjects, gatewayMultiUser)
+			} else {
+				log.Printf("HOST-006 subject limiter: max_per_subject=%d process_max=%d multi_user=%v",
+					perSubj, procMax, gatewayMultiUser)
+			}
 			// Token-bucket rate: empty env → defaults (30/min, burst 10); explicit
 			// 0 disables (residual opt-out). Process ceilings use package defaults.
 			rateRPM, rateBurst, rerr := gateway.ResolveSubjectRateCaps(

@@ -202,7 +202,9 @@ combine mode-matrix residual, `multi_user_enabled`,
 `ha_multi_replica=false`, `session_affinity_recommended`, multi-pod residual fields,
 progressive consent residual, `rateEnabled` / `ratePerMinute` / `rateBurst`,
 `shared_subject_rate_file`, optional `subject_rate_max_subjects` when
-`JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS` is set, and `principal_cache_entries`
+`JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS` is set, optional
+`subject_limiter_max_subjects` when
+`JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` is set, and `principal_cache_entries`
 (count only) plus `principal_cache_process_note` (this-process only: CLI/admin ≠
 remote serve) and optional `principal_cache_max_entries` /
 `principal_cache_ttl_seconds` when hygiene env is set.
@@ -412,6 +414,7 @@ Caller ExternalSubject isolation. Optional env:
 |-----|------|
 | `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` | Per-subject slots (empty → 8) |
 | `JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT` | Process-wide slots (empty → 64) |
+| `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` | Optional max tracked subjects for `SubjectLimiter` map hygiene (HOST-006 residual lite). Empty → unlimited (0). On Acquire of a **new** subject when full: evict idle (0 in-use) oldest `lastAccess`; if all subjects still hold slots → **fail closed** (`CodeQuota`) — never steals live holders. Invalid fails start. Process-local only — **not** multi-pod |
 | `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` | Per-subject sustained tools/min (empty → 30; **0 = disabled** residual) |
 | `JENKINS_MCP_SUBJECT_RATE_BURST` | Per-subject token-bucket capacity (empty → 10) |
 | `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` | Optional same-host multi-process rate state file (`FileSubjectRateLimiter`, flock + secret-free JSON 0600). Empty → process-local `SubjectRateLimiter`. HOST-008 lite only — **not** multi-pod shared rate. Invalid path fails start |
@@ -425,6 +428,9 @@ serve constructs `FileSubjectRateLimiter` instead (same Allow / LowerRate wire;
 `ha_multi_replica: false`). Optional `JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS`
 applies `SetMaxSubjects` on either limiter; when set, `StatusMap` /
 residual-status include `subject_rate_max_subjects` (omit when unlimited).
+Optional `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` applies
+`SubjectLimiter.SetMaxSubjects`; when set, `StatusMap` / residual-status include
+`subject_limiter_max_subjects` (omit when unlimited).
 
 **Policy-driven rate reduction (HOST-006 Done\* foundation):** serve constructs
 `SubjectRateLimiter` from env bootstrap, then optional overlay fields may only

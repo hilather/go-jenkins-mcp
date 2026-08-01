@@ -175,6 +175,11 @@ func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 	if maxSubj, err := gateway.SubjectRateMaxSubjectsFromEnviron(getenv); err == nil && maxSubj > 0 {
 		out["subject_rate_max_subjects"] = maxSubj
 	}
+	// Optional subject-limiter map hygiene residual lite (empty = unlimited).
+	// Process-local only — multi-pod shared concurrency residual.
+	if limMax, err := gateway.SubjectLimiterMaxSubjectsFromEnviron(getenv); err == nil && limMax > 0 {
+		out["subject_limiter_max_subjects"] = limMax
+	}
 	if mp.Checklist != "" {
 		out["multi_pod_residual_checklist"] = mp.Checklist
 	}
