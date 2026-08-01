@@ -1121,9 +1121,29 @@ func TestRunDoctor_ModeC_GatewayStatusResidual(t *testing.T) {
 	if gs.Details["gateway_ready"] != false {
 		t.Fatalf("offline gateway_ready must stay false: %+v", gs.Details)
 	}
+	// Progressive consent residual (OAUTH-010): browser 3LO not automated; metadata Done*.
+	if gs.Details["progressive_consent_browser_3lo_automated"] != false {
+		t.Fatalf("browser_3lo_automated: %+v", gs.Details)
+	}
+	if gs.Details["progressive_consent_metadata_path_done_star"] != true {
+		t.Fatalf("metadata_path_done_star: %+v", gs.Details)
+	}
+	if gs.Details["progressive_consent_last_would_apply"] != true {
+		t.Fatalf("last_would_apply: %+v", gs.Details)
+	}
+	resNote, _ := gs.Details["progressive_consent_residual"].(string)
+	if !strings.Contains(resNote, "OAUTH-010") || !strings.Contains(strings.ToLower(resNote), "not automated") {
+		t.Fatalf("progressive_consent_residual honesty: %q", resNote)
+	}
+	if !strings.Contains(gs.Message, "progressive consent") && !strings.Contains(gs.Message, "browser 3LO") {
+		t.Fatalf("Mode C message should note progressive consent residual: %s", gs.Message)
+	}
 	// Residual text secret-free.
 	if strings.Contains(gs.Message, doctorCanary) {
 		t.Fatal("canary in message")
+	}
+	if strings.Contains(resNote, doctorCanary) {
+		t.Fatal("canary in progressive residual")
 	}
 	// Mode A primary must not elevate Mode C warn.
 	getenvA := func(k string) string {

@@ -62,6 +62,76 @@ func TestGatewayUnknownSubcommand(t *testing.T) {
 	}
 }
 
+// OAUTH-010 / GWY-001: progressive consent residual CLI (secret-free JSON).
+func TestGatewayConsentResidual(t *testing.T) {
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	errRun := runGatewayConsentResidual(nil)
+	_ = w.Close()
+	os.Stdout = old
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	_ = r.Close()
+	if errRun != nil {
+		t.Fatalf("run: %v\nstdout=%s", errRun, buf.String())
+	}
+	out := buf.String()
+	if strings.Contains(out, canaryCLIToken) || strings.Contains(out, qualify.CanaryToken) {
+		t.Fatal("canary in consent-residual output")
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &payload); err != nil {
+		t.Fatalf("json: %v body=%s", err, out)
+	}
+	pc, ok := payload["progressive_consent"].(map[string]any)
+	if !ok {
+		t.Fatalf("want progressive_consent object: %+v", payload)
+	}
+	if pc["browser_3lo_automated"] != false {
+		t.Fatalf("browser_3lo_automated: %+v", pc)
+	}
+	if pc["metadata_path_done_star"] != true {
+		t.Fatalf("metadata_path_done_star: %+v", pc)
+	}
+	note, _ := pc["residual_note"].(string)
+	if !strings.Contains(note, "OAUTH-010") || !strings.Contains(strings.ToLower(note), "not automated") {
+		t.Fatalf("residual_note honesty: %q", note)
+	}
+	// Forbidden secret markers.
+	for _, bad := range []string{"access_token=", "refresh_token=", "client_secret=", "Authorization: Bearer"} {
+		if strings.Contains(out, bad) {
+			t.Fatalf("forbidden %q in output", bad)
+		}
+	}
+}
+
+func TestGatewayConsentResidual_ViaDispatch(t *testing.T) {
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	errRun := runGateway([]string{"consent-residual"})
+	_ = w.Close()
+	os.Stdout = old
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	_ = r.Close()
+	if errRun != nil {
+		t.Fatalf("dispatch: %v", errRun)
+	}
+	if !strings.Contains(buf.String(), "metadata_path_done_star") {
+		t.Fatalf("stdout: %s", buf.String())
+	}
+}
+
 func TestGatewayVaultPutDelete(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "vault.json")

@@ -411,7 +411,7 @@ Raise replicas **only** when every row is satisfied (org-owned design):
 | Surface | Fields | Honesty |
 |---------|--------|---------|
 | `SubjectLimiter.StatusMap` | `ha_multi_replica: false` | Always false until multi-replica runtime exists |
-| Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `mode_a/b/c_enabled`, `mode_*_live_*_qualified=false`, `oauth009_offline_only`, `gateway_ready=false`, `ha_multi_replica=false`, `mode_matrix_residual` | Env parse only; Ready is serve `/readyz`; unified modes A/B/C residual honesty |
+| Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `mode_a/b/c_enabled`, `mode_*_live_*_qualified=false`, `oauth009_offline_only`, `gateway_ready=false`, `ha_multi_replica=false`, `mode_matrix_residual`, `progressive_consent_*` (browser 3LO not automated; metadata Done*) | Env parse only; Ready is serve `/readyz`; unified modes A/B/C residual honesty |
 | Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false`, `rateEnabled` | Admin BFF ≠ MCP serve; Ready residual documented; `rateEnabled` = HOST-006 env parse only (process-local) |
 | Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false`, `rateEnabled` + mode matrix | Never tokens; multi-user residual note when env set; file vault flock is multi-process lite only |
 

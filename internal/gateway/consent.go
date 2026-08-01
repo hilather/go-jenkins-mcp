@@ -116,3 +116,65 @@ func NewConsentRequired(info ConsentInfo) error {
 	}
 	return &ConsentRequired{Info: info}
 }
+
+// ProgressiveConsentResidualNote is the secret-free honesty string for Mode C
+// progressive consent (OAUTH-010 / GWY-001). Operators/agents may surface it
+// via doctor gateway_status, gateway qualify residuals, or
+// `jenkins-mcp gateway consent-residual`.
+//
+// Done*: ConsentRequired → operator/model-visible authorization_url + session_id
+// only (tools.mapToolErr / AuthProvider preserve metadata; Error() stays host +
+// truncated session). Residual: browser 3LO not automated; durable consent
+// session store; multi-replica consent correlation.
+const ProgressiveConsentResidualNote = "Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; durable consent session store / multi-replica correlation residual"
+
+// ProgressiveConsentResidual is a secret-free residual snapshot for doctor,
+// qualify, and CLI surfaces when Mode C ConsentRequired would apply.
+// Never includes tokens, refresh material, client secrets, or auth codes.
+// Env-only / static honesty — does not require a live Obtain path.
+type ProgressiveConsentResidual struct {
+	// Browser3LOAutomated is always false until GWY-003 / OAUTH-010 live pin
+	// automates interactive authorization-code UX.
+	Browser3LOAutomated bool `json:"browser_3lo_automated"`
+	// MetadataPathDoneStar is true when ConsentRequired → auth URL + session_id
+	// only is implemented on Obtain / AuthProvider / mapToolErr paths.
+	MetadataPathDoneStar bool `json:"metadata_path_done_star"`
+	// DurableConsentSessionStore is false (process-local metadata only).
+	DurableConsentSessionStore bool `json:"durable_consent_session_store"`
+	// MultiReplicaConsentCorrelation is false (HOST-008 residual).
+	MultiReplicaConsentCorrelation bool `json:"multi_replica_consent_correlation"`
+	// Surfaces documents allowed progressive fields (no tokens).
+	Surfaces string `json:"surfaces"`
+	// ResidualNote is the operator-facing residual sentence.
+	ResidualNote string `json:"residual_note"`
+	// LastConsentWouldApply is always true as a static residual marker:
+	// when Obtain returns ConsentRequired, only auth URL + session_id surface.
+	// (No process-local last-consent store; env/static residual is intentional.)
+	LastConsentWouldApply bool `json:"last_consent_would_apply"`
+}
+
+// NewProgressiveConsentResidual returns the fixed secret-free residual snapshot.
+func NewProgressiveConsentResidual() ProgressiveConsentResidual {
+	return ProgressiveConsentResidual{
+		Browser3LOAutomated:            false,
+		MetadataPathDoneStar:           true,
+		DurableConsentSessionStore:     false,
+		MultiReplicaConsentCorrelation: false,
+		Surfaces:                       "authorization_url + session_id only; never access_token / refresh_token / client_secret / Authorization headers",
+		ResidualNote:                   ProgressiveConsentResidualNote,
+		LastConsentWouldApply:          true,
+	}
+}
+
+// StatusMap is a non-secret map for doctor / admin / JSON CLI.
+func (r ProgressiveConsentResidual) StatusMap() map[string]any {
+	return map[string]any{
+		"browser_3lo_automated":             r.Browser3LOAutomated,
+		"metadata_path_done_star":           r.MetadataPathDoneStar,
+		"durable_consent_session_store":     r.DurableConsentSessionStore,
+		"multi_replica_consent_correlation": r.MultiReplicaConsentCorrelation,
+		"surfaces":                          r.Surfaces,
+		"residual_note":                     r.ResidualNote,
+		"last_consent_would_apply":          r.LastConsentWouldApply,
+	}
+}

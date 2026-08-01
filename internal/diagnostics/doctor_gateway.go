@@ -88,6 +88,18 @@ func checkGatewayStatus(getenv func(string) string) Check {
 		details["enabled_modes"] = strings.Join(enabledIDs, ",")
 	}
 
+	// Mode C progressive consent residual (OAUTH-010 / GWY-001): env/static only.
+	// When ConsentRequired would apply, only auth URL + session_id surface;
+	// browser 3LO is not automated (metadata path Done*).
+	pc := gateway.NewProgressiveConsentResidual()
+	details["progressive_consent_browser_3lo_automated"] = pc.Browser3LOAutomated
+	details["progressive_consent_metadata_path_done_star"] = pc.MetadataPathDoneStar
+	details["progressive_consent_last_would_apply"] = pc.LastConsentWouldApply
+	if modeC {
+		details["progressive_consent_residual"] = pc.ResidualNote
+		details["progressive_consent_surfaces"] = pc.Surfaces
+	}
+
 	msg := fmt.Sprintf("multi_user=%v credential_mode=%s modes_a/b/c=%v/%v/%v gateway_ready=false ha_multi_replica=false",
 		multiUser, nonEmpty(mode, "(default/unset)"), modeA, modeB, modeC)
 	if multiUser {
@@ -97,7 +109,7 @@ func checkGatewayStatus(getenv func(string) string) Check {
 		msg += " (mode B offline vault only; live jwt-auth-filter/Entra residual OAUTH-009)"
 	}
 	if modeC && !modeB {
-		msg += " (mode C Live=false foundation; live AgentCore residual)"
+		msg += " (mode C Live=false foundation; live AgentCore residual; progressive consent metadata Done*)"
 	}
 	if modeA && !modeB && !modeC {
 		msg += " (mode A offline vault foundation; live multi-user Obtain residual)"
@@ -115,7 +127,7 @@ func checkGatewayStatus(getenv func(string) string) Check {
 	explicitModeC := strings.TrimSpace(getenv(gateway.EnvGatewayCredentialMode)) != "" && modeC
 	if modeC && (explicitModeC || liveEnv || multiUser) {
 		status = StatusWarn
-		msg = "gateway Mode C (agentcore_3lo_obo): offline Live=false/mock Fetcher foundation only; live Entra 3LO/OBO + AgentCore pin residual (OAUTH-010)"
+		msg = "gateway Mode C (agentcore_3lo_obo): offline Live=false/mock Fetcher foundation only; live Entra 3LO/OBO + AgentCore pin residual (OAUTH-010); progressive consent metadata path Done* (browser 3LO not automated)"
 		if multiUser {
 			msg += "; multi_user foundation residual"
 		}

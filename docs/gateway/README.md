@@ -101,9 +101,26 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 `authorization_url=` + `session_id=` only (progressive consent UX residual).
 `Error()` / logs stay host + truncated session (no full authorize query dump).
 
-**Progressive consent residual (Mode C):** full browser 3LO UX, durable consent
-session store, and multi-replica consent correlation remain **GWY-003 /
-OAUTH-010 / HOST-008** — not closed by metadata propagation alone.
+### Progressive consent residual (Mode C / OAUTH-010 / GWY-001)
+
+| Path | Status |
+|------|--------|
+| `ConsentRequired` → auth URL + session id only (Obtain / AuthProvider / `mapToolErr`) | **Done\*** |
+| Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway consent-residual`) | **Done\*** (env/static honesty) |
+| Browser 3LO interactive UX automation | **Residual** — not automated; operator/agent opens `authorization_url` out-of-band |
+| Durable consent session store | **Residual** (process-local metadata only) |
+| Multi-replica consent correlation | **Residual** (HOST-008) |
+
+```bash
+jenkins-mcp gateway consent-residual   # secret-free JSON residual snapshot
+jenkins-mcp gateway qualify --offline  # includes progressive_consent_residual case + residual note
+jenkins-mcp doctor --offline           # gateway_status progressive_consent_* fields when Mode C
+```
+
+**Honesty:** metadata propagation alone does **not** close full GWY-001/003 DoD.
+When Obtain would return `ConsentRequired`, surfaces never include tokens,
+refresh material, client secrets, or `Authorization` headers — only
+`authorization_url` + `session_id` on the progressive tool path.
 
 Token cache: in-memory, keyed by `(tenant, user, workload, profile)` (HOST-004),
 TTL-bounded. `String()` / errors / `Status` **never** include token bytes (canary tests).
@@ -664,7 +681,8 @@ opt in via `JENKINS_MCP_GATEWAY_LIVE` + token endpoint (`EnableLiveHTTPFetcher`)
 Consent metadata (`ConsentInfo`) may carry **authorization URL + session id** only —
 never access tokens, refresh tokens, client secrets, or auth codes.
 Tool path: `mapToolErr` surfaces progressive `authorization_url` + `session_id`
-(Mode C residual; full 3LO browser UX remains GWY-003 / OAUTH-010).
+(**Done\*** metadata path; browser 3LO not automated — GWY-003 / OAUTH-010 residual).
+See §3 progressive consent residual table; CLI: `jenkins-mcp gateway consent-residual`.
 
 Token cache: in-memory, keyed by `(user, workload, profile)`, TTL-bounded.
 `String()` / errors / `Status` **never** include token bytes (canary tests).

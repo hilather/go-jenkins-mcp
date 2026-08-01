@@ -178,7 +178,7 @@ func ModeMatrixResidualNote(primary CredentialMode, enabled []CredentialMode) st
 		parts = append(parts, "mode_b jwt_rs_bearer offline vault (HOST-010); live IdP/jwt-auth-filter pin residual (OAUTH-009)")
 	}
 	if ModeEnabledIn(CredentialModeAgentCore, enabled, primary) {
-		parts = append(parts, "mode_c agentcore_3lo_obo offline Live=false/mock Fetcher/consent matrix (OAUTH-010); live Entra 3LO/OBO + AgentCore pin residual (not production)")
+		parts = append(parts, "mode_c agentcore_3lo_obo offline Live=false/mock Fetcher/consent matrix + progressive metadata path Done* (OAUTH-010); browser 3LO not automated; live Entra 3LO/OBO + AgentCore pin residual (not production)")
 	}
 	return strings.Join(parts, "; ")
 }
