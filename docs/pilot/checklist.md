@@ -33,7 +33,7 @@ Gateway residual accepted (ticket/notes): _____________
 `multi_user_offline` · `oauth009_offline` · `oauth010_offline` · `progressive_consent_offline` · `host008_single_replica` · `gateway_modes_live`  
 See [release gates](../release/gates.md) residuals section.  
 Optional honesty automation (not default `make test` / `make ci`):  
-`make residual-smoke` (alias `make gateway-residual-smoke`) → runs `gateway qualify --offline` + `release-evidence --offline` and **fails** if those residual ids are missing. Artifacts: `dist/residual-smoke/<ts>/`.  
+`make residual-smoke` (alias `make gateway-residual-smoke`) → runs `gateway qualify --offline` + `release-evidence --offline` + `gateway residual-status` (honesty canaries) and **fails** if those residual ids are missing or residual-status honesty fields fail. Artifacts: `dist/residual-smoke/<ts>/` (includes `gateway-residual-status.json`).  
 **Live production GO residual checklists** (what still blocks Mode B/C multi-user and multi-pod): [gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) — residual-smoke proves honesty **not** live Done.
 
 ## 1. Install

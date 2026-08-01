@@ -41,7 +41,7 @@ help:
 	@echo "  make package-smoke  PKG-001 offline package script smoke (SKIP_DEB/RPM; not in default test)"
 	@echo "  make stdio-smoke    FND-006 offline MCP stdio host-lifecycle smoke (not in default test; Cursor product residual)"
 	@echo "  make pilot-evidence  Offline pilot/release evidence under dist/pilot-evidence/ (REL-001/002)"
-	@echo "  make residual-smoke     REL offline residual honesty (qualify + release-evidence residual ids; not default test)"
+	@echo "  make residual-smoke     REL offline residual honesty (qualify + release-evidence + residual-status; not default test)"
 	@echo "  make gateway-residual-smoke  Alias for residual-smoke"
 	@echo "  make live-jenkins-up    Start disposable Jenkins LTS (Docker; not in default test)"
 	@echo "  make live-jenkins-test  Compose up + live smoke + down (needs Docker)"

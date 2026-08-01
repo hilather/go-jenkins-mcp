@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
@@ -414,6 +415,219 @@ func TestGatewayResidualStatus_MultiPodFromK8sEnv(t *testing.T) {
 	blob, _ := json.Marshal(out)
 	if strings.Contains(string(blob), "10.0.0.1") {
 		t.Fatal("must not embed KUBERNETES_SERVICE_HOST value")
+	}
+}
+
+// OAUTH-010: consent-purge default expires TTL metadata; secret-free summary.
+func TestGatewayConsentPurge_ExpiredAndSessionAndAll(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "consent_sessions.json")
+	// Seed file as if written while live, then clock advanced past ExpiresAt
+	// (persist skips already-expired Puts; real TTL uses future ExpiresAt on write).
+	now := time.Now().UTC()
+	seed := fmt.Sprintf(`{
+  "version": 1,
+  "entries": {
+    "sess-purge-live": {
+      "authorization_url": "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?state=purge-live",
+      "session_id": "sess-purge-live",
+      "provider": "agentcore",
+      "stored_at": %q,
+      "expires_at": %q
+    },
+    "sess-purge-exp": {
+      "authorization_url": "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?state=purge-exp",
+      "session_id": "sess-purge-exp",
+      "provider": "agentcore",
+      "stored_at": %q,
+      "expires_at": %q
+    }
+  }
+}
+`, now.Add(-time.Hour).Format(time.RFC3339Nano), now.Add(time.Hour).Format(time.RFC3339Nano),
+		now.Add(-2*time.Hour).Format(time.RFC3339Nano), now.Add(-time.Minute).Format(time.RFC3339Nano))
+	if err := os.WriteFile(path, []byte(seed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(gateway.EnvConsentSessionStorePath, path)
+	t.Setenv("HOST009_FAKE_TOKEN", canaryCLIToken)
+
+	// Default: purge expired only.
+	var errRun error
+	out := captureStdout(t, func() {
+		errRun = runGatewayConsentPurge(nil)
+	})
+	if errRun != nil {
+		t.Fatalf("purge expired: %v\n%s", errRun, out)
+	}
+	assertConsentPurgeSecretFree(t, out)
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("json: %v body=%s", err, out)
+	}
+	if payload["action"] != "purge_expired" {
+		t.Fatalf("action: %+v", payload["action"])
+	}
+	if payload["deleted_count"] != float64(1) {
+		t.Fatalf("deleted_count: %+v", payload["deleted_count"])
+	}
+	if payload["remaining_count"] != float64(1) {
+		t.Fatalf("remaining_count: %+v", payload["remaining_count"])
+	}
+	if payload["stores_tokens"] != false || payload["metadata_only"] != true {
+		t.Fatalf("honesty flags: %+v", payload)
+	}
+	if payload["file_basename"] != "consent_sessions.json" {
+		t.Fatalf("file_basename: %+v", payload["file_basename"])
+	}
+	// Full path must not appear if it would leak home-style paths unnecessarily;
+	// basename residual is enough. Never tokens.
+	if strings.Contains(out, canaryCLIToken) || strings.Contains(out, "access_token=") {
+		t.Fatal("token/canary in purge output")
+	}
+
+	// --session-id deletes live session.
+	out = captureStdout(t, func() {
+		errRun = runGatewayConsentPurge([]string{"--session-id", "sess-purge-live"})
+	})
+	if errRun != nil {
+		t.Fatalf("session delete: %v\n%s", errRun, out)
+	}
+	assertConsentPurgeSecretFree(t, out)
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["action"] != "delete_session" || payload["deleted_count"] != float64(1) {
+		t.Fatalf("session delete: %+v", payload)
+	}
+	if payload["remaining_count"] != float64(0) {
+		t.Fatalf("remaining after session delete: %+v", payload["remaining_count"])
+	}
+
+	// Re-seed and --all.
+	store2, err := gateway.NewFileBackedConsentSessionStore(0, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store2.Put(gateway.ConsentSessionRecord{
+		Info: gateway.ConsentInfo{
+			AuthorizationURL: "https://login.example/authorize?state=a",
+			SessionID:        "sess-all-1",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store2.Put(gateway.ConsentSessionRecord{
+		Info: gateway.ConsentInfo{
+			AuthorizationURL: "https://login.example/authorize?state=b",
+			SessionID:        "sess-all-2",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	out = captureStdout(t, func() {
+		errRun = runGatewayConsentPurge([]string{"--all"})
+	})
+	if errRun != nil {
+		t.Fatalf("clear all: %v\n%s", errRun, out)
+	}
+	assertConsentPurgeSecretFree(t, out)
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["action"] != "clear_all" || payload["deleted_count"] != float64(2) {
+		t.Fatalf("clear all: %+v", payload)
+	}
+	if payload["remaining_count"] != float64(0) {
+		t.Fatalf("remaining after --all: %+v", payload["remaining_count"])
+	}
+}
+
+func TestGatewayConsentPurge_AllAndSessionExclusive(t *testing.T) {
+	err := runGatewayConsentPurge([]string{"--all", "--session-id", "x"})
+	if err == nil {
+		t.Fatal("want mutual exclusion error")
+	}
+	if apperr.CodeOf(err) != apperr.CodeInvalidArgument {
+		t.Fatalf("code: %v", err)
+	}
+}
+
+func TestGatewayConsentPurge_ViaDispatchAlias(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "c.json")
+	t.Setenv(gateway.EnvConsentSessionStorePath, path)
+	var errRun error
+	out := captureStdout(t, func() {
+		errRun = runGateway([]string{"consent-expire", "--path", path})
+	})
+	if errRun != nil {
+		t.Fatalf("dispatch: %v\n%s", errRun, out)
+	}
+	assertConsentPurgeSecretFree(t, out)
+	if !strings.Contains(out, "purge_expired") {
+		t.Fatalf("stdout: %s", out)
+	}
+	if !strings.Contains(out, "deleted_count") || !strings.Contains(out, "remaining_count") {
+		t.Fatalf("want summary fields: %s", out)
+	}
+}
+
+func TestGatewayConsentPurge_PathFlag(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "explicit.json")
+	store, err := gateway.NewFileBackedConsentSessionStore(0, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(gateway.ConsentSessionRecord{
+		Info: gateway.ConsentInfo{
+			AuthorizationURL: "https://login.example/authorize?state=p",
+			SessionID:        "sess-path-1",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Env points elsewhere — --path must win.
+	t.Setenv(gateway.EnvConsentSessionStorePath, filepath.Join(dir, "other.json"))
+	var errRun error
+	out := captureStdout(t, func() {
+		errRun = runGatewayConsentPurge([]string{"--path", path, "--all"})
+	})
+	if errRun != nil {
+		t.Fatalf("path all: %v\n%s", errRun, out)
+	}
+	assertConsentPurgeSecretFree(t, out)
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["deleted_count"] != float64(1) {
+		t.Fatalf("deleted: %+v body=%s", payload["deleted_count"], out)
+	}
+	// File should be empty metadata after clear.
+	reloaded, err := gateway.NewFileBackedConsentSessionStore(0, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.List()) != 0 {
+		t.Fatal("path --all must clear file")
+	}
+}
+
+func assertConsentPurgeSecretFree(t *testing.T, out string) {
+	t.Helper()
+	for _, bad := range []string{
+		canaryCLIToken,
+		qualify.CanaryToken,
+		"access_token=",
+		"refresh_token=",
+		"client_secret=",
+		"Authorization: Bearer",
+	} {
+		if strings.Contains(out, bad) {
+			t.Fatalf("forbidden %q in consent-purge output", bad)
+		}
 	}
 }
 

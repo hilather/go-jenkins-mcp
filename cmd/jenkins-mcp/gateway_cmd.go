@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
@@ -18,7 +19,7 @@ import (
 func runGateway(args []string) error {
 	if len(args) < 1 {
 		return apperr.New(apperr.CodeInvalidArgument,
-			"gateway subcommand required: qualify | residual-status | consent-residual | vault | vault-put | vault-delete")
+			"gateway subcommand required: qualify | residual-status | consent-residual | consent-purge | consent-expire | vault | vault-put | vault-delete")
 	}
 	switch args[0] {
 	case "qualify":
@@ -27,6 +28,9 @@ func runGateway(args []string) error {
 		return runGatewayResidualStatus(args[1:])
 	case "consent-residual":
 		return runGatewayConsentResidual(args[1:])
+	case "consent-purge", "consent-expire":
+		// OAUTH-010 residual: purge expired consent metadata (or --session-id / --all).
+		return runGatewayConsentPurge(args[1:])
 	case "vault":
 		return runGatewayVault(args[1:])
 	case "vault-put":
@@ -37,7 +41,7 @@ func runGateway(args []string) error {
 		return runGatewayVaultDelete(args[1:])
 	default:
 		return apperr.New(apperr.CodeInvalidArgument,
-			fmt.Sprintf("unknown gateway subcommand %q (qualify|residual-status|consent-residual|vault|vault-put|vault-delete)", args[0]))
+			fmt.Sprintf("unknown gateway subcommand %q (qualify|residual-status|consent-residual|consent-purge|consent-expire|vault|vault-put|vault-delete)", args[0]))
 	}
 }
 
@@ -286,6 +290,98 @@ func runGatewayConsentResidual(args []string) error {
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(out); err != nil {
 		return apperr.Wrap(apperr.CodeInternal, "failed to encode consent residual", err)
+	}
+	return nil
+}
+
+// runGatewayConsentPurge expires/deletes process-local consent metadata
+// (OAUTH-010 residual). Metadata only — never tokens (store has none).
+//
+// Default: purge TTL-expired sessions.
+//
+//	jenkins-mcp gateway consent-purge
+//	jenkins-mcp gateway consent-purge --session-id SESS
+//	jenkins-mcp gateway consent-purge --all
+//	jenkins-mcp gateway consent-expire   # alias
+//
+// Path: --path or JENKINS_MCP_CONSENT_STORE_PATH or XDG default.
+// Secret-free JSON summary: deleted_count, remaining_count, action, path residual.
+func runGatewayConsentPurge(args []string) error {
+	fs := flag.NewFlagSet("gateway consent-purge", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	all := fs.Bool("all", false, "Clear all consent metadata (requires explicit --all; not the default)")
+	sessionID := fs.String("session-id", "", "Delete one consent session by id (metadata only)")
+	pathFlag := fs.String("path", "", "Consent metadata file path (else JENKINS_MCP_CONSENT_STORE_PATH / XDG default)")
+	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
+		// --all is a bool flag (no value). session-id and path take values.
+		"session-id": true,
+		"path":       true,
+	})); err != nil {
+		return apperr.New(apperr.CodeInvalidArgument, err.Error())
+	}
+	sid := strings.TrimSpace(*sessionID)
+	if *all && sid != "" {
+		return apperr.New(apperr.CodeInvalidArgument,
+			"consent-purge: --all and --session-id are mutually exclusive")
+	}
+
+	store, err := gateway.OpenConsentSessionStoreForPurge(strings.TrimSpace(*pathFlag), os.Getenv)
+	if err != nil {
+		return err
+	}
+
+	action := "purge_expired"
+	deleted := 0
+	switch {
+	case *all:
+		action = "clear_all"
+		// Honest deleted_count includes expired + live entries present before clear.
+		deleted = store.EntryCount()
+		store.Clear()
+	case sid != "":
+		action = "delete_session"
+		if store.DeleteSession(sid) {
+			deleted = 1
+		}
+	default:
+		action = "purge_expired"
+		deleted = store.PurgeExpired()
+	}
+
+	remaining := len(store.List())
+	// Path residual: basename only (never dump full path that may embed home).
+	filePath := strings.TrimSpace(store.FilePath)
+	fileBasename := ""
+	if filePath != "" {
+		if i := strings.LastIndexAny(filePath, `/\`); i >= 0 && i+1 < len(filePath) {
+			fileBasename = filePath[i+1:]
+		} else {
+			fileBasename = filePath
+		}
+	}
+
+	out := map[string]any{
+		"action":                           action,
+		"deleted_count":                    deleted,
+		"remaining_count":                  remaining,
+		"metadata_only":                    true,
+		"stores_tokens":                    false,
+		"process_local":                    true,
+		"multi_replica_shared":             false,
+		"browser_3lo_automated":            false,
+		"durable_agentcore_vault_residual": true,
+		"file_backed":                      filePath != "",
+		"file_basename":                    fileBasename,
+		"residual_note":                    "consent metadata purge only (OAUTH-010 residual); never tokens; not multi-replica HA; browser 3LO not automated",
+		"doc":                              "docs/gateway/README.md § progressive consent residual",
+	}
+	// Defense: never echo session id value if it looks secret-shaped (CLI still accepts ids for delete).
+	// Summary omits session_id entirely to keep residual-status style secret-free.
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(out); err != nil {
+		return apperr.Wrap(apperr.CodeInternal, "failed to encode consent-purge summary", err)
 	}
 	return nil
 }

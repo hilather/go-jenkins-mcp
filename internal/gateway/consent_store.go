@@ -110,6 +110,9 @@ type ConsentSessionStore interface {
 	Delete(sessionID string)
 	// Clear drops all entries.
 	Clear()
+	// PurgeExpired removes expired sessions (TTL) and returns how many were deleted.
+	// Secret-free; never returns session payloads or tokens.
+	PurgeExpired() int
 	// StatusMap is secret-free store summary (counts / residual flags only).
 	StatusMap() map[string]any
 	// String is secret-free (entry count only).
@@ -332,6 +335,58 @@ func (s *MemoryConsentSessionStore) Clear() {
 	_ = s.persistLocked()
 }
 
+// PurgeExpired implements ConsentSessionStore. Removes TTL-expired metadata
+// sessions and persists when file-backed. Returns deleted count only (never
+// session ids / URLs / tokens in the return path).
+func (s *MemoryConsentSessionStore) PurgeExpired() int {
+	if s == nil {
+		return 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := s.purgeExpiredLocked(s.clock())
+	if n > 0 {
+		_ = s.persistLocked()
+	}
+	return n
+}
+
+// DeleteSession removes a session by id (expired or live). Returns true when an
+// entry was present and removed. Secret-free bool only — never returns payload.
+// Prefer over Delete when the caller needs a deleted_count summary (CLI purge).
+func (s *MemoryConsentSessionStore) DeleteSession(sessionID string) bool {
+	if s == nil {
+		return false
+	}
+	sid := strings.TrimSpace(sessionID)
+	if sid == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.bySession[sid]
+	if !ok {
+		return false
+	}
+	s.deleteLocked(sid)
+	_ = s.persistLocked()
+	return true
+}
+
+// EntryCount returns total in-memory entries including expired (pre-purge).
+// Secret-free count for consent-purge --all deleted_count honesty.
+func (s *MemoryConsentSessionStore) EntryCount() int {
+	if s == nil {
+		return 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.bySession == nil {
+		return 0
+	}
+	return len(s.bySession)
+}
+
 // StatusMap implements ConsentSessionStore (secret-free).
 func (s *MemoryConsentSessionStore) StatusMap() map[string]any {
 	n := 0
@@ -405,12 +460,19 @@ func (s *MemoryConsentSessionStore) deleteLocked(sid string) {
 	}
 }
 
-func (s *MemoryConsentSessionStore) purgeExpiredLocked(now time.Time) {
+// purgeExpiredLocked removes expired records. Caller holds mu. Returns count deleted.
+func (s *MemoryConsentSessionStore) purgeExpiredLocked(now time.Time) int {
+	if s == nil || s.bySession == nil {
+		return 0
+	}
+	n := 0
 	for sid, rec := range s.bySession {
 		if rec.expired(now) {
 			s.deleteLocked(sid)
+			n++
 		}
 	}
+	return n
 }
 
 // enforceMaxLocked drops oldest entries when over MaxEntries.

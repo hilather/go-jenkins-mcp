@@ -288,7 +288,10 @@ make residual-smoke PROFILE=corp
 # Underlying pieces:
 jenkins-mcp gateway qualify --offline
 jenkins-mcp release-evidence --offline
+jenkins-mcp gateway residual-status   # required Wave 8 honesty (ha_multi_replica=false, oauth009_offline, residual_ids)
+jenkins-mcp gateway consent-residual  # optional progressive consent residual snapshot
 # script: scripts/gateway-residual-smoke.sh → dist/residual-smoke/<ts>/
+#   (gateway-qualify.json, release-evidence.json, gateway-residual-status.json, …)
 ```
 
 ### 5.2 Residual ids that **must remain present** offline
@@ -336,8 +339,9 @@ live pin complete without lab evidence.
 | `gateway_status` | `ha_multi_replica=false`, `oauth009_offline_only`, `mode_*_live_*_qualified=false`, `session_affinity_recommended`, `gateway_ready` | Env/parse + Ready honesty |
 | `security self-check` | item `rs_qualification` (OAUTH-009 residual summary) | Warn on `oidc_bearer` or Mode B |
 | Admin `GET /admin/v1/health` / `gateway/vault` | `haMultiReplica=false`, `sessionAffinityRecommended`, mode ids only | Never tokens |
-| `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count) | Env/static honesty; Mode B id `oauth009_offline`; never tokens |
-| `gateway consent-residual` | Progressive consent residual snapshot | Browser 3LO not automated |
+| `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count) | Env/static honesty; Mode B id `oauth009_offline`; never tokens; **exercised by residual-smoke** |
+| `gateway consent-residual` | Progressive consent residual snapshot | Browser 3LO not automated; residual-smoke optional |
+| `gateway consent-purge` / `consent-expire` | Purge TTL-expired consent metadata (or `--session-id` / `--all`) | Metadata only; secret-free counts; not multi-replica HA |
 | `gateway qualify --offline` | Residual notes in JSON summary | Live residuals always listed |
 
 ```bash
@@ -347,6 +351,9 @@ jenkins-mcp oauth probe-rs --profile <id> --offline
 jenkins-mcp gateway qualify --offline
 jenkins-mcp gateway residual-status
 jenkins-mcp gateway consent-residual
+jenkins-mcp gateway consent-purge              # default: TTL expire
+jenkins-mcp gateway consent-purge --session-id SESS
+jenkins-mcp gateway consent-purge --all        # explicit clear-all
 ```
 
 **Code residual (not done in this docs pass):** flipping any

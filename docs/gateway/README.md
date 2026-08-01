@@ -109,6 +109,7 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 | `ConsentRequired` → auth URL + session id only (Obtain / AuthProvider / `mapToolErr`) | **Done\*** |
 | Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway residual-status`, `gateway consent-residual`) | **Done\*** (env/static honesty) |
 | Process-local consent metadata store (TTL; optional file under XDG data) | **Done\*** — auth URL + session id + timestamps only; never tokens |
+| Consent metadata purge/expire CLI (`gateway consent-purge` / `consent-expire`) | **Done\*** — TTL purge / `--session-id` / `--all`; secret-free summary; never tokens |
 | Browser 3LO interactive UX automation | **Residual** — not automated; operator/agent opens `authorization_url` out-of-band |
 | AgentCore durable consent / token vault | **Residual** (not this process-local metadata store) |
 | Multi-replica consent correlation | **Residual** (HOST-008) — process-local / single-node file only |
@@ -121,16 +122,22 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
   `$XDG_DATA_HOME/jenkins-mcp/gateway/consent_sessions.json` (override
   `JENKINS_MCP_CONSENT_STORE_PATH`). Mode 0600; schema is metadata only
   (no `access_token` / `refresh_token` / `client_secret` fields — load rejects them).
-- API: `Get` / `GetBySubjectKey` / `List` / `Delete` / `Clear`; `StatusMap` / `String`
-  are secret-free (host + truncated session; never full authorize query dump in
-  status maps).
+- API: `Get` / `GetBySubjectKey` / `List` / `Delete` / `Clear` / `PurgeExpired`;
+  `StatusMap` / `String` are secret-free (host + truncated session; never full
+  authorize query dump in status maps).
+- Operator purge CLI: `jenkins-mcp gateway consent-purge` (alias `consent-expire`)
+  defaults to TTL expire; `--session-id` deletes one entry; `--all` clears all
+  (explicit flag required). Summary: `deleted_count`, `remaining_count`, path
+  basename residual only — never tokens or full authorize URLs.
 - **Not** multi-replica shared store; sticky sessions / shared AgentCore vault remain residual.
 
 ```bash
 jenkins-mcp gateway residual-status    # unified secret-free residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count)
 jenkins-mcp gateway consent-residual   # progressive consent residual + last consent_sessions if file present
+jenkins-mcp gateway consent-purge      # purge TTL-expired metadata (or --session-id / --all); secret-free counts
 jenkins-mcp gateway qualify --offline  # includes progressive_consent_residual case + residual note
 jenkins-mcp doctor --offline           # gateway_status progressive_consent_* fields when Mode C
+make residual-smoke                    # exercises residual-status honesty canaries (opt-in offline)
 ```
 
 **`gateway residual-status`** combines mode-matrix residual, `multi_user_enabled`,
@@ -716,7 +723,8 @@ Tool path: `mapToolErr` surfaces progressive `authorization_url` + `session_id`
 (**Done\*** metadata path; browser 3LO not automated — GWY-003 / OAUTH-010 residual).
 Process-local consent metadata store (optional XDG file) remembers metadata only
 when Obtain returns `ConsentRequired` — not multi-replica shared store.
-See §3 progressive consent residual table; CLI: `jenkins-mcp gateway consent-residual`.
+See §3 progressive consent residual table; CLI: `jenkins-mcp gateway consent-residual`,
+`jenkins-mcp gateway consent-purge` (TTL expire / `--session-id` / `--all`).
 
 Token cache: in-memory, keyed by `(user, workload, profile)`, TTL-bounded.
 `String()` / errors / `Status` **never** include token bytes (canary tests).
