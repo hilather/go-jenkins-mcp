@@ -83,9 +83,9 @@ func TestProtocolMatrix_HTTPInitializeListTools(t *testing.T) {
 	if initRes.ProtocolVersion == "" {
 		t.Fatal("HTTP negotiated protocol version is empty")
 	}
-	// Declared set matches ADR 0006 / go-sdk v1.1.0.
+	// Declared set matches ADR 0006 / go-sdk v1.7.0 supportedProtocolVersions.
 	switch initRes.ProtocolVersion {
-	case "2025-06-18", "2025-03-26", "2024-11-05":
+	case "2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05":
 	default:
 		t.Fatalf("unexpected protocol version %q", initRes.ProtocolVersion)
 	}

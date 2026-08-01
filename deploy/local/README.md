@@ -20,14 +20,13 @@ without a full host package install.
 
 | Use this stack | Prefer something else |
 |----------------|------------------------|
-| Support: doctor, version, policy show-effective in a clean env | **Cursor daily driver** — host **stdio** MCP (ADR 0002) |
-| Admin console without host RPM/DEB/npm | Production **gateway** near Jenkins — `deploy/gateway/` |
+| Support: doctor, version, policy show-effective in a clean env | Production **gateway** near Jenkins — `deploy/gateway/` |
+| Admin console without host RPM/DEB/npm | Live Entra multi-user GO — roadmap Tier A JWT path |
 | Lab: disposable Jenkins + admin together | Live API-token lab only — `testdata/jenkins-compose/` + `make live-jenkins-*` |
-| Demo admin UI on loopback | Multi-tenant / team-hosted OAuth — `docs/roadmap/server-team-hosted.md` |
-| CI-adjacent opt-in smoke (`make local-docker-smoke`) | Default `make test` / `make ci` (must stay offline, no Docker) |
+| **Warm log/cache for agents** via shared XDG (see below) | Default `make test` / `make ci` (must stay offline, no Docker) |
+| Demo admin UI on loopback | Multi-tenant / team-hosted OAuth production |
 
-**Cursor MCP stdio always stays on the host.** This stack does not replace
-`jenkins-mcp serve --stdio` for agent tool discovery.
+**Default Cursor path remains host `serve --stdio` (ADR 0002).** Docker is not “stdio inside the container” unless you opt into a shared-XDG or HTTP model below.
 
 ---
 
@@ -73,6 +72,140 @@ make local-docker-down
 
 `make local-docker-up` creates `.env` from the example if missing; still set a
 lab admin token before treating the stack as “locked down.”
+
+---
+
+## Agent + cache models (configure deliberately)
+
+Three supported lab layouts. Pick one; do not assume admin Docker alone warms
+Cursor’s default host cache.
+
+```text
+Model 1 — Host stdio only (default pilot)
+  Cursor ──stdio──► host jenkins-mcp ──► Jenkins
+                      └── host ~/.config|share|cache/jenkins-mcp
+
+Model 2 — Shared XDG (recommended when Docker cache is valuable)
+  Cursor ──stdio──► host jenkins-mcp ──► Jenkins
+                      └── .local-mcp/xdg/{config,data,cache}/jenkins-mcp
+  Docker admin/http ─────────────────────┘  (same dirs bind-mounted)
+
+Model 3 — Streamable HTTP MCP in Docker (opt-in clients)
+  MCP client ──HTTP──► mcp-http :8081 ──► Jenkins
+                          └── Docker volumes or shared XDG bind mounts
+  Cursor: only if the host supports MCP over HTTP URL (many setups are stdio-only)
+```
+
+### Model 1 — Host stdio only (default)
+
+No Docker required for the agent. Cache is per-OS-user XDG on the host.
+See [user guide § Cursor stdio](../../docs/user/README.md#4-cursor-stdio-configuration-read-only-default).
+
+Docker admin (`make local-docker-up`) is a **separate** process with **named
+volumes** (`local-config` / `local-data` / `local-cache`). It does **not** share
+cache with host Cursor unless you enable Model 2.
+
+### Model 2 — Shared Docker/host XDG cache (recommended for warm agent cache)
+
+**Why:** L1 log mirrors, store generations, and doctor/cache status stay warm
+whether you hit Jenkins from Cursor tools or from admin/doctor in Docker.
+
+**One-time setup (repo root):**
+
+```bash
+# 1) Host package dirs (gitignored .local-mcp/)
+mkdir -p .local-mcp/xdg/{config,data,cache}/jenkins-mcp
+
+# 2) Compose override (gitignored if named docker-compose.override.yml)
+cp deploy/local/docker-compose.shared-xdg.example.yml \
+   deploy/local/docker-compose.override.yml
+
+# 3) Lab env + admin token
+cp -n deploy/local/.env.example deploy/local/.env
+# set JENKINS_MCP_ADMIN_TOKEN in .env
+
+# 4) Start admin (and optionally lab Jenkins)
+# LOCAL_COMPOSE_PROFILES=with-jenkins make local-docker-up
+make local-docker-up
+make local-docker-init-profile   # if profile missing
+# With Jenkins in compose: init with JENKINS_URL=http://jenkins:8080
+```
+
+**Host Cursor MCP entry** (same profile id; RO; **shared XDG**):
+
+```json
+{
+  "mcpServers": {
+    "jenkins": {
+      "command": "jenkins-mcp",
+      "args": [
+        "serve",
+        "--profile",
+        "corp",
+        "--read-only",
+        "--stdio"
+      ],
+      "env": {
+        "JENKINS_MCP_READ_ONLY": "true",
+        "XDG_CONFIG_HOME": "/ABSOLUTE/PATH/TO/REPO/.local-mcp/xdg/config",
+        "XDG_DATA_HOME": "/ABSOLUTE/PATH/TO/REPO/.local-mcp/xdg/data",
+        "XDG_CACHE_HOME": "/ABSOLUTE/PATH/TO/REPO/.local-mcp/xdg/cache"
+      }
+    }
+  }
+}
+```
+
+Notes:
+
+- Use **absolute** paths in Cursor `env` (Cursor’s cwd is not the repo).
+- **Never** put API tokens in Cursor config. Use `jenkins-mcp login --profile corp`
+  on the host with the same XDG env so the keyring still holds the secret, **or**
+  a lab token flow documented for disposable Jenkins only.
+- Profile id must match Docker (`JENKINS_MCP_PROFILE`, default `corp`).
+- After host `login` / first tool use, Docker doctor sees the same cache/data
+  roots: `make local-docker-doctor` / admin Cache metrics (process-local still
+  residual for multi-pod).
+- Tear-down: `make local-docker-down` does **not** delete host `.local-mcp/`
+  bind mounts; remove manually if you want a cold cache.
+
+**Keyring residual:** Linux Secret Service is host-side. In-container admin does
+not use your desktop keyring for Jenkins API tokens. Shared XDG shares
+**profiles + store/cache**, not Secret Service material.
+
+### Model 3 — Streamable HTTP MCP inside Docker
+
+For MCP clients that speak **HTTP** (not the default Cursor stdio entry):
+
+```bash
+# Admin + HTTP serve (+ optional Jenkins)
+LOCAL_COMPOSE_PROFILES=http,with-jenkins make local-docker-up
+# Prefer shared XDG override (Model 2) so admin + HTTP share cache.
+```
+
+| Item | Value |
+|------|--------|
+| URL | `http://127.0.0.1:8081` (see `LOCAL_HTTP_HOST_PORT`) |
+| Auth | Set `JENKINS_MCP_HTTP_TOKEN` in `.env` (lab only); client sends Bearer |
+| Cache | Same volumes / shared XDG as above |
+| Cursor | Residual if the product only supports `command`+`args` stdio — use Model 2 |
+
+Entrypoint: `serve-http` → `jenkins-mcp serve --http … --http-allow-non-local`
+(loopback publish only).
+
+### Agent hints (summary)
+
+| Goal | Configure |
+|------|-----------|
+| Daily Cursor RO pilot | Model 1 host stdio |
+| Warm cache + admin UI + Cursor tools | **Model 2** shared XDG |
+| Non-Cursor HTTP MCP client | Model 3 `http` profile |
+| Production multi-user JWT | Not this stack — Tier A gateway roadmap |
+
+Coding agents: prefer `jenkins_mirror_logs` / diagnose once so L1 fills the shared
+cache; do not re-download full logs when mirror/cache already has frames. Point
+operators at this section when cache “disappears” after Docker-only vs host-only
+splits (Model 1 vs 2 confusion).
 
 ### Admin UI URL + token
 
@@ -220,7 +353,9 @@ make local-docker-config
 
 | Residual | Notes |
 |----------|--------|
-| Cursor stdio | Still install host binary / package for MCP agent path |
+| Cursor stdio | Host binary still required for Model 1/2 agent path (ADR 0002); Docker alone is admin/HTTP unless shared XDG |
+| Shared XDG | Optional override `docker-compose.shared-xdg.example.yml` — bind-mount lab dirs under `.local-mcp/` |
+| Cursor HTTP MCP | Model 3 residual if the IDE only supports stdio `command`/`args` |
 | Profile bootstrap | First-time `profile add` may need `local-docker-init-profile` / `local-docker-run` |
 | SPA assets in image | May show placeholder unless admin-ui embedded at image build (UI-008); BFF JSON still works |
 | Production gateway | Use `deploy/gateway/` + HOST/GWY tasks — not this stack |

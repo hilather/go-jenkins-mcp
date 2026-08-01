@@ -55,6 +55,8 @@ JWT on Jenkins (**mode B/C**) and “OAuth” (**Entra AS + obtain path**) are *
 
 **Live production GO residual runbook:** [docs/gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) consolidates what still blocks production Mode B/C and multi-pod HA (OAUTH-009 jwt-auth-filter pin, OAUTH-010 Entra/AgentCore, HOST-008 multi-pod checklist, and what `make residual-smoke` proves vs does not). **Do not claim live Entra / multi-replica Done** from offline qualify alone.
 
+**Tier A JWT/OAuth critical-path task list (all three modes; multi-node deferred):** [server-tier-a-jwt-oauth-critical-path.md](server-tier-a-jwt-oauth-critical-path.md).
+
 ### 1.3 Code / deploy map (for agents)
 
 | Path | Role |

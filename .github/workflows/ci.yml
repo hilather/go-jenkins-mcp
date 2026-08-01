@@ -62,7 +62,7 @@ jobs:
           # rockylinux packages may lag; install official toolchain to $HOME
           GOVER=$(grep '^go ' go.mod | awk '{print $2}')
           curl -fsSL "https://go.dev/dl/go${GOVER}.linux-amd64.tar.gz" -o /tmp/go.tgz || \
-            curl -fsSL "https://go.dev/dl/go1.25.0.linux-amd64.tar.gz" -o /tmp/go.tgz
+            curl -fsSL "https://go.dev/dl/go1.25.12.linux-amd64.tar.gz" -o /tmp/go.tgz
           rm -rf "$HOME/.local/go"
           mkdir -p "$HOME/.local"
           tar -C "$HOME/.local" -xzf /tmp/go.tgz
@@ -139,7 +139,8 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go test -count=1 ./...
-      - run: go build -o bin/jenkins-mcp .
+      # Module root has no package main; binary lives under cmd/jenkins-mcp.
+      - run: go build -o bin/jenkins-mcp ./cmd/jenkins-mcp
 
   # Wave 23 / FND-007 expand: PKG-001 offline package smoke (bare Ubuntu only).
   # Does not run in Rocky container (no dpkg tooling assumptions; keeps Rocky job lean).

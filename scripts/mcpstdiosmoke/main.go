@@ -43,8 +43,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Declared MCP protocol versions for go-sdk v1.1.0 (ADR 0006). Keep in sync.
+// Declared MCP protocol versions for go-sdk v1.7.0 (ADR 0006). Keep in sync with
+// mcp.supportedProtocolVersions.
 var declaredProtocolVersions = map[string]struct{}{
+	"2026-07-28": {},
+	"2025-11-25": {},
 	"2025-06-18": {},
 	"2025-03-26": {},
 	"2024-11-05": {},

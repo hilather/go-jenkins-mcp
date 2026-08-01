@@ -15,7 +15,7 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 |------|-----|
 | Pilot / developer (Cursor stdio) | [user/README.md](user/README.md) |
 | Platform operator / packager | [admin/README.md](admin/README.md) |
-| **Local Docker support / admin UI** (no host install) | [`../deploy/local/README.md`](../deploy/local/README.md) · `make local-docker-up` |
+| **Local Docker support / admin UI** (no host install) | [`../deploy/local/README.md`](../deploy/local/README.md) · `make local-docker-up` · shared XDG / agent cache models |
 | Security reviewer | [security/operator-guide.md](security/operator-guide.md) · [security/threat-model.md](security/threat-model.md) |
 | Coding agent / model | [agent-usage.md](agent-usage.md) · [tool-contracts.md](tool-contracts.md) · root [`AGENTS.md`](../AGENTS.md) |
 | Pilot evidence kit | [pilot/README.md](pilot/README.md) · [pilot/checklist.md](pilot/checklist.md) |
@@ -29,6 +29,7 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [`../deploy/local/README.md`](../deploy/local/README.md) | **First-class** disposable admin BFF/SPA + optional lab Jenkins (Docker; not Cursor stdio) |
 | [agent-usage.md](agent-usage.md) | Triage flow; Wave 18–19 tools (queue cancel, ext-logs ACL, change correlation, search re-eval, start_job params) |
 | [mutations/power-user-backlog.md](mutations/power-user-backlog.md) | Remaining write / power-user mutations (opt-in; MUT-001 gate; admin out of scope) |
+| [roadmap/server-tier-a-jwt-oauth-critical-path.md](roadmap/server-tier-a-jwt-oauth-critical-path.md) | Server Tier A critical path: Modes A/B/C JWT/OAuth (multi-node deferred) |
 | [tool-contracts.md](tool-contracts.md) | MCP tool inventory, budgets, error codes, side effects |
 | [packaging.md](packaging.md) | RPM/DEB/tar, XDG paths, update-check, HTTP mode notes, local Docker pointer |
 | [policy-rbac.md](policy-rbac.md) | Deny-only RBAC + overlay schema |

@@ -17,8 +17,11 @@ import (
 )
 
 // Declared MCP protocol versions supported by the pinned SDK (FND-006 / ADR 0006).
-// Keep in sync with github.com/modelcontextprotocol/go-sdk@v1.1.0 mcp.supportedProtocolVersions.
+// Keep in sync with github.com/modelcontextprotocol/go-sdk@v1.7.0 mcp.supportedProtocolVersions
+// (newest first in SDK; map membership only here).
 var declaredProtocolVersions = map[string]struct{}{
+	"2026-07-28": {}, // latest / preferred negotiate (v1.7.0)
+	"2025-11-25": {},
 	"2025-06-18": {},
 	"2025-03-26": {},
 	"2024-11-05": {},
@@ -139,7 +142,7 @@ func TestGoModPinsOfficialMCPSDK(t *testing.T) {
 		t.Fatalf("read go.mod: %v", err)
 	}
 	mod := string(data)
-	const want = "github.com/modelcontextprotocol/go-sdk v1.1.0"
+	const want = "github.com/modelcontextprotocol/go-sdk v1.7.0"
 	if !strings.Contains(mod, want) {
 		t.Fatalf("go.mod must pin %q (ADR 0006 / FND-006); not found", want)
 	}

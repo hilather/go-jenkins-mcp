@@ -251,13 +251,15 @@ func TestFilePrincipalCache_TTLAndMaxEntries(t *testing.T) {
 	// Exercise TTL via short-lived expires by writing entry then advancing with re-open + manual file edit.
 	// MaxEntries: fill 2, Set third evicts LRU.
 	c.Set(gateway.SubjectKeyParts("t", "a", "p"), "a-j")
-	time.Sleep(5 * time.Millisecond) // distinct last_access
+	// Distinct last_access under -race / loaded CI: short sleeps can coalesce.
+	time.Sleep(25 * time.Millisecond)
 	c.Set(gateway.SubjectKeyParts("t", "b", "p"), "b-j")
-	time.Sleep(5 * time.Millisecond)
-	// Touch a so b is older? Get updates lastAccess — touch a then insert c.
+	time.Sleep(25 * time.Millisecond)
+	// Touch a so b is older — Get updates lastAccess — then insert c.
 	if _, ok := c.Get(gateway.SubjectKeyParts("t", "a", "p")); !ok {
 		t.Fatal("a miss")
 	}
+	time.Sleep(25 * time.Millisecond)
 	c.Set(gateway.SubjectKeyParts("t", "c", "p"), "c-j")
 	if c.Len() > 2 {
 		t.Fatalf("max entries: %d", c.Len())
@@ -273,9 +275,9 @@ func TestFilePrincipalCache_TTLAndMaxEntries(t *testing.T) {
 		t.Fatal("c should remain")
 	}
 
-	// TTL: write short-expiry by using WithLimits 1ms and wait.
+	// TTL: short limit then wait past expiry (margin for slow CI).
 	path2 := filepath.Join(t.TempDir(), "ttl.json")
-	cTTL, err := gateway.NewFilePrincipalCacheWithLimits(path2, 0, 20*time.Millisecond)
+	cTTL, err := gateway.NewFilePrincipalCacheWithLimits(path2, 0, 30*time.Millisecond)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +286,7 @@ func TestFilePrincipalCache_TTLAndMaxEntries(t *testing.T) {
 	if _, ok := cTTL.Get(sk); !ok {
 		t.Fatal("ttl immediate hit")
 	}
-	time.Sleep(40 * time.Millisecond)
+	time.Sleep(80 * time.Millisecond)
 	if _, ok := cTTL.Get(sk); ok {
 		t.Fatal("ttl expired must miss")
 	}

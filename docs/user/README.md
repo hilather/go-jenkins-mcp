@@ -136,6 +136,16 @@ Notes:
 - There is **no** supported “generic inverse switch” that bypasses enterprise `force_read_only` or a stronger profile RO setting.
 - Optional adapters (`ext-logs`, `work-items`, `otel-correlate`) are **off** unless the host adds `--enable-adapter=…` — pilot Cursor configs should stay RO + core tools only unless an exception is approved.
 
+### Shared cache with local Docker admin (optional)
+
+Default host stdio uses `~/.config|share|cache/jenkins-mcp`. The local Docker admin stack uses **separate** named volumes unless you opt into **shared XDG** so Cursor and Docker share profile + L1/log cache:
+
+1. Follow [`deploy/local/README.md`](../../deploy/local/README.md) § *Agent + cache models* → **Model 2**.
+2. Point Cursor `env` at absolute `XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_CACHE_HOME` under the repo’s `.local-mcp/xdg/…` tree.
+3. Keep `--read-only` + `JENKINS_MCP_READ_ONLY=true`; still no tokens in Cursor config.
+
+This is the usual way to get **valuable Docker-backed cache** while keeping Cursor on **stdio**.
+
 ### Optional TLS / proxy for enterprise networks
 
 Prefer profile fields (paths only):

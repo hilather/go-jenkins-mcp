@@ -1,11 +1,11 @@
 module github.com/simonfxr/go-jenkins-mcp
 
-go 1.25.0
+go 1.25.12
 
 // FND-006 / ADR 0006: pin official MCP Go SDK (protocol versions documented in docs/adr/0006-mcp-go-sdk.md).
 require (
-	github.com/google/jsonschema-go v0.3.0
-	github.com/modelcontextprotocol/go-sdk v1.1.0
+	github.com/google/jsonschema-go v0.4.3
+	github.com/modelcontextprotocol/go-sdk v1.7.0
 )
 
 require (
@@ -24,8 +24,11 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	golang.org/x/oauth2 v0.34.0 // indirect
+	github.com/segmentio/asm v1.1.3 // indirect
+	github.com/segmentio/encoding v0.5.4 // indirect
+	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	modernc.org/libc v1.74.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

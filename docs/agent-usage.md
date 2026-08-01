@@ -236,6 +236,8 @@ Prefer this for “what ticket/PR is this?” only after diagnose when SCM/param
 - Capabilities / health may be cached with TTL; pass refresh only when the user reports version/plugin change.
 - Log tools may prefer local mirror (LOG-004) then fall back to Jenkins — cite incomplete/mirror notes when present.
 - `corrupt_cache` / doctor failures: tell the user to run CLI `doctor` / `cache verify` rather than inventing repair steps that rewrite packs.
+- **Local Docker vs host cache:** default `make local-docker-up` keeps cache on **Docker volumes** separate from host Cursor stdio. If the operator wants a **warm shared cache** (admin + agent tools), they must use **shared XDG** — bind-mount + Cursor `XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_CACHE_HOME` pointing at repo `.local-mcp/xdg/…` (see [`deploy/local/README.md`](../deploy/local/README.md) § *Agent + cache models*). Prefer `jenkins_mirror_logs` / diagnose once so L1 fills that shared root; do not re-fetch full logs when mirror already has frames.
+- Do not tell users that “Docker alone” is their Cursor MCP server unless they configured Streamable HTTP (Model 3) or shared XDG (Model 2).
 
 ---
 

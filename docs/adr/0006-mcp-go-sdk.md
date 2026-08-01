@@ -14,16 +14,18 @@ The product speaks Model Context Protocol to Cursor and optional gateways. Using
 1. **Pin the official SDK** in `go.mod`:
 
    ```text
-   github.com/modelcontextprotocol/go-sdk v1.1.0
+   github.com/modelcontextprotocol/go-sdk v1.7.0
    ```
 
    This is an MIT-licensed, upstream module from the Model Context Protocol org (not a fork).
 
-2. **Declared protocol versions supported by this pin** (from SDK `mcp` package `supportedProtocolVersions` / `latestProtocolVersion` at v1.1.0):
+2. **Declared protocol versions supported by this pin** (from SDK `mcp` package `supportedProtocolVersions` / `latestProtocolVersion` at v1.7.0):
 
-   | Protocol version | Role in SDK v1.1.0 |
+   | Protocol version | Role in SDK v1.7.0 |
    |------------------|--------------------|
-   | `2025-06-18` | Latest / preferred negotiate |
+   | `2026-07-28` | Latest / preferred negotiate (`latestProtocolVersion`) |
+   | `2025-11-25` | Supported |
+   | `2025-06-18` | Supported |
    | `2025-03-26` | Supported |
    | `2024-11-05` | Supported (legacy SSE-era baseline) |
 
@@ -44,8 +46,8 @@ The product speaks Model Context Protocol to Cursor and optional gateways. Using
 5. **Upgrade / downgrade policy:**  
    - Prefer newest **stable** v1.x after: `go test ./...`, tool schema check, stdio smoke, and note of any protocol version list change in this ADR (amend or supersede).  
    - Do not jump to `v0.x` or replace with a third-party MCP library without a new ADR.  
-   - As of this writing, newer stables exist on the module proxy (e.g. v1.7.x line); **we intentionally remain on v1.1.0** until an upgrade is validated against this codebase and the supported Cursor fleet. Record the upgrade in this ADR when performed.  
-   - Downgrade below v1.1.0 requires security/architecture review (loss of protocol fixes).
+   - **2026-08-01:** upgraded **v1.1.0 → v1.7.0** (govulncheck on stdlib/deps; protocol set now includes `2026-07-28` / `2025-11-25`). **Remain on v1.7.0** until the next validated bump against this codebase and the supported Cursor fleet.  
+   - Downgrade below v1.7.0 requires security/architecture review (loss of protocol fixes).
 
 6. **Cancellation:** tool handlers receive `context.Context` from the SDK; handlers and Jenkins client calls must honor cancellation (enforced in later tasks; smoke does not substitute for full cancel integration tests).
 
@@ -56,7 +58,7 @@ The product speaks Model Context Protocol to Cursor and optional gateways. Using
 | Hand-rolled JSON-RPC MCP | High maintenance; easy non-conformance. |
 | Unofficial / community Go MCP forks | Supply-chain and protocol skew risk. |
 | Always track latest SDK without pin | Non-reproducible builds; surprise breaks. |
-| Immediate upgrade to newest v1.x | Desirable long-term; deferred to keep Phase 0 docs-first and seed-compatible until validated. |
+| Always track latest SDK without validation | Non-reproducible breaks; each bump still needs smoke + protocol matrix + this ADR amend. |
 
 ## Consequences
 
@@ -70,6 +72,6 @@ The product speaks Model Context Protocol to Cursor and optional gateways. Using
 | Field | Value |
 |-------|-------|
 | Module | `github.com/modelcontextprotocol/go-sdk` |
-| Pinned version | `v1.1.0` |
+| Pinned version | `v1.7.0` |
 | Import path used | `github.com/modelcontextprotocol/go-sdk/mcp` |
 | License | MIT |

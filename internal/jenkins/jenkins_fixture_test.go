@@ -608,9 +608,17 @@ func writeSyntheticLog(w io.Writer, start, n int) (int, error) {
 	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	const alphaLen = len(alphabet)
 	// Modest chunks so LOG-001 early close is visible in fixture accounting
-	// without huge per-Write overhead.
+	// without huge per-Write overhead. Flush when possible so httptest/pipe
+	// does not silently buffer an entire 1 MiB remainder (Rocky CI flake).
 	const bufSize = 8 * 1024
 	buf := make([]byte, bufSize)
+	flusher, _ := w.(http.Flusher)
+	// countingWriter does not implement Flusher; unwrap for flush only.
+	if flusher == nil {
+		if cw, ok := w.(*countingWriter); ok {
+			flusher, _ = cw.w.(http.Flusher)
+		}
+	}
 	written := 0
 	for written < n {
 		chunk := n - written
@@ -624,6 +632,9 @@ func writeSyntheticLog(w io.Writer, start, n int) (int, error) {
 		written += nw
 		if err != nil {
 			return written, err
+		}
+		if flusher != nil {
+			flusher.Flush()
 		}
 	}
 	return written, nil

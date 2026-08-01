@@ -20,3 +20,7 @@ web/admin/node_modules/
 # Windows alternate-data-stream junk from browser downloads
 *Zone.Identifier
 *:Zone.Identifier
+
+# Local Docker + host shared XDG (lab cache; never commit tokens)
+.local-mcp/
+deploy/local/docker-compose.override.yml

@@ -94,7 +94,8 @@ type Client struct {
 	metrics MetricsHook
 	// res holds retries, body limits, throttle, and circuit breaker (NET-003).
 	// nil uses DefaultResilienceConfig on first use via ensureResilience.
-	res *Resilience
+	res     *Resilience
+	resOnce sync.Once // race-safe lazy init under concurrent CallJenkins
 	// sharedTransport is the pooled Transport from NewHTTPClients, if any.
 	sharedTransport *http.Transport
 	// Capability discovery cache (JEN-001).
@@ -364,10 +365,14 @@ func (opts *Client) ensureResilience() *Resilience {
 	if opts == nil {
 		return NewResilience(DefaultResilienceConfig())
 	}
-	if opts.res == nil {
-		opts.res = NewResilience(DefaultResilienceConfig())
-		opts.bindCircuitMetrics()
-	}
+	// Concurrent waiters (queue/build demux) may call CallJenkins before res is set;
+	// sync.Once prevents racing NewResilience / bindCircuitMetrics (CI -race).
+	opts.resOnce.Do(func() {
+		if opts.res == nil {
+			opts.res = NewResilience(DefaultResilienceConfig())
+			opts.bindCircuitMetrics()
+		}
+	})
 	return opts.res
 }
 

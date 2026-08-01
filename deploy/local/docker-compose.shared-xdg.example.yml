@@ -1,0 +1,36 @@
+# Optional Compose override: bind-mount host XDG package dirs so **host Cursor
+# stdio** and **Docker admin / HTTP serve** share the same profile + log cache.
+#
+# Usage (from repo root):
+#   mkdir -p .local-mcp/xdg/{config,data,cache}/jenkins-mcp
+#   cp deploy/local/docker-compose.shared-xdg.example.yml deploy/local/docker-compose.override.yml
+#   # optional: add docker-compose.override.yml to your personal ignore; do not commit secrets
+#   make local-docker-up
+#   # Cursor env: see deploy/local/README.md § "Shared Docker cache + Cursor stdio"
+#
+# Layout matches container XDG (nonroot home):
+#   host .local-mcp/xdg/config/jenkins-mcp  →  /home/nonroot/.config/jenkins-mcp
+#   host .local-mcp/xdg/data/jenkins-mcp    →  /home/nonroot/.local/share/jenkins-mcp
+#   host .local-mcp/xdg/cache/jenkins-mcp   →  /home/nonroot/.cache/jenkins-mcp
+#
+# Host binary then uses:
+#   XDG_CONFIG_HOME=$PWD/.local-mcp/xdg/config
+#   XDG_DATA_HOME=$PWD/.local-mcp/xdg/data
+#   XDG_CACHE_HOME=$PWD/.local-mcp/xdg/cache
+#
+# Security: loopback-only ports; RO default; never put tokens in this file.
+# `make local-docker-down` with override still removes named volumes that remain
+# unused; bind-mount host dirs are NOT deleted by down -v.
+
+services:
+  mcp:
+    volumes:
+      - ../../.local-mcp/xdg/config/jenkins-mcp:/home/nonroot/.config/jenkins-mcp
+      - ../../.local-mcp/xdg/data/jenkins-mcp:/home/nonroot/.local/share/jenkins-mcp
+      - ../../.local-mcp/xdg/cache/jenkins-mcp:/home/nonroot/.cache/jenkins-mcp
+
+  mcp-http:
+    volumes:
+      - ../../.local-mcp/xdg/config/jenkins-mcp:/home/nonroot/.config/jenkins-mcp
+      - ../../.local-mcp/xdg/data/jenkins-mcp:/home/nonroot/.local/share/jenkins-mcp
+      - ../../.local-mcp/xdg/cache/jenkins-mcp:/home/nonroot/.cache/jenkins-mcp
