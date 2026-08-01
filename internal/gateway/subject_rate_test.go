@@ -641,7 +641,9 @@ func TestSubjectRateLimiter_MaxSubjectsConcurrentAllow(t *testing.T) {
 }
 
 // Regression: MaxSubjects must never grow past the cap under sequential new-subject
-// churn (eviction always frees for new keys; fail-closed if map still full).
+// churn (idle-full purge + LRU eviction; fail-closed if map still full).
+// Final tracked may be < MaxSubjects when idle-full purge drops multiple victims
+// at once — security property is never exceed, not always at-cap.
 func TestSubjectRateLimiter_MaxSubjectsNeverExceedsCap(t *testing.T) {
 	t.Parallel()
 	l := gateway.NewSubjectRateLimiter(600, 10, 6000, 500)
@@ -661,8 +663,8 @@ func TestSubjectRateLimiter_MaxSubjectsNeverExceedsCap(t *testing.T) {
 			t.Fatalf("tracked=%d exceeds MaxSubjects=3 after admit %d", n, i)
 		}
 	}
-	if n := l.SubjectsTracked(); n != 3 {
-		t.Fatalf("final tracked=%d want 3", n)
+	if n := l.SubjectsTracked(); n < 1 || n > 3 {
+		t.Fatalf("final tracked=%d want 1..3 (never over MaxSubjects)", n)
 	}
 }
 
