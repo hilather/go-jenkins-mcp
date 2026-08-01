@@ -91,6 +91,20 @@ describe("pickResidualRateCacheFields", () => {
     });
     expect(JSON.stringify(picked)).not.toMatch(/canary|alice|token|path|secret\/path/i);
   });
+
+  it("only treats explicit boolean true as shared_*_file (never Boolean() truthy strings)", () => {
+    // Regression: Boolean("false") === true; residual honesty must fail closed.
+    const noisy = {
+      shared_subject_rate_file: "false",
+      shared_principal_cache_file: "true",
+      shared_jwks_file: 1,
+    } as unknown as GatewayResidualStatusResponse;
+    expect(pickResidualRateCacheFields(noisy)).toEqual({
+      shared_subject_rate_file: false,
+      shared_principal_cache_file: false,
+      shared_jwks_file: false,
+    });
+  });
 });
 
 describe("formatPrincipalCacheHygiene", () => {

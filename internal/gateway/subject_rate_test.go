@@ -640,6 +640,32 @@ func TestSubjectRateLimiter_MaxSubjectsConcurrentAllow(t *testing.T) {
 	}
 }
 
+// Regression: MaxSubjects must never grow past the cap under sequential new-subject
+// churn (eviction always frees for new keys; fail-closed if map still full).
+func TestSubjectRateLimiter_MaxSubjectsNeverExceedsCap(t *testing.T) {
+	t.Parallel()
+	l := gateway.NewSubjectRateLimiter(600, 10, 6000, 500)
+	l.SetMaxSubjects(3)
+	base := time.Unix(1_700_200_000, 0).UTC()
+	var clock atomic.Value
+	clock.Store(base)
+	l.SetNow(func() time.Time { return clock.Load().(time.Time) })
+
+	for i := 0; i < 50; i++ {
+		clock.Store(base.Add(time.Duration(i) * time.Second))
+		key := gateway.SubjectKeyParts("t", fmt.Sprintf("churn%03d", i), "p")
+		if err := l.Allow(key); err != nil {
+			t.Fatalf("Allow churn %d: %v", i, err)
+		}
+		if n := l.SubjectsTracked(); n > 3 {
+			t.Fatalf("tracked=%d exceeds MaxSubjects=3 after admit %d", n, i)
+		}
+	}
+	if n := l.SubjectsTracked(); n != 3 {
+		t.Fatalf("final tracked=%d want 3", n)
+	}
+}
+
 func TestResolveSubjectRateMaxSubjects(t *testing.T) {
 	t.Parallel()
 	n, err := gateway.ResolveSubjectRateMaxSubjects("")

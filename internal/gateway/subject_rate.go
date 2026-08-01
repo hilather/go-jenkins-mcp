@@ -439,7 +439,9 @@ func (l *SubjectRateLimiter) SubjectsTracked() int {
 //
 // When MaxSubjects > 0 and subjectKey is new while the map is full: purges
 // idle full buckets (if any), else evicts the oldest lastAccess subject
-// (never the current key when other victims exist).
+// (never the current key when other victims exist). If the map is still full
+// after eviction (defense-in-depth), fails closed as CodeQuota and does not
+// grow past MaxSubjects.
 //
 // Nil limiter is a no-op success (unlimited; tests / stdio / rate disabled wire).
 func (l *SubjectRateLimiter) Allow(subjectKey string) error {
@@ -483,6 +485,16 @@ func (l *SubjectRateLimiter) Allow(subjectKey string) error {
 				if !l.evictOldestSubjectLocked(key) {
 					break
 				}
+			}
+			// Fail closed if map still full (defense-in-depth; normal new-key
+			// admits always free a victim). Never grow past MaxSubjects.
+			if len(l.bySubject) >= l.maxSubjects {
+				// Refund process token taken above before subject bucket work.
+				l.process.tokens += 1
+				if l.process.tokens > l.process.capacity {
+					l.process.tokens = l.process.capacity
+				}
+				return apperr.New(apperr.CodeQuota, "subject rate subject map budget exceeded")
 			}
 		}
 		b = &subjectBucket{

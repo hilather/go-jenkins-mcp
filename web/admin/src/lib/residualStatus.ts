@@ -118,10 +118,12 @@ export function pickResidualRateCacheFields(
       shared_jwks_file: false,
     };
   }
+  // Fail-closed honesty: only explicit boolean true counts as shared-file lite.
+  // Never treat truthy strings/numbers as true (Boolean("false") === true).
   const out: ResidualRateCacheFields = {
-    shared_subject_rate_file: Boolean(data.shared_subject_rate_file),
-    shared_principal_cache_file: Boolean(data.shared_principal_cache_file),
-    shared_jwks_file: Boolean(data.shared_jwks_file),
+    shared_subject_rate_file: data.shared_subject_rate_file === true,
+    shared_principal_cache_file: data.shared_principal_cache_file === true,
+    shared_jwks_file: data.shared_jwks_file === true,
   };
   if (typeof data.subject_rate_max_subjects === "number") {
     out.subject_rate_max_subjects = data.subject_rate_max_subjects;
