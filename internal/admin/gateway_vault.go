@@ -24,6 +24,9 @@ type gatewayVaultResponse struct {
 	MultiUserEnabled bool `json:"multiUserEnabled"`
 	// HAMultiReplica is always false (HOST-008 Tier A single-replica default).
 	HAMultiReplica bool `json:"haMultiReplica"`
+	// SessionAffinityRecommended is true when multi-user env is set (HOST-008
+	// sticky Service scaffold honesty). Not multi-replica Done.
+	SessionAffinityRecommended bool `json:"sessionAffinityRecommended"`
 	// RateEnabled is secret-free HOST-006 residual (env parse only; process-local).
 	// Empty rate env → true (default); explicit 0 → false. Not multi-replica shared rate.
 	RateEnabled bool `json:"rateEnabled"`
@@ -58,16 +61,17 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 	}
 	multiUser := gateway.MultiUserEnabled(os.Getenv)
 	resp := gatewayVaultResponse{
-		Subjects:         []string{},
-		EnabledModes:     []string{},
-		MultiUserEnabled: multiUser,
-		HAMultiReplica:   false, // HOST-008 Tier A; no multi-replica runtime
-		RateEnabled:      gateway.SubjectRateEnabledFromEnviron(os.Getenv),
-		Residual:         "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser)",
+		Subjects:                   []string{},
+		EnabledModes:               []string{},
+		MultiUserEnabled:           multiUser,
+		HAMultiReplica:             false, // HOST-008 Tier A; no multi-replica runtime
+		SessionAffinityRecommended: multiUser,
+		RateEnabled:                gateway.SubjectRateEnabledFromEnviron(os.Getenv),
+		Residual:                   "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser)",
 	}
 	if multiUser {
 		// Secret-free; SPA residual banner (no embed rebuild). host008_single_replica honesty.
-		resp.Residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO; haMultiReplica=false HOST-008); " + resp.Residual
+		resp.Residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO; haMultiReplica=false HOST-008; sessionAffinityRecommended=true scaffold only); " + resp.Residual
 	}
 
 	mx, err := gateway.ModeMatrixFromEnviron(os.Getenv)

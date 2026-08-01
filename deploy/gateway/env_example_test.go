@@ -138,4 +138,46 @@ func TestKustomize_SingleReplicaProbes(t *testing.T) {
 	if !strings.Contains(body, "JENKINS_MCP_GATEWAY_MULTI_USER") {
 		t.Fatal("kustomize should document MULTI_USER lab flag (commented ok)")
 	}
+	// Scale residual honesty: comments must not imply multi-replica Done.
+	lower := strings.ToLower(body)
+	if !strings.Contains(lower, "sessionaffinity") && !strings.Contains(lower, "sticky") {
+		t.Fatal("deployment comments should mention sticky/sessionAffinity when scaling")
+	}
+	if !strings.Contains(lower, "flock") && !strings.Contains(lower, "shared vault") {
+		t.Fatal("deployment comments should mention shared vault / flock residual when scaling")
+	}
+}
+
+// Regression: HOST-008 sticky session scaffold on Service (Done* packaging only).
+// Multi-replica runtime remains residual — affinity must not be sold as HA Done.
+func TestKustomize_ServiceSessionAffinityScaffold(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(repoRoot(t), "deploy/gateway/kustomize/service.yaml")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	if !strings.Contains(body, "sessionAffinity: ClientIP") {
+		t.Fatal("service must scaffold sessionAffinity: ClientIP (HOST-008)")
+	}
+	if !strings.Contains(body, "sessionAffinityConfig:") {
+		t.Fatal("service must include sessionAffinityConfig")
+	}
+	if !strings.Contains(body, "timeoutSeconds:") {
+		t.Fatal("service sessionAffinityConfig must set clientIP timeoutSeconds")
+	}
+	lower := strings.ToLower(body)
+	// Honesty: comments must state multi-replica residual / not Done from affinity alone.
+	if !strings.Contains(lower, "residual") {
+		t.Fatal("service.yaml must document multi-replica residual honesty")
+	}
+	if !strings.Contains(lower, "vault") {
+		t.Fatal("service.yaml must mention vault residual with sticky scaffold")
+	}
+	// Never claim multi-replica Done.
+	if strings.Contains(lower, "multi-replica done") && !strings.Contains(lower, "not") {
+		// Allow "do not claim multi-replica Done" — forbid bare celebration claims.
+		t.Fatal("service.yaml must not claim multi-replica Done")
+	}
 }

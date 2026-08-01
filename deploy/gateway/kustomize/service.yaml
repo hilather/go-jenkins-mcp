@@ -1,6 +1,17 @@
 # GWY-004 MVP scaffold — ClusterIP service (no public LB by default).
 # Prefer reverse-proxy / mesh for TLS terminate (HOST-002). Do not expose NodePort
 # or LoadBalancer without non-local HTTP gates (AllowedHosts/Origins + secret + subject).
+#
+# HOST-008 sticky session scaffold (optional affinity for future multi-replica):
+#   sessionAffinity: ClientIP + sessionAffinityConfig are present so operators who
+#   raise Deployment replicas > 1 get sticky routing by default.
+#   Multi-replica HA remains RESIDUAL until ALL of the following exist:
+#     - durable shared token vault (not emptyDir; multi-pod — not flock alone)
+#     - shared Obtain / session store OR reliance on affinity only as mitigation
+#     - shared (or carefully partitioned) cache + external rate residual closed
+#   File vault flock is multi-process same host / shared FS only — multi-pod needs
+#   shared FS residual or an external vault. Do NOT claim multi-replica Done from
+#   this Service alone. See docs/gateway/deployment.md §9.
 apiVersion: v1
 kind: Service
 metadata:
@@ -16,3 +27,12 @@ spec:
       port: 8081
       targetPort: mcp-http
       protocol: TCP
+  # HOST-008 Done* scaffold / residual runtime:
+  # ClientIP sticky sessions help subject-bound confirm tokens / page tokens stay
+  # on one pod when (and only if) an operator scales replicas. Affinity alone is
+  # NOT multi-replica HA — vault, Obtain cache, rate, and audit must still be shared.
+  # timeoutSeconds: max kube session stickiness (3h); tune per site.
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800

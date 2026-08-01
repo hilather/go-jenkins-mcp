@@ -4816,11 +4816,12 @@
       "dependency_text": "HOST-003, HOST-004",
       "parallel_safe": null,
       "objective": "Define multi-replica only after durable vault.",
-      "implementation": "Single-replica Tier A default; multi-replica checklist; file vault flock Done* lite.",
+      "implementation": "Single-replica Tier A default; multi-replica checklist; file vault flock Done* lite; sticky Service sessionAffinity Done* scaffold (residual runtime).",
       "acceptance_criteria": [
         "Single-replica Tier A default documented.",
         "Multi-replica checklist (vault, affinity, audit).",
         "Shared vault path + flock multi-process lite (not multi-pod Done).",
+        "Sticky session Service scaffold (ClientIP) Done* packaging only.",
         "Non-goal until multi-pod durable vault + sticky sessions exist."
       ],
       "acceptance_criteria_count": 3,

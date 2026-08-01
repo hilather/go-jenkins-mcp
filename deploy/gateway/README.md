@@ -7,7 +7,7 @@ Illustrative packaging for `jenkins-mcp serve --gateway` near Jenkins.
 | `docker-compose.yml` | Non-root, read-only root, CPU/memory limits, health probes, secret-free env |
 | `.env.example` | Non-secret env vars only (never tokens/client secrets) |
 | `Dockerfile` | Distroless non-root image build of the same MCP binary |
-| `kustomize/` | Deployment (probes + limits, replicas: 1) + ClusterIP Service |
+| `kustomize/` | Deployment (probes + limits, replicas: 1) + ClusterIP Service with optional `sessionAffinity: ClientIP` scaffold (HOST-008; residual multi-replica runtime) |
 
 **Docs:** [docs/gateway/deployment.md](../../docs/gateway/deployment.md) (reverse-proxy matrix, readiness, HA residual)
 
@@ -89,7 +89,7 @@ make build
 | Image signing / SBOM attach | Org pipeline |
 | Streamable HTTP mTLS + non-local production pin | HOST-001 / HOST-002 |
 | Live reverse-proxy path-prefix matrix | HOST-002 / NET-001 |
-| Multi-replica HA | HOST-008 Tier B (file vault flock Done* lite same-host only; sticky sessions + multi-pod residual; replicas stay 1) |
+| Multi-replica HA | HOST-008 Tier B (file vault flock Done* lite same-host only; Service sticky **Done* scaffold** / residual runtime; multi-pod vault + shared rate residual; replicas stay 1) |
 | Real Entra / jwt-auth-filter production pin | OAUTH-009 / OAUTH-010 |
 | Multi-user production GO | HOST multi-user foundation only (`MULTI_USER` ≠ production pin) |
 

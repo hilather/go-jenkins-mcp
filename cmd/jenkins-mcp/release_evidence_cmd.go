@@ -164,7 +164,7 @@ func knownReleaseResiduals() []releaseResidual {
 			// HOST-008 Tier A single-replica honesty (scaffold replicas:1).
 			ID:      "host008_single_replica",
 			GateIDs: []string{"REL-002.compat.gateway", "REL-002.ops.doctor"},
-			Message: "HOST-008 Tier A: single-replica default (deploy/gateway kustomize replicas:1; doctor/admin ha_multi_replica=false); file vault flock multi-process Done* lite (same host/shared FS); multi-replica HA residual until multi-pod durable vault + sticky sessions",
+			Message: "HOST-008 Tier A: single-replica default (deploy/gateway kustomize replicas:1; doctor/admin ha_multi_replica=false); Service sessionAffinity ClientIP Done* scaffold (residual runtime); session_affinity_recommended when multi_user; file vault flock multi-process Done* lite (same host/shared FS only — multi-pod needs shared FS/external vault); multi-replica HA residual until multi-pod durable vault + shared rate/cache",
 		},
 		{
 			// Done* inventory: offline binary smoke exists (Wave 25 make + Wave 26 optional CI job).

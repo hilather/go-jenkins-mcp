@@ -15,6 +15,8 @@ import (
 // gateway_ready is always false here (offline doctor does not hold a live
 // CredentialProvider; MCP serve /readyz is the Ready probe). ha_multi_replica
 // is always false (Tier A single-replica default; multi-replica not implemented).
+// session_affinity_recommended is true when multi-user env is set (HOST-008
+// sticky scaffold honesty — not multi-replica Done).
 //
 // Mode B residual: offline vault only (OAUTH-009 live pin open).
 // Mode C residual: offline Live=false / mock Fetcher (OAUTH-010 live pin open).
@@ -69,10 +71,13 @@ func checkGatewayStatus(getenv func(string) string) Check {
 		"gateway_ready":      false, // offline residual: Ready only on serve /readyz
 		"credential_mode":    mode,
 		"ha_multi_replica":   false, // HOST-008: single-replica Tier A default
-		"gateway_live_env":   liveEnv,
-		"mode_a_enabled":     modeA,
-		"mode_b_enabled":     modeB,
-		"mode_c_enabled":     modeC,
+		// HOST-008: recommend sticky Service affinity when multi-user lab env is set
+		// (scaffold honesty only — multi-replica runtime still residual).
+		"session_affinity_recommended": multiUser,
+		"gateway_live_env":             liveEnv,
+		"mode_a_enabled":               modeA,
+		"mode_b_enabled":               modeB,
+		"mode_c_enabled":               modeC,
 		// Aliases for residual test / older check consumers.
 		"gateway_mode_c_enabled": modeC,
 		// Offline never claims live pins (unified residual honesty).
@@ -91,7 +96,7 @@ func checkGatewayStatus(getenv func(string) string) Check {
 	msg := fmt.Sprintf("multi_user=%v credential_mode=%s modes_a/b/c=%v/%v/%v gateway_ready=false ha_multi_replica=false",
 		multiUser, nonEmpty(mode, "(default/unset)"), modeA, modeB, modeC)
 	if multiUser {
-		msg += " (multi-user env set: foundation residual, not production GO; no tokens in this check)"
+		msg += " (multi-user env set: foundation residual, not production GO; session_affinity_recommended=true scaffold only; no tokens in this check)"
 	}
 	if modeB {
 		msg += " (mode B offline vault only; live jwt-auth-filter/Entra residual OAUTH-009)"
