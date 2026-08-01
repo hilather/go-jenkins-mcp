@@ -402,7 +402,7 @@ Raise replicas **only** when every row is satisfied (org-owned design):
 | 5 | **Audit aggregation** (central sink) | Per-pod files are not a fleet audit plane | **Residual** |
 | 6 | Sticky or shared Obtain / consent correlation | Refresh/consent must not double-mint unsafely | **Residual** (Mode C progressive consent) |
 | 7 | JWKS / identity multi-instance behavior measured | Process-local JWKS refresh is not multi-region HA | **Residual** |
-| 8 | Shared subject rate / concurrency limiters | Process-local `SubjectRateLimiter` / `SubjectLimiter` only today | **Residual** (admin `rateEnabled` is env residual only) |
+| 8 | Shared subject rate / concurrency limiters | Process-local `SubjectRateLimiter` / `SubjectLimiter` only today | **Residual** (admin `rateEnabled`/`ratePerMinute`/`rateBurst` are process-local env residual only) |
 
 **Honesty:** **Done* lite** (1a) is multi-process file safety on a **shared path**, not multi-replica HA. Do **not** raise `replicas` > 1 until **1b–8** are satisfied.
 
@@ -412,8 +412,8 @@ Raise replicas **only** when every row is satisfied (org-owned design):
 |---------|--------|---------|
 | `SubjectLimiter.StatusMap` | `ha_multi_replica: false` | Always false until multi-replica runtime exists |
 | Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `mode_a/b/c_enabled`, `mode_*_live_*_qualified=false`, `oauth009_offline_only`, `gateway_ready=false`, `ha_multi_replica=false`, `mode_matrix_residual` | Env parse only; Ready is serve `/readyz`; unified modes A/B/C residual honesty |
-| Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false`, `rateEnabled` | Admin BFF ≠ MCP serve; Ready residual documented; `rateEnabled` = HOST-006 env parse only (process-local) |
-| Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false`, `rateEnabled` + mode matrix | Never tokens; multi-user residual note when env set; file vault flock is multi-process lite only |
+| Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false`, `rateEnabled`/`ratePerMinute`/`rateBurst` | Admin BFF ≠ MCP serve; Ready residual documented; rate knobs = HOST-006 env resolve only (process-local) |
+| Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false`, `rateEnabled`/`ratePerMinute`/`rateBurst` + mode matrix | Never tokens; multi-user residual note when env set; file vault flock is multi-process lite only |
 
 **Never** claim multi-replica Done from docs, kustomize `replicas: 1`, or these
 status fields. See [roadmap § HOST-008](../roadmap/server-team-hosted.md).

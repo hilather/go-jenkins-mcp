@@ -309,10 +309,11 @@ concurrency still applies).
 | `max_tools_per_minute` | Upper bound on per-subject sustained tools/min (lower only) |
 | `max_tools_burst` | Upper bound on per-subject burst (lower only) |
 
-**Done\*** Binding PrincipalID from PrincipalCache after Obtain (not on request
-ctx). **Done\*** policy SubjectFromContext JenkinsUserID from PrincipalCache
-after Obtain (prefer cache over HTTP claim). **Residual:** multi-replica shared
-rate/slots (HOST-008); admin SPA subject-rate knobs.
+**Done\*** Binding PrincipalID + policy SubjectFromContext JenkinsUserID from
+PrincipalCache after Obtain (prefer cache over HTTP claim). **Admin residual
+knobs Done\* (read-only):** `rateEnabled` / `ratePerMinute` / `rateBurst` on
+health + vault. **Residual:** multi-replica shared rate/slots (HOST-008); SPA
+write/edit of subject-rate or overlay `max_tools_*`.
 
 ---
 

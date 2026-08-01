@@ -268,6 +268,51 @@ func TestSubjectRateEnabledFromEnviron(t *testing.T) {
 	}
 }
 
+// HOST-006 / HOST-007 admin residual: resolved rate knobs (secret-free; never tokens).
+func TestSubjectRateConfigFromEnviron(t *testing.T) {
+	t.Parallel()
+	en, rpm, burst := gateway.SubjectRateConfigFromEnviron(func(string) string { return "" })
+	if !en || rpm != gateway.DefaultSubjectRatePerMinute || burst != gateway.DefaultSubjectRateBurst {
+		t.Fatalf("defaults: enabled=%v rpm=%d burst=%d", en, rpm, burst)
+	}
+	en, rpm, burst = gateway.SubjectRateConfigFromEnviron(func(k string) string {
+		switch k {
+		case gateway.EnvSubjectRatePerMinute:
+			return "45"
+		case gateway.EnvSubjectRateBurst:
+			return "7"
+		default:
+			return ""
+		}
+	})
+	if !en || rpm != 45 || burst != 7 {
+		t.Fatalf("override: enabled=%v rpm=%d burst=%d", en, rpm, burst)
+	}
+	// Explicit 0 → disabled; burst reported 0 (ignored when rate off).
+	en, rpm, burst = gateway.SubjectRateConfigFromEnviron(func(k string) string {
+		if k == gateway.EnvSubjectRatePerMinute {
+			return "0"
+		}
+		if k == gateway.EnvSubjectRateBurst {
+			return "99"
+		}
+		return ""
+	})
+	if en || rpm != 0 || burst != 0 {
+		t.Fatalf("disabled: enabled=%v rpm=%d burst=%d", en, rpm, burst)
+	}
+	// Invalid → fail closed zeros.
+	en, rpm, burst = gateway.SubjectRateConfigFromEnviron(func(k string) string {
+		if k == gateway.EnvSubjectRatePerMinute {
+			return "x"
+		}
+		return ""
+	})
+	if en || rpm != 0 || burst != 0 {
+		t.Fatalf("invalid: enabled=%v rpm=%d burst=%d", en, rpm, burst)
+	}
+}
+
 func TestSubjectRateLimiter_AbsoluteCeilingsClamped(t *testing.T) {
 	t.Parallel()
 	l := gateway.NewSubjectRateLimiter(10_000, 10_000, 10_000, 10_000)

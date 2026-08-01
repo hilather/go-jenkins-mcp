@@ -2804,8 +2804,12 @@ after Obtain, else HTTP claim). **Serve wire Done*:** `tools.SubjectSlotLimiter`
 concurrent + rate/burst (`JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` 0 = rate disabled).
 **Policy rate reduction Done\* foundation:** overlay optional
 `max_tools_per_minute` / `max_tools_burst` → `SubjectRateLimiter.LowerRate`
-(lower only). **Residual:** multi-replica (HOST-008); admin SPA subject-rate
-knobs.
+(lower only). **Admin residual knobs Done\* (read-only):** health +
+`/gateway/vault` expose secret-free `rateEnabled` / `ratePerMinute` / `rateBurst`
+via `gateway.SubjectRateConfigFromEnviron` (SPA Overview shows when present).
+**Done\*** Obtain→policy RBAC JenkinsUserID via PrincipalCache.
+**Residual:** multi-replica shared rate (HOST-008); SPA write/edit of subject-rate
+or overlay `max_tools_*` knobs.
 
 ---
 
@@ -2838,7 +2842,7 @@ knobs.
 - [x] Multi-replica checklist: shared vault, affinity, no memory-only token cache, audit aggregation. — expanded checklist in deployment.md §9
 - [x] Shared vault path + flock multi-process lite (**Done* lite**). — `FileAPITokenVault` / `FileJWTVault`: process mutex + `syscall.Flock` on `path.lock` (unix); tests multi-instance concurrent Put + multi-process block on Linux. **Not** multi-pod HA; sticky sessions / external vault / shared rate still residual
 - [x] Explicit non-goal until multi-pod durable vault + affinity exist. — documented non-goal; do not claim multi-replica Done
-- [x] Secret-free residual surfaces: doctor `gateway_status` + admin health/vault (`multi_user_enabled` / `multiUserEnabled`, `credential_mode`, `gateway_ready=false`, `ha_multi_replica=false`, `rateEnabled` env residual)
+- [x] Secret-free residual surfaces: doctor `gateway_status` + admin health/vault (`multi_user_enabled` / `multiUserEnabled`, `credential_mode`, `gateway_ready=false`, `ha_multi_replica=false`, `rateEnabled` / `ratePerMinute` / `rateBurst` env residual knobs)
 
 **Status:** **Done*** lite for same-host shared file vault flock + docs residual + secret-free status fields. **No multi-replica runtime** (sticky sessions, shared Obtain cache, multi-pod vault, shared rate still residual).
 

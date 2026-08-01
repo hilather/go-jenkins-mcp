@@ -27,6 +27,10 @@ type gatewayVaultResponse struct {
 	// RateEnabled is secret-free HOST-006 residual (env parse only; process-local).
 	// Empty rate env → true (default); explicit 0 → false. Not multi-replica shared rate.
 	RateEnabled bool `json:"rateEnabled"`
+	// RatePerMinute is resolved bootstrap tools/min (default or env); 0 when disabled.
+	RatePerMinute int `json:"ratePerMinute"`
+	// RateBurst is resolved bootstrap burst; 0 when rate disabled. Never tokens.
+	RateBurst int `json:"rateBurst"`
 	// VaultConfigured is true when the Mode A vault file exists on disk.
 	VaultConfigured bool `json:"vaultConfigured"`
 	// EntryCount is the number of subject entries (0 when missing/unreadable).
@@ -57,13 +61,17 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 		ctx = context.Background()
 	}
 	multiUser := gateway.MultiUserEnabled(os.Getenv)
+	rateEnabled, ratePerMinute, rateBurst := gateway.SubjectRateConfigFromEnviron(os.Getenv)
 	resp := gatewayVaultResponse{
 		Subjects:         []string{},
 		EnabledModes:     []string{},
 		MultiUserEnabled: multiUser,
 		HAMultiReplica:   false, // HOST-008 Tier A; no multi-replica runtime
-		RateEnabled:      gateway.SubjectRateEnabledFromEnviron(os.Getenv),
-		Residual:         "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser)",
+		RateEnabled:      rateEnabled,
+		RatePerMinute:    ratePerMinute,
+		RateBurst:        rateBurst,
+		// HOST-006 rate knobs are process-local residual (not multi-replica shared).
+		Residual: "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser); subject rate knobs process-local (HOST-006); multi-replica shared rate residual (HOST-008)",
 	}
 	if multiUser {
 		// Secret-free; SPA residual banner (no embed rebuild). host008_single_replica honesty.

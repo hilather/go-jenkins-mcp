@@ -95,7 +95,10 @@ Current process authentication state and console role. **Never includes the toke
   "multiUserEnabled": false,
   "gatewayReady": false,
   "haMultiReplica": false,
-  "rateEnabled": true
+  "rateEnabled": true,
+  "ratePerMinute": 30,
+  "rateBurst": 10,
+  "residual": "subject rate knobs are process-local (HOST-006); multi-replica shared rate residual (HOST-008); never tokens"
 }
 ```
 
@@ -109,7 +112,9 @@ Current process authentication state and console role. **Never includes the toke
 | `gatewayReady` | Always **`false` on admin BFF** (separate process from MCP serve). Live Obtain Ready is `GET /readyz` on the gateway serve process. |
 | `haMultiReplica` | Always **`false`** (HOST-008 Tier A single-replica default; multi-replica runtime not implemented). |
 | `rateEnabled` | **HOST-006 / HOST-008 residual:** `true` when subject rate env would enable process-local limiting (empty `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` → default on; explicit `0` → false). **Not** multi-replica shared rate. Never tokens. |
-| `residual` | Present when multi-user env is set (secret-free honesty note; never tokens). Mentions foundation residual + HOST-008 single-replica (`haMultiReplica` always false). |
+| `ratePerMinute` | **HOST-006 residual knob:** resolved bootstrap tools/min via `gateway.ResolveSubjectRateCaps` / `SubjectRateConfigFromEnviron` (package default **30** when env empty; explicit env value when set; **0** when disabled or invalid parse fail-closed). Process-local only — not multi-replica shared rate. Never tokens. |
+| `rateBurst` | **HOST-006 residual knob:** resolved bootstrap burst via same resolver (package default **10** when env empty; **0** when rate disabled — burst is ignored when rate is off). Process-local only. Never tokens. |
+| `residual` | Secret-free honesty note (never tokens). Always includes process-local subject-rate residual + HOST-008 multi-replica shared-rate residual. When multi-user env is set, also mentions foundation residual + HOST-008 single-replica (`haMultiReplica` always false). |
 
 ## GET /admin/v1/gateway/vault
 
@@ -124,10 +129,12 @@ Authorization headers, or raw subject keys.
   "multiUserEnabled": false,
   "haMultiReplica": false,
   "rateEnabled": true,
+  "ratePerMinute": 30,
+  "rateBurst": 10,
   "vaultConfigured": true,
   "entryCount": 1,
   "subjects": ["a1b2c3…"],
-  "residual": "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser)"
+  "residual": "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser); subject rate knobs process-local (HOST-006); multi-replica shared rate residual (HOST-008)"
 }
 ```
 
@@ -138,10 +145,12 @@ Authorization headers, or raw subject keys.
 | `multiUserEnabled` | `JENKINS_MCP_GATEWAY_MULTI_USER` truthy parse (foundation residual; not production GO) |
 | `haMultiReplica` | Always `false` (HOST-008 Tier A; multi-replica not implemented) |
 | `rateEnabled` | HOST-006 env residual (process-local rate would be enabled; not multi-replica shared rate) |
+| `ratePerMinute` | Resolved bootstrap tools/min (default or `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE`); **0** when disabled. Process-local residual only. Never tokens. |
+| `rateBurst` | Resolved bootstrap burst (default or `JENKINS_MCP_SUBJECT_RATE_BURST`); **0** when rate disabled. Process-local residual only. Never tokens. |
 | `vaultConfigured` | Whether the Mode A vault file exists |
 | `entryCount` | Number of subject entries |
 | `subjects` | **SubjectKeyHash** values only (never raw keys or tokens) |
-| `residual` | Operator notes (CLI-only write; Mode B/C residuals; multi-user honesty when env set) |
+| `residual` | Operator notes (CLI-only write; Mode B/C residuals; HOST-006 process-local rate residual; multi-user honesty when env set) |
 
 Writes remain CLI-only. SPA Overview may display this status; provision/rotate/revoke
 is not available from the browser.
