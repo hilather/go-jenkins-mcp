@@ -452,6 +452,12 @@ export interface GatewayResidualStatusResponse {
    */
   shared_principal_cache_file?: boolean;
   /**
+   * HOST-001 / HOST-008 Done* lite: true when JENKINS_MCP_HTTP_JWKS_CACHE_PATH set
+   * (same-host FileJWKS / public JWKS snapshot). Path never returned.
+   * Not multi-pod external JWKS HA. Public keys only — never tokens.
+   */
+  shared_jwks_file?: boolean;
+  /**
    * Optional MaxSubjects for rate map hygiene when env > 0 (omit = unlimited).
    */
   subject_rate_max_subjects?: number;

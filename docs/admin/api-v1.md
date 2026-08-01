@@ -304,9 +304,12 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 | `residual_note` / `doc` | Honesty sentence + pointer to [live-pin-blockers.md](../gateway/live-pin-blockers.md) |
 
 **SPA:** Overview card “Gateway residual status” loads this route; **404 hides the
-card** on older BFF builds. SPA shows `shared_subject_rate_file`, principal_cache
-count, and optional max/ttl with honesty (same-host rate lite; admin BFF process
-for cache count). Operators may also run CLI `gateway residual-status`.
+card** on older BFF builds. SPA shows `shared_subject_rate_file`,
+`shared_principal_cache_file`, `shared_jwks_file` (bool when
+`JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set; same-host FileJWKS lite only — path never
+shown; not multi-pod external JWKS HA), principal_cache count, and optional
+max/ttl with honesty (same-host rate/principal/JWKS lite; admin BFF process for
+cache count). Operators may also run CLI `gateway residual-status`.
 
 ## POST /admin/v1/gateway/subject-invalidate
 
