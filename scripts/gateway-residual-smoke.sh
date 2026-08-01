@@ -19,6 +19,7 @@
 #      - shared_subject_rate_file false by default; true when SUBJECT_RATE_PATH set (path never dumped)
 #      - shared_principal_cache_file false by default; true when PRINCIPAL_CACHE_PATH set (path never dumped)
 #      - shared_jwks_file false by default; true when JENKINS_MCP_HTTP_JWKS_CACHE_PATH set (path never dumped)
+#      - shared_token_cache_file false by default; true when JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH set (path never dumped)
 #      - optional: principal_cache_entries Len when file has entries (secret-free count only)
 #      - principal_cache_process_note: principal_cache_entries is this-process / file Len only
 #   5. Optional: gateway consent-residual when subcommand exists (progressive consent residual)
@@ -646,6 +647,14 @@ if sjwks is True:
 elif sjwks is not False and sjwks is not None:
     errors.append(f"shared_jwks_file={sjwks!r} want false|absent")
 
+# HOST-008 lite: shared_token_cache_file default false (or absent-as-false).
+# Path value never appears; residual never opens token cache file (secrets on disk).
+stcf = data.get("shared_token_cache_file")
+if stcf is True:
+    errors.append("shared_token_cache_file=true without TOKEN_CACHE_PATH (default must be false)")
+elif stcf is not False and stcf is not None:
+    errors.append(f"shared_token_cache_file={stcf!r} want false|absent")
+
 # principal_cache_entries is this-process count only (CLI/admin ≠ remote serve).
 pc_note = str(data.get("principal_cache_process_note") or "")
 note_blob = pc_note + " " + str(data.get("residual_note") or "")
@@ -680,7 +689,7 @@ print(
     f"(oauth009_offline + ha_multi_replica=false + residual_ids={len(required)} + "
     "progressive_consent + shared_subject_rate_file=false default + "
     "shared_principal_cache_file=false default + shared_jwks_file=false default + "
-    "principal_cache process note)"
+    "shared_token_cache_file=false default + principal_cache process note)"
 )
 sys.exit(0)
 PY
@@ -902,6 +911,70 @@ if errors:
         print(f"  - {e}", file=sys.stderr)
     sys.exit(1)
 print("PASS: residual-status shared_jwks_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          fail=1
+        fi
+      fi
+
+      # Optional subtest: TOKEN_CACHE_PATH set → shared_token_cache_file=true (path never dumped).
+      # residual never opens the token cache file (secrets on disk) — bool residual only.
+      echo "== gateway residual-status (TOKEN_CACHE_PATH canary) =="
+      TOKEN_PATH_MARKER="token-cache-path-CANARY-never-in-json-$$"
+      TOKEN_TMP_MARKED="$OUT_DIR/${TOKEN_PATH_MARKER}.json"
+      # Plant a fake token so open-leak would surface if residual ever read the file.
+      TOKEN_SEED="seed-access-token-CANARY-never-in-residual-json"
+      cat >"$TOKEN_TMP_MARKED" <<EOF
+{"version":1,"entries":{"k":{"access_token":"${TOKEN_SEED}","expires_at":"2099-01-01T00:00:00Z"}}}
+EOF
+      RESIDUAL_STATUS_TOKEN_JSON="$OUT_DIR/gateway-residual-status-token-path.json"
+      set +e
+      env JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH="$TOKEN_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_TOKEN_JSON" 2>"$OUT_DIR/gateway-residual-status-token-path.stderr"
+      trc=$?
+      set -e
+      if [[ $trc -ne 0 ]]; then
+        fail_msg "gateway residual-status with TOKEN_CACHE_PATH exit $trc"
+        if [[ -s "$OUT_DIR/gateway-residual-status-token-path.stderr" ]]; then
+          head -n 20 "$OUT_DIR/gateway-residual-status-token-path.stderr" >&2 || true
+        fi
+      else
+        assert_secret_free "$RESIDUAL_STATUS_TOKEN_JSON" "gateway-residual-status-token-path.json" || true
+        export GRS_TOKEN_JSON="$RESIDUAL_STATUS_TOKEN_JSON"
+        export GRS_TOKEN_MARKER="$TOKEN_PATH_MARKER"
+        export GRS_TOKEN_SEED="$TOKEN_SEED"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["GRS_TOKEN_JSON"]
+marker = os.environ["GRS_TOKEN_MARKER"]
+seed = os.environ.get("GRS_TOKEN_SEED", "")
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_token_cache_file") is not True:
+    errors.append(
+        f"shared_token_cache_file={data.get('shared_token_cache_file')!r} want true when TOKEN_CACHE_PATH set"
+    )
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("TOKEN_CACHE_PATH / marker leaked into residual-status JSON (path must never dump)")
+if seed and seed in blob:
+    errors.append("token cache file contents leaked into residual-status JSON")
+# secret-shaped canaries
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status TOKEN_CACHE_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print("PASS: residual-status shared_token_cache_file=true when path set (path not dumped)")
 sys.exit(0)
 PY
         then

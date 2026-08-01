@@ -15,6 +15,7 @@ import {
   PRINCIPAL_CACHE_PROCESS_HONESTY,
   SHARED_JWKS_FILE_HONESTY,
   SHARED_SUBJECT_RATE_FILE_HONESTY,
+  SHARED_TOKEN_CACHE_FILE_HONESTY,
 } from "../lib/residualStatus";
 
 function statusClass(status: string): string {
@@ -102,6 +103,11 @@ function DoctorGatewayResidualCard({
         <dd>
           {rateCache.shared_jwks_file ? "yes" : "no"}{" "}
           <span className="muted">({SHARED_JWKS_FILE_HONESTY})</span>
+        </dd>
+        <dt>shared_token_cache_file</dt>
+        <dd>
+          {rateCache.shared_token_cache_file ? "yes" : "no"}{" "}
+          <span className="muted">({SHARED_TOKEN_CACHE_FILE_HONESTY})</span>
         </dd>
         <dt>principal_cache_entries</dt>
         <dd>

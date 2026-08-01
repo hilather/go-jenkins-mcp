@@ -214,6 +214,7 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 		"shared_subject_rate_file",
 		"shared_principal_cache_file",
 		"shared_jwks_file",
+		"shared_token_cache_file",
 	} {
 		if !strings.Contains(bodyStr, key) {
 			t.Fatalf("scripts/pilot-evidence.sh must assert %s honesty canary", key)
@@ -230,6 +231,9 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 	}
 	if !strings.Contains(bodyStr, "JENKINS_MCP_HTTP_JWKS_CACHE_PATH") {
 		t.Fatal("scripts/pilot-evidence.sh must canary JWKS_CACHE_PATH → shared_jwks_file=true")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary TOKEN_CACHE_PATH → shared_token_cache_file=true")
 	}
 	if !strings.Contains(bodyStr, "gateway consent-residual") {
 		t.Fatal("scripts/pilot-evidence.sh must optionally capture gateway consent-residual")
@@ -354,6 +358,7 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 			"shared_subject_rate_file",
 			"shared_principal_cache_file",
 			"shared_jwks_file",
+			"shared_token_cache_file",
 		} {
 			v, ok := rs[key]
 			if !ok || v == nil {

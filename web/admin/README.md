@@ -115,7 +115,7 @@ localStorage.setItem("jenkins-mcp.admin.profile", "corp");
 - **Cache:** quota/usage (`available:false` residual when store missing), non-destructive eviction plan for all roles, destructive evict only when role is operator — double-confirm modal (type `EVICT` twice); server also requires exact `confirm: "EVICT"`.
 - **Overview consent purge (HOST-007 Mode C):** `purge_expired` / `delete_session` as usual; destructive **clear_all** requires typing `CLEAR_ALL` (server also requires exact `confirm: "CLEAR_ALL"`; CLI `--all --confirm=CLEAR_ALL`).
 - **Doctor:** run button + offline toggle (online needs admin shared secret on the BFF).
-- **Doctor:** run button + offline toggle (online needs admin shared secret on the BFF). When the report includes `gateway_residual_status`, a residual card (shared_*_file, principal count honesty, live-pin-blockers pointer) appears after Overall — HOST-007 lite; does not drive overall; never tokens.
+- **Doctor:** run button + offline toggle (online needs admin shared secret on the BFF). When the report includes `gateway_residual_status`, a residual card (`shared_subject_rate_file` / `shared_principal_cache_file` / `shared_jwks_file` / `shared_token_cache_file`, principal count honesty, live-pin-blockers pointer) appears after Overall — HOST-007 lite; does not drive overall; never tokens; path values never shown.
 - **Residuals:** pin list UI, full cache repair/verify from SPA (use CLI); policy apply (UI-004).
 
 ### Metrics page (UI-005)

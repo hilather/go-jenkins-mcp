@@ -101,6 +101,18 @@ func TokenCacheFromEnviron(getenv func(string) string, ttl time.Duration) (Token
 	return NewFileTokenCache(path, ttl)
 }
 
+// TokenCachePathConfiguredFromEnviron reports whether
+// JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH is non-empty (secret-free residual bool).
+// Does not validate path usability (serve fails closed on construct when invalid).
+// getenv nil → os.Getenv. Never returns the path value. Never opens the cache
+// file (tokens live on disk — residual surfaces must not read it).
+func TokenCachePathConfiguredFromEnviron(getenv func(string) string) bool {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	return strings.TrimSpace(getenv(EnvGatewayTokenCachePath)) != ""
+}
+
 func (c *FileTokenCache) clock() time.Time {
 	if c != nil && c.now != nil {
 		return c.now()

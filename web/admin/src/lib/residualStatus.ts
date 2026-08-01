@@ -14,6 +14,10 @@ export const SHARED_SUBJECT_RATE_FILE_HONESTY =
 export const SHARED_JWKS_FILE_HONESTY =
   "same-host FileJWKS lite when true (JENKINS_MCP_HTTP_JWKS_CACHE_PATH); not multi-pod external JWKS HA — path never shown; public keys only";
 
+/** Same-host FileTokenCache lite honesty (HOST-008); not multi-pod external Obtain cache. */
+export const SHARED_TOKEN_CACHE_FILE_HONESTY =
+  "same-host FileTokenCache lite when true (JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH); not multi-pod Redis/HA — path never shown; secrets never shown";
+
 /**
  * Principal cache entry count is the process that served residual-status
  * (admin BFF), not necessarily the MCP gateway serve process.
@@ -92,6 +96,8 @@ export interface ResidualRateCacheFields {
   shared_principal_cache_file: boolean;
   /** HOST-001/HOST-008 FileJWKS path configured (bool only; never path). */
   shared_jwks_file: boolean;
+  /** HOST-008 FileTokenCache path configured (bool only; never path/tokens). */
+  shared_token_cache_file: boolean;
   /** Present when MaxSubjects env > 0. */
   subject_rate_max_subjects?: number;
   /** Process-local or file Len() count. */
@@ -116,6 +122,7 @@ export function pickResidualRateCacheFields(
       shared_subject_rate_file: false,
       shared_principal_cache_file: false,
       shared_jwks_file: false,
+      shared_token_cache_file: false,
     };
   }
   // Fail-closed honesty: only explicit boolean true counts as shared-file lite.
@@ -124,6 +131,7 @@ export function pickResidualRateCacheFields(
     shared_subject_rate_file: data.shared_subject_rate_file === true,
     shared_principal_cache_file: data.shared_principal_cache_file === true,
     shared_jwks_file: data.shared_jwks_file === true,
+    shared_token_cache_file: data.shared_token_cache_file === true,
   };
   if (typeof data.subject_rate_max_subjects === "number") {
     out.subject_rate_max_subjects = data.subject_rate_max_subjects;

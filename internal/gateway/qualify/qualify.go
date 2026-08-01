@@ -461,6 +461,7 @@ func caseGatewayResidualStatusOfflineHonesty(ctx context.Context) error {
 		"shared_subject_rate_file",
 		"shared_principal_cache_file",
 		"shared_jwks_file",
+		"shared_token_cache_file",
 	} {
 		if out[k] != false {
 			return fmt.Errorf("%s default false when path unset: %+v", k, out[k])

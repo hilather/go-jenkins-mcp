@@ -158,8 +158,12 @@ func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 		// (HOST-001/HOST-008 same-host public JWKS snapshot lite). Path never returned.
 		// Multi-pod external JWKS still residual. Public keys only — never tokens.
 		"shared_jwks_file": auth.JWKSCachePathConfiguredFromEnviron(getenv),
-		"residual_note":    ResidualStatusHonestyNote,
-		"doc":              ResidualStatusDoc,
+		// shared_token_cache_file=true only when JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH set
+		// (HOST-008 same-host FileTokenCache lite). Path never returned. Residual never
+		// opens the cache file (tokens on disk). Multi-pod external Obtain cache residual.
+		"shared_token_cache_file": gateway.TokenCachePathConfiguredFromEnviron(getenv),
+		"residual_note":           ResidualStatusHonestyNote,
+		"doc":                     ResidualStatusDoc,
 	}
 	// Optional PrincipalCache hygiene residual lite (env/static; empty = unlimited / no TTL).
 	if pcMax, pcTTL, err := gateway.PrincipalCacheConfigFromEnviron(getenv); err == nil {

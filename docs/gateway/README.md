@@ -209,8 +209,11 @@ progressive consent residual, `rateEnabled` / `ratePerMinute` / `rateBurst`,
 remote serve) and optional `principal_cache_max_entries` /
 `principal_cache_ttl_seconds` when hygiene env is set.
 `shared_subject_rate_file`, `shared_principal_cache_file` (true when
-`JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` set — never the path value), and
-`principal_cache_entries` (count only) plus optional
+`JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` set — never the path value),
+`shared_jwks_file` (true when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set),
+`shared_token_cache_file` (true when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` set —
+same-host FileTokenCache lite; path never returned; residual never opens the
+token file), and `principal_cache_entries` (count only) plus optional
 `principal_cache_max_entries` / `principal_cache_ttl_seconds` when hygiene env is set.
 Always advertises Mode B residual id `oauth009_offline` and points at
 [live-pin-blockers.md](live-pin-blockers.md). Shared assembly:
@@ -548,7 +551,7 @@ Enable gateway mode with any of:
 | `JENKINS_MCP_AGENTCORE_AUTH_ENDPOINT` | Optional authorize URL |
 | `JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT` | Optional token URL; **required** when `JENKINS_MCP_GATEWAY_LIVE=1` |
 | `JENKINS_MCP_GATEWAY_LIVE` | Mode C only: `1`/`true` enables `HTTPTokenFetcher` Live wire (default off) |
-| `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` | Optional Mode C Obtain cache file (`FileTokenCache`, flock + 0600). Empty → `MemoryTokenCache`. HOST-008 same-host lite only — **not** multi-pod Redis/HA. Invalid path fails start |
+| `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` | Optional Mode C Obtain cache file (`FileTokenCache`, flock + 0600). Empty → `MemoryTokenCache`. HOST-008 same-host lite only — **not** multi-pod Redis/HA. Invalid path fails start. residual-status `shared_token_cache_file: true` (path never returned; residual never opens the file) |
 | `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` | Optional principal map file (`FilePrincipalCache`, flock + secret-free JSON 0600; SubjectKey → Jenkins principal only — **never tokens**). Empty → process-local memory. HOST-008 same-host lite only — **not** multi-pod HA. Invalid path fails start |
 | `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` | Optional gateway subject rate state file (`FileSubjectRateLimiter`, flock + secret-free JSON 0600). Empty → process-local `SubjectRateLimiter`. HOST-008 same-host lite only — **not** multi-pod shared rate. Invalid path fails start |
 

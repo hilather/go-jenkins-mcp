@@ -357,6 +357,13 @@ if sjwks is True:
 elif sjwks is not False and sjwks is not None:
     errors.append(f"shared_jwks_file={sjwks!r} want false|absent")
 
+# HOST-008 lite: shared_token_cache_file default false (or absent-as-false).
+stcf = data.get("shared_token_cache_file")
+if stcf is True:
+    errors.append("shared_token_cache_file=true without TOKEN_CACHE_PATH (default must be false)")
+elif stcf is not False and stcf is not None:
+    errors.append(f"shared_token_cache_file={stcf!r} want false|absent")
+
 blob = json.dumps(data).lower()
 if "production go complete" in blob:
     errors.append("residual-status overclaims production GO complete")
@@ -376,7 +383,7 @@ print(
     "PASS: gateway residual-status honesty "
     f"(oauth009_offline + ha_multi_replica=false + residual_ids={len(required)} + "
     "shared_subject_rate_file=false default + shared_principal_cache_file=false default + "
-    "shared_jwks_file=false default)"
+    "shared_jwks_file=false default + shared_token_cache_file=false default)"
 )
 sys.exit(0)
 PY
@@ -393,7 +400,8 @@ PY
         && grep -q 'progressive_consent' "$RESIDUAL_STATUS_JSON" \
         && grep -qE '"shared_subject_rate_file":\s*false' "$RESIDUAL_STATUS_JSON" \
         && grep -qE '"shared_principal_cache_file":\s*false' "$RESIDUAL_STATUS_JSON" \
-        && grep -qE '"shared_jwks_file":\s*false' "$RESIDUAL_STATUS_JSON"; then
+        && grep -qE '"shared_jwks_file":\s*false' "$RESIDUAL_STATUS_JSON" \
+        && grep -qE '"shared_token_cache_file":\s*false' "$RESIDUAL_STATUS_JSON"; then
         echo "  [pass] gateway residual-status greppable honesty markers (no python3)"
       else
         residual_status_ok=0
@@ -562,6 +570,61 @@ if errors:
         print(f"  - {e}", file=sys.stderr)
     sys.exit(1)
 print("PASS: residual-status shared_jwks_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          residual_status_ok=0
+          HARD_FAIL=1
+        fi
+      fi
+
+      TOKEN_PATH_MARKER="token-cache-path-CANARY-never-in-json-$$"
+      TOKEN_TMP_MARKED="$OUT_DIR/${TOKEN_PATH_MARKER}.json"
+      : >"$TOKEN_TMP_MARKED"
+      RESIDUAL_STATUS_TOKEN_JSON="$OUT_DIR/gateway-residual-status-token-path.json"
+      set +e
+      env JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH="$TOKEN_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_TOKEN_JSON" 2>"$OUT_DIR/gateway-residual-status-token-path.stderr"
+      trc=$?
+      set -e
+      if [[ $trc -ne 0 ]]; then
+        residual_status_ok=0
+        HARD_FAIL=1
+        echo "  [fail] gateway residual-status with TOKEN_CACHE_PATH exit $trc" >&2
+      else
+        assert_secret_free_file "$RESIDUAL_STATUS_TOKEN_JSON" "gateway-residual-status-token-path.json" || {
+          residual_status_ok=0
+          HARD_FAIL=1
+        }
+        export PE_TOKEN_JSON="$RESIDUAL_STATUS_TOKEN_JSON"
+        export PE_TOKEN_MARKER="$TOKEN_PATH_MARKER"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["PE_TOKEN_JSON"]
+marker = os.environ["PE_TOKEN_MARKER"]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_token_cache_file") is not True:
+    errors.append(
+        f"shared_token_cache_file={data.get('shared_token_cache_file')!r} want true when TOKEN_CACHE_PATH set"
+    )
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("TOKEN_CACHE_PATH / marker leaked into residual-status JSON (path must never dump)")
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status TOKEN_CACHE_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print("PASS: residual-status shared_token_cache_file=true when path set (path not dumped)")
 sys.exit(0)
 PY
         then

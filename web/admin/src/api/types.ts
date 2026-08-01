@@ -501,6 +501,12 @@ export interface GatewayResidualStatusResponse {
    */
   shared_jwks_file?: boolean;
   /**
+   * HOST-008 Done* lite: true when JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH set
+   * (same-host FileTokenCache). Path never returned. Never opens cache file /
+   * never tokens. Not multi-pod Redis/HA.
+   */
+  shared_token_cache_file?: boolean;
+  /**
    * Optional MaxSubjects for rate map hygiene when env > 0 (omit = unlimited).
    */
   subject_rate_max_subjects?: number;
