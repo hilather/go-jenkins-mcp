@@ -310,7 +310,9 @@ Obtain Ready and Streamable HTTP mTLS hardening remain residuals.
 - [ ] Non-local HTTP: AllowedHosts + AllowedOrigins + secret + subject (no CORS `*`)  
 - [ ] Health probes secret-free; no inventory without auth  
 - [ ] TLS terminate at reverse-proxy (or mesh) for non-loopback  
-- [ ] Image SBOM + signature verified before production (org pipeline)
+- [ ] Image SBOM + signature verified before production (org pipeline)  
+- [ ] Enterprise policy pin (MGR-001): `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` + trusted keys + signed `overlay.bundle.json` when claiming force-off / fleet constrain ([policy-bundles](../security/policy-bundles.md))  
+- [ ] Modes A/B/C enablement recorded; offline qualify ≠ live multi-user GO
 
 ---
 

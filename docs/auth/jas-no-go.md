@@ -98,6 +98,36 @@ Detailed build-out is **JAS-002** (clients/consent/PKCE) → **JAS-003** (tokens
 
 ---
 
+## 4.1 OAUTH-011 formal residual decision log (default **no-go**)
+
+**Status:** Residual formalization of the product default — **not** a production
+“shipped AS” claim. **Decision: default no-go** after prototype posture review.
+
+| Field | Record |
+|-------|--------|
+| Decision | **NO-GO** (default; remains until an explicit funded **go** packet) |
+| Date (UTC) | 2026-08-01 (repo residual formalization) |
+| Criteria (go would require) | Named blocker that Entra/AgentCore RS, filter/proxy, token exchange, or narrow broker **cannot** solve safely; funded threat model, keys, revoke, conformance, pen-test, owners |
+| Evidence considered | ADR 0003 / 0011 / 0013; capability matrix `custom_jenkins_as_plugin=no_go_default`; gateway `ValidateProviderConfig` rejects Jenkins-as-AS; doctor `jenkins_as_as`; offline oauth labs (mock IdP/JWT RS) prove **external** AS paths only |
+| Prototypes residual | Live Entra + AgentCore pin still open (OAUTH-009/010 / GWY-003) — absence of those pins does **not** justify Jenkins-as-AS |
+| Approvers | Engineering + security co-owners (org sign-off residual for any future **go**) |
+| Funding / support horizon | **None** allocated for JAS-002…005 under default no-go |
+| Effect on conditional epic | JAS-002…005 **deprioritized / closed until go**; MCP local + Mode A/B/C release paths **must not** depend on Jenkins-hosted AS |
+| Code enforcement | `auth.RejectJenkinsAsAuthorizationServer`; `gateway.ValidateProviderConfig`; profile OIDC issuer host check; qualify case `jenkins_as_as_rejected` |
+| Related | [ADR 0013](../adr/0013-jas-default-no-go-enforcement.md), [oauth-capability-matrix](oauth-capability-matrix.md), [server-team-hosted §7](../roadmap/server-team-hosted.md) |
+
+**Re-open only** via written OAUTH-011 **go** packet (blocker, evidence, funding,
+owners). Desire for Jenkins-branded OAuth endpoints is insufficient.
+
+Regression canaries (must stay green):
+
+```bash
+go test ./internal/auth -count=1 -run 'RejectJenkins|JASNoGo|Capability'
+go test ./internal/gateway -count=1 -run 'JenkinsAsAS|ValidateProviderConfig_Rejects'
+```
+
+---
+
 ## 5. Operator checklist (fail closed)
 
 1. Profile `authMethod: oidc_bearer` → `oidc.issuer` is Entra/approved IdP, **not** the Jenkins URL.  
@@ -113,6 +143,7 @@ Detailed build-out is **JAS-002** (clients/consent/PKCE) → **JAS-003** (tokens
 | Item | Status |
 |------|--------|
 | This threat model + enforcement helpers/tests | **This pack (JAS-001 MVP)** |
-| Security “approval” signature for a future plugin **go** | Residual until OAUTH-011 go packet |
+| OAUTH-011 formal default no-go decision log (§4.1) | **Done\*** residual formalization (not a live pen-test sign-off) |
+| Org security “approval” signature for a future plugin **go** | Residual until funded OAUTH-011 **go** packet |
 | JAS-002…005 implementation | **Not started** (correct under default no-go) |
 | Live jwt-auth-filter lab / AgentCore pin | Separate OAUTH-009 / GWY residuals |

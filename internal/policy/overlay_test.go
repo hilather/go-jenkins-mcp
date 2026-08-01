@@ -456,6 +456,8 @@ func TestEnvPolicyFileAndDefaultPath(t *testing.T) {
 	}
 	t.Setenv(policy.EnvPolicyFileVar, path)
 	t.Setenv(policy.EnvPolicyRequiredVar, "")
+	t.Setenv(policy.EnvRequireSignedPolicyVar, "")
+	t.Setenv(policy.EnvPolicyTrustedKeysVar, "")
 
 	res, err := policy.LoadFromEnviron()
 	if err != nil {

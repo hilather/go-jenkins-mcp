@@ -143,6 +143,12 @@ func knownReleaseResiduals() []releaseResidual {
 			Message: "Live Entra / jwt-auth-filter / AgentCore Obtain network qualification remains residual",
 		},
 		{
+			// REL-001/002 honesty: offline gateway qualify is not live mode A/B/C GO.
+			ID:      "gateway_modes_live",
+			GateIDs: []string{"REL-002.compat.modes", "REL-002.compat.gateway", "REL-002.compat.auth"},
+			Message: "Live multi-user gateway modes A/B/C remain residual unless operator mode matrix records live pilot cohorts; offline gateway qualify + unit contracts are foundation only (see docs/pilot/checklist.md §0)",
+		},
+		{
 			// Done* inventory: offline binary smoke exists (Wave 25 make + Wave 26 optional CI job).
 			// Not merge-gate; does not close Cursor host CI — keep listed for honesty.
 			ID:      "stdio_binary_smoke",

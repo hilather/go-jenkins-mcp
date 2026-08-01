@@ -82,7 +82,13 @@ npm run build     # primary v1 CI smoke: typecheck + production bundle
 | Profile id | query `?profile=corp` or `localStorage` key `jenkins-mcp.admin.profile` | Default `corp` |
 | Admin token | `localStorage` key `jenkins-mcp.admin.token` | Sent as `Authorization: Bearer` when set |
 
-**Residual:** token-in-localStorage is pilot-only UX (ADR 0014). Layout shows process role from `GET /admin/v1/me` (UI-003) and a token field (value never logged). The SPA has **no Jenkins credential fields**.
+**Residual / quarantine:** token-in-`localStorage` is **pilot-only** UX (ADR 0014,
+HOST-007). **Do not** treat it as production multi-host admin authn — prefer
+httpOnly cookie + CSRF or reverse-proxy mTLS/OIDC residual before non-pilot
+deploy. Layout shows process role from `GET /admin/v1/me` (UI-003) and a token
+field (value never logged). The SPA has **no Jenkins credential fields** and
+never displays vault tokens / raw subjects. Multi-user MCP readiness is **not**
+signaled by SPA state (no `JENKINS_MCP_GATEWAY_MULTI_USER` pin).
 
 Example (browser console, loopback only):
 

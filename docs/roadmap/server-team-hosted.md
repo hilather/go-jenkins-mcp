@@ -656,7 +656,7 @@ When implementing, agents may **close ACs on GWY-*/OAUTH-*** and mark HOST-* as 
 
 | Gate | Blocking? | Default | Owner | Notes |
 |------|-----------|---------|-------|-------|
-| **OAUTH-011** Jenkins-as-AS | Yes for JAS epic only | **No-go** | Security + eng | Enforced in code (ADR 0013); do not build JAS-* without go |
+| **OAUTH-011** Jenkins-as-AS | Yes for JAS epic only | **No-go** (formal residual log) | Security + eng | Enforced in code (ADR 0013); decision log [`docs/auth/jas-no-go.md`](../auth/jas-no-go.md) §4.1; do not build JAS-* without go |
 | **OAUTH-009** RS production pin | Yes for **mode B** (and C when Bearer to Jenkins) | Open until lab | Platform + security | Fallthrough risk |
 | **Ship all three modes A/B/C** | Yes for Tier A “complete” claim | **Implement all**; site picks default | Eng + security | HOST-011 matrix; no silent fallthrough |
 | **Within mode C:** 3LO vs OBO vs exact JWT passthrough | Yes for GWY-003 close | Prefer OBO/3LO; passthrough most restricted | Security | Document residuals |

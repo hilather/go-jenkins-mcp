@@ -1,9 +1,11 @@
 # Pilot operator checklist (REL-001)
 
+> **Canonical copy:** [`pilot/checklist.md`](pilot/checklist.md) (includes **modes piloted** matrix §0). Prefer that path for new evidence packs.
+
 Use one copy per host. Platforms: **Rocky Linux** or **Ubuntu** only.
 Windows: stop — not a pilot platform.
 
-Companion: [README.md](README.md) · [user guide](../user/README.md) · [admin guide](../admin/README.md) · [agent usage](../agent-usage.md)
+Companion: [pilot/README.md](pilot/README.md) · [user guide](user/README.md) · [admin guide](admin/README.md) · [agent usage](agent-usage.md)
 
 Host OS: _____________  (Rocky / Ubuntu)  
 Binary version/commit: _____________  

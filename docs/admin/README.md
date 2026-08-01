@@ -121,7 +121,8 @@ a multi-tenant end-user control plane or SaaS console.
 | Vault / Jenkins tokens | **Never** in browser JSON or SPA. Mode A vault inventory is hash-only subjects via `GET /admin/v1/gateway/vault`; writes remain CLI (`gateway vault-put` / `vault-delete`). |
 | Enabled auth modes | Secret-free mode **ids** on `GET /admin/v1/health` (`enabledModes`) and `GET /admin/v1/gateway/vault` (`mode` + `enabledModes`). No secrets, no vault material. |
 | Multi-operator sessions | **Residual: single process role** (`--admin-role`) for the whole BFF. No multi-user admin session table / CSRF cookies in v1. |
-| localStorage token UX | **Pilot / quarantine for non-pilot.** Prefer httpOnly cookie + CSRF or OS-broker residual before production multi-host. |
+| localStorage token UX | **Pilot / quarantine for production.** SPA may store admin Bearer in `localStorage` for loopback labs only — **not** a production multi-host authn story. Prefer httpOnly cookie + CSRF or reverse-proxy mTLS/OIDC residual (ADR 0014). |
+| Multi-user MCP gateway pin | **Residual:** there is **no** production `JENKINS_MCP_GATEWAY_MULTI_USER=1` “ready” flip in admin or serve that declares multi-user identity complete. Shared admin token ≠ per-user MCP subject. RequireSubject + mode matrix + vault paths are offline foundations; live multi-user GO is REL/HOST residual. Admin never surfaces tokens/subjects raw. |
 | CSP under reverse-proxy | Prefer **same-origin** (SPA + `/admin/v1`). Do not strip CSP; re-apply if TLS terminates upstream. |
 | HA admin | Not multi-replica admin plane (HOST-008 Tier B). |
 

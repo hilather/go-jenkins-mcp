@@ -26,7 +26,8 @@ func TestValidateProviderConfig_OK(t *testing.T) {
 
 func TestValidateProviderConfig_RejectsJenkinsAsAS(t *testing.T) {
 	t.Parallel()
-	// Regression: stock Jenkins must never be configured as OAuth authorization server.
+	// Regression / OAUTH-011 canary: stock Jenkins must never be configured as
+	// OAuth authorization server (default no-go; ADR 0013 / docs/auth/jas-no-go.md §4.1).
 	cases := []gateway.AgentCoreConfig{
 		{
 			AuthorizationServerBaseURL: "https://jenkins.example.com",

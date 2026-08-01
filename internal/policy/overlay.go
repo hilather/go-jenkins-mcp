@@ -24,8 +24,17 @@ const (
 	// EnvPolicyRequiredVar when truthy (1/true/yes/on) fails closed if the
 	// resolved policy file is missing. Invalid/unreadable present files always
 	// fail closed regardless of this flag. Also rejects unsigned overlays when
-	// set (production-style enforcement even without trusted keys staging).
+	// set (production-style enforcement even without trusted keys staging —
+	// RequiringSignatureVerifier field-presence check only).
 	EnvPolicyRequiredVar = "JENKINS_MCP_POLICY_REQUIRED"
+
+	// EnvRequireSignedPolicyVar when truthy (1/true/yes/on) requires a
+	// cryptographically signed policy bundle with trusted public keys
+	// (Ed25519). Stronger than POLICY_REQUIRED: fails closed if no trusted
+	// keys are configured (staging stub is not accepted). Intended for
+	// enterprise gateway hosts / force-off pin (MGR-001 residual lite).
+	// Alias intent: refuse unsigned force-off residual paths at serve load.
+	EnvRequireSignedPolicyVar = "JENKINS_MCP_REQUIRE_SIGNED_POLICY"
 )
 
 // PolicyMode controls default-allow vs default-deny for tools (POL-002).
@@ -445,6 +454,7 @@ func LoadOverlay(opts LoadOptions) (LoadResult, error) {
 // DefaultVerifierFromEnviron builds the production/pilot verifier for LoadFromEnviron.
 //
 //	trusted keys present → Ed25519SignatureVerifier (RequireSigned=true)
+//	REQUIRE_SIGNED_POLICY without keys → error (fail closed; no staging stub)
 //	POLICY_REQUIRED without keys → RequiringSignatureVerifier (staging)
 //	else → NopSignatureVerifier (pilot)
 func DefaultVerifierFromEnviron(opts LoadOptions) (SignatureVerifier, error) {
@@ -456,7 +466,16 @@ func DefaultVerifierFromEnviron(opts LoadOptions) (SignatureVerifier, error) {
 			return nil, err
 		}
 	}
-	required := opts.Required || policyRequiredFromEnv()
+	requireSigned := requireSignedPolicyFromEnv()
+	required := opts.Required || policyRequiredFromEnv() || requireSigned
+	if requireSigned && keys.Len() == 0 {
+		// MGR-001 residual lite: enterprise gateway hosts must pin real Ed25519
+		// verification — field-presence staging is not force-off safe.
+		return nil, apperr.New(apperr.CodePolicyDenial,
+			"JENKINS_MCP_REQUIRE_SIGNED_POLICY=1 requires trusted public keys "+
+				"(set JENKINS_MCP_POLICY_TRUSTED_KEYS or policy/trusted_keys/); "+
+				"unsigned pilot overlays and staging stub signatures are rejected")
+	}
 	if keys.Len() > 0 {
 		var cache *LastGoodCache
 		if !opts.SkipLastGood {
@@ -486,8 +505,9 @@ func DefaultVerifierFromEnviron(opts LoadOptions) (SignatureVerifier, error) {
 // When trusted public keys are present, Ed25519 verification is enforced and
 // unsigned plain overlays are rejected. When no keys are configured, pilot
 // NopSignatureVerifier is used (signature_state=unverified_pilot).
+// JENKINS_MCP_REQUIRE_SIGNED_POLICY=1 fails closed without trusted keys.
 func LoadFromEnviron() (LoadResult, error) {
-	opts := LoadOptions{Required: policyRequiredFromEnv()}
+	opts := LoadOptions{Required: policyRequiredFromEnv() || requireSignedPolicyFromEnv()}
 	v, err := DefaultVerifierFromEnviron(opts)
 	if err != nil {
 		return LoadResult{}, err
@@ -498,6 +518,10 @@ func LoadFromEnviron() (LoadResult, error) {
 
 func policyRequiredFromEnv() bool {
 	return ParseEnvReadOnly(os.Getenv(EnvPolicyRequiredVar)) // same truthy parser
+}
+
+func requireSignedPolicyFromEnv() bool {
+	return ParseEnvReadOnly(os.Getenv(EnvRequireSignedPolicyVar))
 }
 
 // sanitizePath returns a base-only path for model-visible errors when possible.

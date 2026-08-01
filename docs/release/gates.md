@@ -35,6 +35,7 @@ Stable IDs emitted on `checks[].gate_id` and `residual[].gate_ids` in schema **v
 | `REL-002.compat.mcp-sdk` | Compatibility · MCP SDK | `mcp_sdk_pin` (+ residual `cursor_host_ci`) |
 | `REL-002.compat.gateway` | Compatibility · gateway | `gateway_qualify_offline` |
 | `REL-002.compat.auth` | Compatibility · auth | residual `live_entra` |
+| `REL-002.compat.modes` | Compatibility · modes A/B/C | residual `gateway_modes_live` (operator mode matrix) |
 | `REL-002.compat.os` | Compatibility · OS Tier-1 | residual `install_operator` |
 | `REL-002.sec.self-check` | Security · self-assessment | `security_self_check` |
 | `REL-002.sec.policy` | Security · read-only / deny-only | `policy_engine_self_test` |
@@ -103,6 +104,7 @@ Stable IDs emitted on `checks[].gate_id` and `residual[].gate_ids` in schema **v
 | MCP SDK | `go test ./internal/tools/ -count=1 -run MCP` + `mcp_sdk_pin` in release-evidence (go.mod / build_info) | ADR 0006 versions |
 | Gateway offline qualify | `jenkins-mcp gateway qualify --offline` or embed in release-evidence | Live AgentCore residual |
 | Auth matrix | API-token cohort evidence; OAuth residual if not claimed | AUTH docs |
+| **Modes piloted (A/B/C + stdio)** | Fill [evidence-template](evidence-template.md) mode matrix + [pilot checklist §0](../pilot/checklist.md) | Offline `gateway qualify` ≠ live mode GO; residual `gateway_modes_live` in release-evidence |
 | Jenkins LTS / plugins | Org matrix notes (version + Pipeline REST + JUnit) | capability tool |
 
 ### Usability (mandatory for pilot/production docs)
@@ -183,6 +185,8 @@ make pilot-evidence PROFILE= SKIP_GO_TEST=1
 - UPD-001 signed manifest verify + optional checksum-only download are implemented; **auto-install and binary rollback remain residual** (prefer package manager).
 - `release-evidence --offline` and `make pilot-evidence` do **not** replace full `make test` / package / signing gates; attach those logs separately when claiming production GO.
 - Live Entra / jwt-auth-filter / AgentCore Obtain remain residual (offline contracts only).
+- **Gateway modes A/B/C live multi-user** remain residual unless the release evidence mode matrix records live pilot cohorts; offline `gateway_qualify` / unit contracts are foundation only (`gateway_modes_live`).
 - Cursor host stdio CI remains residual (offline MCP protocol matrix + Wave 25 binary stdio smoke + Wave 26 optional CI job `stdio-smoke`; not real Cursor). Residual ids: `stdio_binary_smoke` Done* vs `cursor_host_ci` open.
 - Live Rocky/Ubuntu pilot install evidence remains operator-owned (REL-001).
 - Code signing keys and HSM remain organization-owned (packaging placeholder).
+- OAUTH-011 Jenkins-as-AS remains **default no-go** ([jas-no-go](../auth/jas-no-go.md), ADR 0013); not a release dependency.

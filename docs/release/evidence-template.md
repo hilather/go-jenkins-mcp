@@ -84,6 +84,24 @@ Link artifacts by path or hash. **No secrets** in this document.
 | Auth cohort (API token / OAuth) | | | |
 | Jenkins version matrix | | | |
 
+### Modes piloted (REL-001/002 honesty)
+
+Record deployment surfaces and gateway credential modes that have **evidence**
+for this release decision. Offline-only rows must not be treated as live GO.
+See [pilot checklist §0](../pilot/checklist.md) and [gates.md](gates.md).
+
+| Mode / surface | Piloted? | Evidence path | Residual |
+|----------------|----------|---------------|----------|
+| Local Cursor stdio (personal API token) | | | |
+| Local OIDC profile (IdP ≠ Jenkins) | | | live RS residual if unclaimed |
+| Gateway Mode **A** `api_token_vault` | | | multi-user Obtain residual |
+| Gateway Mode **B** `jwt_rs_bearer` | | | live Entra / jwt-auth-filter |
+| Gateway Mode **C** AgentCore Live | | | live AgentCore / Entra Obtain |
+| Offline only: `gateway qualify --offline` | | `gateway-qualify.json` / release-evidence | **not** live multi-user GO |
+| Admin console (loopback) | | | localStorage pilot-only residual |
+
+Modes **not** in release scope: _____________
+
 ---
 
 ## Usability gates
