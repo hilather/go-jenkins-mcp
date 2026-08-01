@@ -349,6 +349,28 @@ func TestTokenCacheFromEnviron(t *testing.T) {
 	}
 }
 
+func TestTokenCachePathConfiguredFromEnviron(t *testing.T) {
+	t.Parallel()
+	if gateway.TokenCachePathConfiguredFromEnviron(func(string) string { return "" }) {
+		t.Fatal("empty path must be false")
+	}
+	if gateway.TokenCachePathConfiguredFromEnviron(func(string) string { return "   " }) {
+		t.Fatal("whitespace-only path must be false")
+	}
+	marker := "token-cache-path-canary-NEVER-IN-JSON"
+	path := filepath.Join(t.TempDir(), marker+".json")
+	if !gateway.TokenCachePathConfiguredFromEnviron(func(k string) string {
+		if k == gateway.EnvGatewayTokenCachePath {
+			return path
+		}
+		return ""
+	}) {
+		t.Fatal("non-empty path must be true")
+	}
+	// Secret-free: helper returns bool only — never the path string.
+	// (No string return to leak; residual-status canaries assert path not dumped.)
+}
+
 // Mode C serve wire: JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH → FileTokenCache on provider.
 func TestCredentialProviderFromEnviron_ModeC_FileTokenCache(t *testing.T) {
 	t.Parallel()

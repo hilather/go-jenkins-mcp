@@ -552,8 +552,9 @@ func TestGatewayResidualStatus(t *testing.T) {
 	if _, ok := payload["rateEnabled"].(bool); !ok {
 		t.Fatalf("rateEnabled: %+v", payload["rateEnabled"])
 	}
-	// shared_subject_rate_file / shared_principal_cache_file / shared_jwks_file are
-	// env path residual (false when unset; HOST-008 lite). Never path values.
+	// shared_subject_rate_file / shared_principal_cache_file / shared_jwks_file /
+	// shared_token_cache_file are env path residual (false when unset; HOST-008 lite).
+	// Never path values.
 	if payload["shared_subject_rate_file"] != false {
 		t.Fatalf("shared_subject_rate_file default false: %+v", payload["shared_subject_rate_file"])
 	}
@@ -562,6 +563,9 @@ func TestGatewayResidualStatus(t *testing.T) {
 	}
 	if payload["shared_jwks_file"] != false {
 		t.Fatalf("shared_jwks_file default false: %+v", payload["shared_jwks_file"])
+	}
+	if payload["shared_token_cache_file"] != false {
+		t.Fatalf("shared_token_cache_file default false: %+v", payload["shared_token_cache_file"])
 	}
 	if _, ok := payload["ratePerMinute"].(float64); !ok {
 		// json numbers → float64
@@ -714,6 +718,36 @@ func TestGatewayResidualStatus_SharedJWKSFileEnv(t *testing.T) {
 	s := string(blob)
 	if strings.Contains(s, marker) || strings.Contains(s, path) {
 		t.Fatal("Regression: JWKS_CACHE_PATH leaked into residual-status")
+	}
+	for _, bad := range []string{canaryCLIToken, "access_token=", "refresh_token=", "Bearer " + canaryCLIToken} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q", bad)
+		}
+	}
+}
+
+// shared_token_cache_file flips true when TOKEN_CACHE_PATH set; path never appears in JSON.
+func TestGatewayResidualStatus_SharedTokenCacheFileEnv(t *testing.T) {
+	marker := "cli-token-cache-path-canary-NEVER"
+	path := filepath.Join(t.TempDir(), marker+".json")
+	t.Setenv(gateway.EnvGatewayTokenCachePath, path)
+	t.Setenv("HOST009_FAKE_TOKEN", canaryCLIToken)
+
+	out := buildGatewayResidualStatus(os.Getenv)
+	if out["shared_token_cache_file"] != true {
+		t.Fatalf("shared_token_cache_file want true: %+v", out["shared_token_cache_file"])
+	}
+	clear := buildGatewayResidualStatus(func(string) string { return "" })
+	if clear["shared_token_cache_file"] != false {
+		t.Fatalf("shared_token_cache_file default false: %+v", clear["shared_token_cache_file"])
+	}
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: TOKEN_CACHE_PATH leaked into residual-status")
 	}
 	for _, bad := range []string{canaryCLIToken, "access_token=", "refresh_token=", "Bearer " + canaryCLIToken} {
 		if strings.Contains(s, bad) {

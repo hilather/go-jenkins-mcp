@@ -15,6 +15,7 @@ import {
   PRINCIPAL_CACHE_PROCESS_HONESTY,
   SHARED_JWKS_FILE_HONESTY,
   SHARED_SUBJECT_RATE_FILE_HONESTY,
+  SHARED_TOKEN_CACHE_FILE_HONESTY,
 } from "./residualStatus";
 
 describe("pickResidualRateCacheFields", () => {
@@ -23,19 +24,22 @@ describe("pickResidualRateCacheFields", () => {
       shared_subject_rate_file: false,
       shared_principal_cache_file: false,
       shared_jwks_file: false,
+      shared_token_cache_file: false,
     });
     expect(pickResidualRateCacheFields(null)).toEqual({
       shared_subject_rate_file: false,
       shared_principal_cache_file: false,
       shared_jwks_file: false,
+      shared_token_cache_file: false,
     });
   });
 
-  it("mirrors Wave 11 snake_case residual-status keys including shared_jwks_file", () => {
+  it("mirrors Wave 11 snake_case residual-status keys including shared_token_cache_file", () => {
     const data: GatewayResidualStatusResponse = {
       shared_subject_rate_file: true,
       shared_principal_cache_file: true,
       shared_jwks_file: true,
+      shared_token_cache_file: true,
       subject_rate_max_subjects: 64,
       principal_cache_entries: 3,
       principal_cache_max_entries: 256,
@@ -49,6 +53,7 @@ describe("pickResidualRateCacheFields", () => {
       shared_subject_rate_file: true,
       shared_principal_cache_file: true,
       shared_jwks_file: true,
+      shared_token_cache_file: true,
       subject_rate_max_subjects: 64,
       principal_cache_entries: 3,
       principal_cache_max_entries: 256,
@@ -61,12 +66,14 @@ describe("pickResidualRateCacheFields", () => {
     const data: GatewayResidualStatusResponse = {
       shared_subject_rate_file: false,
       shared_jwks_file: false,
+      shared_token_cache_file: false,
       principal_cache_entries: 0,
     };
     expect(pickResidualRateCacheFields(data)).toEqual({
       shared_subject_rate_file: false,
       shared_principal_cache_file: false,
       shared_jwks_file: false,
+      shared_token_cache_file: false,
       principal_cache_entries: 0,
     });
   });
@@ -75,21 +82,24 @@ describe("pickResidualRateCacheFields", () => {
     const data = {
       shared_subject_rate_file: true,
       shared_jwks_file: true,
+      shared_token_cache_file: true,
       principal_cache_entries: 1,
       // adversarial noise — must not surface as typed rate/cache fields
       subject: "tenant|alice|profile",
       token: "canary-secret-token",
       path: "/tmp/jwks-cache.json",
       jwks_cache_path: "/secret/path/jwks.json",
+      token_cache_path: "/secret/path/token.json",
     } as GatewayResidualStatusResponse;
     const picked = pickResidualRateCacheFields(data);
     expect(picked).toEqual({
       shared_subject_rate_file: true,
       shared_principal_cache_file: false,
       shared_jwks_file: true,
+      shared_token_cache_file: true,
       principal_cache_entries: 1,
     });
-    expect(JSON.stringify(picked)).not.toMatch(/canary|alice|token|path|secret\/path/i);
+    expect(JSON.stringify(picked)).not.toMatch(/canary|alice|secret-token|path|secret\/path/i);
   });
 
   it("only treats explicit boolean true as shared_*_file (never Boolean() truthy strings)", () => {
@@ -98,11 +108,13 @@ describe("pickResidualRateCacheFields", () => {
       shared_subject_rate_file: "false",
       shared_principal_cache_file: "true",
       shared_jwks_file: 1,
+      shared_token_cache_file: "yes",
     } as unknown as GatewayResidualStatusResponse;
     expect(pickResidualRateCacheFields(noisy)).toEqual({
       shared_subject_rate_file: false,
       shared_principal_cache_file: false,
       shared_jwks_file: false,
+      shared_token_cache_file: false,
     });
   });
 });
@@ -208,6 +220,15 @@ describe("honesty constants", () => {
     expect(SHARED_JWKS_FILE_HONESTY).toMatch(/not multi-pod/i);
     expect(SHARED_JWKS_FILE_HONESTY).toMatch(/path never shown/i);
     expect(SHARED_JWKS_FILE_HONESTY).not.toMatch(/token|secret|\/tmp|\/var/i);
+  });
+
+  it("token cache file honesty is same-host FileTokenCache lite not multi-pod", () => {
+    expect(SHARED_TOKEN_CACHE_FILE_HONESTY).toMatch(/same-host/i);
+    expect(SHARED_TOKEN_CACHE_FILE_HONESTY).toMatch(/FileTokenCache/i);
+    expect(SHARED_TOKEN_CACHE_FILE_HONESTY).toMatch(/not multi-pod/i);
+    expect(SHARED_TOKEN_CACHE_FILE_HONESTY).toMatch(/path never shown/i);
+    expect(SHARED_TOKEN_CACHE_FILE_HONESTY).toMatch(/secrets never shown/i);
+    expect(SHARED_TOKEN_CACHE_FILE_HONESTY).not.toMatch(/\/tmp|\/var|access_token/i);
   });
 
   it("principal cache honesty is admin BFF process-local", () => {

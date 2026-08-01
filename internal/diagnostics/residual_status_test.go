@@ -2,6 +2,7 @@ package diagnostics_test
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -80,6 +81,10 @@ func TestBuildGatewayResidualStatus_SecretFreeAndModeBId(t *testing.T) {
 	// shared_jwks_file default false when JWKS cache path unset (HOST-001/HOST-008 lite).
 	if out["shared_jwks_file"] != false {
 		t.Fatalf("shared_jwks_file default false: %+v", out["shared_jwks_file"])
+	}
+	// shared_token_cache_file default false when TOKEN_CACHE_PATH unset (HOST-008 lite).
+	if out["shared_token_cache_file"] != false {
+		t.Fatalf("shared_token_cache_file default false: %+v", out["shared_token_cache_file"])
 	}
 	note, _ := out["residual_note"].(string)
 	doc, _ := out["doc"].(string)
@@ -253,5 +258,55 @@ func TestBuildGatewayResidualStatus_SharedJWKSFile(t *testing.T) {
 	clear := diagnostics.BuildGatewayResidualStatus(func(string) string { return "" })
 	if clear["shared_jwks_file"] != false {
 		t.Fatalf("shared_jwks_file default false: %+v", clear["shared_jwks_file"])
+	}
+}
+
+// shared_token_cache_file=true when TOKEN_CACHE_PATH set; path never dumped (HOST-008 lite).
+// Residual must not open the cache file (tokens on disk) — bool + path residual only.
+func TestBuildGatewayResidualStatus_SharedTokenCacheFile(t *testing.T) {
+	marker := "token-cache-path-canary-NEVER-IN-JSON"
+	path := t.TempDir() + "/" + marker + ".json"
+	// Plant a fake token file so open-leak would surface if residual ever read it.
+	seedToken := "seed-access-token-CANARY-never-in-residual-json"
+	if err := os.WriteFile(path, []byte(`{"version":1,"entries":{"k":{"access_token":"`+seedToken+`","expires_at":"2099-01-01T00:00:00Z"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(gateway.EnvGatewayTokenCachePath, path)
+	t.Setenv("HOST_RESIDUAL_CANARY", residualCanary)
+
+	out := diagnostics.BuildGatewayResidualStatus(nil)
+	if out["shared_token_cache_file"] != true {
+		t.Fatalf("shared_token_cache_file want true when path set: %+v", out["shared_token_cache_file"])
+	}
+	// Other shared_*_file flags stay false when only token path is set.
+	if out["shared_subject_rate_file"] != false {
+		t.Fatalf("shared_subject_rate_file must stay false: %+v", out["shared_subject_rate_file"])
+	}
+	if out["shared_principal_cache_file"] != false {
+		t.Fatalf("shared_principal_cache_file must stay false: %+v", out["shared_principal_cache_file"])
+	}
+	if out["shared_jwks_file"] != false {
+		t.Fatalf("shared_jwks_file must stay false: %+v", out["shared_jwks_file"])
+	}
+	clear := diagnostics.BuildGatewayResidualStatus(func(string) string { return "" })
+	if clear["shared_token_cache_file"] != false {
+		t.Fatalf("shared_token_cache_file default false: %+v", clear["shared_token_cache_file"])
+	}
+
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: TOKEN_CACHE_PATH leaked into residual-status JSON")
+	}
+	if strings.Contains(s, seedToken) {
+		t.Fatal("Regression: token cache file contents leaked into residual-status JSON")
+	}
+	for _, bad := range []string{residualCanary, "access_token=", "refresh_token=", "client_secret=", "Bearer " + residualCanary} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q in residual-status with token cache path", bad)
+		}
 	}
 }
