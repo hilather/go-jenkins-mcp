@@ -81,6 +81,17 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 - Retention is size-based for the pilot; enterprise export/retention policy is residual.
 - **Admin audit list (same-host lite):** `GET /admin/v1/profiles/{id}/audit` merges the active file with numbered rotates (`audit.jsonl.1` …) and optional timestamp-like siblings next to the active path; newest matching events first; corrupt lines skipped. **Not** multi-pod aggregation.
 
+### Remote SIEM / syslog / Splunk (residual)
+
+| Capability | Status |
+|------------|--------|
+| Local JSONL file sink + `audit.Multi` fan-out interface | **Done\*** |
+| In-process **syslog** / **Splunk HEC** / webhook audit ship | **Residual** — not implemented (backlog **AUD-T-010…012** in [security/audit-trail-review.md](security/audit-trail-review.md)) |
+| Host agent tail of `audit.jsonl` (Fluent Bit, Splunk UF, rsyslog `imfile`, Vector) | **Operator-owned** near-term path (runbook **AUD-T-013**) |
+| `ext-logs` adapter (query external logs for Jenkins jobs) | **Separate** INT-003 — not audit export; real Splunk/ELK *clients* residual |
+
+Industry mapping + task backlog: **[security/audit-trail-review.md](security/audit-trail-review.md)**.
+
 ## Metrics & logging (OBS-001)
 
 Package: `internal/telemetry`.
@@ -524,6 +535,17 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 - Default max active file size: **8 MiB**, keep **3** rotated siblings (`audit.jsonl.1` …).
 - Retention is size-based for the pilot; enterprise export/retention policy is residual.
 - **Admin audit list (same-host lite):** `GET /admin/v1/profiles/{id}/audit` merges the active file with numbered rotates (`audit.jsonl.1` …) and optional timestamp-like siblings next to the active path; newest matching events first; corrupt lines skipped. **Not** multi-pod aggregation.
+
+### Remote SIEM / syslog / Splunk (residual)
+
+| Capability | Status |
+|------------|--------|
+| Local JSONL file sink + `audit.Multi` fan-out interface | **Done\*** |
+| In-process **syslog** / **Splunk HEC** / webhook audit ship | **Residual** — not implemented (backlog **AUD-T-010…012** in [security/audit-trail-review.md](security/audit-trail-review.md)) |
+| Host agent tail of `audit.jsonl` (Fluent Bit, Splunk UF, rsyslog `imfile`, Vector) | **Operator-owned** near-term path (runbook **AUD-T-013**) |
+| `ext-logs` adapter (query external logs for Jenkins jobs) | **Separate** INT-003 — not audit export; real Splunk/ELK *clients* residual |
+
+Industry mapping + task backlog: **[security/audit-trail-review.md](security/audit-trail-review.md)**.
 
 ## Metrics & logging (OBS-001)
 

@@ -44,6 +44,7 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [security/policy-bundles.md](security/policy-bundles.md) | Signed Ed25519 policy envelopes (MGR-001) |
 | [security/fleet-telemetry.md](security/fleet-telemetry.md) | Opt-in telemetry privacy (MGR-002) |
 | [security/privacy-data-retention.md](security/privacy-data-retention.md) | Data classes & retention (QA-006) |
+| [security/audit-trail-review.md](security/audit-trail-review.md) | Audit trail vs industry standards + **AUD-T** backlog (SIEM residual) |
 | [security/threat-model.md](security/threat-model.md) | Assets, actors, trust boundaries |
 | [security/cache-encryption.md](security/cache-encryption.md) | Optional L1 AEAD residual |
 

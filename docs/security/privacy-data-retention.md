@@ -40,13 +40,13 @@ SSD secure-erasure limitations are stated honestly.
 | Profile JSON | Until `profile remove` | Non-secret fields only |
 | L1 frames | Quota + maintenance eviction; optional L1 release after verified L2 | `app.Maintainer` + `store.QuotaManager` |
 | L2 packs | Until eviction / manual cache purge | Format versioned; recovery paths documented in archive docs |
-| Audit JSONL | Size-based rotation (file sink) | No remote ship in MVP |
+| Audit JSONL | Size-based rotation (file sink) | No in-process remote SIEM ship (residual **AUD-T-010…012**); host-agent tail OK — see [audit-trail-review.md](audit-trail-review.md) |
 | Support bundles | Operator-managed; not auto-uploaded | Create on demand; preview first |
 | Local telemetry | Process lifetime | In-process counters; stderr logs redacted |
 | Fleet telemetry queue | Bounded local queue under XDG data | **Disabled by default** (MGR-002); see [fleet-telemetry.md](fleet-telemetry.md) |
 | Adapters | Process lifetime | Disabled by default |
 
-**Residual:** org-wide retention SLAs, legal hold, and remote SIEM shipping remain operator-owned. Fleet export requires explicit `JENKINS_MCP_TELEMETRY=1` plus privacy approval of the schema in [fleet-telemetry.md](fleet-telemetry.md).
+**Residual:** org-wide retention SLAs, legal hold, and **in-process** remote SIEM shipping remain open (task backlog in [audit-trail-review.md](audit-trail-review.md)). Operators may ship local `audit.jsonl` via host agents today. Fleet **telemetry** export requires explicit `JENKINS_MCP_TELEMETRY=1` plus privacy approval of the schema in [fleet-telemetry.md](fleet-telemetry.md) — that plane is not the AUD-001 audit trail.
 
 ---
 
