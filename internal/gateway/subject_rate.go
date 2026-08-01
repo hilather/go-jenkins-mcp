@@ -14,12 +14,14 @@ import (
 //
 // Single-process MVP only (HOST-008 multi-replica residual). Policy may only
 // reduce these caps — never elevate past process absolute ceilings.
+// Overlay max_tools_per_minute / max_tools_burst → LowerRate (lower only;
+// empty = no change; absolute floor MinSubjectRate*).
 //
 // Serve wire (Done*): cmd sets tools.RegisterOptions.SubjectRateLimiter when
 // --gateway is on and resolved ratePerMinute > 0 (0 = disabled residual).
 // tools.addTool calls Allow when limiter and SubjectKey are set. tools does
 // not import gateway (FND-004); the tools.SubjectRateLimiter interface is the
-// wire surface.
+// wire surface (Allow only; LowerRate stays on *gateway.SubjectRateLimiter).
 
 const (
 	// DefaultSubjectRatePerMinute is the default sustained tool dispatches per
@@ -34,6 +36,12 @@ const (
 	AbsoluteMaxSubjectRatePerMinute = 600
 	// AbsoluteMaxSubjectRateBurst is the hard per-subject burst ceiling.
 	AbsoluteMaxSubjectRateBurst = 120
+	// MinSubjectRatePerMinute is the absolute floor when policy/env lowers the
+	// live rate mid-serve (never 0 via LowerRate; 0 remains construction-only
+	// disabled residual).
+	MinSubjectRatePerMinute = 1
+	// MinSubjectRateBurst is the absolute floor when lowering burst.
+	MinSubjectRateBurst = 1
 	// DefaultProcessRatePerMinute is the default process-wide sustained rate
 	// when processMaxPerMinute is non-positive at construction.
 	DefaultProcessRatePerMinute = 300
@@ -199,6 +207,8 @@ func (l *SubjectRateLimiter) RatePerMinute() int {
 	if l == nil {
 		return 0
 	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	return l.ratePerMinute
 }
 
@@ -207,6 +217,8 @@ func (l *SubjectRateLimiter) Burst() int {
 	if l == nil {
 		return 0
 	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	return l.burst
 }
 
@@ -224,6 +236,76 @@ func (l *SubjectRateLimiter) ProcessBurst() int {
 		return 0
 	}
 	return l.processBurst
+}
+
+// LowerRate reduces per-subject sustained rate and/or burst when the requested
+// values are positive and strictly smaller than the current live values.
+//
+// Policy/overlay may only lower serve-bootstrap rate — never raise (HOST-006).
+// Semantics:
+//   - perMin <= 0 → leave rate unchanged (empty / omitted)
+//   - burst <= 0 → leave burst unchanged
+//   - requested values are clamped to [MinSubjectRate*, AbsoluteMaxSubjectRate*]
+//     then applied only when still strictly below current
+//   - never raises above absolute ceilings or current live values
+//   - does not change process-wide ceilings
+//   - updates existing subject buckets' refill/capacity (tokens clamped to new capacity)
+//
+// Returns true when either dimension changed. Nil receiver is a no-op false.
+// Raising rate above the live value still requires process restart with a higher
+// env/bootstrap (overlay alone never elevates).
+func (l *SubjectRateLimiter) LowerRate(perMin, burst int) bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	changed := false
+	if perMin > 0 {
+		want := perMin
+		if want > AbsoluteMaxSubjectRatePerMinute {
+			want = AbsoluteMaxSubjectRatePerMinute
+		}
+		if want < MinSubjectRatePerMinute {
+			want = MinSubjectRatePerMinute
+		}
+		if want < l.ratePerMinute {
+			l.ratePerMinute = want
+			refill := float64(want) / 60.0
+			for _, b := range l.bySubject {
+				if b == nil {
+					continue
+				}
+				b.refillPerS = refill
+			}
+			changed = true
+		}
+	}
+	if burst > 0 {
+		want := burst
+		if want > AbsoluteMaxSubjectRateBurst {
+			want = AbsoluteMaxSubjectRateBurst
+		}
+		if want < MinSubjectRateBurst {
+			want = MinSubjectRateBurst
+		}
+		if want < l.burst {
+			l.burst = want
+			cap := float64(want)
+			for _, b := range l.bySubject {
+				if b == nil {
+					continue
+				}
+				b.capacity = cap
+				if b.tokens > cap {
+					b.tokens = cap
+				}
+			}
+			changed = true
+		}
+	}
+	return changed
 }
 
 // SetNow injects a clock for tests. Nil now is ignored.
@@ -304,16 +386,20 @@ func (l *SubjectRateLimiter) StatusMap() map[string]any {
 	}
 	l.mu.Lock()
 	subjects := len(l.bySubject)
+	rpm := l.ratePerMinute
+	burst := l.burst
 	l.mu.Unlock()
 	return map[string]any{
 		"configured":                    true,
-		"rate_per_minute":               l.ratePerMinute,
-		"burst":                         l.burst,
+		"rate_per_minute":               rpm,
+		"burst":                         burst,
 		"process_rate_per_minute":       l.processRPM,
 		"process_burst":                 l.processBurst,
 		"subjects_tracked":              subjects,
 		"absolute_max_rate_per_minute":  AbsoluteMaxSubjectRatePerMinute,
 		"absolute_max_burst":            AbsoluteMaxSubjectRateBurst,
+		"absolute_min_rate_per_minute":  MinSubjectRatePerMinute,
+		"absolute_min_burst":            MinSubjectRateBurst,
 		"absolute_process_rate_per_min": AbsoluteMaxProcessRatePerMinute,
 		"ha_multi_replica":              false, // HOST-008 residual
 	}

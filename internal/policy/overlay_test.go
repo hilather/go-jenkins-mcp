@@ -23,7 +23,9 @@ func TestLoadValidOverlay(t *testing.T) {
 		"mode": "pilot",
 		"deny_tools": ["jenkins_get_build_logs", "jenkins_start_job"],
 		"deny_job_prefixes": ["secret-folder"],
-		"max_result_bytes": 4096
+		"max_result_bytes": 4096,
+		"max_tools_per_minute": 15,
+		"max_tools_burst": 5
 	}`
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
@@ -50,6 +52,12 @@ func TestLoadValidOverlay(t *testing.T) {
 	}
 	if n, ok := res.Overlay.EffectiveMaxResultBytes(); !ok || n != 4096 {
 		t.Fatalf("max_result_bytes=%d ok=%v", n, ok)
+	}
+	if n, ok := res.Overlay.EffectiveMaxToolsPerMinute(); !ok || n != 15 {
+		t.Fatalf("max_tools_per_minute=%d ok=%v", n, ok)
+	}
+	if n, ok := res.Overlay.EffectiveMaxToolsBurst(); !ok || n != 5 {
+		t.Fatalf("max_tools_burst=%d ok=%v", n, ok)
 	}
 	if res.SignatureState != "unverified_pilot" {
 		t.Fatalf("signature_state=%s", res.SignatureState)
@@ -128,6 +136,47 @@ func TestLoadEmptyDenyJobPrefixFailClosed(t *testing.T) {
 	}
 	if apperr.CodeOf(err) != apperr.CodePolicyDenial && apperr.CodeOf(err) != apperr.CodeInvalidArgument {
 		t.Fatalf("code=%s", apperr.CodeOf(err))
+	}
+}
+
+// HOST-006: max_tools_per_minute / max_tools_burst must be positive when set;
+// omitted fields leave Effective* empty (serve treats as no LowerRate change).
+func TestOverlayMaxToolsRateValidate(t *testing.T) {
+	t.Parallel()
+	o := &policy.Overlay{Version: 1}
+	if _, ok := o.EffectiveMaxToolsPerMinute(); ok {
+		t.Fatal("empty EffectiveMaxToolsPerMinute")
+	}
+	if _, ok := o.EffectiveMaxToolsBurst(); ok {
+		t.Fatal("empty EffectiveMaxToolsBurst")
+	}
+	zero := 0
+	o.MaxToolsPerMinute = &zero
+	if err := o.Validate(); err == nil {
+		t.Fatal("zero max_tools_per_minute must fail closed")
+	}
+	neg := -3
+	o.MaxToolsPerMinute = &neg
+	if err := o.Validate(); err == nil {
+		t.Fatal("negative max_tools_per_minute must fail closed")
+	}
+	pos := 12
+	o.MaxToolsPerMinute = &pos
+	burstZero := 0
+	o.MaxToolsBurst = &burstZero
+	if err := o.Validate(); err == nil {
+		t.Fatal("zero max_tools_burst must fail closed")
+	}
+	burst := 3
+	o.MaxToolsBurst = &burst
+	if err := o.Validate(); err != nil {
+		t.Fatalf("valid rate fields: %v", err)
+	}
+	if n, ok := o.EffectiveMaxToolsPerMinute(); !ok || n != 12 {
+		t.Fatalf("rpm=%d ok=%v", n, ok)
+	}
+	if n, ok := o.EffectiveMaxToolsBurst(); !ok || n != 3 {
+		t.Fatalf("burst=%d ok=%v", n, ok)
 	}
 }
 

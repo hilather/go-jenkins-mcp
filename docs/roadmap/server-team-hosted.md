@@ -454,8 +454,10 @@ Prevent one user from exhausting process-wide budgets for others.
 `gateway.SubjectRateLimiter` (30/min + burst 10 default; process ceiling).
 **Serve wire Done*:** `SubjectSlotLimiter` + `SubjectRateLimiter`; Allow then Hold;
 `MutationBindingFromContext` prefers Valid PolicySubject PrincipalID (HTTP claim)
-else Caller + process principal. **Residual:** HOST-008 multi-replica; policy
-overlay rate reduction; Obtain whoAmI principal not re-injected onto ctx mid-call.
+else Caller + process principal. **Policy rate reduction Done\* foundation:**
+overlay `max_tools_per_minute` / `max_tools_burst` → `LowerRate` (lower only).
+**Residual:** HOST-008 multi-replica; admin SPA subject-rate knobs; Obtain whoAmI
+principal not re-injected onto ctx mid-call.
 
 ---
 

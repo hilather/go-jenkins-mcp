@@ -139,6 +139,10 @@ type Document struct {
 	DenyBranchNames []string
 	// MaxResultBytes optionally lowers result hard max (0 = unset).
 	MaxResultBytes int
+	// MaxToolsPerMinute optionally lowers per-subject tool rate (0 = unset; HOST-006).
+	MaxToolsPerMinute int
+	// MaxToolsBurst optionally lowers per-subject burst (0 = unset; HOST-006).
+	MaxToolsBurst int
 	// ForceReadOnly mirrors overlay force_read_only for status.
 	ForceReadOnly bool
 	// Version is the source overlay version (0 if synthetic).
@@ -168,6 +172,12 @@ func DocumentFromOverlay(o *Overlay) Document {
 	}
 	if n, ok := o.EffectiveMaxResultBytes(); ok {
 		doc.MaxResultBytes = n
+	}
+	if n, ok := o.EffectiveMaxToolsPerMinute(); ok {
+		doc.MaxToolsPerMinute = n
+	}
+	if n, ok := o.EffectiveMaxToolsBurst(); ok {
+		doc.MaxToolsBurst = n
 	}
 	return doc
 }

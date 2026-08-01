@@ -2789,8 +2789,12 @@ PrincipalID; cooldown keys and audit use effective binding. **Serve wire Done*:*
 `tools.SubjectSlotLimiter` + `tools.SubjectRateLimiter`; `addTool` Allow then Hold
 under `--gateway`; env concurrent + rate/burst
 (`JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` 0 = rate disabled).
-**Residual:** multi-replica (HOST-008); policy overlay rate reduction; Obtain
-principal not re-injected onto ctx mid-call.
+**Policy rate reduction Done\* foundation:** overlay optional
+`max_tools_per_minute` / `max_tools_burst` → `SubjectRateLimiter.LowerRate`
+(lower only; empty = no change; abs floor 1; cannot raise above abs/current);
+bootstrap + reload OnSuccess wire under `--gateway`.
+**Residual:** multi-replica (HOST-008); admin SPA/BFF subject-rate knobs;
+Obtain principal not re-injected onto ctx mid-call.
 
 ---
 

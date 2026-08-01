@@ -275,9 +275,25 @@ Rate limiter is wired under `--gateway` when `rate_per_minute > 0` after resolve
 (default enabled). Explicit `0` leaves `SubjectRateLimiter` nil (unlimited rate;
 concurrency still applies).
 
-**Residual:** multi-replica shared rate/slots (HOST-008); policy-driven rate
-reduction beyond env; Obtain principal not re-injected onto request ctx mid-call
-(Binding PrincipalID uses HTTP claim / lab JenkinsPrincipal when Valid).
+**Policy-driven rate reduction (HOST-006 Done\* foundation):** serve constructs
+`SubjectRateLimiter` from env bootstrap, then optional overlay fields may only
+**lower** via `SubjectRateLimiter.LowerRate` (absolute floors
+`MinSubjectRatePerMinute=1` / `MinSubjectRateBurst=1`; never raise above abs
+ceilings or current live values):
+
+| Overlay field | Role |
+|---------------|------|
+| `max_tools_per_minute` | Upper bound on per-subject sustained tools/min (lower only) |
+| `max_tools_burst` | Upper bound on per-subject burst (lower only) |
+
+Omitted / empty fields leave bootstrap unchanged. Hot-reload OnSuccess applies
+the same LowerRate path (still lower-only; raising rate needs restart with a
+higher env bootstrap). Process-wide rate ceilings are not overlay-tunable.
+Admin SPA rate-cap editor residual (CLI/show-effective + reload log only).
+
+**Residual:** multi-replica shared rate/slots (HOST-008); Obtain principal not
+re-injected onto request ctx mid-call (Binding PrincipalID uses HTTP claim /
+lab JenkinsPrincipal when Valid); admin BFF/SPA parity for subject rate knobs.
 
 ---
 
