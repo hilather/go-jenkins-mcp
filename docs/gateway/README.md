@@ -180,8 +180,17 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
   `FailOnGroupOverage=true`. Lab header `X-Jenkins-MCP-Lab-Groups`
   (comma-separated) only when lab identity is on. Groups never elevate
   `deny_tools` / `force_read_only`.
-- **Live Entra group overage / Microsoft Graph membership expansion** remains
-  residual (OAUTH-010 / GWY-003): no Graph call; overage references do not invent membership.
+- **Entra group overage fail-closed foundation (OAUTH-006): Done\*** —
+  JWT payloads with `_claim_names` / `_claim_sources` group overage markers
+  **or** a groups-as-reference object **without** a concrete `groups` string
+  array fail closed at `ValidateAccessToken` /
+  `ResolveHTTPInbound` / `ExtractGroups` / `GroupsFromValidatedToken`
+  (multi-user RequireVerified gateway bind never invents empty membership).
+  Hybrid tokens that still embed a full `groups` array keep the current path
+  (markers ignored for membership; residual note `group_overage_hybrid`).
+  Lab header path unchanged.
+- **Microsoft Graph membership expansion** remains residual (OAUTH-010 /
+  GWY-003): no Graph call; incomplete overage membership is never invented.
 - **Live Entra / JWKS rotation / Mode C 3LO browser UX** remain GWY-003 /
   OAUTH-010 residuals.
 - **MCP SDK context flow:** AuthProviderCtx / SubjectFromContext only see the
@@ -337,6 +346,13 @@ wrapper (injectable `getenv` for offline tests).
 `MaxInboundGroupNameBytes=256`. Default `FailOnGroupOverage=true` (gateway is
 stricter than local OIDC truncate-by-default). Truncate residual string:
 `group_overage_truncated: stored_groups capped at N; excess ignored (cannot broaden access)`.
+
+**Entra distributed-claim overage (OAUTH-006 foundation Done\*):** when the
+access token has `_claim_names.groups` / groups-as-ref **and no full `groups`
+array**, validation fails closed (`authentication` —
+`entra group overage without full groups claim; membership not invented`).
+No Microsoft Graph expansion (residual OAUTH-010). Hybrid with concrete
+`groups` array: accepted.
 
 **Policy**
 

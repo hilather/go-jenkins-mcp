@@ -54,6 +54,9 @@
 // parser (fixture-only). Live jwt-auth-filter lab remains residual.
 //
 // OAUTH-006 (light): ExtractGroups / BoundGroups with MaxStoredGroups + MaxGroupNameBytes.
+// Entra group overage (_claim_names/_claim_sources or groups-as-ref) without a full
+// groups array fails closed (CheckIncompleteGroupOverage); hybrid concrete groups OK.
+// Microsoft Graph membership expansion remains residual (OAUTH-010).
 //
 // Legacy -auth / JENKINS_MCP_AUTH remain bootstrap-only (KD-003 deprecated path).
 package auth

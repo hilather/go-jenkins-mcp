@@ -85,9 +85,10 @@ func TestExtractGroups_OverageFailClosed(t *testing.T) {
 	}
 }
 
-func TestExtractGroups_EntraOverageReference(t *testing.T) {
+func TestExtractGroups_EntraOverageReference_FailClosed(t *testing.T) {
 	t.Parallel()
-	// Entra overage: groups claim is a reference object, not a list.
+	// Entra overage: groups claim is a reference object, not a list — fail closed
+	// even when roles are present (roles ≠ full directory group membership).
 	claims := map[string]any{
 		"groups": map[string]any{
 			"src":      []string{"src1"},
@@ -95,16 +96,94 @@ func TestExtractGroups_EntraOverageReference(t *testing.T) {
 		},
 		"roles": []string{"App.Reader"},
 	}
+	_, err := auth.ExtractGroups(claims, auth.DefaultGroupClaimConfig())
+	if err == nil || apperr.CodeOf(err) != apperr.CodeAuthentication {
+		t.Fatalf("want auth fail closed, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "overage") {
+		t.Fatalf("want overage wording: %v", err)
+	}
+	// Must not invent membership from the Graph endpoint URL or roles alone.
+	if strings.Contains(err.Error(), "App.Reader") {
+		t.Fatalf("must not leak role invent path: %v", err)
+	}
+	if strings.Contains(err.Error(), "graph.microsoft.com") {
+		t.Fatalf("must not echo graph endpoint in error: %v", err)
+	}
+}
+
+func TestExtractGroups_EntraClaimNamesOverage_FailClosed(t *testing.T) {
+	t.Parallel()
+	// Classic Entra distributed claim: _claim_names.groups + _claim_sources, no groups array.
+	claims := map[string]any{
+		"sub": "user-overage",
+		"_claim_names": map[string]any{
+			"groups": "src1",
+		},
+		"_claim_sources": map[string]any{
+			"src1": map[string]any{
+				"endpoint": "https://graph.microsoft.com/v1.0/users/uid/getMemberObjects",
+			},
+		},
+		// roles alone must not substitute for full groups membership under overage.
+		"roles": []string{"App.Reader"},
+	}
+	_, err := auth.ExtractGroups(claims, auth.DefaultGroupClaimConfig())
+	if err == nil || apperr.CodeOf(err) != apperr.CodeAuthentication {
+		t.Fatalf("want auth fail closed on claim_names overage, got %v", err)
+	}
+	if !strings.Contains(err.Error(), auth.IncompleteGroupOverageMessage) &&
+		!strings.Contains(err.Error(), "overage") {
+		t.Fatalf("want incomplete overage message: %v", err)
+	}
+	// Secret / endpoint canary: no Graph URL or invented groups in error.
+	if strings.Contains(err.Error(), "graph.microsoft.com") ||
+		strings.Contains(err.Error(), "getMemberObjects") {
+		t.Fatalf("must not echo claim_sources endpoint: %v", err)
+	}
+	if err := auth.CheckIncompleteGroupOverage(claims); err == nil {
+		t.Fatal("CheckIncompleteGroupOverage must fail")
+	}
+	// No markers → OK.
+	if err := auth.CheckIncompleteGroupOverage(map[string]any{"groups": []string{"g1"}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExtractGroups_EntraOverageHybrid_GroupsPresentOK(t *testing.T) {
+	t.Parallel()
+	// Hybrid: concrete groups array present alongside overage markers — keep path.
+	claims := map[string]any{
+		"sub":    "user-hybrid",
+		"groups": []any{"g-ops", "g-dev"},
+		"roles":  []string{"reader"},
+		"_claim_names": map[string]any{
+			"groups": "src1",
+		},
+		"_claim_sources": map[string]any{
+			"src1": map[string]any{
+				"endpoint": "https://graph.microsoft.com/v1.0/users/uid/getMemberObjects",
+			},
+		},
+	}
 	res, err := auth.ExtractGroups(claims, auth.DefaultGroupClaimConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Must not invent directory membership from the reference.
-	if len(res.Groups) != 1 || res.Groups[0] != "App.Reader" {
-		t.Fatalf("groups: %v", res.Groups)
+	if len(res.Groups) != 3 {
+		t.Fatalf("want concrete groups+roles, got %v", res.Groups)
 	}
-	if !strings.Contains(res.ResidualNote, "group_overage_reference") {
-		t.Fatalf("residual: %q", res.ResidualNote)
+	if res.Groups[0] != "g-ops" || res.Groups[1] != "g-dev" || res.Groups[2] != "reader" {
+		t.Fatalf("order: %v", res.Groups)
+	}
+	if !strings.Contains(res.ResidualNote, "group_overage_hybrid") {
+		t.Fatalf("want hybrid residual note: %q", res.ResidualNote)
+	}
+	// Residual must not invent extra Graph memberships.
+	for _, g := range res.Groups {
+		if strings.Contains(g, "graph") || strings.Contains(g, "src1") {
+			t.Fatalf("invented membership: %v", res.Groups)
+		}
 	}
 }
 

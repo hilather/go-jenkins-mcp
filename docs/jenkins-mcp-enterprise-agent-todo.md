@@ -1350,10 +1350,19 @@ Prove identity and both authorization layers behave under enterprise edge cases.
 
 Test direct groups, Entra overage/reference behavior, large sets, renamed users, removed roles, disabled accounts, token expiry/revocation, key rotation, clock skew, and Jenkins principal mapping. Verify MCP policy subject/group bindings update within the approved window.
 
+**Partial progress (foundation)**
+
+- [x] **Entra group overage fail-closed foundation (Done\*):** `_claim_names` /
+  `_claim_sources` or groups-as-ref without a full `groups` array fails closed
+  at `ValidateAccessToken` / `ExtractGroups` / gateway `ResolveHTTPInbound`
+  (no invented membership). Hybrid concrete `groups` array OK. Lab path
+  unchanged. Secret/endpoint canaries. **Residual:** Microsoft Graph membership
+  expansion (OAUTH-010); live Entra under load; full role-removal window matrix.
+
 **Acceptance criteria**
 
 - [ ] Jenkins and MCP policy permissions reflect role removal within the approved window.
-- [ ] Group overage cannot silently broaden access.
+- [x] Group overage cannot silently broaden access. *(count cap + Entra incomplete overage fail-closed foundation; Graph expansion still residual)*
 - [ ] Identity changes invalidate incompatible sessions/cache bindings.
 - [ ] Effective permission remains the intersection of Jenkins and MCP policy.
 
