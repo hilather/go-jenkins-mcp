@@ -20,8 +20,12 @@
 #      - shared_principal_cache_file false by default; true when PRINCIPAL_CACHE_PATH set (path never dumped)
 #      - shared_jwks_file false by default; true when JENKINS_MCP_HTTP_JWKS_CACHE_PATH set (path never dumped)
 #      - shared_token_cache_file false by default; true when JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH set (path never dumped)
-#      - shared_api_token_vault_file false by default; true when JENKINS_MCP_GATEWAY_VAULT_PATH set (path never dumped; never opens vault)
-#      - shared_jwt_vault_file false by default; true when JENKINS_MCP_GATEWAY_JWT_VAULT_PATH set (path never dumped; never opens vault)
+#      - shared_api_token_vault_file false by default (default XDG does not count); true only when
+#        JENKINS_MCP_GATEWAY_VAULT_PATH set (path never dumped; never opens vault)
+#      - shared_jwt_vault_file false by default (default XDG does not count); true only when
+#        JENKINS_MCP_GATEWAY_JWT_VAULT_PATH set (path never dumped; never opens vault)
+#      - XDG-only canary: XDG_DATA_HOME set + vault files planted at default paths, vault path env
+#        unset → shared_*_vault_file stay false and planted seeds never leak
 #      - optional: principal_cache_entries Len when file has entries (secret-free count only)
 #      - principal_cache_process_note: principal_cache_entries is this-process / file Len only
 #      - subject_limiter_max_subjects omit/absent by default; ==N when
@@ -629,6 +633,11 @@ if isinstance(pc, dict):
         errors.append("progressive_consent.browser_3lo_automated=true")
     if pc.get("metadata_path_done_star") is False:
         errors.append("progressive_consent.metadata_path_done_star must be true (Done*)")
+    # stores_tokens-style secret canary (metadata path only — never tokens).
+    if pc.get("stores_tokens") is True:
+        errors.append("progressive_consent.stores_tokens=true (must never store tokens)")
+    if pc.get("stores_tokens") is not False and pc.get("stores_tokens") is not None:
+        errors.append(f"progressive_consent.stores_tokens={pc.get('stores_tokens')!r} want false|absent")
 else:
     errors.append("progressive_consent object missing")
 
@@ -663,17 +672,28 @@ if stcf is True:
 elif stcf is not False and stcf is not None:
     errors.append(f"shared_token_cache_file={stcf!r} want false|absent")
 
-# HOST-008 lite: shared_api_token_vault_file default false (env-explicit VAULT_PATH only).
+# HOST-008 lite: shared_api_token_vault_file default false.
+# VaultPathConfiguredFromEnviron requires explicit JENKINS_MCP_GATEWAY_VAULT_PATH —
+# default XDG under XDG_DATA_HOME/HOME does NOT count (even if a vault file exists).
+# Fail hard if residual-status ever returns true with vault path env unset.
 satvf = data.get("shared_api_token_vault_file")
 if satvf is True:
-    errors.append("shared_api_token_vault_file=true without VAULT_PATH (default must be false)")
+    errors.append(
+        "shared_api_token_vault_file=true without VAULT_PATH "
+        "(default XDG must not count; residual must stay false)"
+    )
 elif satvf is not False and satvf is not None:
     errors.append(f"shared_api_token_vault_file={satvf!r} want false|absent")
 
-# HOST-008 lite: shared_jwt_vault_file default false (env-explicit JWT_VAULT_PATH only).
+# HOST-008 lite: shared_jwt_vault_file default false.
+# JWTVaultPathConfiguredFromEnviron requires explicit JENKINS_MCP_GATEWAY_JWT_VAULT_PATH —
+# default XDG does NOT count. Fail hard if residual-status returns true without env.
 sjvf = data.get("shared_jwt_vault_file")
 if sjvf is True:
-    errors.append("shared_jwt_vault_file=true without JWT_VAULT_PATH (default must be false)")
+    errors.append(
+        "shared_jwt_vault_file=true without JWT_VAULT_PATH "
+        "(default XDG must not count; residual must stay false)"
+    )
 elif sjvf is not False and sjvf is not None:
     errors.append(f"shared_jwt_vault_file={sjvf!r} want false|absent")
 
@@ -1137,6 +1157,103 @@ if errors:
         print(f"  - {e}", file=sys.stderr)
     sys.exit(1)
 print("PASS: residual-status shared_jwt_vault_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          fail=1
+        fi
+      fi
+
+      # Optional subtest: ONLY default XDG vault paths (XDG_DATA_HOME set, vault path env
+      # unset) must keep shared_*_vault_file false and must not open/leak planted vault
+      # seeds. Catches regression of "default XDG counted as shared vault".
+      echo "== gateway residual-status (XDG-default vault honesty canary) =="
+      XDG_VAULT_DATA="$OUT_DIR/xdg-data-vault-honesty-$$"
+      mkdir -p "$XDG_VAULT_DATA/jenkins-mcp/gateway"
+      XDG_API_SEED="xdg-default-api-token-CANARY-never-in-residual-json"
+      XDG_JWT_SEED="xdg-default-jwt-CANARY-never-in-residual-json.eyJhbGciOiJub25lIn0."
+      cat >"$XDG_VAULT_DATA/jenkins-mcp/gateway/apitoken_vault.json" <<EOF
+{"version":1,"entries":{"k":"${XDG_API_SEED}"}}
+EOF
+      cat >"$XDG_VAULT_DATA/jenkins-mcp/gateway/jwt_vault.json" <<EOF
+{"version":1,"entries":{"k":"${XDG_JWT_SEED}"}}
+EOF
+      RESIDUAL_STATUS_XDG_VAULT_JSON="$OUT_DIR/gateway-residual-status-xdg-default-vault.json"
+      set +e
+      # Explicitly clear vault path envs so ambient developer env cannot flip residual;
+      # only XDG_DATA_HOME is set so VaultPathFromEnviron would resolve default paths.
+      env -u JENKINS_MCP_GATEWAY_VAULT_PATH -u JENKINS_MCP_GATEWAY_JWT_VAULT_PATH \
+        XDG_DATA_HOME="$XDG_VAULT_DATA" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_XDG_VAULT_JSON" \
+        2>"$OUT_DIR/gateway-residual-status-xdg-default-vault.stderr"
+      xdgvrc=$?
+      set -e
+      if [[ $xdgvrc -ne 0 ]]; then
+        fail_msg "gateway residual-status with XDG_DATA_HOME (no vault path env) exit $xdgvrc"
+        if [[ -s "$OUT_DIR/gateway-residual-status-xdg-default-vault.stderr" ]]; then
+          head -n 20 "$OUT_DIR/gateway-residual-status-xdg-default-vault.stderr" >&2 || true
+        fi
+      else
+        assert_secret_free "$RESIDUAL_STATUS_XDG_VAULT_JSON" "gateway-residual-status-xdg-default-vault.json" || true
+        export GRS_XDG_VAULT_JSON="$RESIDUAL_STATUS_XDG_VAULT_JSON"
+        export GRS_XDG_API_SEED="$XDG_API_SEED"
+        export GRS_XDG_JWT_SEED="$XDG_JWT_SEED"
+        export GRS_XDG_DATA="$XDG_VAULT_DATA"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["GRS_XDG_VAULT_JSON"]
+api_seed = os.environ.get("GRS_XDG_API_SEED", "")
+jwt_seed = os.environ.get("GRS_XDG_JWT_SEED", "")
+xdg = os.environ.get("GRS_XDG_DATA", "")
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+# Fail hard if residual-status returns true for vault shared_* with empty vault env.
+if data.get("shared_api_token_vault_file") is True:
+    errors.append(
+        "shared_api_token_vault_file=true with only XDG_DATA_HOME "
+        "(VaultPathConfiguredFromEnviron requires explicit VAULT_PATH env)"
+    )
+elif data.get("shared_api_token_vault_file") not in (False, None):
+    errors.append(
+        f"shared_api_token_vault_file={data.get('shared_api_token_vault_file')!r} want false|absent"
+    )
+if data.get("shared_jwt_vault_file") is True:
+    errors.append(
+        "shared_jwt_vault_file=true with only XDG_DATA_HOME "
+        "(JWTVaultPathConfiguredFromEnviron requires explicit JWT_VAULT_PATH env)"
+    )
+elif data.get("shared_jwt_vault_file") not in (False, None):
+    errors.append(
+        f"shared_jwt_vault_file={data.get('shared_jwt_vault_file')!r} want false|absent"
+    )
+blob = json.dumps(data)
+if api_seed and api_seed in blob:
+    errors.append("default XDG Mode A vault contents leaked (residual must never open vault)")
+if jwt_seed and jwt_seed in blob:
+    errors.append("default XDG Mode B JWT vault contents leaked (residual must never open vault)")
+if xdg and xdg in blob:
+    errors.append("XDG_DATA_HOME path leaked into residual-status JSON")
+# stores_tokens-style secret canary on progressive_consent nest
+pc = data.get("progressive_consent") or {}
+if isinstance(pc, dict) and pc.get("stores_tokens") is True:
+    errors.append("progressive_consent.stores_tokens=true")
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status XDG-default vault honesty canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print(
+    "PASS: residual-status XDG-default vault honesty "
+    "(shared_*_vault_file=false; vault seeds not opened/leaked)"
+)
 sys.exit(0)
 PY
         then

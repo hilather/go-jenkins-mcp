@@ -167,13 +167,17 @@ func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 		"shared_token_cache_file": gateway.TokenCachePathConfiguredFromEnviron(getenv),
 		// shared_api_token_vault_file=true only when JENKINS_MCP_GATEWAY_VAULT_PATH is
 		// explicitly set (HOST-008 Mode A same-host FileAPITokenVault path residual lite).
-		// Default XDG vault path does not count. Path never returned. Residual never
-		// opens the vault file (tokens on disk). Multi-pod shared vault residual.
+		// Uses VaultPathConfiguredFromEnviron — NOT VaultPathFromEnviron. Default XDG
+		// under XDG_DATA_HOME/HOME does not count even when a vault file exists there.
+		// Path never returned. Residual never opens the vault file (tokens on disk).
+		// Multi-pod shared vault residual.
 		"shared_api_token_vault_file": gateway.VaultPathConfiguredFromEnviron(getenv),
 		// shared_jwt_vault_file=true only when JENKINS_MCP_GATEWAY_JWT_VAULT_PATH is
 		// explicitly set (HOST-008 Mode B same-host FileJWTVault path residual lite).
-		// Default XDG JWT vault path does not count. Path never returned. Residual never
-		// opens the vault file (tokens on disk). Multi-pod shared vault residual.
+		// Uses JWTVaultPathConfiguredFromEnviron — NOT JWTVaultPathFromEnviron. Default
+		// XDG under XDG_DATA_HOME/HOME does not count even when a vault file exists there.
+		// Path never returned. Residual never opens the vault file (tokens on disk).
+		// Multi-pod shared vault residual.
 		"shared_jwt_vault_file": gateway.JWTVaultPathConfiguredFromEnviron(getenv),
 		"residual_note":         ResidualStatusHonestyNote,
 		"doc":                   ResidualStatusDoc,
