@@ -16,7 +16,7 @@ production GO is not claimed**.
 | Claim | Reality |
 |-------|---------|
 | Offline `gateway qualify --offline` green | **Contracts only** — not live Entra, not production RS, not multi-pod HA |
-| `make residual-smoke` green | Residual **ids still present** in offline evidence — **not** a live GO |
+| `make residual-smoke` green | Residual **ids still present** + qualify residual-status honesty case — **not** a live GO |
 | Mode B JWT vault Ready | Offline Obtain → Bearer for lab tokens — **not** jwt-auth-filter pin |
 | Mode C Live opt-in + mock AS | Wire-shaped HTTP — **not** AgentCore Identity vault / production Entra |
 | Kustomize `sessionAffinity` + `replicas: 1` | Packaging honesty — **not** multi-replica runtime |
@@ -303,6 +303,9 @@ jenkins-mcp doctor --profile <id> --offline --json  # optional: gateway_residual
 # script: scripts/gateway-residual-smoke.sh → dist/residual-smoke/<ts>/
 #   (gateway-qualify.json, release-evidence.json, gateway-residual-status.json,
 #    doctor-offline.json when PROFILE set, …)
+# qualify residual lite canaries (Wave 13): gateway-qualify.json must include
+#   case gateway_residual_status_offline_honesty (passed), residuals[] residual-status
+#   honesty note (case name or residual-status + honesty), passed >= 20, residual_count >= 8
 # residual-status canaries (residual lite): shared_subject_rate_file=false by default;
 #   with JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set → true (path never dumped);
 #   shared_principal_cache_file=false by default;
@@ -331,6 +334,7 @@ That is an **honesty canary**, not a readiness badge.
 | Proves | Does **not** prove |
 |--------|--------------------|
 | Qualify suite contracts (wrong aud, Jenkins-as-AS reject, Mode A/B/C shapes, fallthrough classifiers) | Live Entra Conditional Access |
+| Qualify residual lite: case `gateway_residual_status_offline_honesty` present+passed in `gateway-qualify.json`; residual-status honesty note in `residuals[]`; suite floors `passed` ≥ 20 and `residual_count` ≥ 8 | Live residual-status multi-pod / Entra / AgentCore Done |
 | Residual ids still advertised in release-evidence | Live `jwt-auth-filter` version pin |
 | Secret-free JSON surfaces (no tokens in qualify/evidence) | Production AgentCore Identity vault |
 | Doctor residual fields stay honest when profile/env set | Multi-pod shared vault safety |

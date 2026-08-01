@@ -10,6 +10,9 @@
 # Steps:
 #   1. Build or reuse jenkins-mcp binary
 #   2. jenkins-mcp gateway qualify --offline  (must pass; no live network)
+#      - assert case gateway_residual_status_offline_honesty present + passed
+#      - assert case name (or residual-status honesty) in residuals[]
+#      - assert passed >= 20 and residual_count >= MIN (Wave 13 suite floor)
 #   3. jenkins-mcp release-evidence --offline (assert residual[] honesty)
 #   4. jenkins-mcp gateway residual-status (required Wave 8 honesty; JSON under OUT_DIR)
 #      - shared_subject_rate_file false by default; true when SUBJECT_RATE_PATH set (path never dumped)
@@ -225,6 +228,8 @@ else
 
   if [[ -f "$QUALIFY_JSON" ]]; then
     # Prefer python3 (stdlib) for portable JSON; jq optional.
+    # Wave 13 residual lite: gateway_residual_status_offline_honesty must pass;
+    # suite floor passed >= 20; residual_count >= MIN_RESIDUALS (honesty notes).
     if command -v python3 >/dev/null 2>&1; then
       if python3 - "$QUALIFY_JSON" <<'PY'
 import json, sys
@@ -234,9 +239,14 @@ with open(path, encoding="utf-8") as f:
 ok = data.get("ok") is True
 suite = data.get("suite")
 failed = int(data.get("failed") or 0)
+passed = int(data.get("passed") or 0)
 cases = data.get("cases") or []
 names = {c.get("name") for c in cases if isinstance(c, dict)}
 residuals = data.get("residuals") or []
+residual_count = len(residuals) if isinstance(residuals, list) else 0
+# Suite floors (internal/gateway/qualify: 20 cases after residual-status honesty).
+MIN_PASSED = 20
+MIN_RESIDUALS = 8
 errors = []
 if not ok:
     errors.append(f"ok={data.get('ok')!r} want true")
@@ -244,22 +254,47 @@ if suite != "offline":
     errors.append(f"suite={suite!r} want 'offline'")
 if failed != 0:
     errors.append(f"failed={failed} want 0")
-# Offline Mode B/C residual cases must be present and passed when suite is complete.
+if passed < MIN_PASSED:
+    errors.append(f"passed={passed} want >= {MIN_PASSED} (Wave 13 residual-status honesty suite floor)")
+if residual_count < MIN_RESIDUALS:
+    errors.append(
+        f"residual_count={residual_count} want >= {MIN_RESIDUALS} "
+        "(qualify must list live pins + residual-status honesty notes)"
+    )
+# Offline Mode B/C + progressive consent + residual-status honesty cases must
+# be present and passed when suite is complete.
 case_map = {c.get("name"): c for c in cases if isinstance(c, dict)}
 want_cases = [
     ("oauth009_offline_bearer_matrix", ("OAUTH-009", "oauth009")),
     ("oauth010_mode_c_offline_matrix", ("OAUTH-010", "oauth010")),
     ("progressive_consent_residual", ("progressive consent", "OAUTH-010", "progressive_consent")),
+    # GWY-003 residual lite (Wave 13): BuildGatewayResidualStatus / CLI residual-status.
+    (
+        "gateway_residual_status_offline_honesty",
+        (
+            "gateway_residual_status_offline_honesty",
+            "residual-status",
+            "ha_multi_replica",
+        ),
+    ),
 ]
+blob_r = " ".join(str(r) for r in residuals).lower() if isinstance(residuals, list) else ""
 for want_case, residual_needles in want_cases:
     if want_case not in case_map:
         # Older binaries may rename; still require residual honesty strings when present.
-        blob_r = " ".join(str(r) for r in residuals).lower()
         if not any(n.lower() in blob_r for n in residual_needles):
             errors.append(f"missing case {want_case} and no residual honesty string {residual_needles}")
     else:
         if not case_map[want_case].get("passed"):
             errors.append(f"case {want_case} not passed: {case_map[want_case]}")
+# residual-status honesty case name (or residual-status Done*) must appear in residuals[].
+if "gateway_residual_status_offline_honesty" not in blob_r and not (
+    "residual-status" in blob_r and "honesty" in blob_r
+):
+    errors.append(
+        "residuals[] missing residual-status honesty note "
+        "(want case name gateway_residual_status_offline_honesty or residual-status honesty Done*)"
+    )
 if not residuals:
     errors.append("residuals[] empty — qualify must list live pins as residual")
 # Must not claim production live GO complete (honest residuals may say
@@ -270,7 +305,11 @@ if "production go complete" in blob:
 if errors:
     print("FAIL: gateway qualify JSON:", "; ".join(errors), file=sys.stderr)
     sys.exit(1)
-print(f"PASS: gateway qualify ok suite={suite} passed={data.get('passed')} residual_count={len(residuals)}")
+print(
+    f"PASS: gateway qualify ok suite={suite} passed={passed} "
+    f"residual_count={residual_count} "
+    f"case=gateway_residual_status_offline_honesty"
+)
 sys.exit(0)
 PY
       then
@@ -279,16 +318,33 @@ PY
         fail=1
       fi
     elif command -v jq >/dev/null 2>&1; then
-      if jq -e '.ok == true and .suite == "offline" and .failed == 0 and (.residuals | length) > 0' "$QUALIFY_JSON" >/dev/null; then
-        pass "gateway qualify JSON ok/suite/failed/residuals"
+      if jq -e '
+        .ok == true
+        and .suite == "offline"
+        and .failed == 0
+        and (.passed // 0) >= 20
+        and ((.residuals // []) | length) >= 8
+        and (
+          [.cases[]? | select(.name == "gateway_residual_status_offline_honesty" and .passed == true)]
+          | length
+        ) > 0
+        and (
+          ([.residuals[]? | ascii_downcase] | join(" "))
+          | (contains("gateway_residual_status_offline_honesty")
+             or (contains("residual-status") and contains("honesty")))
+        )
+      ' "$QUALIFY_JSON" >/dev/null; then
+        pass "gateway qualify JSON ok/suite/failed/passed>=20/residual_count + residual-status honesty case"
       else
-        fail_msg "gateway qualify JSON structure failed jq assertions"
+        fail_msg "gateway qualify JSON structure failed jq assertions (need residual-status honesty case + floors)"
       fi
     else
-      if grep -q '"ok": true' "$QUALIFY_JSON" && grep -q '"suite": "offline"' "$QUALIFY_JSON"; then
-        pass "gateway qualify JSON contains ok/suite (no python3/jq for deep assert)"
+      if grep -q '"ok": true' "$QUALIFY_JSON" \
+        && grep -q '"suite": "offline"' "$QUALIFY_JSON" \
+        && grep -q 'gateway_residual_status_offline_honesty' "$QUALIFY_JSON"; then
+        pass "gateway qualify JSON contains ok/suite + residual-status honesty case (no python3/jq for deep assert)"
       else
-        fail_msg "gateway qualify JSON missing ok/suite markers"
+        fail_msg "gateway qualify JSON missing ok/suite or gateway_residual_status_offline_honesty markers"
       fi
     fi
   fi
