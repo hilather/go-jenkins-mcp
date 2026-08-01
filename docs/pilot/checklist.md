@@ -34,7 +34,8 @@ Gateway residual accepted (ticket/notes): _____________
 See [release gates](../release/gates.md) residuals section.  
 Optional honesty automation (not default `make test` / `make ci`):  
 `make residual-smoke` (alias `make gateway-residual-smoke`) → runs `gateway qualify --offline` + `release-evidence --offline` + `gateway residual-status` (honesty canaries) and **fails** if those residual ids are missing or residual-status honesty fields fail. Artifacts: `dist/residual-smoke/<ts>/` (includes `gateway-residual-status.json`).  
-**Live production GO residual checklists** (what still blocks Mode B/C multi-user and multi-pod): [gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) — residual-smoke proves honesty **not** live Done.
+**Pilot evidence residual lite:** `make pilot-evidence` also captures `gateway-residual-status.json` (+ optional `gateway-consent-residual.json`) into the pack with residual-id / `ha_multi_replica=false` honesty canaries — no separate residual-smoke required for residual presence in pilot kits (deeper path canaries still on residual-smoke).  
+**Live production GO residual checklists** (what still blocks Mode B/C multi-user and multi-pod): [gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) — residual-smoke / pilot residual-status prove honesty **not** live Done.
 
 ## 1. Install
 
@@ -77,6 +78,7 @@ Optional honesty automation (not default `make test` / `make ci`):
 
 - [ ] `make pilot-evidence PROFILE=<id> SKIP_GO_TEST=1` → `dist/pilot-evidence/<ts>/MANIFEST.json` overall not `fail`
 - [ ] `gateway-qualify.json` present when pack ran (offline GWY-003; **not** live AgentCore pin)
+- [ ] `gateway-residual-status.json` present when pack ran (offline residual honesty canaries; **not** live multi-user GO)
 - [ ] Section **0** mode matrix filled (modes A/B/C + stdio surface)
 - [ ] `jenkins-mcp security self-check --json --profile <id>` → saved or noted (secret-free)
 - [ ] `jenkins-mcp pilot-check --profile <id> --offline` → overall not `fail`; JSON saved

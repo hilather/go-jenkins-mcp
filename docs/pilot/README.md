@@ -112,7 +112,8 @@ Also run `security self-check` / `support-bundle` for scrubbed posture packs.
 
 ## Automated offline evidence pack (`make pilot-evidence`)
 
-Collect version, security self-check, gateway offline qualify, optional
+Collect version, security self-check, gateway offline qualify, gateway
+residual-status (residual honesty), optional consent-residual, optional
 doctor/pilot-check, and optional `go test` summary into a timestamped directory:
 
 ```bash
@@ -135,14 +136,18 @@ Output: `dist/pilot-evidence/<UTC-timestamp>/` with:
 | `version.json` | `jenkins-mcp version --json` |
 | `security-self-check.json` | `security self-check --json` |
 | `gateway-qualify.json` | `gateway qualify --offline` (when available) |
+| `gateway-residual-status.json` | `gateway residual-status` (always when subcommand exists; residual honesty canaries hard-fail) |
+| `gateway-consent-residual.json` | `gateway consent-residual` (optional when subcommand exists) |
 | `doctor.txt` | `doctor --profile … --offline` when `PROFILE` set |
 | `pilot-check.json` | `pilot-check --profile … --offline` when `PROFILE` set |
 | `go-test-summary.txt` | Bounded `go test` unless `SKIP_GO_TEST=1` |
 
 The pack is **secret-free** by construction (CLI paths that already scrub). Do not
 copy live tokens into the evidence directory. Exit code is non-zero when overall
-is `fail`. Without `PROFILE`, overall is **`incomplete`** (doctor/pilot-check
-skipped) when the offline generators pass.
+is `fail` (including residual-status honesty canary failure). Without `PROFILE`,
+overall is **`incomplete`** (doctor/pilot-check skipped) when the offline
+generators pass. Residual-status in this pack is **offline honesty only** — not
+live multi-user GO; deeper path canaries remain on `make residual-smoke`.
 
 See also REL-002 gates: [`../release/gates.md`](../release/gates.md).
 
