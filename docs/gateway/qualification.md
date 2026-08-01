@@ -56,6 +56,7 @@ jenkins-mcp gateway qualify --offline   # JSON summary, no secrets
 - Mode C live Entra 3LO/OBO + AgentCore Identity vault residual (OAUTH-010 / GWY-003); offline prototype matrix Done* (`oauth010_mode_c_offline_matrix` + `mode_c_agentcore_live_matrix`) — **do not claim live Entra Done**
 - Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; process-local consent metadata store Done* (optional file; never tokens; same-host reload-before-persist flock lite; not multi-replica shared store); multi-pod consent correlation residual (HOST-008)
 - Gateway residual-status offline honesty Done* (`gateway_residual_status_offline_honesty`): `residual_ids` + `ha_multi_replica=false` + live mode pins false + `oauth009_offline` + `shared_*_file` default false; no secrets — live Entra/AgentCore pin residual
+- Security self-check residual lite Done* (`gateway_residual_status_honesty` in `RunSecuritySelfCheck`): same honesty map as qualify residual-status case / CLI residual-status; **ok** when honesty holds; **warn** if multi_user env set (not live multi-user GO); pure offline — not residual-smoke, not live pin
 - OAUTH-010: `HTTPTokenFetcher` https mock AS in package tests (`TestOAUTH010_*` / `TestHTTPTokenFetcher_*`)
 - Opt-in residual lab: `testdata/oauth-lab` + `make live-oauth-*` + `go test -tags=live_oauth` Mode C Obtain vs mock-token (TLS test shim; not default `make test`; not production Entra)
 - Production P95/P99 token acquisition SLOs  

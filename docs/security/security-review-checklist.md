@@ -136,6 +136,7 @@ Use this during independent review; check boxes only when **external** evidence 
 | `jenkins_resilience_residual` | ok | Wave 45 / NET-003: GET/HEAD retry + circuit; POST never auto-retry; residual live chaos |
 | `update_lkg_residual` | ok | Wave 47 / UPD-001: LKG residual honesty offline — metadata only, not installed binary; install/rollback operator-owned; residual_auto_install=false |
 | `mutation_confirm_cooldown_residual` | ok | Wave 48 / MUT-001: DefaultTokenTTL + DefaultConfirmCooldown positive; Manager defaults enforce confirm cooldown offline (second Confirm denied); Details `cooldown_enforced=true`, `mutations_opt_in_default=true`; residual gateway multi-tenant / live remote mutation |
+| `gateway_residual_status_honesty` | ok/warn | **GWY-003 residual lite:** `BuildGatewayResidualStatus` (same map as CLI `gateway residual-status` / doctor embed / qualify case `gateway_residual_status_offline_honesty`) — `residual_ids` present, `ha_multi_replica=false`, live `mode_*_*_qualified=false`, `oauth009_offline`, `shared_*_file` default false (empty environ), secret-free; Details `residual_live_go=false`. **warn** when multi_user env set (offline residual — **not** live multi-user GO). Never production Entra/AgentCore pin |
 | `report_canary_leak` | ok | Planted canary absent from full serialized report |
 
 Messages and details are secret-free; the planted canary must never appear in JSON/text output.
