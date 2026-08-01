@@ -13,7 +13,9 @@ import {
   pickResidualLivePinFields,
   pickResidualRateCacheFields,
   PRINCIPAL_CACHE_PROCESS_HONESTY,
+  SHARED_API_TOKEN_VAULT_FILE_HONESTY,
   SHARED_JWKS_FILE_HONESTY,
+  SHARED_JWT_VAULT_FILE_HONESTY,
   SHARED_SUBJECT_RATE_FILE_HONESTY,
   SHARED_TOKEN_CACHE_FILE_HONESTY,
   SUBJECT_LIMITER_MAX_SUBJECTS_HONESTY,
@@ -27,6 +29,8 @@ describe("pickResidualRateCacheFields", () => {
       shared_principal_cache_file: false,
       shared_jwks_file: false,
       shared_token_cache_file: false,
+      shared_api_token_vault_file: false,
+      shared_jwt_vault_file: false,
       subject_slots_process_local: false,
     });
     expect(pickResidualRateCacheFields(null)).toEqual({
@@ -34,16 +38,20 @@ describe("pickResidualRateCacheFields", () => {
       shared_principal_cache_file: false,
       shared_jwks_file: false,
       shared_token_cache_file: false,
+      shared_api_token_vault_file: false,
+      shared_jwt_vault_file: false,
       subject_slots_process_local: false,
     });
   });
 
-  it("mirrors Wave 11 snake_case residual-status keys including shared_token_cache_file", () => {
+  it("mirrors Wave 11 snake_case residual-status keys including vault path residual", () => {
     const data: GatewayResidualStatusResponse = {
       shared_subject_rate_file: true,
       shared_principal_cache_file: true,
       shared_jwks_file: true,
       shared_token_cache_file: true,
+      shared_api_token_vault_file: true,
+      shared_jwt_vault_file: true,
       subject_rate_max_subjects: 64,
       subject_limiter_max_subjects: 2048,
       subject_slots_process_local: true,
@@ -60,6 +68,8 @@ describe("pickResidualRateCacheFields", () => {
       shared_principal_cache_file: true,
       shared_jwks_file: true,
       shared_token_cache_file: true,
+      shared_api_token_vault_file: true,
+      shared_jwt_vault_file: true,
       subject_rate_max_subjects: 64,
       subject_limiter_max_subjects: 2048,
       subject_slots_process_local: true,
@@ -75,6 +85,8 @@ describe("pickResidualRateCacheFields", () => {
       shared_subject_rate_file: false,
       shared_jwks_file: false,
       shared_token_cache_file: false,
+      shared_api_token_vault_file: false,
+      shared_jwt_vault_file: false,
       subject_slots_process_local: true,
       principal_cache_entries: 0,
     };
@@ -83,6 +95,8 @@ describe("pickResidualRateCacheFields", () => {
       shared_principal_cache_file: false,
       shared_jwks_file: false,
       shared_token_cache_file: false,
+      shared_api_token_vault_file: false,
+      shared_jwt_vault_file: false,
       subject_slots_process_local: true,
       principal_cache_entries: 0,
     });
@@ -94,6 +108,8 @@ describe("pickResidualRateCacheFields", () => {
       shared_subject_rate_file: true,
       shared_jwks_file: true,
       shared_token_cache_file: true,
+      shared_api_token_vault_file: true,
+      shared_jwt_vault_file: true,
       subject_slots_process_local: true,
       principal_cache_entries: 1,
       // adversarial noise — must not surface as typed rate/cache fields
@@ -102,6 +118,7 @@ describe("pickResidualRateCacheFields", () => {
       path: "/tmp/jwks-cache.json",
       jwks_cache_path: "/secret/path/jwks.json",
       token_cache_path: "/secret/path/token.json",
+      vault_path: "/secret/path/vault.json",
     } as GatewayResidualStatusResponse;
     const picked = pickResidualRateCacheFields(data);
     expect(picked).toEqual({
@@ -109,6 +126,8 @@ describe("pickResidualRateCacheFields", () => {
       shared_principal_cache_file: false,
       shared_jwks_file: true,
       shared_token_cache_file: true,
+      shared_api_token_vault_file: true,
+      shared_jwt_vault_file: true,
       subject_slots_process_local: true,
       principal_cache_entries: 1,
     });
@@ -122,6 +141,8 @@ describe("pickResidualRateCacheFields", () => {
       shared_principal_cache_file: "true",
       shared_jwks_file: 1,
       shared_token_cache_file: "yes",
+      shared_api_token_vault_file: "true",
+      shared_jwt_vault_file: 1,
       subject_slots_process_local: "true",
     } as unknown as GatewayResidualStatusResponse;
     expect(pickResidualRateCacheFields(noisy)).toEqual({
@@ -129,6 +150,8 @@ describe("pickResidualRateCacheFields", () => {
       shared_principal_cache_file: false,
       shared_jwks_file: false,
       shared_token_cache_file: false,
+      shared_api_token_vault_file: false,
+      shared_jwt_vault_file: false,
       subject_slots_process_local: false,
     });
   });
@@ -244,6 +267,24 @@ describe("honesty constants", () => {
     expect(SHARED_TOKEN_CACHE_FILE_HONESTY).toMatch(/path never shown/i);
     expect(SHARED_TOKEN_CACHE_FILE_HONESTY).toMatch(/secrets never shown/i);
     expect(SHARED_TOKEN_CACHE_FILE_HONESTY).not.toMatch(/\/tmp|\/var|access_token/i);
+  });
+
+  it("api token vault file honesty is same-host path residual not multi-pod", () => {
+    expect(SHARED_API_TOKEN_VAULT_FILE_HONESTY).toMatch(/same-host/i);
+    expect(SHARED_API_TOKEN_VAULT_FILE_HONESTY).toMatch(/FileAPITokenVault|VAULT_PATH/i);
+    expect(SHARED_API_TOKEN_VAULT_FILE_HONESTY).toMatch(/not multi-pod/i);
+    expect(SHARED_API_TOKEN_VAULT_FILE_HONESTY).toMatch(/path never shown/i);
+    expect(SHARED_API_TOKEN_VAULT_FILE_HONESTY).toMatch(/never opened|secrets never shown/i);
+    expect(SHARED_API_TOKEN_VAULT_FILE_HONESTY).not.toMatch(/\/tmp|\/var|access_token=/i);
+  });
+
+  it("jwt vault file honesty is same-host path residual not multi-pod", () => {
+    expect(SHARED_JWT_VAULT_FILE_HONESTY).toMatch(/same-host/i);
+    expect(SHARED_JWT_VAULT_FILE_HONESTY).toMatch(/FileJWTVault|JWT_VAULT_PATH/i);
+    expect(SHARED_JWT_VAULT_FILE_HONESTY).toMatch(/not multi-pod/i);
+    expect(SHARED_JWT_VAULT_FILE_HONESTY).toMatch(/path never shown/i);
+    expect(SHARED_JWT_VAULT_FILE_HONESTY).toMatch(/never opened|secrets never shown/i);
+    expect(SHARED_JWT_VAULT_FILE_HONESTY).not.toMatch(/\/tmp|\/var|access_token=/i);
   });
 
   it("principal cache honesty is admin BFF process-local", () => {

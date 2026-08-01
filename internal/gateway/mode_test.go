@@ -27,6 +27,56 @@ func TestModeEnabled(t *testing.T) {
 	}
 }
 
+// HOST-008 residual lite: vault path configured only when env explicitly set
+// (not when VaultPathFromEnviron / JWTVaultPathFromEnviron returns default XDG).
+func TestVaultPathConfiguredFromEnviron(t *testing.T) {
+	t.Parallel()
+	if gateway.VaultPathConfiguredFromEnviron(func(string) string { return "" }) {
+		t.Fatal("empty env must be false")
+	}
+	if gateway.VaultPathConfiguredFromEnviron(func(string) string { return "   " }) {
+		t.Fatal("whitespace-only env must be false")
+	}
+	// Default path resolution must not flip residual (configured = env key only).
+	def := gateway.VaultPathFromEnviron(func(string) string { return "" })
+	if def == "" {
+		t.Fatal("VaultPathFromEnviron always returns a default path")
+	}
+	if gateway.VaultPathConfiguredFromEnviron(func(string) string { return "" }) {
+		t.Fatal("default XDG vault path must not count as configured")
+	}
+	if !gateway.VaultPathConfiguredFromEnviron(func(k string) string {
+		if k == gateway.EnvGatewayVaultPath {
+			return "/tmp/shared-vault-canary.json"
+		}
+		return ""
+	}) {
+		t.Fatal("non-empty VAULT_PATH must be true")
+	}
+}
+
+func TestJWTVaultPathConfiguredFromEnviron(t *testing.T) {
+	t.Parallel()
+	if gateway.JWTVaultPathConfiguredFromEnviron(func(string) string { return "" }) {
+		t.Fatal("empty env must be false")
+	}
+	if gateway.JWTVaultPathConfiguredFromEnviron(func(string) string { return "   " }) {
+		t.Fatal("whitespace-only env must be false")
+	}
+	def := gateway.JWTVaultPathFromEnviron(func(string) string { return "" })
+	if def == "" {
+		t.Fatal("JWTVaultPathFromEnviron always returns a default path")
+	}
+	if !gateway.JWTVaultPathConfiguredFromEnviron(func(k string) string {
+		if k == gateway.EnvGatewayJWTVaultPath {
+			return "/tmp/shared-jwt-vault-canary.json"
+		}
+		return ""
+	}) {
+		t.Fatal("non-empty JWT_VAULT_PATH must be true")
+	}
+}
+
 func TestConfigFromEnviron(t *testing.T) {
 	t.Setenv(gateway.EnvAgentCoreASURL, "https://login.microsoftonline.com/t/v2.0")
 	t.Setenv(gateway.EnvAgentCoreAudience, "api://jenkins-api")

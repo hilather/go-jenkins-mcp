@@ -18,6 +18,14 @@ export const SHARED_JWKS_FILE_HONESTY =
 export const SHARED_TOKEN_CACHE_FILE_HONESTY =
   "same-host FileTokenCache lite when true (JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH); not multi-pod Redis/HA — path never shown; secrets never shown";
 
+/** Mode A shared vault path residual lite (HOST-008); env path set only; not multi-pod vault HA. */
+export const SHARED_API_TOKEN_VAULT_FILE_HONESTY =
+  "same-host FileAPITokenVault path residual when true (JENKINS_MCP_GATEWAY_VAULT_PATH set; default XDG does not count); not multi-pod vault HA — path never shown; vault never opened; secrets never shown";
+
+/** Mode B shared JWT vault path residual lite (HOST-008); env path set only; not multi-pod vault HA. */
+export const SHARED_JWT_VAULT_FILE_HONESTY =
+  "same-host FileJWTVault path residual when true (JENKINS_MCP_GATEWAY_JWT_VAULT_PATH set; default XDG does not count); not multi-pod vault HA — path never shown; vault never opened; secrets never shown";
+
 /**
  * Principal cache entry count is the process that served residual-status
  * (admin BFF), not necessarily the MCP gateway serve process.
@@ -109,6 +117,10 @@ export interface ResidualRateCacheFields {
   shared_jwks_file: boolean;
   /** HOST-008 FileTokenCache path configured (bool only; never path/tokens). */
   shared_token_cache_file: boolean;
+  /** HOST-008 Mode A vault path env configured (bool only; never path/tokens). */
+  shared_api_token_vault_file: boolean;
+  /** HOST-008 Mode B JWT vault path env configured (bool only; never path/tokens). */
+  shared_jwt_vault_file: boolean;
   /** Present when MaxSubjects env > 0. */
   subject_rate_max_subjects?: number;
   /**
@@ -144,6 +156,8 @@ export function pickResidualRateCacheFields(
       shared_principal_cache_file: false,
       shared_jwks_file: false,
       shared_token_cache_file: false,
+      shared_api_token_vault_file: false,
+      shared_jwt_vault_file: false,
       subject_slots_process_local: false,
     };
   }
@@ -154,6 +168,8 @@ export function pickResidualRateCacheFields(
     shared_principal_cache_file: data.shared_principal_cache_file === true,
     shared_jwks_file: data.shared_jwks_file === true,
     shared_token_cache_file: data.shared_token_cache_file === true,
+    shared_api_token_vault_file: data.shared_api_token_vault_file === true,
+    shared_jwt_vault_file: data.shared_jwt_vault_file === true,
     subject_slots_process_local: data.subject_slots_process_local === true,
   };
   if (typeof data.subject_rate_max_subjects === "number") {

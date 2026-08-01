@@ -751,8 +751,10 @@ func TestScrubResidualStatusMapDropsSecretKeys(t *testing.T) {
 	in := map[string]any{
 		"residual_id":              "oauth009_offline",
 		"ha_multi_replica":         false,
-		"shared_token_cache_file":  true,
-		"shared_jwks_file":         false,
+		"shared_token_cache_file":       true,
+		"shared_api_token_vault_file":   true,
+		"shared_jwt_vault_file":         false,
+		"shared_jwks_file":              false,
 		"access_token":             "should-drop",
 		"client_secret":            "should-drop",
 		"authorization":            "Bearer drop-me",
@@ -775,6 +777,12 @@ func TestScrubResidualStatusMapDropsSecretKeys(t *testing.T) {
 	}
 	if out["shared_token_cache_file"] != true {
 		t.Fatalf("Regression: shared_token_cache_file residual honesty bool dropped by scrub: %+v", out["shared_token_cache_file"])
+	}
+	if out["shared_api_token_vault_file"] != true {
+		t.Fatalf("Regression: shared_api_token_vault_file residual honesty bool dropped by scrub: %+v", out["shared_api_token_vault_file"])
+	}
+	if out["shared_jwt_vault_file"] != false {
+		t.Fatalf("shared_jwt_vault_file: %+v", out["shared_jwt_vault_file"])
 	}
 	if out["shared_jwks_file"] != false {
 		t.Fatalf("shared_jwks_file: %+v", out["shared_jwks_file"])

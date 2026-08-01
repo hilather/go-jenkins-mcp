@@ -102,7 +102,9 @@ func SanitizeCheck(c Check) Check {
 // from doctor/support-bundle/release-evidence embeds (Wave 15 residual honesty).
 func residualHonestyNonSecretKey(k string) bool {
 	switch k {
-	case "shared_token_cache_file":
+	case "shared_token_cache_file",
+		// Mode A vault path residual bool (contains "token"; never vault bytes/path).
+		"shared_api_token_vault_file":
 		return true
 	default:
 		return false

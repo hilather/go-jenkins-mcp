@@ -457,11 +457,14 @@ func caseGatewayResidualStatusOfflineHonesty(ctx context.Context) error {
 	}
 
 	// shared_*_file default false when paths unset (HOST-008 lite residual).
+	// Vault path residual uses env-explicit helpers (default XDG path does not count).
 	for _, k := range []string{
 		"shared_subject_rate_file",
 		"shared_principal_cache_file",
 		"shared_jwks_file",
 		"shared_token_cache_file",
+		"shared_api_token_vault_file",
+		"shared_jwt_vault_file",
 	} {
 		if out[k] != false {
 			return fmt.Errorf("%s default false when path unset: %+v", k, out[k])

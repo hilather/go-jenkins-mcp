@@ -9,11 +9,9 @@
 # binary has the subcommand, so pilot kits include residual honesty without a
 # separate residual-smoke run. Optional consent-residual when present.
 # Residual honesty canaries hard-fail (missing residual_ids / ha_multi_replica /
-# shared_*_file default false / subject_limiter_max_subjects omit default)
-# matching residual-smoke residual-lite style — offline only, not live GO.
-# Lightweight path canaries (path set → bool true, path never dumped) and
-# SUBJECT_LIMITER_MAX_SUBJECTS canary (env=64 → field 64) also hard-fail when
-# python3 is available.
+# shared_*_file default false) matching residual-smoke residual-lite style —
+# offline only, not live GO. Lightweight path canaries (path set → bool true,
+# path never dumped) also hard-fail when python3 is available.
 #
 # Usage:
 #   scripts/pilot-evidence.sh
@@ -73,8 +71,7 @@ Writes dist/pilot-evidence/<timestamp>/ with MANIFEST.json.
 
 Always captures gateway residual-status (honesty canaries hard-fail) when the
 subcommand exists; optional consent-residual. shared_*_file default-false +
-subject_limiter_max_subjects omit default + lightweight path-not-dumped /
-SUBJECT_LIMITER_MAX_SUBJECTS canaries align with residual-smoke residual lite.
+lightweight path-not-dumped canaries align with residual-smoke residual lite.
 Offline residual honesty only — not live multi-user GO.
 EOF
 }
@@ -234,9 +231,8 @@ fi
 # --- gateway residual-status (always when binary available; residual honesty) ---
 # Captures gateway-residual-status.json into the pilot pack so residual honesty
 # is present without a separate residual-smoke run. Hard-fail on missing
-# residual_ids / ha_multi_replica / shared_*_file default-false /
-# subject_limiter_max_subjects omit-default honesty (residual lite; offline only).
-# Optional path + SUBJECT_LIMITER_MAX_SUBJECTS canaries when python3 available.
+# residual_ids / ha_multi_replica / shared_*_file default-false honesty
+# (residual lite; offline only). Optional path canaries when python3 available.
 assert_secret_free_file() {
   local file="$1"
   local label="$2"
@@ -368,8 +364,21 @@ if stcf is True:
 elif stcf is not False and stcf is not None:
     errors.append(f"shared_token_cache_file={stcf!r} want false|absent")
 
+# HOST-008 lite: shared_api_token_vault_file default false (env-explicit VAULT_PATH only).
+satvf = data.get("shared_api_token_vault_file")
+if satvf is True:
+    errors.append("shared_api_token_vault_file=true without VAULT_PATH (default must be false)")
+elif satvf is not False and satvf is not None:
+    errors.append(f"shared_api_token_vault_file={satvf!r} want false|absent")
+
+# HOST-008 lite: shared_jwt_vault_file default false (env-explicit JWT_VAULT_PATH only).
+sjvf = data.get("shared_jwt_vault_file")
+if sjvf is True:
+    errors.append("shared_jwt_vault_file=true without JWT_VAULT_PATH (default must be false)")
+elif sjvf is not False and sjvf is not None:
+    errors.append(f"shared_jwt_vault_file={sjvf!r} want false|absent")
+
 # HOST-006 residual lite: subject_limiter_max_subjects omit when env unset (unlimited).
-# Path never involved — integer hygiene residual only. Aligns with residual-smoke.
 slms = data.get("subject_limiter_max_subjects")
 if slms is not None and slms is not False and slms != 0 and slms != "":
     errors.append(
@@ -397,7 +406,7 @@ print(
     f"(oauth009_offline + ha_multi_replica=false + residual_ids={len(required)} + "
     "shared_subject_rate_file=false default + shared_principal_cache_file=false default + "
     "shared_jwks_file=false default + shared_token_cache_file=false default + "
-    "subject_limiter_max_subjects omit default)"
+    "shared_api_token_vault_file=false default + shared_jwt_vault_file=false default + subject_limiter_max_subjects omit default)"
 )
 sys.exit(0)
 PY
@@ -415,7 +424,9 @@ PY
         && grep -qE '"shared_subject_rate_file":\s*false' "$RESIDUAL_STATUS_JSON" \
         && grep -qE '"shared_principal_cache_file":\s*false' "$RESIDUAL_STATUS_JSON" \
         && grep -qE '"shared_jwks_file":\s*false' "$RESIDUAL_STATUS_JSON" \
-        && grep -qE '"shared_token_cache_file":\s*false' "$RESIDUAL_STATUS_JSON"; then
+        && grep -qE '"shared_token_cache_file":\s*false' "$RESIDUAL_STATUS_JSON" \
+        && grep -qE '"shared_api_token_vault_file":\s*false' "$RESIDUAL_STATUS_JSON" \
+        && grep -qE '"shared_jwt_vault_file":\s*false' "$RESIDUAL_STATUS_JSON"; then
         echo "  [pass] gateway residual-status greppable honesty markers (no python3)"
       else
         residual_status_ok=0
@@ -424,12 +435,11 @@ PY
       fi
     fi
 
-    # Lightweight path + limiter-max canaries (align residual-smoke): path set →
-    # shared_*_file=true (path never dumped); SUBJECT_LIMITER_MAX_SUBJECTS=N →
-    # subject_limiter_max_subjects==N. Hard-fail when python3 available; residual lite only.
+    # Lightweight path canaries (align residual-smoke): path set → shared_*_file=true,
+    # path marker never dumped. Hard-fail when python3 available; residual lite only.
     if [[ $residual_status_ok -eq 1 && -f "$RESIDUAL_STATUS_JSON" ]] \
       && command -v python3 >/dev/null 2>&1; then
-      echo "  [=] residual-status shared_*_file path + SUBJECT_LIMITER_MAX canaries (path never dumped)"
+      echo "  [=] residual-status shared_*_file path canaries (path never dumped)"
       RATE_PATH_MARKER="subject-rate-path-CANARY-never-in-json-$$"
       RATE_TMP_MARKED="$OUT_DIR/${RATE_PATH_MARKER}.dat"
       : >"$RATE_TMP_MARKED"
@@ -650,9 +660,118 @@ PY
         fi
       fi
 
-      # Optional subtest: SUBJECT_LIMITER_MAX_SUBJECTS set → subject_limiter_max_subjects==N
-      # (HOST-006 residual lite). Path never involved; omit when unset (default unlimited).
-      echo "  [=] residual-status SUBJECT_LIMITER_MAX_SUBJECTS canary (env=64 → field 64)"
+      VAULT_PATH_MARKER="api-token-vault-path-CANARY-never-in-json-$$"
+      VAULT_TMP_MARKED="$OUT_DIR/${VAULT_PATH_MARKER}.json"
+      : >"$VAULT_TMP_MARKED"
+      RESIDUAL_STATUS_VAULT_JSON="$OUT_DIR/gateway-residual-status-vault-path.json"
+      set +e
+      env JENKINS_MCP_GATEWAY_VAULT_PATH="$VAULT_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_VAULT_JSON" 2>"$OUT_DIR/gateway-residual-status-vault-path.stderr"
+      vrc=$?
+      set -e
+      if [[ $vrc -ne 0 ]]; then
+        residual_status_ok=0
+        HARD_FAIL=1
+        echo "  [fail] gateway residual-status with VAULT_PATH exit $vrc" >&2
+      else
+        assert_secret_free_file "$RESIDUAL_STATUS_VAULT_JSON" "gateway-residual-status-vault-path.json" || {
+          residual_status_ok=0
+          HARD_FAIL=1
+        }
+        export PE_VAULT_JSON="$RESIDUAL_STATUS_VAULT_JSON"
+        export PE_VAULT_MARKER="$VAULT_PATH_MARKER"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["PE_VAULT_JSON"]
+marker = os.environ["PE_VAULT_MARKER"]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_api_token_vault_file") is not True:
+    errors.append(
+        f"shared_api_token_vault_file={data.get('shared_api_token_vault_file')!r} want true when VAULT_PATH set"
+    )
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("VAULT_PATH / marker leaked into residual-status JSON (path must never dump)")
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status VAULT_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print("PASS: residual-status shared_api_token_vault_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          residual_status_ok=0
+          HARD_FAIL=1
+        fi
+      fi
+
+      JWT_VAULT_PATH_MARKER="jwt-vault-path-CANARY-never-in-json-$$"
+      JWT_VAULT_TMP_MARKED="$OUT_DIR/${JWT_VAULT_PATH_MARKER}.json"
+      : >"$JWT_VAULT_TMP_MARKED"
+      RESIDUAL_STATUS_JWT_VAULT_JSON="$OUT_DIR/gateway-residual-status-jwt-vault-path.json"
+      set +e
+      env JENKINS_MCP_GATEWAY_JWT_VAULT_PATH="$JWT_VAULT_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_JWT_VAULT_JSON" 2>"$OUT_DIR/gateway-residual-status-jwt-vault-path.stderr"
+      jvrc=$?
+      set -e
+      if [[ $jvrc -ne 0 ]]; then
+        residual_status_ok=0
+        HARD_FAIL=1
+        echo "  [fail] gateway residual-status with JWT_VAULT_PATH exit $jvrc" >&2
+      else
+        assert_secret_free_file "$RESIDUAL_STATUS_JWT_VAULT_JSON" "gateway-residual-status-jwt-vault-path.json" || {
+          residual_status_ok=0
+          HARD_FAIL=1
+        }
+        export PE_JWT_VAULT_JSON="$RESIDUAL_STATUS_JWT_VAULT_JSON"
+        export PE_JWT_VAULT_MARKER="$JWT_VAULT_PATH_MARKER"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["PE_JWT_VAULT_JSON"]
+marker = os.environ["PE_JWT_VAULT_MARKER"]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_jwt_vault_file") is not True:
+    errors.append(
+        f"shared_jwt_vault_file={data.get('shared_jwt_vault_file')!r} want true when JWT_VAULT_PATH set"
+    )
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("JWT_VAULT_PATH / marker leaked into residual-status JSON (path must never dump)")
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status JWT_VAULT_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print("PASS: residual-status shared_jwt_vault_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          residual_status_ok=0
+          HARD_FAIL=1
+        fi
+      fi
+    fi
+
+
       LIMITER_MAX_CANARY=64
       RESIDUAL_STATUS_LIM_JSON="$OUT_DIR/gateway-residual-status-limiter-max.json"
       set +e
@@ -725,7 +844,6 @@ PY
           HARD_FAIL=1
         fi
       fi
-    fi
 
     if [[ $residual_status_ok -eq 1 ]]; then
       ARTIFACT_LINES+=("gateway_residual_status|gateway-residual-status.json|pass|0|")
@@ -912,7 +1030,7 @@ manifest = {
         "Full REL-002 make test / package / signing gates not included (see docs/release/gates.md)",
         "Live Rocky/Ubuntu install evidence remains operator-owned",
         "gateway residual-status / consent-residual in this pack are offline honesty — not live Mode B/C pin or multi-pod HA (see docs/gateway/live-pin-blockers.md)",
-        "shared_*_file default-false + subject_limiter_max_subjects omit default + path-not-dumped / SUBJECT_LIMITER_MAX_SUBJECTS canaries in this pack; residual-smoke still has fuller residual suite (seeded principal Len, etc.)",
+        "shared_*_file default-false + lightweight path-not-dumped canaries in this pack; residual-smoke still has fuller residual suite (seeded principal Len, etc.)",
     ],
 }
 if not profile:

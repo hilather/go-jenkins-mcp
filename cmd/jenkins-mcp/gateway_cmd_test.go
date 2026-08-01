@@ -553,8 +553,8 @@ func TestGatewayResidualStatus(t *testing.T) {
 		t.Fatalf("rateEnabled: %+v", payload["rateEnabled"])
 	}
 	// shared_subject_rate_file / shared_principal_cache_file / shared_jwks_file /
-	// shared_token_cache_file are env path residual (false when unset; HOST-008 lite).
-	// Never path values.
+	// shared_token_cache_file / shared_api_token_vault_file / shared_jwt_vault_file
+	// are env path residual (false when unset; HOST-008 lite). Never path values.
 	if payload["shared_subject_rate_file"] != false {
 		t.Fatalf("shared_subject_rate_file default false: %+v", payload["shared_subject_rate_file"])
 	}
@@ -566,6 +566,12 @@ func TestGatewayResidualStatus(t *testing.T) {
 	}
 	if payload["shared_token_cache_file"] != false {
 		t.Fatalf("shared_token_cache_file default false: %+v", payload["shared_token_cache_file"])
+	}
+	if payload["shared_api_token_vault_file"] != false {
+		t.Fatalf("shared_api_token_vault_file default false: %+v", payload["shared_api_token_vault_file"])
+	}
+	if payload["shared_jwt_vault_file"] != false {
+		t.Fatalf("shared_jwt_vault_file default false: %+v", payload["shared_jwt_vault_file"])
 	}
 	// HOST-007/HOST-008: concurrency slots always process-local honesty.
 	if payload["subject_slots_process_local"] != true {
@@ -752,6 +758,66 @@ func TestGatewayResidualStatus_SharedTokenCacheFileEnv(t *testing.T) {
 	s := string(blob)
 	if strings.Contains(s, marker) || strings.Contains(s, path) {
 		t.Fatal("Regression: TOKEN_CACHE_PATH leaked into residual-status")
+	}
+	for _, bad := range []string{canaryCLIToken, "access_token=", "refresh_token=", "Bearer " + canaryCLIToken} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q", bad)
+		}
+	}
+}
+
+// shared_api_token_vault_file flips true when VAULT_PATH set; path never appears in JSON.
+func TestGatewayResidualStatus_SharedAPITokenVaultFileEnv(t *testing.T) {
+	marker := "cli-api-token-vault-path-canary-NEVER"
+	path := filepath.Join(t.TempDir(), marker+".json")
+	t.Setenv(gateway.EnvGatewayVaultPath, path)
+	t.Setenv("HOST009_FAKE_TOKEN", canaryCLIToken)
+
+	out := buildGatewayResidualStatus(os.Getenv)
+	if out["shared_api_token_vault_file"] != true {
+		t.Fatalf("shared_api_token_vault_file want true: %+v", out["shared_api_token_vault_file"])
+	}
+	clear := buildGatewayResidualStatus(func(string) string { return "" })
+	if clear["shared_api_token_vault_file"] != false {
+		t.Fatalf("shared_api_token_vault_file default false: %+v", clear["shared_api_token_vault_file"])
+	}
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: VAULT_PATH leaked into residual-status")
+	}
+	for _, bad := range []string{canaryCLIToken, "access_token=", "refresh_token=", "Bearer " + canaryCLIToken} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q", bad)
+		}
+	}
+}
+
+// shared_jwt_vault_file flips true when JWT_VAULT_PATH set; path never appears in JSON.
+func TestGatewayResidualStatus_SharedJWTVaultFileEnv(t *testing.T) {
+	marker := "cli-jwt-vault-path-canary-NEVER"
+	path := filepath.Join(t.TempDir(), marker+".json")
+	t.Setenv(gateway.EnvGatewayJWTVaultPath, path)
+	t.Setenv("HOST009_FAKE_TOKEN", canaryCLIToken)
+
+	out := buildGatewayResidualStatus(os.Getenv)
+	if out["shared_jwt_vault_file"] != true {
+		t.Fatalf("shared_jwt_vault_file want true: %+v", out["shared_jwt_vault_file"])
+	}
+	clear := buildGatewayResidualStatus(func(string) string { return "" })
+	if clear["shared_jwt_vault_file"] != false {
+		t.Fatalf("shared_jwt_vault_file default false: %+v", clear["shared_jwt_vault_file"])
+	}
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: JWT_VAULT_PATH leaked into residual-status")
 	}
 	for _, bad := range []string{canaryCLIToken, "access_token=", "refresh_token=", "Bearer " + canaryCLIToken} {
 		if strings.Contains(s, bad) {

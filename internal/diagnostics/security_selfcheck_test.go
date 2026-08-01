@@ -541,7 +541,9 @@ func TestSecuritySelfCheck_OfflineCanaries(t *testing.T) {
 		if gr.Details["shared_subject_rate_file_default_false"] != true ||
 			gr.Details["shared_principal_cache_file_default_false"] != true ||
 			gr.Details["shared_jwks_file_default_false"] != true ||
-			gr.Details["shared_token_cache_file_default_false"] != true {
+			gr.Details["shared_token_cache_file_default_false"] != true ||
+			gr.Details["shared_api_token_vault_file_default_false"] != true ||
+			gr.Details["shared_jwt_vault_file_default_false"] != true {
 			t.Fatalf("shared_*_file default false: %+v", gr.Details)
 		}
 		if gr.Details["secret_free"] != true {
