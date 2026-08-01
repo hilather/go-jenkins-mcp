@@ -41,6 +41,7 @@ jenkins-mcp gateway qualify --offline   # JSON summary, no secrets
 | `mode_b_jwt_vault_bearer` | security | **Mode B:** JWT vault Obtain → Bearer; `id_token` reject; wrong subject miss |
 | `mode_c_agentcore_live_matrix` | security | **Mode C:** Live=false → not_configured; Live+mock Fetcher → Bearer; wrong audience fail; ConsentRequired metadata only |
 | `host011_no_silent_fallthrough` | security | **HOST-011:** empty Mode B does not use Mode A token; residual Mode B fail closed; A stays Basic / B stays Bearer; invalid mode & primary-not-enabled fail start |
+| `oauth009_offline_bearer_matrix` | security | **OAUTH-009:** wrong aud/exp/iss fail closed; ID token reject; OfflineFallthroughFixtures; Mode B empty ≠ Mode A; ModeMatrix residual honesty |
 | `concurrent_obtain_stub_under_budget` | performance | N=32 concurrent stub Obtain under 500ms wall budget |
 | `fail_closed_obtain_latency` | performance | Fail-closed Obtain under 50ms |
 
@@ -48,7 +49,7 @@ jenkins-mcp gateway qualify --offline   # JSON summary, no secrets
 
 - Live Entra / AgentCore network acquisition not exercised  
 - Live Entra JWKS rotation under load and live IdP outage chaos (offline vault hit/miss + mock IdP outage + JWKS kid-lite + mode A/B/C matrix Done*)
-- Mode B live jwt-auth-filter / IdP pin residual (OAUTH-009); offline JWT vault Bearer matrix Done*
+- Mode B live jwt-auth-filter / IdP pin residual (OAUTH-009); offline JWT vault Bearer + claim fail-closed matrix Done* (`oauth009_offline_bearer_matrix`)
 - Mode C live Entra 3LO/OBO + AgentCore Identity vault residual; offline Live=false / mock Fetcher / consent matrix Done*
 - Opt-in residual lab: `testdata/oauth-lab` + `make live-oauth-*` (not default `make test`; not production Entra)
 - Production P95/P99 token acquisition SLOs  

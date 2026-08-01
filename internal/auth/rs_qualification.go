@@ -370,27 +370,33 @@ func BuildOfflineRSProbe(authMethod string) RSProbeReport {
 	rep.OfflineAutomated = []string{
 		"FallthroughMustDeny + ClassifyFallthroughProbe (status/WWW-Authenticate/body class) Done*",
 		"OfflineFallthroughFixtures matrix (empty body, HTML error/login, Bearer WWW-Authenticate, authn fail-closed)",
+		"Bearer claim fail-closed: wrong aud / exp / iss + ID token never API credential (ValidateAccessToken + simulated RS on RequiredMCPRoutes)",
 		"JWKS outage fail-closed (EvaluateJWKSOutage* + ValidateAccessToken nil/empty JWKS)",
 		"RequiredMCPRoutes inventory (unique IDs, progressive_text OutsideAPIGlob)",
 		"RFC 9728 protected resource metadata parser + edge validation (fixture-only; no live fetch)",
 		"JWT iss/aud/alg multi-issuer contracts (ValidateAccessToken)",
-		"Simulated RS invalid Bearer + session → 401",
+		"Simulated RS invalid Bearer + session → 401 (no Basic/session fallthrough)",
+		"Gateway Mode B Obtain → Bearer only; empty JWT vault never falls through to Basic (HOST-011 / GWY-003 qualify)",
 	}
 	rep.Notes = append(rep.Notes,
 		"jwt-auth-filter is a bearer resource server only (not an authorization server)",
+		"ID tokens must never be used as Jenkins API credentials (Mode B / oidc_bearer)",
 		fmt.Sprintf("contract FallthroughMustDeny=%v", FallthroughMustDeny),
 		fmt.Sprintf("JWKS outage must be %s (acceptable=%v)", RequiredJWKSOutageBehavior, jwksEval.Acceptable),
 		fmt.Sprintf("%d MCP routes require RS coverage (%d outside /**/api/**); inventory_ok=%v",
 			len(RequiredMCPRoutes), len(outside), rep.InventoryOK),
 		fmt.Sprintf("threats: %d contract_tested, %d residual_live_lab", contractN, residualN),
 		"see docs/auth/jwt-auth-filter-qualification.md",
+		"mock lab: testdata/oauth-lab + make live-oauth-* (HOST-012…014); GWY-003 offline: jenkins-mcp gateway qualify --offline",
 	)
 	rep.Residuals = append(rep.Residuals,
 		"live Jenkins LTS + jwt-auth-filter version pins (lab residual)",
 		"operator-approved JCasC/proxy config and go/no-go sign-off",
 		"Jenkins RS JWKS cache TTL / rotation under load (MCP client fail-closed is offline-tested)",
-		"live invalid-bearer fallthrough on all RequiredMCPRoutes",
+		"live invalid-bearer fallthrough on all RequiredMCPRoutes (wrong aud/exp/iss re-prove on controller)",
 		"RFC 9728 metadata publication on controller (parser only offline)",
+		"live Entra issuance + real jwt-auth-filter pin (oauth-lab mock RS is not production)",
+		"Gateway Mode B offline vault Ready does not close OAUTH-009 live RS pin",
 	)
 
 	switch method {
