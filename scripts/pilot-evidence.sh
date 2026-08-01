@@ -807,7 +807,7 @@ PY
       # file_backed + same_host_reload_before_persist; path never dumped; stores_tokens=false.
       CONSENT_PATH_MARKER="consent-store-path-CANARY-never-in-json-$$"
       CONSENT_TMP_MARKED="$OUT_DIR/${CONSENT_PATH_MARKER}.json"
-      : >"$CONSENT_TMP_MARKED"
+      # Do not pre-create — residual-status must not open/create the consent file.
       RESIDUAL_STATUS_CONSENT_JSON="$OUT_DIR/gateway-residual-status-consent-path.json"
       set +e
       env JENKINS_MCP_CONSENT_STORE_PATH="$CONSENT_TMP_MARKED" \
@@ -819,17 +819,24 @@ PY
         HARD_FAIL=1
         echo "  [fail] gateway residual-status with CONSENT_STORE_PATH exit $cprc" >&2
       else
+        if [[ -e "$CONSENT_TMP_MARKED" ]]; then
+          residual_status_ok=0
+          HARD_FAIL=1
+          echo "  [fail] gateway residual-status opened/created CONSENT_STORE_PATH (must be env-bool only)" >&2
+        fi
         assert_secret_free_file "$RESIDUAL_STATUS_CONSENT_JSON" "gateway-residual-status-consent-path.json" || {
           residual_status_ok=0
           HARD_FAIL=1
         }
         export PE_CONSENT_JSON="$RESIDUAL_STATUS_CONSENT_JSON"
         export PE_CONSENT_MARKER="$CONSENT_PATH_MARKER"
+        export PE_CONSENT_PATH="$CONSENT_TMP_MARKED"
         if python3 - <<'PY'
 import json, os, sys
 
 path = os.environ["PE_CONSENT_JSON"]
 marker = os.environ["PE_CONSENT_MARKER"]
+consent_path = os.environ.get("PE_CONSENT_PATH", "")
 with open(path, encoding="utf-8") as f:
     data = json.load(f)
 errors = []
@@ -859,6 +866,8 @@ else:
 blob = json.dumps(data)
 if marker in blob:
     errors.append("CONSENT_STORE_PATH / marker leaked into residual-status JSON (path must never dump)")
+if consent_path and consent_path in blob:
+    errors.append("CONSENT_STORE_PATH full path leaked into residual-status JSON")
 low = blob.lower()
 for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
     if needle in low:
@@ -871,7 +880,7 @@ if errors:
 print(
     "PASS: residual-status progressive_consent file_backed=true + "
     "same_host_reload_before_persist=true when path set "
-    "(path not dumped; stores_tokens=false)"
+    "(path not dumped; never opens consent file; stores_tokens=false)"
 )
 sys.exit(0)
 PY
