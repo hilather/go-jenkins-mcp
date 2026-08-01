@@ -74,13 +74,21 @@ const HeaderJenkinsMCPToken = "X-Jenkins-MCP-Token"
 //     (prefix stripped before the SDK handler). /healthz and /readyz remain
 //     at root and are also available at {prefix}/healthz and {prefix}/readyz.
 //     Origin/Host/body/token/subject checks are unchanged after strip.
+//   - TrustedProxy (HOST-002 residual): default false. When false (always
+//     today), X-Forwarded-Host / X-Forwarded-Prefix / X-Forwarded-For /
+//     X-Forwarded-Proto are never used for Host, Origin, or path-prefix auth
+//     decisions — only the direct Host header, Origin header, and URL path
+//     (plus configured PathPrefix) apply. Auto-trust of client-supplied
+//     forwarded headers is fail-closed. TrustedProxy=true is reserved and
+//     currently a no-op residual (still ignores X-Forwarded-*).
 //
 // Residual: empty BearerToken on loopback without RequireToken still leaves the
 // socket open to any local process (KD-008 pilot residual, non-gateway only).
 // Production multi-user JWT/OIDC validation is partial (lab header + resolver
 // hook foundation; continuous JWKS rotation under load residual HOST-001 /
-// HOST-014). Live path-prefix origin pin matrix remains residual (HOST-002 /
-// NET-001). Prefer stdio for pilot (ADR 0002).
+// HOST-014). Live edge reverse-proxy origin pin matrix remains residual
+// (HOST-002 / NET-001); offline path-prefix + origin pin fixtures ship here.
+// Prefer stdio for pilot (ADR 0002).
 type HTTPConfig struct {
 	// Addr is the listen address (e.g. "127.0.0.1:8765", "localhost:0").
 	Addr string
@@ -105,12 +113,25 @@ type HTTPConfig struct {
 	// endpoints stay at root and also at {prefix}/healthz|{prefix}/readyz.
 	// Wire as --http-path-prefix / JENKINS_MCP_HTTP_PATH_PREFIX. Validated:
 	// must start with "/", no "//", no ".." segments; trailing slash normalized.
+	// PathPrefix is taken only from this config — never from X-Forwarded-Prefix
+	// (TrustedProxy residual; fail closed by default).
 	PathPrefix string
+
+	// TrustedProxy is a residual flag for future reverse-proxy trust of
+	// X-Forwarded-* headers (HOST-002). Default false: Host/Origin/path auth
+	// decisions ignore X-Forwarded-Host, X-Forwarded-Prefix, X-Forwarded-For,
+	// and X-Forwarded-Proto entirely. When false (default), operators must
+	// configure the edge to forward the real Host and Origin (and app PathPrefix)
+	// rather than relying on client-controlled forwarded headers.
+	// TrustedProxy=true is reserved and currently does not enable trust
+	// (still ignores X-Forwarded-* — fail closed residual; do not auto-trust).
+	TrustedProxy bool
 
 	// AllowedOrigins, when non-empty, is an exact-match allow list for the
 	// Origin header on non-GET requests. When empty (default), only loopback
 	// origins (http(s)://localhost, 127.0.0.1, ::1) and missing Origin are
 	// accepted on non-GET. Required non-empty when AllowNonLocal.
+	// Never derived from X-Forwarded-* (TrustedProxy residual).
 	AllowedOrigins []string
 
 	// AllowedHosts is an exact-match allow list for the Host header hostname
@@ -118,6 +139,8 @@ type HTTPConfig struct {
 	// AllowNonLocal is true for DNS-rebinding defense on non-loopback binds.
 	// Wire as --http-allowed-host (repeatable). Required non-empty when
 	// AllowNonLocal; ignored for loopback-only mode (Host must still be loopback).
+	// Compared against the direct Host header only — not X-Forwarded-Host
+	// (TrustedProxy residual; default false = ignore forwarded host).
 	AllowedHosts []string
 
 	// BearerToken, when non-empty, requires every request (including GET SSE)
@@ -463,6 +486,10 @@ func NewHTTPHandler(server *mcp.Server, cfg HTTPConfig) (http.Handler, error) {
 		inner:                   inner,
 		maxBody:                 maxBody,
 		pathPrefix:              pathPrefix,
+		// HOST-002: store flag for residual clarity; Host/Origin/path never
+		// read X-Forwarded-* while trustedProxy is false (default) or while
+		// true remains unimplemented (fail closed — do not auto-trust).
+		trustedProxy:            cfg.TrustedProxy,
 		allowNonLocal:           cfg.AllowNonLocal,
 		allowedOrigins:          append([]string(nil), cfg.AllowedOrigins...),
 		allowedHosts:            append([]string(nil), cfg.AllowedHosts...),
@@ -639,11 +666,18 @@ func effectiveMaxBody(cfg HTTPConfig) int64 {
 // protectHandler applies optional shared-secret, subject identity, body size,
 // Host, Origin, and path-prefix checks around the SDK handler
 // (HOST-001 + HOST-002 + KD-008).
+//
+// HOST-002 TrustedProxy residual: X-Forwarded-Host / X-Forwarded-Prefix /
+// X-Forwarded-For / X-Forwarded-Proto are never consulted for auth or path
+// decisions while trustedProxy is false (default) or true-but-unimplemented.
 type protectHandler struct {
 	inner         http.Handler
 	maxBody       int64
 	pathPrefix    string // normalized; empty = no prefix (MCP at root path space)
-	allowNonLocal bool
+	// trustedProxy residual: when false (default), ignore X-Forwarded-* for
+	// Host/Origin/path. When true, still ignored until residual lands.
+	trustedProxy     bool
+	allowNonLocal    bool
 	allowedOrigins   []string
 	allowedHosts     []string
 	bearerToken      string
@@ -743,14 +777,23 @@ func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// HOST-002 TrustedProxy residual: even when the flag is true, do not
+	// promote X-Forwarded-Host / X-Forwarded-Prefix into auth decisions.
+	// Default false is the only shipped behavior; true is reserved and
+	// fail-closed (no auto-trust of client-controlled forwarded headers).
+	// Reference the field so residual config is retained on the handler.
+	_ = h.trustedProxy
+
 	// Host check: when loopback-only, reject Host headers that point off-box
 	// (DNS rebinding). When AllowNonLocal, Host hostname must match AllowedHosts.
+	// Uses direct Host only — never X-Forwarded-Host.
 	if err := checkRequestHost(r, h.allowNonLocal, h.allowedHosts); err != nil {
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 
 	// Origin check for non-GET (POST/DELETE carry session/mutation semantics).
+	// Uses Origin header only — never X-Forwarded-*.
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		if err := checkOrigin(r, h.allowedOrigins, h.allowNonLocal); err != nil {
 			http.Error(w, err.Error(), http.StatusForbidden)
@@ -868,6 +911,10 @@ func bearerFromAuthorization(h string) string {
 }
 
 func checkRequestHost(r *http.Request, allowNonLocal bool, allowedHosts []string) error {
+	// HOST-002 TrustedProxy residual: use only the direct Host header (or
+	// URL.Host fallback). Never substitute X-Forwarded-Host / Forwarded —
+	// client-controlled forwarded hosts must not pass DNS-rebinding checks.
+	// TrustedProxy=true does not change this until residual trust lands.
 	host := r.Host
 	if host == "" && r.URL != nil {
 		host = r.URL.Host
@@ -928,6 +975,9 @@ func hostInAllowList(hostname string, allowed []string) bool {
 }
 
 func checkOrigin(r *http.Request, allowed []string, allowNonLocal bool) error {
+	// HOST-002 TrustedProxy residual: exact-match the Origin header only.
+	// Never derive allowed origin from X-Forwarded-Host / X-Forwarded-Proto
+	// (client-controlled; fail closed). PathPrefix does not affect Origin.
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
 	if origin == "" {
 		// Non-browser clients (curl, MCP SDK) often omit Origin — allow.

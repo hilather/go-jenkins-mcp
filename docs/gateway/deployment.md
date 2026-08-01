@@ -126,6 +126,24 @@ still listens on loopback or a private port.
 | MCP routes when prefix empty | Unchanged: root path space (as today) |
 | Health | `GET /healthz` and `GET /readyz` **always** at root; also at `{prefix}/healthz` and `{prefix}/readyz` when prefix set |
 | Origin / Host | Unchanged after strip (exact `AllowedOrigins` / `AllowedHosts`; no CORS wildcards) |
+| `X-Forwarded-Host` / `X-Forwarded-Prefix` | **Not trusted by default** (`HTTPConfig.TrustedProxy` residual, default **false**) — Host/Origin/path auth use direct `Host` + `Origin` + configured `PathPrefix` only |
+| `TrustedProxy` | Residual flag; when `false` (shipped default) ignore all `X-Forwarded-*` for auth. When `true`, still **no auto-trust** until residual lands (fail closed) |
+
+#### Path-prefix + origin pin fixture matrix (offline)
+
+Offline unit fixtures (`TestHOST002_PathPrefixOriginPinFixtureMatrix` in
+`internal/mcpserver`) pin the reverse-proxy contract:
+
+| Fixture | PathPrefix | Host | Origin | Extra headers | Expect |
+|---------|------------|------|--------|---------------|--------|
+| Origin exact match under prefix | `/mcp` | allowed | exact allow-list | — | Pass protect (not 401/403/404) |
+| Wrong Origin under prefix | `/mcp` | allowed | evil | — | **403** |
+| Host allow-list OK (non-local + prefix) | `/mcp` | allowed | allowed | — | Pass protect |
+| Host allow-list reject (non-local + prefix) | `/mcp` | evil | allowed | — | **403** |
+| Health root unauthenticated | `/mcp` | any | — | no token | **200** `GET /healthz` |
+| Health `{prefix}/healthz` unauthenticated | `/mcp` | any | — | no token | **200** `GET /mcp/healthz` |
+| `X-Forwarded-Host` spoof | `/mcp` | evil | allowed | `X-Forwarded-Host: allowed` | **403** (not trusted) |
+| `X-Forwarded-Prefix` spoof | `/mcp` | allowed | allowed | path `/` + `X-Forwarded-Prefix` | **404** (prefix from config only) |
 
 ```bash
 # App: loopback MCP under /mcp (proxy terminates TLS and forwards /mcp/*)
@@ -138,12 +156,12 @@ jenkins-mcp serve --profile corp --gateway --read-only \
 # Example nginx shape (illustrative — site-owned TLS and auth remain residual)
 # location /mcp/ {
 #   proxy_pass http://127.0.0.1:8081/mcp/;   # keep prefix; app strips
-#   proxy_set_header Host $host;
-#   proxy_set_header Origin $http_origin;  # do not invent *
+#   proxy_set_header Host $host;             # required: app pins Host (not X-Forwarded-Host)
+#   proxy_set_header Origin $http_origin;  # do not invent *; app does not trust X-Forwarded-*
 #   proxy_http_version 1.1;
 #   proxy_buffering off;                   # SSE / streamable
 # }
-# Probes may hit app root or prefixed health:
+# Probes may hit app root or prefixed health (unauthenticated):
 #   GET /healthz  or  GET /mcp/healthz
 #   GET /readyz   or  GET /mcp/readyz
 ```
@@ -152,11 +170,19 @@ jenkins-mcp serve --profile corp --gateway --read-only \
 (e.g. Streamable endpoint `https://edge.example.corp/mcp`). Do not configure a
 CORS `*` allow-list on the proxy for browser agents.
 
-**Residual (NET-001 / HOST-002 live matrix):** a full **live path-prefix origin
-pin matrix** (edge strips/rewrites `Host`/`Origin`/`X-Forwarded-*`, multi-prefix
-Jenkins vs MCP edge) is **not** automated here. Document site proxy config in
-pilot evidence; Origin pin pure helpers remain offline. Do not claim automatic
-multi-prefix production support beyond the strip + dual health surface above.
+**Edge guidance (fail closed):** the reverse-proxy must forward the real
+`Host` and browser `Origin` to the app. Do **not** rely on
+`X-Forwarded-Host` / `X-Forwarded-Prefix` for MCP auth — the process ignores
+them by default (`TrustedProxy=false`). Configure `PathPrefix` / AllowedHosts /
+AllowedOrigins on the app to match the public edge URL.
+
+**Residual (NET-001 / HOST-002 live matrix):** a full **live** path-prefix origin
+pin matrix (real edge container that strips/rewrites `Host`/`Origin`/
+`X-Forwarded-*`, multi-prefix Jenkins vs MCP edge) is **not** automated here.
+Offline fixtures above cover app-side pin behavior. Document site proxy config
+in pilot evidence. Do not claim automatic multi-prefix production support or
+trusted-proxy mode beyond the strip + dual health + fail-closed X-Forwarded
+surface above.
 
 ### Health endpoints — secret-free (HOST-002 / HOST-005)
 
@@ -175,7 +201,11 @@ multi-prefix production support beyond the strip + dual health surface above.
 - When `--gateway` is set, serve wires `ReadyCheck` from Obtain Ready; when
   Obtain is not Ready, **readiness fails (503)** while liveness stays ok.
 
-Regression tests: `go test ./internal/mcpserver -run 'Health|Readyz|PathPrefix|AllowedHosts|Wildcard'`.
+Regression tests:
+
+```bash
+go test ./internal/mcpserver -count=1 -run 'Health|Readyz|PathPrefix|AllowedHosts|Wildcard|HOST002'
+```
 
 ---
 
@@ -343,7 +373,7 @@ See [roadmap § HOST-008](../roadmap/server-team-hosted.md).
 | **Live AgentCore sidecar / binary pin** | GWY-003 live pin + org AgentCore release |
 | **Image signing** (cosign / registry signing) | Org release pipeline; not in `make package` |
 | Streamable HTTP transport hardening + mTLS | GWY-004 production / HOST-001 |
-| Live path-prefix origin pin matrix | HOST-002 / NET-001 residual |
+| Live edge path-prefix origin pin matrix (container) | HOST-002 / NET-001 residual — offline fixtures + `TrustedProxy` fail-closed ship |
 | Multi-tenant quotas + enforced namespace isolation in one process | Storage / MGR / HOST-004 |
 | Private ratarmount-rs sidecar packaging | ARC / platform |
 | Measurable near-source bandwidth benefit study | PERF / pilot metrics |
