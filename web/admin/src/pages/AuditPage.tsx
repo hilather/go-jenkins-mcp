@@ -5,8 +5,11 @@ import type { AuditEvent, AuditQuery } from "../api/types";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
 import {
   AUDIT_LIMIT_OPTIONS,
+  AUDIT_TYPE_OPTIONS,
   buildAuditExportPayload,
   datetimeLocalToRfc3339,
+  filterEventsByExternalSubject,
+  formatAuditSubjectCell,
   normalizeAuditLimit,
   olderBeforeCursor,
   presentAuditFields,
@@ -21,6 +24,10 @@ interface AuditFilters {
   beforeText: string;
   /** datetime-local form value; takes precedence when set. */
   beforeLocal: string;
+  /**
+   * Client-side only filter on loaded events (BFF has no externalSubject query param).
+   */
+  externalSubject: string;
 }
 
 function defaultFilters(): AuditFilters {
@@ -29,6 +36,7 @@ function defaultFilters(): AuditFilters {
     limit: 50,
     beforeText: "",
     beforeLocal: "",
+    externalSubject: "",
   };
 }
 
@@ -119,6 +127,7 @@ export function AuditPage() {
       limit: normalizeAuditLimit(draft.limit),
       beforeText: draft.beforeText.trim(),
       beforeLocal: draft.beforeLocal,
+      externalSubject: draft.externalSubject.trim(),
     });
     setPageBefore(undefined);
     setAppendNext(false);
@@ -145,10 +154,19 @@ export function AuditPage() {
     setPageBefore(cursor);
   };
 
+  /** Page-local view after optional client-side externalSubject filter. */
+  const displayed = useMemo(
+    () => filterEventsByExternalSubject(loaded, applied.externalSubject),
+    [loaded, applied.externalSubject],
+  );
+
   const exportLoaded = () => {
-    const payload = buildAuditExportPayload(profileId, loaded, {
+    const payload = buildAuditExportPayload(profileId, displayed, {
       truncated: Boolean(q.data?.truncated),
-      filters: query,
+      filters: {
+        ...query,
+        externalSubject: applied.externalSubject || undefined,
+      },
     });
     downloadJson("audit-export.json", payload);
   };
@@ -170,7 +188,9 @@ export function AuditPage() {
       <p className="page-sub">
         Privacy-preserving audit tail for profile <code>{profileId}</code>{" "}
         (<code>GET /admin/v1/profiles/{"{id}"}/audit</code>). Cap limit ≤ 200.
-        No live SSE tail in v1.
+        Multi-user correlation columns:{" "}
+        <code>externalSubject</code> / <code>subjectKeyHash</code> (opaque hash
+        only — never tokens). No live SSE tail in v1.
       </p>
 
       <form className="card filters-card" onSubmit={applyFilters}>
@@ -178,16 +198,19 @@ export function AuditPage() {
         <div className="filters-grid">
           <label className="field">
             <span>type</span>
-            <input
-              type="text"
+            <select
               className="input mono"
-              placeholder="e.g. tool_deny"
               value={draft.type}
               onChange={(e) =>
                 setDraft((d) => ({ ...d, type: e.target.value }))
               }
-              autoComplete="off"
-            />
+            >
+              {AUDIT_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value || "all"} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="field">
             <span>limit</span>
@@ -232,6 +255,21 @@ export function AuditPage() {
               autoComplete="off"
             />
           </label>
+          <label className="field field-wide">
+            <span>
+              externalSubject (client filter on loaded page; BFF residual)
+            </span>
+            <input
+              type="text"
+              className="input mono"
+              placeholder="IdP subject substring"
+              value={draft.externalSubject}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, externalSubject: e.target.value }))
+              }
+              autoComplete="off"
+            />
+          </label>
         </div>
         <div className="toolbar">
           <button type="submit" className="btn btn-primary">
@@ -244,14 +282,21 @@ export function AuditPage() {
             type="button"
             className="btn"
             onClick={exportLoaded}
-            disabled={loaded.length === 0}
+            disabled={displayed.length === 0}
           >
             Export loaded JSON
           </button>
           <span className="toolbar-meta muted">
-            {loaded.length} loaded
+            {displayed.length}
+            {applied.externalSubject && loaded.length !== displayed.length
+              ? ` of ${loaded.length}`
+              : ""}{" "}
+            loaded
             {q.data?.truncated ? " · truncated (more on server)" : ""}
             {pageBefore ? ` · cursor before=${pageBefore}` : ""}
+            {applied.externalSubject
+              ? ` · externalSubject≈${applied.externalSubject}`
+              : ""}
           </span>
         </div>
       </form>
@@ -272,11 +317,19 @@ export function AuditPage() {
           <div className="audit-layout">
             <div className="card audit-table-card">
               <h2>
-                Events ({loaded.length}
-                {q.data?.truncated ? ", page truncated" : ""})
+                Events ({displayed.length}
+                {q.data?.truncated ? ", page truncated" : ""}
+                {applied.externalSubject && loaded.length !== displayed.length
+                  ? `; filtered from ${loaded.length}`
+                  : ""}
+                )
               </h2>
               {!loaded.length ? (
                 <p className="muted">{emptyMessage}</p>
+              ) : !displayed.length ? (
+                <p className="muted">
+                  No events match externalSubject client filter on this page.
+                </p>
               ) : (
                 <div className="table-scroll">
                   <table className="data">
@@ -288,10 +341,16 @@ export function AuditPage() {
                         <th>tool</th>
                         <th>reason</th>
                         <th>principal</th>
+                        <th title="IdP subject label (gateway multi-user); never a token">
+                          externalSubject
+                        </th>
+                        <th title="Opaque HashOpaque(tenant|subject|profile); never raw subject key">
+                          subjectKeyHash
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {loaded.map((ev, i) => {
+                      {displayed.map((ev, i) => {
                         const active = isSelected(ev);
                         return (
                           <tr
@@ -314,6 +373,18 @@ export function AuditPage() {
                             <td className="mono">{ev.tool || "—"}</td>
                             <td className="mono">{ev.reasonCode || "—"}</td>
                             <td className="mono">{ev.principalId || "—"}</td>
+                            <td
+                              className="mono muted"
+                              title={ev.externalSubject || undefined}
+                            >
+                              {formatAuditSubjectCell(ev.externalSubject)}
+                            </td>
+                            <td
+                              className="mono muted"
+                              title={ev.subjectKeyHash || undefined}
+                            >
+                              {formatAuditSubjectCell(ev.subjectKeyHash)}
+                            </td>
                           </tr>
                         );
                       })}
