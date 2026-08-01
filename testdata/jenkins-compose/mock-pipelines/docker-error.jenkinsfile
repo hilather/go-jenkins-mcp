@@ -1,0 +1,15 @@
+pipeline {
+  agent any
+  stages {
+    stage('Build Image') {
+      steps {
+        sh '''
+          echo "docker build -t mock/app:latest ."
+          echo "Cannot connect to the Docker daemon at unix:///var/run/docker.sock"
+          echo "Is the docker daemon running?"
+          exit 1
+        '''
+      }
+    }
+  }
+}

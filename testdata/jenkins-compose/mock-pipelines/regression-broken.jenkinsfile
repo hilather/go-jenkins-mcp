@@ -1,0 +1,43 @@
+pipeline {
+  agent any
+  stages {
+    stage('Checkout') {
+      steps {
+        echo '[mock-inv-regression-broken] checkout complete'
+      }
+    }
+    stage('Build') {
+      steps {
+        sh '''
+          set -euo pipefail
+          mkdir -p target/classes target/surefire-reports
+          echo "compiled mock module" > target/classes/app.txt
+        '''
+      }
+    }
+    stage('Test') {
+      steps {
+        sh '''
+          cat > target/surefire-reports/TEST-RegressionBroken.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="RegressionBroken" tests="3" failures="2" errors="0" skipped="0" time="0.12">
+  <testcase classname="com.mock.Regression" name="testHealth" time="0.01"/>
+  <testcase classname="com.mock.Regression" name="testApiContract" time="0.02">
+    <failure message="expected 200 got 500">java.lang.AssertionError: expected 200 got 500</failure>
+  </testcase>
+  <testcase classname="com.mock.Regression" name="testCacheWarm" time="0.02">
+    <failure message="Cache miss on shard-7">org.junit.ComparisonFailure: expected:&lt;hit&gt; but was:&lt;miss&gt;</failure>
+  </testcase>
+</testsuite>
+EOF
+        '''
+        junit testResults: 'target/surefire-reports/TEST-*.xml', allowEmptyResults: false
+      }
+    }
+    stage('Publish') {
+      steps {
+        echo 'should not reach publish on hard test failure'
+      }
+    }
+  }
+}

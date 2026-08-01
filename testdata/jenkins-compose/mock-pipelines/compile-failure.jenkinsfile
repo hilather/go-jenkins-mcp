@@ -1,0 +1,27 @@
+pipeline {
+  agent any
+  stages {
+    stage('Checkout') {
+      steps {
+        echo '[mock-inv-compile-failure] checkout complete'
+      }
+    }
+    stage('Compile') {
+      steps {
+        sh '''
+          set -euo pipefail
+          echo "src/main/mock/App.java:42: error: cannot find symbol"
+          echo "  symbol:   class MissingDependency"
+          echo "  location: class com.mock.App"
+          echo "1 error"
+          exit 1
+        '''
+      }
+    }
+    stage('Test') {
+      steps {
+        echo 'Compile failed — tests skipped'
+      }
+    }
+  }
+}

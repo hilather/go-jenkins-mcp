@@ -44,6 +44,7 @@ help:
 	@echo "  make live-jenkins-up    Start disposable Jenkins LTS (Docker; not in default test)"
 	@echo "  make live-jenkins-test  Compose up + live smoke + down (needs Docker)"
 	@echo "  make live-jenkins-down  Stop disposable Jenkins and remove volume"
+	@echo "  make live-jenkins-fixtures-rebuild  Re-queue mock-inv-* builds (lab running)"
 	@echo "  make ci         lint + test + build (merge gate subset)"
 	@echo "  make clean      Remove bin/ and dist/"
 
@@ -208,6 +209,12 @@ live-jenkins-test:
 	@chmod +x $(CURDIR)/scripts/jenkins-live-smoke.sh
 	JENKINS_HOST_PORT=$(JENKINS_HOST_PORT) JENKINS_ADMIN_PASSWORD=$(JENKINS_ADMIN_PASSWORD) \
 		$(CURDIR)/scripts/jenkins-live-smoke.sh
+
+.PHONY: live-jenkins-fixtures-rebuild
+live-jenkins-fixtures-rebuild:
+	@chmod +x $(CURDIR)/scripts/jenkins-fixture-rebuild.sh
+	JENKINS_HOST_PORT=$(JENKINS_HOST_PORT) \
+		$(CURDIR)/scripts/jenkins-fixture-rebuild.sh
 
 .PHONY: clean
 clean:

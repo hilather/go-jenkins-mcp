@@ -1,0 +1,36 @@
+pipeline {
+  agent any
+  stages {
+    stage('Build') {
+      steps {
+        sh '''
+          set -euo pipefail
+          mkdir -p target/surefire-reports
+          echo "build ok"
+        '''
+      }
+    }
+    stage('Unit Tests') {
+      steps {
+        sh '''
+          cat > target/surefire-reports/TEST-Unit.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Unit" tests="4" failures="2" errors="1" skipped="0" time="0.20">
+  <testcase classname="com.mock.unit.AuthTest" name="testLogin" time="0.02"/>
+  <testcase classname="com.mock.unit.AuthTest" name="testLogout" time="0.03">
+    <failure message="Session not cleared">java.lang.IllegalStateException: Session not cleared</failure>
+  </testcase>
+  <testcase classname="com.mock.unit.DbTest" name="testInsert" time="0.04">
+    <error message="Connection reset" type="java.sql.SQLException">Connection reset</error>
+  </testcase>
+  <testcase classname="com.mock.unit.DbTest" name="testSelect" time="0.03">
+    <failure message="expected 3 rows">AssertionError: expected 3 rows got 0</failure>
+  </testcase>
+</testsuite>
+EOF
+        '''
+        junit testResults: 'target/surefire-reports/TEST-*.xml', allowEmptyResults: false
+      }
+    }
+  }
+}

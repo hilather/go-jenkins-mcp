@@ -1,0 +1,38 @@
+pipeline {
+  agent any
+  stages {
+    stage('Checkout') {
+      steps {
+        echo '[mock-inv-baseline-green] checkout complete'
+      }
+    }
+    stage('Build') {
+      steps {
+        sh '''
+          set -euo pipefail
+          mkdir -p target/classes target/surefire-reports
+          echo "compiled mock module" > target/classes/app.txt
+        '''
+      }
+    }
+    stage('Test') {
+      steps {
+        sh '''
+          cat > target/surefire-reports/TEST-BaselineGreen.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="BaselineGreen" tests="2" failures="0" errors="0" skipped="0" time="0.05">
+  <testcase classname="com.mock.Baseline" name="testHealth" time="0.01"/>
+  <testcase classname="com.mock.Baseline" name="testSmoke" time="0.01"/>
+</testsuite>
+EOF
+        '''
+        junit testResults: 'target/surefire-reports/TEST-*.xml', allowEmptyResults: false
+      }
+    }
+    stage('Publish') {
+      steps {
+        echo '[mock-inv-baseline-green] publish complete'
+      }
+    }
+  }
+}
