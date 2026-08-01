@@ -308,6 +308,27 @@ func TestBuildGatewayResidualStatus_SubjectLimiterMaxSubjects(t *testing.T) {
 	}
 }
 
+// Regression: LooksSecretKey must not treat residual honesty bool shared_token_cache_file
+// as a secret key (doctor/support-bundle sanitize + release-evidence scrub).
+// Still drops real secret keys like access_token / client_secret.
+func TestLooksSecretKey_SharedTokenCacheFileAllowlist(t *testing.T) {
+	t.Parallel()
+	if diagnostics.LooksSecretKey("shared_token_cache_file") {
+		t.Fatal("Regression: shared_token_cache_file residual honesty bool must not look secret")
+	}
+	if diagnostics.LooksSecretKey("SHARED_TOKEN_CACHE_FILE") {
+		t.Fatal("case-insensitive allowlist for shared_token_cache_file")
+	}
+	for _, secret := range []string{
+		"access_token", "refresh_token", "client_secret", "authorization",
+		"password", "cookie", "private_key", "token_cache_path", "bearer_token",
+	} {
+		if !diagnostics.LooksSecretKey(secret) {
+			t.Fatalf("LooksSecretKey(%q) want true (still drop real secret keys)", secret)
+		}
+	}
+}
+
 // shared_token_cache_file=true when TOKEN_CACHE_PATH set; path never dumped (HOST-008 lite).
 // Residual must not open the cache file (tokens on disk) — bool + path residual only.
 func TestBuildGatewayResidualStatus_SharedTokenCacheFile(t *testing.T) {

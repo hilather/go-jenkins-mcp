@@ -746,14 +746,19 @@ func TestReleaseEvidenceCLI_GatewayResidualStatusJSON(t *testing.T) {
 func TestScrubResidualStatusMapDropsSecretKeys(t *testing.T) {
 	t.Parallel()
 	// Regression: residual embed scrub must drop secret keys and redact values.
+	// Wave 15: shared_token_cache_file residual honesty bool must survive scrub
+	// (naive "token" substring must not drop it).
 	in := map[string]any{
-		"residual_id":       "oauth009_offline",
-		"ha_multi_replica":  false,
-		"access_token":      "should-drop",
-		"client_secret":     "should-drop",
-		"authorization":     "Bearer drop-me",
-		"residual_note":     "see docs/gateway/live-pin-blockers.md",
-		"nested":            map[string]any{"password": "nope", "ok": "live-pin-blockers"},
+		"residual_id":              "oauth009_offline",
+		"ha_multi_replica":         false,
+		"shared_token_cache_file":  true,
+		"shared_jwks_file":         false,
+		"access_token":             "should-drop",
+		"client_secret":            "should-drop",
+		"authorization":            "Bearer drop-me",
+		"token_cache_path":         "/secret/path/token.json",
+		"residual_note":            "see docs/gateway/live-pin-blockers.md",
+		"nested":                   map[string]any{"password": "nope", "ok": "live-pin-blockers"},
 	}
 	out := scrubResidualStatusMap(in)
 	if _, ok := out["access_token"]; ok {
@@ -764,6 +769,15 @@ func TestScrubResidualStatusMapDropsSecretKeys(t *testing.T) {
 	}
 	if _, ok := out["authorization"]; ok {
 		t.Fatal("authorization must be dropped")
+	}
+	if _, ok := out["token_cache_path"]; ok {
+		t.Fatal("token_cache_path must be dropped (path residual never dumped)")
+	}
+	if out["shared_token_cache_file"] != true {
+		t.Fatalf("Regression: shared_token_cache_file residual honesty bool dropped by scrub: %+v", out["shared_token_cache_file"])
+	}
+	if out["shared_jwks_file"] != false {
+		t.Fatalf("shared_jwks_file: %+v", out["shared_jwks_file"])
 	}
 	if out["residual_id"] != "oauth009_offline" {
 		t.Fatalf("residual_id=%v", out["residual_id"])

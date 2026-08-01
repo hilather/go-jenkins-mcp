@@ -95,7 +95,32 @@ func SanitizeCheck(c Check) Check {
 	return c
 }
 
+// residualHonestyNonSecretKey reports residual-status / BuildGatewayResidualStatus
+// keys whose names contain secret-shaped substrings (e.g. "token") but hold only
+// non-secret residual honesty (bools/counts — never paths, tokens, or vault bytes).
+// Regression: naive substring "token" matches must not drop shared_token_cache_file
+// from doctor/support-bundle/release-evidence embeds (Wave 15 residual honesty).
+func residualHonestyNonSecretKey(k string) bool {
+	switch k {
+	case "shared_token_cache_file":
+		return true
+	default:
+		return false
+	}
+}
+
+// LooksSecretKey reports whether a JSON map key name looks like it may hold secret
+// material and should be dropped by defense-in-depth sanitizers. Residual honesty
+// keys that merely mention "token" (e.g. shared_token_cache_file bool) are allowed.
+// Exported for release-evidence scrub parity with doctor/support-bundle.
+func LooksSecretKey(k string) bool {
+	return looksSecretKey(strings.ToLower(strings.TrimSpace(k)))
+}
+
 func looksSecretKey(k string) bool {
+	if residualHonestyNonSecretKey(k) {
+		return false
+	}
 	switch {
 	case strings.Contains(k, "token"),
 		strings.Contains(k, "password"),

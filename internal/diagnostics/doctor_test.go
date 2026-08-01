@@ -313,6 +313,14 @@ func TestRunDoctor_GatewayResidualStatusEmbed(t *testing.T) {
 	if grs["mode_b_live_rs_qualified"] == true {
 		t.Fatal("must not claim mode_b_live_rs_qualified")
 	}
+	// Wave 15 residual honesty: sanitizeResidualStatusMap must keep
+	// shared_token_cache_file (bool) — not drop it via naive "token" key match.
+	if grs["shared_token_cache_file"] != false {
+		t.Fatalf("shared_token_cache_file default false after doctor sanitize: %+v", grs["shared_token_cache_file"])
+	}
+	if grs["subject_slots_process_local"] != true {
+		t.Fatalf("subject_slots_process_local after doctor sanitize: %+v", grs["subject_slots_process_local"])
+	}
 
 	var buf bytes.Buffer
 	diagnostics.FormatReportText(&buf, rep)
@@ -331,6 +339,70 @@ func TestRunDoctor_GatewayResidualStatusEmbed(t *testing.T) {
 		if !strings.Contains(text, "ha_multi_replica") {
 			t.Fatal("text residual section must surface ha_multi_replica")
 		}
+	}
+}
+
+// Regression: doctor gateway_residual_status keeps shared_token_cache_file=true when
+// TOKEN_CACHE_PATH is set; sanitize must not drop the residual honesty bool, never
+// dumps path, never opens the token file contents.
+func TestRunDoctor_GatewayResidualStatus_SharedTokenCacheFileSurvivesSanitize(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	marker := "doctor-token-cache-path-CANARY-never-in-json"
+	path := filepath.Join(t.TempDir(), marker+".json")
+	seedToken := "doctor-seed-access-token-CANARY-never-in-residual"
+	if err := os.WriteFile(path, []byte(`{"version":1,"entries":{"k":{"access_token":"`+seedToken+`","expires_at":"2099-01-01T00:00:00Z"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(gateway.EnvGatewayTokenCachePath, path)
+	t.Setenv("HOST_DOCTOR_TOKEN_CANARY", doctorCanary)
+
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.ProfilesDir(), 0o700)
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	kr := keyring.NewStore(keyring.NewMemory())
+
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     kr,
+		Version:     "test",
+		Commit:      "abc",
+		SkipNetwork: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grs := rep.GatewayResidualStatus
+	if grs == nil {
+		t.Fatal("gateway_residual_status required")
+	}
+	if grs["shared_token_cache_file"] != true {
+		t.Fatalf("Regression: shared_token_cache_file dropped or false after doctor sanitize: %+v", grs["shared_token_cache_file"])
+	}
+	blob, err := json.Marshal(grs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: TOKEN_CACHE_PATH leaked into doctor gateway_residual_status")
+	}
+	if strings.Contains(s, seedToken) {
+		t.Fatal("Regression: token cache file contents leaked into doctor residual")
+	}
+	if strings.Contains(s, doctorCanary) {
+		t.Fatal("canary in residual map")
 	}
 }
 

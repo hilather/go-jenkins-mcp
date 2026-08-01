@@ -120,10 +120,13 @@ func checkGatewayResidualStatusHonesty(getenv func(string) string) SelfCheckItem
 	}
 
 	// shared_*_file default false when paths unset (HOST-008 lite residual).
+	// Includes shared_token_cache_file (HOST-008 FileTokenCache residual; residual
+	// never opens the cache file — bool only).
 	for _, k := range []string{
 		"shared_subject_rate_file",
 		"shared_principal_cache_file",
 		"shared_jwks_file",
+		"shared_token_cache_file",
 	} {
 		if out[k] != false {
 			return fail(k + " default false when path unset")
@@ -181,19 +184,20 @@ func checkGatewayResidualStatusHonesty(getenv func(string) string) SelfCheckItem
 	multiUser := gateway.MultiUserEnabled(getenv)
 
 	details := map[string]any{
-		"residual_ids_present":                   true,
-		"residual_id_count":                      len(idSet),
-		"ha_multi_replica":                       false,
-		"gateway_ready":                          false,
-		"live_mode_pins_false":                   true,
-		"oauth009_offline":                       true,
-		"shared_subject_rate_file_default_false": true,
+		"residual_ids_present":                      true,
+		"residual_id_count":                         len(idSet),
+		"ha_multi_replica":                          false,
+		"gateway_ready":                             false,
+		"live_mode_pins_false":                      true,
+		"oauth009_offline":                          true,
+		"shared_subject_rate_file_default_false":    true,
 		"shared_principal_cache_file_default_false": true,
-		"shared_jwks_file_default_false":         true,
-		"secret_free":                            true,
-		"residual_live_go":                       false,
-		"multi_user_env_set":                     multiUser,
-		"multi_pod_vault_residual":               true,
+		"shared_jwks_file_default_false":            true,
+		"shared_token_cache_file_default_false":     true,
+		"secret_free":                               true,
+		"residual_live_go":                          false,
+		"multi_user_env_set":                        multiUser,
+		"multi_pod_vault_residual":                  true,
 	}
 
 	if multiUser {

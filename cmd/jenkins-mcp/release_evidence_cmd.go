@@ -817,17 +817,15 @@ func scrubReleaseEvidence(ev *releaseEvidence) {
 
 // scrubResidualStatusMap redacts string leaves in the gateway residual-status embed.
 // Drops secret-shaped keys; never elevates residual honesty to live GO.
+// Uses diagnostics.LooksSecretKey so residual honesty bools like
+// shared_token_cache_file are preserved (not dropped by naive "token" substring).
 func scrubResidualStatusMap(in map[string]any) map[string]any {
 	if in == nil {
 		return nil
 	}
 	out := make(map[string]any, len(in))
 	for k, v := range in {
-		lk := strings.ToLower(k)
-		if strings.Contains(lk, "token") || strings.Contains(lk, "password") ||
-			strings.Contains(lk, "secret") || strings.Contains(lk, "cookie") ||
-			strings.Contains(lk, "authorization") || strings.Contains(lk, "private_key") ||
-			strings.Contains(lk, "privatekey") || lk == "auth" {
+		if diagnostics.LooksSecretKey(k) {
 			continue
 		}
 		out[k] = scrubResidualStatusValue(v)
