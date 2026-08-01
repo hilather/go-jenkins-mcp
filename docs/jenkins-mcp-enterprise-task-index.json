@@ -4816,16 +4816,24 @@
       "dependency_text": "HOST-003, HOST-004",
       "parallel_safe": null,
       "objective": "Define multi-replica only after durable vault.",
-      "implementation": "Single-replica Tier A default; multi-replica checklist; file vault flock Done* lite; sticky Service sessionAffinity Done* scaffold (residual runtime).",
+      "implementation": "Single-replica Tier A default; multi-replica checklist; file vault flock Done* lite; optional FileTokenCache Obtain cache same-host lite (JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH); sticky Service sessionAffinity Done* scaffold (residual runtime). Multi-pod external Obtain cache / Redis still residual.",
       "acceptance_criteria": [
         "Single-replica Tier A default documented.",
-        "Multi-replica checklist (vault, affinity, audit).",
+        "Multi-replica checklist (vault, affinity, audit, Obtain cache).",
         "Shared vault path + flock multi-process lite (not multi-pod Done).",
+        "Obtain FileTokenCache same-host flock lite (not multi-pod external Done).",
         "Sticky session Service scaffold (ClientIP) Done* packaging only.",
         "Non-goal until multi-pod durable vault + sticky sessions exist."
       ],
-      "acceptance_criteria_count": 3,
-      "evidence_tests": [],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [
+        "internal/gateway/file_token_cache_test.go:TestFileTokenCache_RoundTripIsolationTTL",
+        "internal/gateway/file_token_cache_test.go:TestFileTokenCache_StatusMapSecretFree",
+        "internal/gateway/file_token_cache_test.go:TestFileTokenCache_MultiInstanceConcurrentSetNoCorrupt",
+        "internal/gateway/file_token_cache_test.go:TestCredentialProviderFromEnviron_ModeC_FileTokenCache",
+        "internal/gateway/file_token_cache_test.go:TestMemoryTokenCache_StatusMapSharedFalse"
+      ],
+      "status_note": "Done* lite same-host vault flock + FileTokenCache Obtain lite + sticky scaffold; multi-pod external residual (not multi-replica Done)",
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": []

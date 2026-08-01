@@ -11,27 +11,28 @@ import (
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 )
 
-// withVaultFileLock serializes multi-process access to a shared vault file via
+// withVaultFileLock serializes multi-process access to a shared file path via
 // a sibling lock file (path+".lock") and syscall.Flock (LOCK_EX).
 //
-// HOST-008 Done* lite: process-local mutex alone does not protect concurrent
-// File*Vault instances or CLI + serve on the same path. Flock on a dedicated
-// lock file (not the vault inode) remains valid across temp+rename of the
-// vault JSON. Not multi-pod / multi-host HA (shared filesystem required).
+// HOST-008 Done* lite: used by FileAPITokenVault / FileJWTVault / FileTokenCache.
+// Process-local mutex alone does not protect concurrent instances or CLI + serve
+// on the same path. Flock on a dedicated lock file (not the data inode) remains
+// valid across temp+rename of the JSON payload. Not multi-pod / multi-host HA
+// (shared filesystem required).
 //
-// Lock file mode 0600; never logs vault contents.
+// Lock file mode 0600; never logs file contents (tokens / vault secrets).
 func withVaultFileLock(vaultPath string, fn func() error) error {
 	if strings.TrimSpace(vaultPath) == "" {
-		return apperr.New(apperr.CodeInternal, "gateway vault path is required for flock")
+		return apperr.New(apperr.CodeInternal, "gateway shared-file path is required for flock")
 	}
 	dir := filepath.Dir(vaultPath)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return apperr.Wrap(apperr.CodeInternal, "gateway vault lock directory create failed", err)
+		return apperr.Wrap(apperr.CodeInternal, "gateway shared-file lock directory create failed", err)
 	}
 	lockPath := vaultPath + ".lock"
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
-		return apperr.Wrap(apperr.CodeInternal, "gateway vault lock open failed", err)
+		return apperr.Wrap(apperr.CodeInternal, "gateway shared-file lock open failed", err)
 	}
 	// Re-assert mode (existing lock file may have looser perms from older labs).
 	_ = f.Chmod(0o600)
@@ -57,7 +58,7 @@ func flockExclusive(f *os.File) error {
 		if err == syscall.EINTR {
 			continue
 		}
-		return apperr.Wrap(apperr.CodeInternal, "gateway vault flock exclusive failed", err)
+		return apperr.Wrap(apperr.CodeInternal, "gateway shared-file flock exclusive failed", err)
 	}
 }
 
