@@ -1935,11 +1935,19 @@ func runServe(args []string) error {
 			Issuer:   jwtEnv.Issuer,
 			Audience: jwtEnv.Audience,
 		})
+		// HOST-005: /readyz reports gateway Obtain Ready when --gateway is on.
+		// Non-gateway HTTP leaves ReadyCheck nil (process-up only; residual).
+		if useGateway {
+			prov := gatewayProv
+			cfg.ReadyCheck = func() bool {
+				return gatewayObtainReady(prov)
+			}
+		}
 		// Never log token values — only required/configured bools and body cap.
-		log.Printf("http serve token policy: http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v http_jwt_configured=%v http_jwt_required=%v max_body_bytes=%d",
+		log.Printf("http serve token policy: http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v http_jwt_configured=%v http_jwt_required=%v max_body_bytes=%d gateway_ready_probe=%v",
 			mcpserver.HTTPTokenRequired(cfg), cfg.BearerToken != "",
 			mcpserver.HTTPSubjectRequired(cfg), cfg.LabIdentity,
-			jwtEnv.Configured(), jwtEnv.Required, cfg.MaxBodyBytes)
+			jwtEnv.Configured(), jwtEnv.Required, cfg.MaxBodyBytes, useGateway)
 		if err := mcpserver.RunHTTP(serveCtx, server, cfg); err != nil {
 			return err
 		}

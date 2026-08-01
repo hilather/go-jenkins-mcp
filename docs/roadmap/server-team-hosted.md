@@ -47,9 +47,9 @@ JWT on Jenkins (**mode B/C**) and “OAuth” (**Entra AS + obtain path**) are *
 | `serve --gateway` | Requires provider config; logs not-ready; **still uses local keyring Jenkins session** until live Obtain | Wire Obtain → Jenkins AuthProvider |
 | `gateway qualify --offline` | GWY-003 **lite** offline suite (isolation, wrong audience, IdP mock chaos) | Live AgentCore pin + SLOs |
 | Streamable HTTP (`--http`) | Loopback default, body/Host/Origin caps, optional shared-secret | **Not multi-tenant session auth**; loopback deny-anonymous **opt-in default off** (KD-008) |
-| `deploy/gateway/` | Dockerfile, compose, kustomize **scaffold**, non-root docs | Signed image, AgentCore sidecar, HA |
+| `deploy/gateway/` | Non-root, limits, probes, secret-free compose/kustomize (**HOST-005** envelope) | Signed image, AgentCore sidecar, HA runtime |
 | Multi-user cache/audit isolation on one process | Docs recommend **one logical user per process** for MVP | True multi-tenant process isolation |
-| Admin for gateway operators | Same loopback admin SPA | Non-loopback, multi-operator sessions, mTLS/OIDC |
+| Admin for gateway operators | Loopback SPA + HOST-007 residual docs; secret-free `enabledModes` | Non-loopback mTLS/OIDC multi-operator sessions |
 
 **Bottom line:** the repo has a **credible foundation and offline contracts** for managed gateway, not a shippable multi-user server. Local stdio + personal credentials is the production-shaped pilot. Team-hosted requires finishing **all three auth modes**, HTTP multi-user authn, isolation, packaging, and REL gates — primarily by **executing existing GWY/OAUTH/MGR tasks plus HOST-***, not inventing a parallel product.
 
@@ -141,7 +141,8 @@ Legend: **Done** / **Partial** / **Not started** relative to Tier A needs.
 | Capability | Local today | Needed for Tier A | Task IDs (existing or NEW) | Priority | Notes |
 |------------|-------------|-------------------|----------------------------|----------|-------|
 | Transport (stdio default) | **Done** | Keep default; server mode optional | ADR 0002, MCP-001 | P0 | Do not flip product default |
-| Streamable HTTP hardened multi-user | **Partial*** (RequireSubject + session fingerprint offline; loopback pilot residual) | Live Entra/JWKS rotation, proxy matrix, mTLS residual | GWY-004, MCP-001 residual, **HOST-001**, **HOST-002** | P0 | Mid-session subject swap fail-closed offline (HOST-001) |
+| Streamable HTTP hardened multi-user | **Partial*** (RequireSubject + session fingerprint offline; HOST-002 matrix docs) | Live Entra/JWKS rotation, path-prefix pin, mTLS residual | GWY-004, MCP-001 residual, **HOST-001**, **HOST-002** | P0 | Mid-session subject swap fail-closed offline |
+
 | Authn (Entra/OIDC, gateway subject) | **Partial** (local OIDC; gateway env labels) | Live inbound claims → `policy.Subject` | OAUTH-001…003, GWY-002, OAUTH-010 | P0 | Env binding is foundation only |
 | Authz (deny-only + Jenkins AND) | **Done** local | Same contracts on gateway path | POL-*, GWY-002 | P0 | Tool args never set identity |
 | Token acquisition **mode A** API token vault | Local keyring **Done** | Per-user vault on gateway host; Obtain path | **HOST-009**, HOST-003 | P0 | Never shared SA |
@@ -152,14 +153,14 @@ Legend: **Done** / **Partial** / **Not started** relative to Tier A needs.
 | Cache isolation by user/tenant/profile | Local XDG per OS user **Partial** | Namespace + ACL on multi-user host | GWY-004, STO-*, **HOST-004** | P0 | MVP: one process per subject OK |
 | Audit isolation + correlation | Local audit **Done*** | Per-subject + correlation ID across hops | AUD-001, GWY-004, OBS-* | P1 | No secrets in events |
 | Network placement near Jenkins | N/A (local) | Deploy next to controller; measure bytes | GWY-004, PERF-* | P1 | Prove near-source benefit |
-| Packaging (container, non-root, health) | Scaffold **Partial** | Signed non-root image, readiness, limits | GWY-004, PKG-001, **HOST-005** | P1 | `deploy/gateway/` exists |
+| Packaging (container, non-root, health) | Scaffold envelope **Done*** | Signed image + live AgentCore | GWY-004, PKG-001, **HOST-005** | P1 | limits+probes; signing residual |
 | Rate limits / multi-tenant budgets | Process budgets **Done*** | Per-subject quotas + fan-out caps | MCP-001, GWY-004, **HOST-006** | P1 | Mutations multi-tenant residual |
 | Policy distribution (signed bundles) | **Partial** lite | Enforce on gateway host | MGR-001 | P1 | ForceOff enterprise pin residual |
 | Observability / correlation | Metrics/doctor **Partial** | Jenkins↔gateway vs gateway↔client byte metrics | OBS-*, GWY-004, MGR-002 | P2 | Fleet export privacy board |
-| Admin console multi-operator | Loopback SPA **Partial** | Gateway operator path; optional non-loopback later | UI-003…010, **HOST-007** | P2 | Not SaaS control plane |
-| jwt-auth-filter / RS pin | Offline classifier **Partial** | Live lab for OAuth-required profiles | OAUTH-009 | P0 for OAuth path | Blocks live OBO usefulness |
+| Admin console multi-operator | Loopback SPA **Partial** + HOST-007 docs | Cookie/OIDC multi-operator | UI-003…010, **HOST-007** | P2 | enabledModes secret-free; not SaaS |
+| jwt-auth-filter / RS pin | Offline **Done***; mock lab scaffold | Live plugin pin + Entra | OAUTH-009 | P0 for OAuth path | `make live-oauth-*` ≠ production |
 | Docker OAuth/JWT labs | Mode A compose **Done*** (jenkins-compose) | Mock IdP + JWT RS + token peer scaffolds | **HOST-012…015** | P0 | Opt-in; not default make test |
-| HA / multi-replica | **Not started** | External vault + sticky or shared cache policy | Tier B: **HOST-008** | P3 | Out of Tier A MVP |
+| HA / multi-replica | **Docs residual Done*** | Runtime multi-replica | Tier B: **HOST-008** | P3 | Single-replica Tier A default documented |
 | Multi-controller chaos | **Not started** | Live matrix residual | NET-*, TST-* | P3 | Tier B / REL |
 | Full Jenkins AS plugin | **No-go default** | Only if OAUTH-011 **go** | OAUTH-011, JAS-* | — | Do not schedule unless go |
 
@@ -350,6 +351,7 @@ Replace “optional shared secret on loopback” as the multi-user story with **
 **Priority:** P1  
 **Dependencies:** HOST-001, NET-001 origin pin  
 **Maps to:** GWY-004 deployment  
+**Progress:** **Partial / Done*** — docs matrix + fail-closed tests; live path-prefix residual  
 
 **Objective**
 
@@ -357,10 +359,10 @@ Prove safe placement behind site reverse-proxy (TLS terminate, path prefix, Host
 
 **Acceptance criteria**
 
-- [ ] Documented allowed deployment shapes (TLS at proxy vs app; no CORS wildcard).
-- [ ] Empty AllowedHosts / AllowedOrigins fail closed for non-local.
+- [x] Documented allowed deployment shapes (TLS at proxy vs app; no CORS wildcard).
+- [x] Empty AllowedHosts / AllowedOrigins fail closed for non-local.
 - [ ] Live or fixture matrix for path-prefix origin pin (extends NET-001 residual).
-- [ ] Health endpoints do not leak secrets or broad tool inventory without auth.
+- [x] Health endpoints do not leak secrets or broad tool inventory without auth.
 
 ---
 
@@ -413,6 +415,7 @@ namespace; multi-replica (HOST-008).
 **Priority:** P1  
 **Dependencies:** GWY-004 scaffold  
 **Maps to:** GWY-004 packaging ACs  
+**Progress:** **Done*** scaffold (probes + limits); live AgentCore residual  
 
 **Objective**
 
@@ -420,10 +423,10 @@ Production-shaped liveness/readiness and cgroup/memory limits for container/syst
 
 **Acceptance criteria**
 
-- [ ] Readiness fails when provider not configured in gateway mode (or reports residual clearly).
-- [ ] Non-root image runs with read-only root where practical; writable only cache/config volumes.
-- [ ] Documented CPU/memory/file descriptor limits for pilot.
-- [ ] Compose/kustomize examples remain secret-free (`.env.example` only).
+- [x] Readiness fails when provider not configured in gateway mode (or reports residual clearly).
+- [x] Non-root image runs with read-only root where practical; writable only cache/config volumes.
+- [x] Documented CPU/memory/file descriptor limits for pilot.
+- [x] Compose/kustomize examples remain secret-free (`.env.example` only).
 
 ---
 
@@ -455,6 +458,7 @@ wire; token-bucket rate (beyond concurrency); HOST-008 multi-replica.
 **Priority:** P2  
 **Dependencies:** UI-003…UI-008, ADR 0014  
 **Maps to:** Phase 6 residual; architecture admin  
+**Progress:** **Done*** residual docs + secret-free `enabledModes`; cookie multi-op residual  
 
 **Objective**
 
@@ -462,11 +466,11 @@ Operators of a **team gateway** can use admin BFF safely; still **not** a multi-
 
 **Acceptance criteria**
 
-- [ ] Document when admin may bind non-loopback (token required; prefer reverse-proxy mTLS/OIDC residual design).
-- [ ] No Jenkins API tokens or gateway vault material in browser responses.
-- [ ] Multi-user admin sessions: either explicit residual “single process role” or designed session table with CSRF for cookies.
-- [ ] Remove or quarantine localStorage token UX for non-pilot (httpOnly cookie or OS-broker residual).
-- [ ] CSP remains fail-closed; reverse-proxy guidance updated.
+- [x] Document when admin may bind non-loopback (token required; prefer reverse-proxy mTLS/OIDC residual design).
+- [x] No Jenkins API tokens or gateway vault material in browser responses.
+- [x] Multi-user admin sessions: either explicit residual “single process role” or designed session table with CSRF for cookies.
+- [x] Remove or quarantine localStorage token UX for non-pilot (httpOnly cookie or OS-broker residual).
+- [x] CSP remains fail-closed; reverse-proxy guidance updated.
 
 ---
 
@@ -475,6 +479,7 @@ Operators of a **team gateway** can use admin BFF safely; still **not** a multi-
 **Priority:** P3  
 **Dependencies:** HOST-003, HOST-004, durable vault  
 **Maps to:** architecture HA session notes  
+**Progress:** **Done*** as documentation residual only (no multi-replica runtime)  
 
 **Objective**
 
@@ -482,9 +487,9 @@ Define when multi-replica is allowed (external vault, sticky sessions, no split-
 
 **Acceptance criteria**
 
-- [ ] Architecture note: single-replica Tier A default.
-- [ ] Checklist for multi-replica: shared vault, session affinity, audit aggregation.
-- [ ] Explicit non-goal until vault exists.
+- [x] Architecture note: single-replica Tier A default.
+- [x] Checklist for multi-replica: shared vault, session affinity, audit aggregation.
+- [x] Explicit non-goal until vault exists.
 
 ---
 

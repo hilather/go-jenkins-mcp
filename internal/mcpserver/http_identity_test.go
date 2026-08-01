@@ -148,6 +148,85 @@ func TestNewHTTPHandler_HealthPathsUnauthenticated(t *testing.T) {
 		if !strings.Contains(body, `"status"`) {
 			t.Fatalf("%s: body: %s", path, body)
 		}
+		// HOST-002: no tool inventory leakage on probes.
+		for _, leak := range []string{"tools", "inventory", "jenkins_"} {
+			if strings.Contains(body, leak) {
+				t.Fatalf("%s: must not leak inventory field %q: %s", path, leak, body)
+			}
+		}
+	}
+}
+
+// HOST-005: /readyz reports gateway_ready when ReadyCheck is set; /healthz stays ok.
+func TestNewHTTPHandler_ReadyzGatewayReady(t *testing.T) {
+	t.Parallel()
+	srv := mcpserver.NewServer("test", "0.0.1")
+	cfg := mcpserver.DefaultHTTPConfig()
+	cfg.BearerToken = canaryHTTPToken
+	ready := false
+	cfg.ReadyCheck = func() bool { return ready }
+	h, err := mcpserver.NewHTTPHandler(srv, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	get := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1"+path, nil)
+		req.Host = "127.0.0.1:8765"
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		return rr
+	}
+	// Not ready → 503 on readyz; healthz still 200.
+	rr := get(mcpserver.ReadyzPath)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("readyz not ready: want 503, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"not_ready"`) || !strings.Contains(rr.Body.String(), `"gateway_ready":false`) {
+		t.Fatalf("readyz body: %s", rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), canaryHTTPToken) {
+		t.Fatalf("canary leaked: %s", rr.Body.String())
+	}
+	hz := get(mcpserver.HealthzPath)
+	if hz.Code != http.StatusOK {
+		t.Fatalf("healthz must stay 200 when not ready, got %d", hz.Code)
+	}
+	if strings.Contains(hz.Body.String(), "gateway_ready") {
+		t.Fatalf("healthz must not include gateway_ready: %s", hz.Body.String())
+	}
+	// Ready → 200 with gateway_ready true.
+	ready = true
+	rr = get(mcpserver.ReadyzPath)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("readyz ready: want 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"gateway_ready":true`) {
+		t.Fatalf("readyz body: %s", rr.Body.String())
+	}
+}
+
+// HOST-002: CORS wildcard origins fail closed at config validation.
+func TestValidateHTTPConfig_NoCORSWildcard(t *testing.T) {
+	t.Parallel()
+	cfg := mcpserver.DefaultHTTPConfig()
+	cfg.Addr = "0.0.0.0:8081"
+	cfg.AllowNonLocal = true
+	cfg.BearerToken = canaryHTTPToken
+	cfg.AllowedHosts = []string{"mcp.example.corp"}
+	for _, origin := range []string{"*", "https://*.example.corp", "https://portal.example.corp/*"} {
+		cfg.AllowedOrigins = []string{origin}
+		err := mcpserver.ValidateHTTPConfig(cfg)
+		if err == nil {
+			t.Fatalf("expected wildcard origin %q to fail closed", origin)
+		}
+		if !strings.Contains(err.Error(), "wildcard") {
+			t.Fatalf("expected wildcard error for %q, got: %v", origin, err)
+		}
+	}
+	// Exact origin still OK.
+	cfg.AllowedOrigins = []string{"https://portal.example.corp"}
+	if err := mcpserver.ValidateHTTPConfig(cfg); err != nil {
+		t.Fatalf("exact origin must pass: %v", err)
 	}
 }
 

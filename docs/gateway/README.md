@@ -276,15 +276,17 @@ Missing identity env fields → bind fails closed at serve start.
 | **Live Entra / AgentCore network acquisition pin** | GWY-003 / OAUTH-010 — Live opt-in + `HTTPTokenFetcher` prove wire contracts only; not production AgentCore |
 | AgentCore Identity/Token Vault (durable) | GWY-001 completion (process memory cache is not a vault) |
 | Full GWY-001 DoD (3LO browser UX, refresh/revocation isolation SLOs) | GWY-001 / GWY-003 — **Live opt-in foundation only** (not fully Done) |
-| Packaging near-source gateway image (signed prod) | GWY-004 residual — scaffold in `deploy/gateway/` + [deployment.md](deployment.md) |
+| Packaging near-source gateway image (signed prod) | GWY-004 residual — scaffold hardened in `deploy/gateway/` + [deployment.md](deployment.md) (HOST-005 limits/probes; image signing residual) |
 | Live AgentCore sidecar pin | GWY-003 / GWY-004 residual |
 | Mode B jwt_rs_bearer Live obtain | HOST-010 residual |
 | Mid-session subject rebind | HOST-003 / GWY-002 residual |
 | Custom Jenkins authorization-server plugin | ADR 0011 / OAUTH-011 **default no-go** |
 | Shared Jenkins service account for interactive users | **Never** |
 | Real client secret storage | keyring / vault (not profile JSON) |
-| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT resolver, `Mcp-Session-Id`→`IdentityFingerprint` fail closed; residual: continuous JWKS rotation under load, live Entra, HOST-002 proxy matrix |
-| Streamable HTTP reverse-proxy / non-loopback deploy matrix | GWY-004 residual (**HOST-002**) |
+| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT resolver, `Mcp-Session-Id`→`IdentityFingerprint` fail closed; residual: continuous JWKS rotation under load, live Entra |
+| Reverse-proxy non-local matrix | HOST-002 **docs Done***; live path-prefix residual; no CORS wildcards fail-closed |
+| Health/readiness envelope | HOST-005 **partial** — `/healthz` + `/readyz` + compose/k8s limits; Obtain Ready on `/readyz` when `--gateway` |
+| Multi-replica HA | HOST-008 Tier B residual (single-replica Tier A default) |
 | **Program path to team-hosted** | [roadmap/server-team-hosted.md](../roadmap/server-team-hosted.md) |
 
 **HOST-003 wiring (Ready path):** closed for Mode A and Mode C Live-opt-in foundation

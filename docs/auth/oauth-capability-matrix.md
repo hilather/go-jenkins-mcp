@@ -73,7 +73,7 @@ Code constant: `auth.FallbackAuthMethodWhenOnlyOICAuth == MethodAPIToken`.
 
 ---
 
-## 4. AgentCore 3LO/OBO (gateway residual)
+## 4. AgentCore 3LO/OBO (gateway residual — OAUTH-010)
 
 | Item | Decision |
 |------|----------|
@@ -81,6 +81,18 @@ Code constant: `auth.FallbackAuthMethodWhenOnlyOICAuth == MethodAPIToken`.
 | Resource / audience | Dedicated Jenkins API |
 | Flows | User-delegated auth code, then OBO/exchange as needed |
 | Full Jenkins AS | Only after ADR 0011 go decision |
+
+### Offline / mock vs live (OAUTH-010 honesty)
+
+| Path | Status | Evidence |
+|------|--------|----------|
+| Gateway Obtain contract (`Live=false` fail-closed) | **Done*** foundation | `internal/gateway` unit tests; no shared SA |
+| Offline mock `TokenFetcher` + consent URL metadata | **Done*** offline | Mock AS / `HTTPTokenFetcher` https-only tests |
+| Docker mock token peer (HOST-015) | **Scaffold** opt-in | `testdata/oauth-lab/` `mock-token`; `make live-oauth-*` |
+| Live Entra 3LO + OBO + durable vault | **Residual** | OAUTH-010 / GWY-001 / GWY-003 production pin |
+| AgentCore production binary pin | **Residual** | GWY-003 / GWY-004 |
+
+Cross-links: [gateway/README.md](../gateway/README.md), [jwt-auth-filter-qualification.md](jwt-auth-filter-qualification.md) §9, HOST-012…015 in [roadmap](../roadmap/server-team-hosted.md), lab [`testdata/oauth-lab/README.md`](../../testdata/oauth-lab/README.md).
 
 ---
 

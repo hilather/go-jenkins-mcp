@@ -1425,6 +1425,8 @@ Inspect and measure invalid-token fallthrough, Basic/API-token/session/anonymous
 - [ ] Claim/group/overage, JWKS cache/outage/rotation, and scope behavior meet requirements.
 - [ ] Security review, performance evidence, rollback, and emergency disable plans exist for any fork/proxy.
 
+**Offline residual note (honest):** Offline classifier + contracts are **Done*** (`docs/auth/jwt-auth-filter-qualification.md`, Wave 33). Mock Docker lab path is HOST-012…014 (`make live-oauth-*`) — **not** a production pin. Live Entra + real jwt-auth-filter version pin remain **open**.
+
 ---
 
 ## OAUTH-010 - Prototype AgentCore per-user Jenkins 3LO/OBO token acquisition
@@ -1458,6 +1460,8 @@ Bind inbound gateway subject and workload identity to the downstream token subje
 - [ ] Direct passthrough rejects generic gateway, ID, Graph, wrong-tenant, and wrong-audience tokens.
 - [ ] No generic Jenkins account is used.
 - [ ] Local and gateway auth providers remain independent and testable.
+
+**Offline residual note (honest):** Gateway Obtain fail-closed + pluggable `TokenFetcher` mock + HOST-015 `mock-token` lab are foundation only (`docs/auth/oauth-capability-matrix.md` §4; `make live-oauth-*`). **Live Entra 3LO/OBO + AgentCore production pin remain open** (GWY-003).
 
 ---
 
@@ -2586,6 +2590,8 @@ Produce a signed non-root Linux container/service with approved Streamable HTTP 
 - [ ] Image is minimal/non-root/signed with SBOM/provenance and bounded resources.
 - [ ] Near-source deployment demonstrates measurable bandwidth benefit without unacceptable auth/latency cost.
 
+**Packaging scaffold note (honest):** `deploy/gateway/` is **hardened scaffold** (non-root distroless, resource limits, secret-free compose/kustomize, `/healthz`+`/readyz` probes — HOST-005). **Not** production DoD: no signed org image, no live AgentCore sidecar, no bandwidth study, no multi-tenant quotas.
+
 ---
 
 # Server / team-hosted deployment epic (HOST-*) — implement all auth modes
@@ -2640,10 +2646,12 @@ Safe placement behind site reverse-proxy (TLS, path prefix, Host/Origin).
 
 **Acceptance criteria**
 
-- [ ] Documented allowed deployment shapes (no CORS wildcard).
-- [ ] Empty AllowedHosts / AllowedOrigins fail closed for non-local.
-- [ ] Path-prefix origin pin fixture/live matrix (NET-001 residual).
-- [ ] Health endpoints do not leak secrets or broad inventory without auth.
+- [x] Documented allowed deployment shapes (no CORS wildcard). — `docs/gateway/deployment.md` §3; compose/README; wildcard origins fail closed in `ValidateHTTPConfig`
+- [x] Empty AllowedHosts / AllowedOrigins fail closed for non-local. — existing mcpserver tests + HOST-002 wildcard fixture
+- [ ] Path-prefix origin pin fixture/live matrix (NET-001 residual). — pure pin helpers exist; **live edge matrix residual**
+- [x] Health endpoints do not leak secrets or broad inventory without auth. — `/healthz` `/readyz` secret-free exact-path; unit canaries
+
+**Status:** **Partial / Done*** for docs + code fail-closed matrix. Live reverse-proxy path-prefix matrix remains residual.
 
 ---
 
@@ -2700,10 +2708,12 @@ pagination; durable L1/L2 archive namespace (STO / HOST-008).
 
 **Acceptance criteria**
 
-- [ ] Readiness fails or clearly residual when gateway provider not Ready.
-- [ ] Non-root image; writable only cache/config volumes where practical.
-- [ ] Documented CPU/memory/FD limits for pilot.
-- [ ] Compose/kustomize examples secret-free.
+- [x] Readiness fails or clearly residual when gateway provider not Ready. — `/readyz` + `ReadyCheck` when `--gateway`; 503 + `gateway_ready:false`; non-gateway process-up residual documented
+- [x] Non-root image; writable only cache/config volumes where practical. — distroless nonroot; compose/k8s read-only root + volume mounts
+- [x] Documented CPU/memory/FD limits for pilot. — 1 CPU / 512Mi limits; FD residual site ulimit noted
+- [x] Compose/kustomize examples secret-free. — `.env.example` non-secret only; no tokens in yaml
+
+**Status:** **Done*** for scaffold envelope + probe contracts. Live AgentCore pin and signed image remain GWY-003/004 residuals.
 
 ---
 
@@ -2734,11 +2744,13 @@ limiter; token-bucket rate (not only concurrency); multi-replica (HOST-008).
 
 **Acceptance criteria**
 
-- [ ] Document non-loopback admin only with token (+ residual mTLS/OIDC design).
-- [ ] No Jenkins API tokens or vault material in browser responses.
-- [ ] Multi-operator sessions: residual “single process role” or designed sessions + CSRF.
-- [ ] Quarantine localStorage token UX for non-pilot.
-- [ ] CSP preserved under reverse-proxy; secret-free note of **enabled auth modes**.
+- [x] Document non-loopback admin only with token (+ residual mTLS/OIDC design). — `docs/admin/README.md` HOST-007 section
+- [x] No Jenkins API tokens or vault material in browser responses. — canaries; `GET /admin/v1/gateway/vault` hash-only; CLI-only vault write residual
+- [x] Multi-operator sessions: residual “single process role” or designed sessions + CSRF. — **documented residual** single process `--admin-role`
+- [x] Quarantine localStorage token UX for non-pilot. — documented pilot-only / quarantine note
+- [x] CSP preserved under reverse-proxy; secret-free note of **enabled auth modes**. — CSP guidance; `enabledModes` on health + gateway/vault
+
+**Status:** **Done*** for operator residual documentation + secret-free mode listing. Cookie sessions / multi-operator OIDC remain residual.
 
 ---
 
@@ -2749,9 +2761,11 @@ limiter; token-bucket rate (not only concurrency); multi-replica (HOST-008).
 
 **Acceptance criteria**
 
-- [ ] Single-replica Tier A default documented.
-- [ ] Multi-replica checklist: shared vault, affinity, audit aggregation.
-- [ ] Explicit non-goal until vault exists.
+- [x] Single-replica Tier A default documented. — `docs/gateway/deployment.md` §9; kustomize `replicas: 1`
+- [x] Multi-replica checklist: shared vault, affinity, audit aggregation. — checklist in deployment.md (not implemented)
+- [x] Explicit non-goal until vault exists. — documented non-goal
+
+**Status:** **Done*** as **documentation residual** only. No multi-replica runtime.
 
 ---
 

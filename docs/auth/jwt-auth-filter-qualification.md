@@ -304,6 +304,41 @@ All of the above remain **offline-friendly** (`--offline` / no network for self-
 Offline **contract tests do not replace** live lab. Do not mark architecture
 acceptance criteria complete until live-lab §8 items have evidence.
 
-## Docker lab residual (HOST-013 / HOST-014)
+## 9. Offline qualification vs live residual (OAUTH-009 honesty)
 
-Disposable Compose for jwt RS + mock IdP is backlog **HOST-013** / **HOST-014** (umbrella **HOST-012**). See `docs/roadmap/server-team-hosted.md`. Live production Entra remains residual.
+| Path | What it proves | What it does **not** prove |
+|------|----------------|----------------------------|
+| **Default `make test` / pure-Go** | Classifier fixtures, JWKS outage contracts, route inventory, claim validation | Real Jenkins plugin behavior under load |
+| **`jenkins-mcp oauth probe-rs --offline`** | Secret-free matrix + fixture table operators can archive | Plugin version pin / JCasC go |
+| **Docker mock lab (`make live-oauth-*`)** | Mock OIDC mint + mock RS fail-closed + mock token peer (HOST-012…015) | Real `jwt-auth-filter` plugin, real Entra |
+| **Live Jenkins + plugin / proxy** | Production-shaped RS pin | — (required for OAUTH-009 go) |
+
+### Mock lab cross-links (HOST-012…015)
+
+| Task | Lab surface | Makefile |
+|------|-------------|----------|
+| HOST-012 umbrella | `testdata/oauth-lab/` | `make live-oauth-up` / `live-oauth-test` / `live-oauth-down` |
+| HOST-014 mock OIDC IdP | `mock-oidc` :18081 | discovery, JWKS, token mint scenarios |
+| HOST-013 mock JWT RS | `mock-rs` :18082 | Bearer whoAmI; **no** Basic/session fallthrough |
+| HOST-015 mock token / 3LO peer | `mock-token` :18083 | HTTPTokenFetcher-shaped JSON; wrong-aud / consent fixtures |
+
+```bash
+# Opt-in only — never part of default make test / make ci
+export PATH="$HOME/.local/go/bin:$PATH"
+make live-oauth-test          # up + smoke + down -v
+go test -count=1 ./internal/authlab/...   # offline mock contracts without Docker
+jenkins-mcp oauth probe-rs --profile corp --offline
+```
+
+Lab README: [`../../testdata/oauth-lab/README.md`](../../testdata/oauth-lab/README.md).  
+Roadmap: [`../roadmap/server-team-hosted.md`](../roadmap/server-team-hosted.md).
+
+**Residuals that remain open after offline + mock lab:**
+
+- [ ] Real Jenkins LTS + `jwt-auth-filter` (or approved proxy) version pin in §2  
+- [ ] Security-approved JCasC and written production go/no-go  
+- [ ] Live invalid-bearer fallthrough on all `RequiredMCPRoutes`  
+- [ ] Live Entra issuer/JWKS/audience (not lab mock keys)  
+- [ ] Production AgentCore / OAUTH-010 pin (separate from this RS doc)
+
+Offline `Done*` and mock-lab green **never** close the live RS production pin.

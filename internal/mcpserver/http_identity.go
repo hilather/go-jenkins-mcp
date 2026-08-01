@@ -175,12 +175,34 @@ func resolveRequestIdentity(r *http.Request, labIdentity bool, resolver Identity
 	return extractLabIdentity(r, labIdentity), nil
 }
 
-// writeHealthOK responds with a minimal secret-free JSON body.
+// writeHealthOK responds with a minimal secret-free JSON body for /healthz
+// (liveness). Never includes inventory, subjects, or secrets.
 func writeHealthOK(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok"}` + "\n"))
+}
+
+// writeReadyz responds for /readyz (HOST-005). When check is nil, reports
+// process-up only ({"status":"ok"}) — gateway Ready residual not wired.
+// When check is set, includes gateway_ready bool and returns 503 when not ready.
+// Never includes tool inventory, tokens, subjects, or credential material.
+func writeReadyz(w http.ResponseWriter, check ReadyCheck) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	if check == nil {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}` + "\n"))
+		return
+	}
+	if check() {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok","gateway_ready":true}` + "\n"))
+		return
+	}
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = w.Write([]byte(`{"status":"not_ready","gateway_ready":false}` + "\n"))
 }
 
 // unauthorizedIdentity writes a generic 401 without echoing tokens or subjects.
