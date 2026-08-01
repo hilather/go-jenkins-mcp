@@ -720,10 +720,8 @@ func addTool[In, Out any](
 		if sk := effectiveSubjectKey(st, ctx); sk != "" {
 			if st.subjectRateLimiter != nil {
 				if err := st.subjectRateLimiter.Allow(sk); err != nil {
-					if st.metrics != nil {
-						st.metrics.Inc(telemetry.MetricMCPToolError, 1)
-					}
 					mapped := mapToolErr(err)
+					emitToolError(ctx, st, t.Name, string(effect), toolErrorReason(mapped), start)
 					logToolError(st, "tool_dispatch_error", mapped,
 						"tool", t.Name, "effect", string(effect), "phase", "subject_rate_limiter",
 						"duration_ms", durationMS(start),
@@ -734,10 +732,8 @@ func addTool[In, Out any](
 			if st.subjectLimiter != nil {
 				release, err := st.subjectLimiter.Hold(sk)
 				if err != nil {
-					if st.metrics != nil {
-						st.metrics.Inc(telemetry.MetricMCPToolError, 1)
-					}
 					mapped := mapToolErr(err)
+					emitToolError(ctx, st, t.Name, string(effect), toolErrorReason(mapped), start)
 					logToolError(st, "tool_dispatch_error", mapped,
 						"tool", t.Name, "effect", string(effect), "phase", "subject_limiter",
 						"duration_ms", durationMS(start),
@@ -775,10 +771,8 @@ func addTool[In, Out any](
 		}
 		res, out, err := h(ctx, req, args)
 		if err != nil {
-			if st.metrics != nil {
-				st.metrics.Inc(telemetry.MetricMCPToolError, 1)
-			}
 			mapped := mapToolErr(err)
+			emitToolError(ctx, st, t.Name, string(effect), toolErrorReason(mapped), start)
 			logToolError(st, "tool_dispatch_error", mapped,
 				"tool", t.Name, "effect", string(effect), "phase", "handler",
 				"duration_ms", durationMS(start),
@@ -787,19 +781,15 @@ func addTool[In, Out any](
 		}
 		enforced, _, berr := EnforceBudgetOrError(out, st.effectiveBudget(), st.strict)
 		if berr != nil {
-			if st.metrics != nil {
-				st.metrics.Inc(telemetry.MetricMCPToolError, 1)
-			}
 			mapped := mapToolErr(berr)
+			emitToolError(ctx, st, t.Name, string(effect), toolErrorReason(mapped), start)
 			logToolError(st, "tool_dispatch_error", mapped,
 				"tool", t.Name, "effect", string(effect), "phase", "budget",
 				"duration_ms", durationMS(start),
 			)
 			return nil, nil, mapped
 		}
-		if st.metrics != nil {
-			st.metrics.Inc(telemetry.MetricMCPToolOK, 1)
-		}
+		emitToolOK(ctx, st, t.Name, string(effect), start)
 		logToolDebug(st, "tool_dispatch_ok",
 			"tool", t.Name,
 			"effect", string(effect),

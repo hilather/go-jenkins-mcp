@@ -21,7 +21,7 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 | Field | Notes |
 |-------|--------|
 | `time` | RFC3339 UTC |
-| `type` | `login_success`, `login_fail`, `serve_start`, `tool_deny`, `auth_fail`, optional `tool_success` |
+| `type` | `login_success`, `login_fail`, `serve_start`, `tool_deny`, `tool_error`, `auth_fail`, optional `tool_success` |
 | `profileId` | Connection profile id |
 | `principalId` | Verified Jenkins user id (never a token) |
 | `externalSubject` | Optional IdP subject label (gateway multi-user); redacted + length-capped like `principalId` — never a token |
@@ -39,12 +39,16 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 
 - `login` success / fail (profile data dir)
 - `serve` start after identity bind; `auth_fail` on serve-time verify failure
-- Tool dispatch **deny** (global read-only + deny-only MCP RBAC); multi-user tool
-  dispatch attributes `profileId` / `principalId` from **effective** subject when
-  wired, plus optional `externalSubject` + `subjectKeyHash` (opaque) when
-  SubjectKey / ExternalSubject are available. Metrics tool_ok / tool_deny /
-  tool_error remain separate (OBS-001); audit still focuses on denials by default
-  (`tool_success` optional residual).
+- Tool dispatch **deny** (global read-only + deny-only MCP RBAC) and **tool_error**
+  (handler / budget / subject limiter failures): multi-user tool dispatch
+  attributes `profileId` / `principalId` from **effective** subject when wired,
+  plus optional `externalSubject` + `subjectKeyHash` (opaque) when SubjectKey /
+  ExternalSubject are available (same multi-user identity path as deny). Metrics tool_ok /
+  tool_deny / tool_error remain separate (OBS-001). `tool_error` audit reason is
+  the stable `apperr` code only (never ModelMessage / tokens).
+- Optional **tool_success** audit: residual/off by default; set
+  `JENKINS_MCP_AUDIT_TOOL_OK=1` (truthy) to emit (high volume). Metrics
+  `mcp_tool_ok` always record regardless.
 - Mid-serve **identity re-verify** fail-closed (`IdentityReverifyGate`, AUTH-004 / Wave 28):
   - `type=auth_fail`, `action=identity_reverify`, `decision=fail`
   - `reasonCode`: `identity_principal_drift` | `identity_reverify_fail` | `identity_unbound`
@@ -58,6 +62,8 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Surface | Status |
 |---------|--------|
 | Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+| Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
+| Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
 | Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
 
@@ -441,7 +447,7 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 | Field | Notes |
 |-------|--------|
 | `time` | RFC3339 UTC |
-| `type` | `login_success`, `login_fail`, `serve_start`, `tool_deny`, `auth_fail`, optional `tool_success` |
+| `type` | `login_success`, `login_fail`, `serve_start`, `tool_deny`, `tool_error`, `auth_fail`, optional `tool_success` |
 | `profileId` | Connection profile id |
 | `principalId` | Verified Jenkins user id (never a token) |
 | `externalSubject` | Optional IdP subject label (gateway multi-user); redacted + length-capped like `principalId` — never a token |
@@ -459,12 +465,16 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 
 - `login` success / fail (profile data dir)
 - `serve` start after identity bind; `auth_fail` on serve-time verify failure
-- Tool dispatch **deny** (global read-only + deny-only MCP RBAC); multi-user tool
-  dispatch attributes `profileId` / `principalId` from **effective** subject when
-  wired, plus optional `externalSubject` + `subjectKeyHash` (opaque) when
-  SubjectKey / ExternalSubject are available. Metrics tool_ok / tool_deny /
-  tool_error remain separate (OBS-001); audit still focuses on denials by default
-  (`tool_success` optional residual).
+- Tool dispatch **deny** (global read-only + deny-only MCP RBAC) and **tool_error**
+  (handler / budget / subject limiter failures): multi-user tool dispatch
+  attributes `profileId` / `principalId` from **effective** subject when wired,
+  plus optional `externalSubject` + `subjectKeyHash` (opaque) when SubjectKey /
+  ExternalSubject are available (same multi-user identity path as deny). Metrics tool_ok /
+  tool_deny / tool_error remain separate (OBS-001). `tool_error` audit reason is
+  the stable `apperr` code only (never ModelMessage / tokens).
+- Optional **tool_success** audit: residual/off by default; set
+  `JENKINS_MCP_AUDIT_TOOL_OK=1` (truthy) to emit (high volume). Metrics
+  `mcp_tool_ok` always record regardless.
 - Mid-serve **identity re-verify** fail-closed (`IdentityReverifyGate`, AUTH-004 / Wave 28):
   - `type=auth_fail`, `action=identity_reverify`, `decision=fail`
   - `reasonCode`: `identity_principal_drift` | `identity_reverify_fail` | `identity_unbound`
@@ -478,6 +488,8 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Surface | Status |
 |---------|--------|
 | Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+| Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
+| Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
 | Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
 
@@ -735,7 +747,8 @@ Env enable path (`JENKINS_MCP_TELEMETRY`) remains separate from force-off.
 - Circuit gauges / half-open+closed transition counters (optional; Wave 27 ships open-events + doctor `State()` only)
 - Wire `DoctorOptions.Circuit` / metrics from serve into MCP `jenkins_doctor` when that tool is registered
 - Per-tool allowlisted counters (only if a closed seed name set is required; default is total ok/error/deny only)
-- Optional tool-success audit summaries (not emitted by default)
+- Optional tool-success audit summaries (`JENKINS_MCP_AUDIT_TOOL_OK`, default off; metrics always on)
+- Multi-pod / multi-replica audit aggregation (central sink) — residual; per-pod JSONL only
 - Policy-controlled retention/export beyond size rotation
 - Support bundle: optional live capability attach from a running `serve` process; signed/encrypted export
 - Post-pack L1 release metrics: `cache_l1_released`, `cache_l1_release_bytes_reclaimed`

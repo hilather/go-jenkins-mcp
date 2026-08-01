@@ -10,7 +10,8 @@ const (
 	TypeLoginFail    = "login_fail"
 	TypeServeStart   = "serve_start"
 	TypeToolDeny     = "tool_deny"
-	TypeToolSuccess  = "tool_success" // optional summary; not emitted by default
+	TypeToolError    = "tool_error"   // handler/budget/subject-limiter failure (non-deny)
+	TypeToolSuccess  = "tool_success" // optional summary; off by default (JENKINS_MCP_AUDIT_TOOL_OK)
 	TypeAuthFail     = "auth_fail"    // serve-time identity / credential failures
 )
 
