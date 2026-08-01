@@ -365,6 +365,7 @@ func TestLoadFromEnvironWithTrustedKeys(t *testing.T) {
 	t.Setenv(policy.EnvPolicyFileVar, path)
 	t.Setenv(policy.EnvPolicyTrustedKeysVar, keysDir)
 	t.Setenv(policy.EnvPolicyRequiredVar, "")
+	t.Setenv(policy.EnvRequireSignedPolicyVar, "")
 	// Isolate last-good under temp XDG cache.
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(dir, "cache"))
 	t.Setenv("HOME", dir)
@@ -393,6 +394,7 @@ func TestLoadFromEnvironPilotNoKeys(t *testing.T) {
 	// Env set to nonexistent → LoadTrustedKeys errors. Use empty/unset for pilot.
 	t.Setenv(policy.EnvPolicyTrustedKeysVar, "")
 	t.Setenv(policy.EnvPolicyRequiredVar, "")
+	t.Setenv(policy.EnvRequireSignedPolicyVar, "")
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "cfg"))
 	t.Setenv("HOME", dir)
 
@@ -402,6 +404,81 @@ func TestLoadFromEnvironPilotNoKeys(t *testing.T) {
 	}
 	if res.SignatureState != policy.SigStateUnverifiedPilot {
 		t.Fatalf("state=%s", res.SignatureState)
+	}
+}
+
+// Regression: JENKINS_MCP_REQUIRE_SIGNED_POLICY=1 must fail closed without
+// trusted keys (staging stub is not enterprise force-off safe). MGR-001 lite.
+func TestLoadFromEnvironRequireSignedPolicyNoKeysFailClosed(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "overlay.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"force_read_only":true,"signature":"stub"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(policy.EnvPolicyFileVar, path)
+	t.Setenv(policy.EnvPolicyTrustedKeysVar, "")
+	t.Setenv(policy.EnvPolicyRequiredVar, "")
+	t.Setenv(policy.EnvRequireSignedPolicyVar, "1")
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "cfg"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(dir, "cache"))
+	t.Setenv("HOME", dir)
+
+	_, err := policy.LoadFromEnviron()
+	if err == nil {
+		t.Fatal("REQUIRE_SIGNED_POLICY without trusted keys must fail closed")
+	}
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "require_signed") && !strings.Contains(msg, "trusted") {
+		t.Fatalf("expected require-signed / trusted-keys wording: %v", err)
+	}
+}
+
+// Regression: REQUIRE_SIGNED_POLICY + trusted keys + valid envelope verifies.
+func TestLoadFromEnvironRequireSignedPolicyOK(t *testing.T) {
+	pub, priv := testKeyPair(t)
+	dir := t.TempDir()
+	keysDir := writeTrustDir(t, dir, "fleet", pub)
+	env := signOverlay(t, policy.Overlay{Version: 1, ForceReadOnly: true}, priv, "fleet", 9, "")
+	path := filepath.Join(dir, "overlay.bundle.json")
+	writeBundle(t, path, env)
+
+	t.Setenv(policy.EnvPolicyFileVar, path)
+	t.Setenv(policy.EnvPolicyTrustedKeysVar, keysDir)
+	t.Setenv(policy.EnvPolicyRequiredVar, "")
+	t.Setenv(policy.EnvRequireSignedPolicyVar, "1")
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(dir, "cache"))
+	t.Setenv("HOME", dir)
+
+	res, err := policy.LoadFromEnviron()
+	if err != nil {
+		t.Fatalf("LoadFromEnviron: %v", err)
+	}
+	if res.SignatureState != policy.SigStateVerified {
+		t.Fatalf("state=%s", res.SignatureState)
+	}
+	if res.Overlay == nil || !res.Overlay.ForceReadOnly {
+		t.Fatal("expected verified force_read_only overlay")
+	}
+}
+
+// Regression: REQUIRE_SIGNED_POLICY + trusted keys rejects plain unsigned overlay.
+func TestLoadFromEnvironRequireSignedPolicyRejectsUnsigned(t *testing.T) {
+	pub, _ := testKeyPair(t)
+	dir := t.TempDir()
+	keysDir := writeTrustDir(t, dir, "fleet", pub)
+	path := filepath.Join(dir, "overlay.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"force_read_only":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(policy.EnvPolicyFileVar, path)
+	t.Setenv(policy.EnvPolicyTrustedKeysVar, keysDir)
+	t.Setenv(policy.EnvRequireSignedPolicyVar, "1")
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(dir, "cache"))
+	t.Setenv("HOME", dir)
+
+	_, err := policy.LoadFromEnviron()
+	if err == nil {
+		t.Fatal("unsigned plain must fail under REQUIRE_SIGNED_POLICY + trusted keys")
 	}
 }
 

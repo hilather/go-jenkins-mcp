@@ -98,7 +98,7 @@ Current process authentication state and console role. **Never includes the toke
 |-------|---------|
 | `status` | Always `ok` when the BFF process is up (liveness). |
 | `version` / `commit` / `uiBuild` | Secret-free binary / SPA build metadata |
-| `enabledModes` | **HOST-007 / HOST-011:** optional list of gateway credential mode **ids** from env (`JENKINS_MCP_GATEWAY_ENABLED_MODES` or primary-only default). **Never** tokens, vault bytes, or subjects. Omitted or empty when mode config is invalid (see `/gateway/vault` residual). |
+| `enabledModes` | **HOST-007 / HOST-011:** optional list of gateway credential mode **ids** from env (`JENKINS_MCP_GATEWAY_ENABLED_MODES` or primary-only default). **Never** tokens, vault bytes, or subjects. Omitted or empty when mode config is invalid (see `/gateway/vault` residual). **Not** a multi-user “production ready” pin — listing a mode id means it is **enabled in config**, not that live multi-user GO / `JENKINS_MCP_GATEWAY_MULTI_USER` residual is closed. |
 
 ## GET /admin/v1/gateway/vault
 
@@ -128,6 +128,12 @@ Authorization headers, or raw subject keys.
 
 Writes remain CLI-only. SPA Overview may display this status; provision/rotate/revoke
 is not available from the browser.
+
+**Multi-user residual (secret-free):** Admin JSON never returns Jenkins tokens,
+vault bytes, Authorization headers, or raw subject keys. There is no admin field
+or env (`JENKINS_MCP_GATEWAY_MULTI_USER`) that certifies multi-user MCP production
+readiness — operators track mode enablement via `enabledModes` only and rely on
+gateway/REL evidence for live multi-user claims.
 
 ## GET /admin/v1/version
 

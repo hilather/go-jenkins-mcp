@@ -10,6 +10,25 @@ Binary version/commit: _____________
 Profile id: _____________  
 Operator: _____________  Date: _____________
 
+## 0. Deployment surface + auth modes piloted (REL-001)
+
+Record **what was actually piloted**. Do not claim gateway multi-user production
+from offline qualify alone. Modes: **A** personal API-token vault,
+**B** Jenkins JWT RS bearer, **C** AgentCore 3LO/OBO Live (see
+[gateway README](../gateway/README.md), [roadmap](../roadmap/server-team-hosted.md)).
+
+| Surface | Piloted? (Y/N) | Evidence path / command | Residual honesty |
+|---------|----------------|-------------------------|------------------|
+| Local Cursor **stdio** (default ADR 0002) | | `pilot-check` / Cursor session notes | Personal Secret Service token |
+| Mode **A** gateway (`api_token_vault`) | | vault inventory secret-free / lab | Live multi-user Obtain residual |
+| Mode **B** gateway (`jwt_rs_bearer`) | | HOST-010 offline / oauth-lab | Live Entra + jwt-auth-filter residual |
+| Mode **C** gateway (AgentCore Live) | | `gateway qualify --offline` only unless live pin | Live AgentCore / Entra Obtain residual |
+| Offline gateway qualify only | | `gateway-qualify.json` in pilot-evidence pack | **Not** live multi-user GO |
+| Admin console (loopback / Docker) | | optional `local-docker-*` | localStorage token pilot-only |
+
+Modes **not** piloted: _____________  
+Gateway residual accepted (ticket/notes): _____________
+
 ## 1. Install
 
 - [ ] Verified package checksum (`SHA256SUMS`) against published artifact
@@ -50,11 +69,14 @@ Operator: _____________  Date: _____________
 ## 6. Pilot evidence package
 
 - [ ] `make pilot-evidence PROFILE=<id> SKIP_GO_TEST=1` → `dist/pilot-evidence/<ts>/MANIFEST.json` overall not `fail`
+- [ ] `gateway-qualify.json` present when pack ran (offline GWY-003; **not** live AgentCore pin)
+- [ ] Section **0** mode matrix filled (modes A/B/C + stdio surface)
 - [ ] `jenkins-mcp security self-check --json --profile <id>` → saved or noted (secret-free)
 - [ ] `jenkins-mcp pilot-check --profile <id> --offline` → overall not `fail`; JSON saved
 - [ ] `jenkins-mcp pilot-check --profile <id>` (online) when approved → JSON saved
 - [ ] Optional: `jenkins-mcp support-bundle --profile <id>` for ticket attachment (scrubbed)
 - [ ] Optional enterprise overlay: `policy show-effective --profile <id>` matches intended deny list
+- [ ] Enterprise gateway pin residual (if claimed): `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` + trusted keys (see [policy-bundles](../security/policy-bundles.md))
 - [ ] Evidence files stored in pilot tracker (not in git with secrets)
 
 ## 7. Optional — Docker admin path (support / no host package)
@@ -83,6 +105,7 @@ admin console without an RPM/DEB install. SoT: [`../../deploy/local/README.md`](
 | No secrets in logs/support bundle | |
 | No `JENKINS_MCP_AUTH` / `-auth` in Cursor config | |
 | Rocky **or** Ubuntu evidence recorded | |
+| Modes piloted recorded (A/B/C/stdio); gateway residual honest | |
 | Go / no-go recommendation | go / no-go / deferred |
 
 Notes / defects: _____________

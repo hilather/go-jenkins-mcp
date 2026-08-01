@@ -29,7 +29,8 @@ Versioned, secret-free JSON loaded at `serve` time.
 | Default plain | `$XDG_CONFIG_HOME/jenkins-mcp/policy/overlay.json` |
 | Default signed | `…/policy/overlay.bundle.json` (preferred when present) |
 | Trusted keys | `…/policy/trusted_keys/` or `JENKINS_MCP_POLICY_TRUSTED_KEYS` |
-| Required mode | `JENKINS_MCP_POLICY_REQUIRED=true` fails closed if file missing / unsigned (staging) |
+| Required mode | `JENKINS_MCP_POLICY_REQUIRED=true` fails closed if file missing / unsigned (staging field-presence) |
+| Require signed (enterprise) | `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` requires trusted keys + Ed25519 envelope (gateway pin; staging stub not accepted) |
 
 ### Schema (version 1) — plain overlay body
 
@@ -303,7 +304,7 @@ Cursor config remains secret-free; point the process at the overlay with env:
 
 | Item | Task |
 |------|------|
-| Signed policy bundles (Ed25519 envelope) | **MGR-001 done (MVP + multi-sig lite)** — full threshold crypto / gateway push residual |
+| Signed policy bundles (Ed25519 envelope) | **MGR-001 done (MVP + multi-sig lite + REQUIRE_SIGNED pin)** — full threshold crypto / gateway push / HSM residual |
 | Verified Jenkins principal (`Verified=true`) | **AUTH-004 done*** — serve-time whoAmI bind + mid-serve re-verify + Wave 28 audit + **Wave 29** ListTools AuthGate empty-list; residual: TTL window until next re-verify |
 | ListTools AuthGate session death | **Wave 29 done*** — discovery empty when `AuthGate.Check` fails; CallTool already fail-closed |
 | Multi-layer PEPs (handler target, network classifier, store) | **POL-004 lite done** — call-time job `Target` + `deny_job_prefixes`; network/store PEPs earlier. Residual: richer ACL language; adapter-specific PEPs beyond shared middleware |

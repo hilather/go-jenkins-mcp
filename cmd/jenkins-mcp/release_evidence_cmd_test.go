@@ -118,7 +118,7 @@ require (
 		}
 	}
 
-	// Structured residuals with known ids.
+	// Structured residuals with known ids (include modes residual honesty).
 	resIDs := map[string]bool{}
 	for _, r := range ev.Residual {
 		resIDs[r.ID] = true
@@ -126,7 +126,7 @@ require (
 			t.Fatalf("empty residual message for %s", r.ID)
 		}
 	}
-	for _, id := range []string{"full_suite", "production_signoff", "live_entra", "stdio_binary_smoke", "cursor_host_ci", "install_operator"} {
+	for _, id := range []string{"full_suite", "production_signoff", "live_entra", "gateway_modes_live", "stdio_binary_smoke", "cursor_host_ci", "install_operator"} {
 		if !resIDs[id] {
 			t.Fatalf("missing residual %s in %+v", id, ev.Residual)
 		}

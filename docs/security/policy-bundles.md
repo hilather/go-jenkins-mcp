@@ -149,8 +149,35 @@ appear in logs, MCP results, doctor output, or support bundles (only `key_id`).
 | Trusted keys configured + plain unsigned file | Reject |
 | `JENKINS_MCP_POLICY_REQUIRED=1` + missing file | Reject |
 | `JENKINS_MCP_POLICY_REQUIRED=1` + no keys + unsigned | Reject (staging stub requires non-empty signature field) |
+| `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` + no trusted keys | Reject (**enterprise**; staging stub not accepted) |
+| `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` + trusted keys + unsigned / bad / expired / downgraded | Reject (same Ed25519 fail-closed path) |
+| `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` + missing file | Reject (`Required=true`) |
 
 Absent file + not required → no overlay (pilot continues).
+
+### Enterprise pin checklist (gateway hosts — MGR-001 residual lite)
+
+Gateway / multi-user hosts that claim **enterprise constrain / force-off** must not
+rely on pilot `unverified_pilot` overlays. Pin **real** Ed25519 verification:
+
+| Step | Operator action |
+|------|-----------------|
+| 1 | Distribute public keys to `JENKINS_MCP_POLICY_TRUSTED_KEYS` (dir or JSON trust store) |
+| 2 | Publish `overlay.bundle.json` with higher `bundle_seq` (force_read_only / deny as needed) |
+| 3 | Set `JENKINS_MCP_POLICY_FILE` to the signed envelope path |
+| 4 | Set **`JENKINS_MCP_REQUIRE_SIGNED_POLICY=1`** (fail closed without keys; refuse unsigned) |
+| 5 | Optional dual-control: `JENKINS_MCP_POLICY_MIN_SIGNATURES=2` + multi-sig envelope |
+| 6 | Verify offline: `jenkins-mcp policy verify --file … --keys … --check-downgrade` |
+| 7 | Confirm serve refuses start on invalid/missing/unsigned bundle (load-time fail closed) |
+| 8 | Self-check residual honesty: multi-sig lite Done*; HSM / true *t*-of-*n* residual |
+
+**Do not** treat `JENKINS_MCP_POLICY_REQUIRED=1` alone as crypto proof — without
+trusted keys it only uses the staging field-presence verifier.
+
+**Force-off residual (honest):** signed-policy overlay fields that pin fleet
+telemetry force-off (MGR-002 `policy_overlay_pin`) remain residual; the load-time
+REQUIRE_SIGNED pin ensures an enterprise host cannot silently run without a
+verified overlay when that env is set.
 
 ### Last-good cache
 
@@ -173,10 +200,12 @@ Emergency deny policy: publish higher `bundle_seq` with stricter `deny_tools` /
 
 1. Resolve path: `JENKINS_MCP_POLICY_FILE` → else prefer
    `policy/overlay.bundle.json` if present → else `policy/overlay.json`.
-2. If trusted keys present → `Ed25519SignatureVerifier` with last-good cache;
+2. If `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` and **no** trusted keys → **error**
+   (fail closed; staging stub not accepted).
+3. If trusted keys present → `Ed25519SignatureVerifier` with last-good cache;
    `RequireSigned=true`.
-3. Else if `JENKINS_MCP_POLICY_REQUIRED` → staging `RequiringSignatureVerifier`.
-4. Else → `NopSignatureVerifier` (pilot; `unverified_pilot`).
+4. Else if `JENKINS_MCP_POLICY_REQUIRED` → staging `RequiringSignatureVerifier`.
+5. Else → `NopSignatureVerifier` (pilot; `unverified_pilot`).
 
 After a successful initial load, `serve` wraps the evaluator in
 `ReloadableDenyOnly` (Wave 24): path mtime is checked on `Evaluate` (min 5s
@@ -250,12 +279,16 @@ the built-in `policy sign` command is a **developer aid**, not a fleet CA.
         "JENKINS_MCP_READ_ONLY": "true",
         "JENKINS_MCP_POLICY_FILE": "/etc/jenkins-mcp/policy/overlay.bundle.json",
         "JENKINS_MCP_POLICY_TRUSTED_KEYS": "/etc/jenkins-mcp/policy/trusted_keys",
-        "JENKINS_MCP_POLICY_REQUIRED": "1"
+        "JENKINS_MCP_REQUIRE_SIGNED_POLICY": "1"
       }
     }
   }
 }
 ```
+
+Gateway hosts: same env pin. Prefer `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` over
+`JENKINS_MCP_POLICY_REQUIRED=1` alone so unsigned pilot / staging stub paths
+cannot start.
 
 ## Signature state tokens
 
@@ -273,12 +306,14 @@ the built-in `policy sign` command is a **developer aid**, not a fleet CA.
 | Multi-sig lite (N distinct Ed25519 keys + `MinSignatures`) | **Done\*** (Wave 34 / MGR-001 residual) |
 | CLI multi-sign (`policy sign` multi-key / `--keys-dir`) | **Done\*** (Wave 35) — dev-only; not a fleet CA |
 | Offline self-check canary (`policy_multisig_lite_residual`) | **Done\*** (Wave 42) — proves 2-of-2 ok / 1-of-2 fail-closed; residual flags `residual_true_threshold=false`, `residual_hsm=false` |
+| `JENKINS_MCP_REQUIRE_SIGNED_POLICY` fail-closed pin | **Done\*** lite — refuse start without trusted keys / unsigned when set (gateway enterprise checklist above) |
 | Full threshold crypto (secret sharing, BLS aggregates, true *t*-of-*n* without N distinct sigs) | Residual — not implemented (self-check documents honesty; does not implement) |
 | Production HSM/KMS-backed signing pipeline | Residual — operator/org-owned; CLI `policy sign` is dev-only |
 | Online key discovery | Out of band only |
 | Detached `.sig` files | Envelope preferred; not implemented |
 | Gateway push of bundles | GWY / fleet epic |
 | Automatic emergency kill-switch channel | Manual higher-seq publish |
+| MGR-002 signed-policy telemetry force-off overlay field wire | Residual (`policy_overlay_pin=false`) — separate from load-time REQUIRE_SIGNED pin |
 
 ## Security notes
 

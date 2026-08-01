@@ -21,7 +21,7 @@ constants so tests fail if classifications drift.
 | `api_token` | Personal Jenkins `username:api_token` (Basic) via Linux Secret Service | **supported** | Pilot default (AUTH / ADR 0009) |
 | `external_idp_jwt_bearer` | Authorization Code + PKCE at **external IdP**; access token audience = exact Jenkins API resource; Jenkins validates bearer as RS | **conditional** | OAUTH-001 profile/discovery; OAUTH-002+ login/token; needs `jwt-auth-filter` or approved proxy |
 | `agentcore_3lo_obo` | Managed-gateway AgentCore 3LO/OBO against **Entra (or approved AS)** → Jenkins-audience token | **residual** | GWY-* / OAUTH-010+; AS endpoints are never stock Jenkins |
-| `custom_jenkins_as_plugin` | Full Jenkins-hosted OAuth authorization server (consent, codes, tokens) | **no_go_default** | ADR 0011/0013; threat model [jas-no-go.md](jas-no-go.md); JAS-002…005 only after OAUTH-011 **go** |
+| `custom_jenkins_as_plugin` | Full Jenkins-hosted OAuth authorization server (consent, codes, tokens) | **no_go_default** | ADR 0011/0013; threat model + OAUTH-011 decision log [jas-no-go.md](jas-no-go.md) §4.1; JAS-002…005 only after explicit OAUTH-011 **go** |
 | `jwt_auth_filter` | Bearer JWT **resource-server** filter (not an AS) | **conditional** | OAUTH-009: offline contracts + `oauth probe-rs`; **live lab residual** |
 
 ### Level definitions

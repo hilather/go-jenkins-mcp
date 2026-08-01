@@ -30,6 +30,21 @@ provides:
    enable mutations unless a separate approved exception exists.
 3. **Profile-only Cursor config** — `command` + `args: ["serve", "--profile", "<id>", "--read-only", "--stdio"]` and `JENKINS_MCP_READ_ONLY=true`. **Never** `JENKINS_MCP_AUTH` or `-auth`.
 4. **No Windows** — do not collect or claim Windows pilot evidence.
+5. **Modes honesty (REL-001)** — record which surfaces/modes were piloted
+   (stdio vs gateway **A/B/C**). Offline `gateway qualify` is **not** live
+   multi-user production evidence. See [checklist §0](checklist.md).
+
+## Auth modes matrix (pilot evidence)
+
+| Mode | Id | Typical pilot path | Offline evidence | Live residual |
+|------|-----|--------------------|------------------|---------------|
+| Local stdio | (default) | Cursor + personal API token / OIDC profile | `pilot-check`, doctor | — |
+| **A** | `api_token_vault` | Gateway vault per subject (HOST-009) | vault CLI + unit/lab | Multi-user Obtain under load |
+| **B** | `jwt_rs_bearer` | Jenkins JWT RS bearer (HOST-010) | offline vault + oauth-lab | Entra + jwt-auth-filter pin |
+| **C** | AgentCore Live | 3LO/OBO Obtain (GWY-001) | `gateway qualify --offline` | Live AgentCore / Entra pin |
+
+Default pilot for REL-001 is **local stdio + personal credentials**. Gateway
+cohorts are optional and must list modes explicitly on the checklist.
 
 ## Prerequisites
 
@@ -158,6 +173,7 @@ Record for **both** Rocky and Ubuntu cohorts (macOS optional):
 - [ ] `cache status` healthy; `cache verify` sample has `pack_fail=0` (or empty cache)
 - [ ] `pilot-check --profile <id>` overall `pass` or `warn` (not `fail`) with saved JSON
 - [ ] Optional: `make pilot-evidence PROFILE=<id> SKIP_GO_TEST=1` MANIFEST overall not `fail`
+- [ ] **Modes piloted** recorded (stdio and/or A/B/C); gateway residuals named if gateway was in scope
 - [ ] No secret/privacy incident; support-bundle used if debugging is needed
 - [ ] Rollback path exercised or documented (see [checklist](checklist.md))
 

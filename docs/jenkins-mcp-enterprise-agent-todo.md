@@ -1468,7 +1468,8 @@ Bind inbound gateway subject and workload identity to the downstream token subje
 ## OAUTH-011 - Run the decision gate for a Jenkins-hosted 3LO authorization server
 
 **Priority:** P2  
-**Dependencies:** OAUTH-009, OAUTH-010, security architecture approval
+**Dependencies:** OAUTH-009, OAUTH-010, security architecture approval  
+**Status:** **Done\*** residual formal **default no-go** (not a funded **go** for JAS plugin)
 
 **Objective**
 
@@ -1478,13 +1479,15 @@ Make the default decision **no-go** and approve a full Jenkins OAuth authorizati
 
 Document every unmet gateway/client requirement after the simpler prototypes, why each alternative fails, security and long-term maintenance ownership, client/scopes/consent requirements, key and token lifecycle, conformance obligations, migration impact, and exit strategy. A desire for Jenkins-branded OAuth endpoints or symmetry with another product is not sufficient justification.
 
+**Evidence (default no-go residual):** [`docs/auth/jas-no-go.md`](auth/jas-no-go.md) §4.1 decision log; ADR 0013; capability matrix; `gateway.ValidateProviderConfig` + `auth.RejectJenkinsAsAuthorizationServer` canaries. Live Entra/AgentCore pins remain open and do **not** re-open Jenkins-as-AS.
+
 **Acceptance criteria**
 
-- [ ] Decision records explicit go/no-go criteria, evidence, approvers, owner, funding, and support horizon.
-- [ ] The default/no-evidence result is no-go and closes or deprioritizes the conditional JAS epic.
-- [ ] A go decision identifies a specific blocker that cannot be solved safely by Entra/AgentCore, a resource filter/proxy, token exchange, or a narrow broker.
-- [ ] A go decision funds separate threat modeling, key management, secure token storage, OAuth conformance, independent review, penetration testing, release engineering, and incident ownership.
-- [ ] The MCP core and local release do not depend on the plugin before or after this gate.
+- [x] Decision records explicit go/no-go criteria, evidence, approvers, owner, funding, and support horizon. — §4.1 residual formalization (org pen-test sign-off residual for any future **go**)
+- [x] The default/no-evidence result is no-go and closes or deprioritizes the conditional JAS epic. — JAS-002…005 not scheduled under default no-go
+- [x] A go decision identifies a specific blocker that cannot be solved safely by Entra/AgentCore, a resource filter/proxy, token exchange, or a narrow broker. — N/A for **no-go**; criteria documented for re-open
+- [x] A go decision funds separate threat modeling, key management, secure token storage, OAuth conformance, independent review, penetration testing, release engineering, and incident ownership. — N/A for **no-go**; funding none under default
+- [x] The MCP core and local release do not depend on the plugin before or after this gate.
 
 ---
 
@@ -2747,10 +2750,11 @@ limiter; token-bucket rate (not only concurrency); multi-replica (HOST-008).
 - [x] Document non-loopback admin only with token (+ residual mTLS/OIDC design). — `docs/admin/README.md` HOST-007 section
 - [x] No Jenkins API tokens or vault material in browser responses. — canaries; `GET /admin/v1/gateway/vault` hash-only; CLI-only vault write residual
 - [x] Multi-operator sessions: residual “single process role” or designed sessions + CSRF. — **documented residual** single process `--admin-role`
-- [x] Quarantine localStorage token UX for non-pilot. — documented pilot-only / quarantine note
+- [x] Quarantine localStorage token UX for non-pilot. — documented pilot-only / quarantine for production (`web/admin/README.md` + admin HOST-007)
 - [x] CSP preserved under reverse-proxy; secret-free note of **enabled auth modes**. — CSP guidance; `enabledModes` on health + gateway/vault
+- [x] Secret-free multi-user residual note: no admin/`JENKINS_MCP_GATEWAY_MULTI_USER` production-ready pin; `enabledModes` is config enablement only.
 
-**Status:** **Done*** for operator residual documentation + secret-free mode listing. Cookie sessions / multi-operator OIDC remain residual.
+**Status:** **Done*** for operator residual documentation + secret-free mode listing + multi-user honesty. Cookie sessions / multi-operator OIDC remain residual.
 
 ---
 
@@ -2936,7 +2940,8 @@ Disposable HTTP peer that simulates AgentCore/Entra **token exchange / OBO / aut
 ## MGR-001 - Sign and enforce enterprise policy bundles
 
 **Priority:** P2  
-**Dependencies:** CFG-002, POL-002, FND-008
+**Dependencies:** CFG-002, POL-002, FND-008  
+**Status:** **Done\*** MVP + multi-sig lite + `JENKINS_MCP_REQUIRE_SIGNED_POLICY` pin; HSM / true *t*-of-*n* / gateway push residual
 
 **Objective**
 
@@ -2946,12 +2951,14 @@ Let security centrally constrain auth, tools, limits, storage, telemetry, and up
 
 Define versioned signed policy bundles, trusted keys, expiry/rollback rules, local cache, and safe bootstrap. Policies can disable features/lower limits but not include credentials.
 
+**Evidence:** [`docs/security/policy-bundles.md`](security/policy-bundles.md) (enterprise gateway pin checklist); `internal/policy` Ed25519 + last-good; env `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` fails closed without trusted keys / unsigned.
+
 **Acceptance criteria**
 
-- [ ] Invalid, expired, downgraded, or untrusted policy fails according to documented safe mode.
-- [ ] User config cannot weaken enforced values.
-- [ ] Effective policy and source are explainable without leaking sensitive internal details.
-- [ ] Key rotation and emergency policy replacement are tested.
+- [x] Invalid, expired, downgraded, or untrusted policy fails according to documented safe mode. — Ed25519 + last-good; REQUIRE_SIGNED pin lite
+- [x] User config cannot weaken enforced values. — force_read_only tests
+- [x] Effective policy and source are explainable without leaking sensitive internal details. — `policy show-effective` / doctor signature_state
+- [x] Key rotation and emergency policy replacement are tested. — higher `bundle_seq` + multi-sig lite; HSM residual
 
 ---
 
@@ -3294,7 +3301,8 @@ Document preferred high-level tools, bounded primitive fallbacks, evidence refer
 ## REL-001 - Run a limited read-only pilot
 
 **Priority:** P0  
-**Dependencies:** Phase 1 complete, QA-005/006 scoped approval, PKG-001, DOC-001
+**Dependencies:** Phase 1 complete, QA-005/006 scoped approval, PKG-001, DOC-001  
+**Status:** **Partial / kit Done\*** — operator Rocky/Ubuntu live cohorts remain residual; mode matrix + offline evidence pack present
 
 **Objective**
 
@@ -3304,20 +3312,24 @@ Validate real workflows and performance with a small approved user group.
 
 Deploy signed Tier-1 builds (Rocky Linux, Ubuntu), collect approved metrics and structured feedback, sample network/cache behavior, track auth/support issues, and maintain rapid rollback. Use API-token and OAuth cohorts if OAuth is ready. Pilot cohorts must include Rocky and Ubuntu users. macOS participants are optional and non-blocking. Windows is not a pilot platform.
 
+**Evidence kit:** [`docs/pilot/README.md`](pilot/README.md), [`docs/pilot/checklist.md`](pilot/checklist.md) §0 mode matrix (stdio + A/B/C), `make pilot-evidence`, `pilot-check`. Offline gateway qualify is **not** live multi-user GO.
+
 **Acceptance criteria**
 
-- [ ] No shared credentials are used.
-- [ ] Network and result-size targets are measured on real workflows.
-- [ ] No secret/privacy incident occurs; any incident triggers the documented response.
-- [ ] Pilot exit report lists defects, SLOs, adoption, and go/no-go recommendation.
-- [ ] Pilot evidence includes successful install/login/diagnose on Rocky and on Ubuntu.
+- [ ] No shared credentials are used. — operator-owned live pilot
+- [ ] Network and result-size targets are measured on real workflows. — operator-owned
+- [ ] No secret/privacy incident occurs; any incident triggers the documented response. — operator-owned
+- [ ] Pilot exit report lists defects, SLOs, adoption, and go/no-go recommendation. — operator-owned; template includes modes piloted
+- [ ] Pilot evidence includes successful install/login/diagnose on Rocky and on Ubuntu. — operator-owned; kit/checklist ready
+- [x] Evidence checklist records **modes piloted** (stdio / A / B / C) and gateway residual honesty. — checklist §0 + README matrix
 
 ---
 
 ## REL-002 - Pass production release gates
 
 **Priority:** P0  
-**Dependencies:** All features selected for release
+**Dependencies:** All features selected for release  
+**Status:** **Partial / lite Done\*** — offline `release-evidence` + gates/template mode matrix; full production sign-off residual
 
 **Objective**
 
@@ -3327,12 +3339,15 @@ Make production approval evidence-based.
 
 Assemble a versioned release-evidence bundle, execute every applicable security, performance, reliability, compatibility, and usability gate, record deviations and approved exceptions, collect named owner sign-offs, and produce a go/no-go decision linked to the exact release artifacts. The release pipeline must block publication when a mandatory gate has no passing evidence or approved exception.
 
+**Evidence kit:** [`docs/release/gates.md`](release/gates.md), [`docs/release/evidence-template.md`](release/evidence-template.md) modes matrix, residual `gateway_modes_live` in `release-evidence` JSON. **Does not claim production GO.**
+
 **Acceptance criteria**
 
 - [ ] Security: personal identity, secret handling, read-only default, origin controls, cache privacy, SBOM/signing, and independent review pass.
 - [ ] Performance: no hidden log over-download, cache reuse, response limits, reference SLOs, and L2 random access pass.
 - [ ] Reliability: crash/disk/corruption/cancellation/outage/migration tests pass.
 - [ ] Compatibility: Jenkins LTS/plugin, OS, Cursor, MCP conformance, and auth matrices pass.
+- [x] Compatibility honesty: release evidence lists **modes piloted** (A/B/C/stdio) and gateway offline residual. — template + residual id
 - [ ] Usability: install, profile, login, identity verification, diagnosis, cache purge, and `doctor` complete successfully from documentation.
 - [ ] Ownership: on-call/support, vulnerability response, Jenkins-side OAuth owner, and release owner are named.
 
