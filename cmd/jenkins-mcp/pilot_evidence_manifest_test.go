@@ -243,6 +243,16 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 	if !strings.Contains(bodyStr, "JENKINS_MCP_GATEWAY_JWT_VAULT_PATH") {
 		t.Fatal("scripts/pilot-evidence.sh must canary JWT_VAULT_PATH → shared_jwt_vault_file=true")
 	}
+	// Wave 17 residual lite: progressive_consent store path honesty.
+	if !strings.Contains(bodyStr, "file_backed") {
+		t.Fatal("scripts/pilot-evidence.sh must assert progressive_consent.file_backed honesty")
+	}
+	if !strings.Contains(bodyStr, "same_host_reload_before_persist") {
+		t.Fatal("scripts/pilot-evidence.sh must assert progressive_consent.same_host_reload_before_persist honesty")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_CONSENT_STORE_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary CONSENT_STORE_PATH → progressive_consent file_backed")
+	}
 	if !strings.Contains(bodyStr, "LIMITER_MAX_CANARY") && !strings.Contains(bodyStr, "SUBJECT_LIMITER_MAX_SUBJECTS") {
 		t.Fatal("scripts/pilot-evidence.sh must canary SUBJECT_LIMITER_MAX_SUBJECTS residual lite")
 	}
@@ -385,6 +395,26 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 				t.Fatalf("%s want false|absent on default pilot residual-status got %v", key, v)
 			}
 		}
+		// progressive_consent store honesty (default CONSENT_STORE_PATH unset).
+		if pcRaw, ok := rs["progressive_consent"]; ok && pcRaw != nil {
+			pc, ok := pcRaw.(map[string]any)
+			if !ok {
+				t.Fatalf("progressive_consent want object got %T", pcRaw)
+			}
+			for _, key := range []string{"file_backed", "same_host_reload_before_persist"} {
+				v, ok := pc[key]
+				if !ok || v == nil {
+					continue // absent-as-false acceptable
+				}
+				b, ok := v.(bool)
+				if !ok || b {
+					t.Fatalf("progressive_consent.%s want false|absent on default pilot residual-status got %v", key, v)
+				}
+			}
+			if st, ok := pc["stores_tokens"].(bool); ok && st {
+				t.Fatal("progressive_consent.stores_tokens must be false")
+			}
+		}
 		// Path values must never appear in residual-status JSON (bool residual only).
 		for _, envKey := range []string{
 			"JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH",
@@ -393,6 +423,7 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 			"JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH",
 			"JENKINS_MCP_GATEWAY_VAULT_PATH",
 			"JENKINS_MCP_GATEWAY_JWT_VAULT_PATH",
+			"JENKINS_MCP_CONSENT_STORE_PATH",
 		} {
 			if strings.Contains(string(rsRaw), envKey) {
 				t.Fatalf("path env name %q must not appear in gateway-residual-status.json", envKey)
@@ -413,6 +444,7 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 			"gateway-residual-status-token-path.json",
 			"gateway-residual-status-vault-path.json",
 			"gateway-residual-status-jwt-vault-path.json",
+			"gateway-residual-status-consent-path.json",
 		} {
 			p := filepath.Join(evidDir, name)
 			rawPath, err := os.ReadFile(p)
@@ -428,6 +460,26 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 			}
 			if strings.Contains(strings.ToLower(string(rawPath)), "authorization: bearer") {
 				t.Fatalf("secret-shaped material in %s", name)
+			}
+			// Consent path canary: file_backed true, stores_tokens false, path not dumped.
+			if name == "gateway-residual-status-consent-path.json" {
+				var pathRS map[string]any
+				if err := json.Unmarshal(rawPath, &pathRS); err != nil {
+					t.Fatalf("parse %s: %v", name, err)
+				}
+				pc, _ := pathRS["progressive_consent"].(map[string]any)
+				if pc == nil {
+					t.Fatalf("%s missing progressive_consent", name)
+				}
+				if fb, ok := pc["file_backed"].(bool); !ok || !fb {
+					t.Fatalf("%s progressive_consent.file_backed want true got %v", name, pc["file_backed"])
+				}
+				if shr, ok := pc["same_host_reload_before_persist"].(bool); !ok || !shr {
+					t.Fatalf("%s progressive_consent.same_host_reload_before_persist want true got %v", name, pc["same_host_reload_before_persist"])
+				}
+				if st, ok := pc["stores_tokens"].(bool); ok && st {
+					t.Fatalf("%s progressive_consent.stores_tokens must be false", name)
+				}
 			}
 		}
 	case "skip":

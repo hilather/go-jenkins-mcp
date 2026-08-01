@@ -9,9 +9,12 @@
 # binary has the subcommand, so pilot kits include residual honesty without a
 # separate residual-smoke run. Optional consent-residual when present.
 # Residual honesty canaries hard-fail (missing residual_ids / ha_multi_replica /
-# shared_*_file default false) matching residual-smoke residual-lite style —
-# offline only, not live GO. Lightweight path canaries (path set → bool true,
-# path never dumped) also hard-fail when python3 is available.
+# shared_*_file default false / progressive_consent file_backed +
+# same_host_reload_before_persist default false) matching residual-smoke
+# residual-lite style — offline only, not live GO. Lightweight path canaries
+# (path set → bool true, path never dumped; CONSENT_STORE_PATH →
+# progressive_consent file_backed/same_host_reload) also hard-fail when
+# python3 is available.
 #
 # Usage:
 #   scripts/pilot-evidence.sh
@@ -70,9 +73,9 @@ Writes dist/pilot-evidence/<timestamp>/ with MANIFEST.json.
   -h, --help       Show this help
 
 Always captures gateway residual-status (honesty canaries hard-fail) when the
-subcommand exists; optional consent-residual. shared_*_file default-false +
-lightweight path-not-dumped canaries align with residual-smoke residual lite.
-Offline residual honesty only — not live multi-user GO.
+subcommand exists; optional consent-residual. shared_*_file + progressive_consent
+store default-false + lightweight path-not-dumped canaries align with
+residual-smoke residual lite. Offline residual honesty only — not live multi-user GO.
 EOF
 }
 
@@ -332,6 +335,32 @@ if isinstance(pc, dict):
         errors.append("progressive_consent.browser_3lo_automated=true")
     if pc.get("metadata_path_done_star") is False:
         errors.append("progressive_consent.metadata_path_done_star must be true (Done*)")
+    # Consent-store path residual: default false when CONSENT_STORE_PATH unset
+    # (file_backed / same_host_reload_before_persist; path never dumped).
+    fb = pc.get("file_backed")
+    if fb is True:
+        errors.append(
+            "progressive_consent.file_backed=true without CONSENT_STORE_PATH "
+            "(default must be false)"
+        )
+    elif fb is not False and fb is not None:
+        errors.append(f"progressive_consent.file_backed={fb!r} want false|absent")
+    shr = pc.get("same_host_reload_before_persist")
+    if shr is True:
+        errors.append(
+            "progressive_consent.same_host_reload_before_persist=true without "
+            "CONSENT_STORE_PATH (default must be false)"
+        )
+    elif shr is not False and shr is not None:
+        errors.append(
+            f"progressive_consent.same_host_reload_before_persist={shr!r} want false|absent"
+        )
+    if pc.get("stores_tokens") is True:
+        errors.append("progressive_consent.stores_tokens=true (must always be false)")
+    if pc.get("multi_replica_shared") is True:
+        errors.append(
+            "progressive_consent.multi_replica_shared=true (must always be false)"
+        )
 else:
     errors.append("progressive_consent object missing")
 
@@ -404,6 +433,8 @@ if errors:
 print(
     "PASS: gateway residual-status honesty "
     f"(oauth009_offline + ha_multi_replica=false + residual_ids={len(required)} + "
+    "progressive_consent.file_backed=false default + "
+    "progressive_consent.same_host_reload_before_persist=false default + "
     "shared_subject_rate_file=false default + shared_principal_cache_file=false default + "
     "shared_jwks_file=false default + shared_token_cache_file=false default + "
     "shared_api_token_vault_file=false default + shared_jwt_vault_file=false default + subject_limiter_max_subjects omit default)"
@@ -421,6 +452,8 @@ PY
       if grep -q 'oauth009_offline' "$RESIDUAL_STATUS_JSON" \
         && grep -q '"ha_multi_replica": false' "$RESIDUAL_STATUS_JSON" \
         && grep -q 'progressive_consent' "$RESIDUAL_STATUS_JSON" \
+        && grep -qE '"file_backed":\s*false' "$RESIDUAL_STATUS_JSON" \
+        && grep -qE '"same_host_reload_before_persist":\s*false' "$RESIDUAL_STATUS_JSON" \
         && grep -qE '"shared_subject_rate_file":\s*false' "$RESIDUAL_STATUS_JSON" \
         && grep -qE '"shared_principal_cache_file":\s*false' "$RESIDUAL_STATUS_JSON" \
         && grep -qE '"shared_jwks_file":\s*false' "$RESIDUAL_STATUS_JSON" \
@@ -760,6 +793,86 @@ if errors:
         print(f"  - {e}", file=sys.stderr)
     sys.exit(1)
 print("PASS: residual-status shared_jwt_vault_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          residual_status_ok=0
+          HARD_FAIL=1
+        fi
+      fi
+
+      # OAUTH-010 / HOST-007 residual lite: CONSENT_STORE_PATH → progressive_consent
+      # file_backed + same_host_reload_before_persist; path never dumped; stores_tokens=false.
+      CONSENT_PATH_MARKER="consent-store-path-CANARY-never-in-json-$$"
+      CONSENT_TMP_MARKED="$OUT_DIR/${CONSENT_PATH_MARKER}.json"
+      : >"$CONSENT_TMP_MARKED"
+      RESIDUAL_STATUS_CONSENT_JSON="$OUT_DIR/gateway-residual-status-consent-path.json"
+      set +e
+      env JENKINS_MCP_CONSENT_STORE_PATH="$CONSENT_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_CONSENT_JSON" 2>"$OUT_DIR/gateway-residual-status-consent-path.stderr"
+      cprc=$?
+      set -e
+      if [[ $cprc -ne 0 ]]; then
+        residual_status_ok=0
+        HARD_FAIL=1
+        echo "  [fail] gateway residual-status with CONSENT_STORE_PATH exit $cprc" >&2
+      else
+        assert_secret_free_file "$RESIDUAL_STATUS_CONSENT_JSON" "gateway-residual-status-consent-path.json" || {
+          residual_status_ok=0
+          HARD_FAIL=1
+        }
+        export PE_CONSENT_JSON="$RESIDUAL_STATUS_CONSENT_JSON"
+        export PE_CONSENT_MARKER="$CONSENT_PATH_MARKER"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["PE_CONSENT_JSON"]
+marker = os.environ["PE_CONSENT_MARKER"]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+pc = data.get("progressive_consent") or {}
+if not isinstance(pc, dict) or not pc:
+    errors.append("progressive_consent object missing when CONSENT_STORE_PATH set")
+else:
+    if pc.get("file_backed") is not True:
+        errors.append(
+            f"progressive_consent.file_backed={pc.get('file_backed')!r} want true "
+            "when CONSENT_STORE_PATH set"
+        )
+    if pc.get("same_host_reload_before_persist") is not True:
+        errors.append(
+            f"progressive_consent.same_host_reload_before_persist="
+            f"{pc.get('same_host_reload_before_persist')!r} want true when CONSENT_STORE_PATH set"
+        )
+    if pc.get("stores_tokens") is not False:
+        errors.append(
+            f"progressive_consent.stores_tokens={pc.get('stores_tokens')!r} want false"
+        )
+    if pc.get("multi_replica_shared") is True:
+        errors.append(
+            "progressive_consent.multi_replica_shared=true "
+            "(must stay false; not multi-pod HA)"
+        )
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("CONSENT_STORE_PATH / marker leaked into residual-status JSON (path must never dump)")
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status CONSENT_STORE_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print(
+    "PASS: residual-status progressive_consent file_backed=true + "
+    "same_host_reload_before_persist=true when path set "
+    "(path not dumped; stores_tokens=false)"
+)
 sys.exit(0)
 PY
         then

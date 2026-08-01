@@ -148,7 +148,9 @@ is `fail` (including residual-status honesty canary failure). Without `PROFILE`,
 overall is **`incomplete`** (doctor/pilot-check skipped) when the offline
 generators pass. Residual-status in this pack is **offline honesty only** — not
 live multi-user GO. Honesty canaries include `shared_*_file` default-false,
-`subject_limiter_max_subjects` omit default, lightweight path-not-dumped checks,
+`progressive_consent.file_backed` / `same_host_reload_before_persist` default-false
+(when `CONSENT_STORE_PATH` unset), `subject_limiter_max_subjects` omit default,
+lightweight path-not-dumped checks (shared_*_file + consent store path),
 and optional `SUBJECT_LIMITER_MAX_SUBJECTS=64` → field 64 (align residual-smoke residual lite).
 
 See also REL-002 gates: [`../release/gates.md`](../release/gates.md).
