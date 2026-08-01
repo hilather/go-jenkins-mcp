@@ -136,7 +136,7 @@ a.btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .brand {
@@ -144,6 +144,7 @@ a.btn {
   align-items: center;
   gap: var(--space-3);
   min-height: 44px;
+  min-width: 0;
 }
 
 .brand-mark {
@@ -167,6 +168,7 @@ a.btn {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  min-width: 0;
 }
 
 .brand-name {
@@ -208,6 +210,12 @@ a.btn {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.nav-actions .btn-ghost,
+.nav-actions .btn-primary {
+  display: none;
 }
 
 .nav-toggle {
@@ -245,6 +253,7 @@ a.btn {
   border-radius: var(--radius-sm);
   color: var(--fg-muted);
   font-size: var(--text-sm);
+  min-height: 44px;
 }
 
 .mobile-nav a:hover,
@@ -897,6 +906,11 @@ a.btn {
 
   .nav-toggle {
     display: none;
+  }
+
+  .nav-actions .btn-ghost,
+  .nav-actions .btn-primary {
+    display: inline-flex;
   }
 
   .stats {
