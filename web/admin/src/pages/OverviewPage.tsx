@@ -38,6 +38,14 @@ export function OverviewPage() {
     vault.error instanceof AdminApiError &&
     vault.error.status === 404;
 
+  // Mode C progressive consent residual (OAUTH-010): show when residual note
+  // is present or Mode C is in health mode fields (never secrets).
+  const modeC =
+    health.isSuccess &&
+    (Boolean(health.data.progressiveConsentResidual) ||
+      health.data.credentialMode === "agentcore_3lo_obo" ||
+      Boolean(health.data.enabledModes?.includes("agentcore_3lo_obo")));
+
   return (
     <>
       <h1 className="page-title">Overview</h1>
@@ -149,6 +157,41 @@ export function OverviewPage() {
           )
         )}
       </div>
+
+      {modeC && health.isSuccess && (
+        <div className="card">
+          <h2>Progressive consent residual (Mode C)</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            OAUTH-010 / GWY-001 honesty from{" "}
+            <code>GET /admin/v1/health</code> (
+            <code>gateway.NewProgressiveConsentResidual</code>). Static /
+            secret-free — never live Obtain, tokens, or{" "}
+            <code>authorization_url</code> query strings in admin JSON.
+          </p>
+          <dl className="dl">
+            <dt>progressiveConsentMetadataDoneStar</dt>
+            <dd>
+              {health.data.progressiveConsentMetadataDoneStar ? "yes" : "no"}{" "}
+              <span className="muted">
+                (ConsentRequired → authorization_url + session_id only)
+              </span>
+            </dd>
+            <dt>progressiveConsentBrowser3loAutomated</dt>
+            <dd>
+              {health.data.progressiveConsentBrowser3loAutomated
+                ? "yes"
+                : "no"}{" "}
+              <span className="muted">(browser 3LO not automated residual)</span>
+            </dd>
+            {health.data.progressiveConsentResidual ? (
+              <>
+                <dt>progressiveConsentResidual</dt>
+                <dd className="muted">{health.data.progressiveConsentResidual}</dd>
+              </>
+            ) : null}
+          </dl>
+        </div>
+      )}
 
       <div className="card">
         <h2>Version</h2>
@@ -295,6 +338,11 @@ export function OverviewPage() {
             Gateway vault <strong>write</strong> is CLI-only (
             <code>jenkins-mcp gateway vault-put</code>); SPA shows status only
             (HOST-009 / HOST-011). Never put tokens in the browser.
+          </li>
+          <li>
+            Mode C progressive consent: metadata path Done* on health; browser
+            3LO not automated (OAUTH-010). Admin never returns authorize URLs
+            with secrets.
           </li>
           <li>
             BFF is loopback-only by default (ADR 0014). No Jenkins tokens in

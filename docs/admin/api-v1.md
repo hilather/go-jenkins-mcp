@@ -99,7 +99,23 @@ Current process authentication state and console role. **Never includes the toke
   "rateEnabled": true,
   "ratePerMinute": 30,
   "rateBurst": 10,
+  "progressiveConsentMetadataDoneStar": true,
+  "progressiveConsentBrowser3loAutomated": false,
   "residual": "subject rate knobs are process-local (HOST-006); multi-replica shared rate residual (HOST-008); never tokens"
+}
+```
+
+When Mode C (`agentcore_3lo_obo`) is enabled in the HOST-011 mode matrix, health
+also includes a secret-free progressive-consent residual note (example primary
+Mode C):
+
+```json
+{
+  "credentialMode": "agentcore_3lo_obo",
+  "enabledModes": ["agentcore_3lo_obo"],
+  "progressiveConsentMetadataDoneStar": true,
+  "progressiveConsentBrowser3loAutomated": false,
+  "progressiveConsentResidual": "Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; durable consent session store / multi-replica correlation residual"
 }
 ```
 
@@ -116,6 +132,9 @@ Current process authentication state and console role. **Never includes the toke
 | `rateEnabled` | **HOST-006 / HOST-008 residual:** `true` when subject rate env would enable process-local limiting (empty `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` → default on; explicit `0` → false). **Not** multi-replica shared rate. Never tokens. |
 | `ratePerMinute` | **HOST-006 residual knob:** resolved bootstrap tools/min via `gateway.SubjectRateConfigFromEnviron` (package default **30**; **0** when disabled). Process-local only. Never tokens. |
 | `rateBurst` | **HOST-006 residual knob:** resolved bootstrap burst (package default **10**; **0** when rate off). Process-local only. Never tokens. |
+| `progressiveConsentMetadataDoneStar` | **OAUTH-010 / GWY-001 residual:** always **`true`**. ConsentRequired → operator/model-visible `authorization_url` + `session_id` only is Done* on Obtain / mapToolErr paths. Sourced from `gateway.NewProgressiveConsentResidual()` (static). **Never** embeds an authorize URL, query secrets, tokens, or client secrets. |
+| `progressiveConsentBrowser3loAutomated` | **OAUTH-010 residual:** always **`false`** until browser 3LO is automated (GWY-003). Static residual only — admin does **not** open browsers or construct authorize URLs. |
+| `progressiveConsentResidual` | **OAUTH-010 residual note** when Mode C (`agentcore_3lo_obo`) is enabled in the mode matrix (or primary when matrix invalid and primary is Mode C). Omitted when Mode C is not enabled. Same text as `gateway.ProgressiveConsentResidualNote` / doctor `gateway_status` progressive_consent residual. **Never** tokens, refresh material, `client_secret`, or `authorization_url` with secrets in query. |
 | `residual` | Secret-free honesty note (never tokens). Process-local subject-rate residual + HOST-008 multi-replica residual; multi-user env also notes foundation residual + sticky scaffold honesty. |
 
 ## GET /admin/v1/gateway/vault
