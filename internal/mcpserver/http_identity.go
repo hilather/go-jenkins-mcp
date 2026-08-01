@@ -37,6 +37,14 @@ const HeaderLabWorkload = "X-Jenkins-MCP-Lab-Workload"
 // HeaderLabJenkinsPrincipal is an optional lab Jenkins principal (lab mode only).
 const HeaderLabJenkinsPrincipal = "X-Jenkins-MCP-Lab-Jenkins-Principal"
 
+// HeaderLabGroups is an optional comma-separated lab groups/roles list (lab mode only).
+// Fail closed when LabIdentity is false — spoof headers are ignored.
+// Bounds applied by gateway PolicySubjectFromHTTPInbound / BindSubject (OAUTH-006).
+const HeaderLabGroups = "X-Jenkins-MCP-Lab-Groups"
+
+// MaxLabGroupsHeaderBytes caps the raw lab groups header (fail closed on absurd size).
+const MaxLabGroupsHeaderBytes = 16 * 1024
+
 // Health path constants (secret-free; may skip subject auth when RequireSubject).
 const (
 	HealthzPath = "/healthz"
@@ -68,6 +76,10 @@ type RequestIdentity struct {
 	WorkloadID string
 	// JenkinsPrincipal is optional exchanged / lab Jenkins user id.
 	JenkinsPrincipal string
+	// Groups is an optional list of IdP group/role ids from JWT claims or lab
+	// header (OAUTH-006 / GWY-002 residual lite). Bounded at policy bind.
+	// Never elevates deny_tools or force_read_only.
+	Groups []string
 	// Source describes the trusted origin of this identity.
 	Source IdentitySource
 	// Verified is true only when the trust path authenticated the caller
@@ -97,7 +109,10 @@ func ContextWithIdentity(ctx context.Context, id RequestIdentity) context.Contex
 }
 
 // IdentityFromContext returns RequestIdentity previously stored by the HTTP
-// protect layer. Present() is false when unset.
+// protect layer (HOST-001). Handlers and tool wiring may read the verified
+// subject labels from the request context after protectHandler accepts the
+// call. Present() is false when unset (health paths, or pilot without subject).
+// Never contains raw tokens.
 func IdentityFromContext(ctx context.Context) RequestIdentity {
 	if ctx == nil {
 		return RequestIdentity{}
@@ -140,9 +155,36 @@ func extractLabIdentity(r *http.Request, labIdentity bool) RequestIdentity {
 		Tenant:           boundClaim(r.Header.Get(HeaderLabTenant), 256),
 		WorkloadID:       boundClaim(r.Header.Get(HeaderLabWorkload), 256),
 		JenkinsPrincipal: boundClaim(r.Header.Get(HeaderLabJenkinsPrincipal), 256),
+		Groups:           parseLabGroupsHeader(r.Header.Get(HeaderLabGroups)),
 		Source:           IdentitySourceLabHeader,
 		Verified:         true, // operator-provisioned lab trust
 	}
+}
+
+// parseLabGroupsHeader splits a comma-separated lab groups header.
+// Oversize raw values yield nil (fail closed). Final group bounds apply at
+// gateway bind (MaxInboundGroups / name length).
+func parseLabGroupsHeader(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	if len(raw) > MaxLabGroupsHeaderBytes {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func boundClaim(v string, max int) string {
@@ -172,12 +214,34 @@ func resolveRequestIdentity(r *http.Request, labIdentity bool, resolver Identity
 	return extractLabIdentity(r, labIdentity), nil
 }
 
-// writeHealthOK responds with a minimal secret-free JSON body.
+// writeHealthOK responds with a minimal secret-free JSON body for /healthz
+// (liveness). Never includes inventory, subjects, or secrets.
 func writeHealthOK(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok"}` + "\n"))
+}
+
+// writeReadyz responds for /readyz (HOST-005). When check is nil, reports
+// process-up only ({"status":"ok"}) — gateway Ready residual not wired.
+// When check is set, includes gateway_ready bool and returns 503 when not ready.
+// Never includes tool inventory, tokens, subjects, or credential material.
+func writeReadyz(w http.ResponseWriter, check ReadyCheck) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	if check == nil {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}` + "\n"))
+		return
+	}
+	if check() {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok","gateway_ready":true}` + "\n"))
+		return
+	}
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = w.Write([]byte(`{"status":"not_ready","gateway_ready":false}` + "\n"))
 }
 
 // unauthorizedIdentity writes a generic 401 without echoing tokens or subjects.

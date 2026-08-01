@@ -268,11 +268,61 @@ func TestResolveTokenTTL_EnvNameAndConstants(t *testing.T) {
 			mutation.AbsoluteMaxTokenTTL, mutation.DefaultTokenTTL)
 	}
 	// Package defaults: DefaultConfirmCooldown (5s) < DefaultTokenTTL (2m).
-	// Residual: serve does not fail closed when ConfirmCooldown ≥ TokenTTL
-	// (independent operator caps; Wave 52 residual).
+	// Serve fail-closed: EnsureConfirmCooldownLessThanTokenTTL after both resolve.
 	if mutation.DefaultConfirmCooldown >= mutation.DefaultTokenTTL {
 		t.Fatalf("DefaultConfirmCooldown %s must be < DefaultTokenTTL %s",
 			mutation.DefaultConfirmCooldown, mutation.DefaultTokenTTL)
+	}
+	if err := mutation.EnsureConfirmCooldownLessThanTokenTTL(
+		mutation.DefaultConfirmCooldown, mutation.DefaultTokenTTL); err != nil {
+		t.Fatalf("default ordering Ensure: %v", err)
+	}
+}
+
+// MUT-001 residual fix: confirm cooldown must be strictly < token TTL at serve.
+func TestEnsureConfirmCooldownLessThanTokenTTL(t *testing.T) {
+	t.Parallel()
+
+	// cooldown < ttl → ok
+	if err := mutation.EnsureConfirmCooldownLessThanTokenTTL(5*time.Second, 2*time.Minute); err != nil {
+		t.Fatalf("cooldown < ttl must succeed: %v", err)
+	}
+	if err := mutation.EnsureConfirmCooldownLessThanTokenTTL(
+		mutation.MinConfirmCooldown, mutation.MinTokenTTL); err != nil {
+		t.Fatalf("min cooldown < min ttl must succeed: %v", err)
+	}
+	// just under equality
+	if err := mutation.EnsureConfirmCooldownLessThanTokenTTL(29*time.Second, 30*time.Second); err != nil {
+		t.Fatalf("29s < 30s must succeed: %v", err)
+	}
+
+	// equal → fail closed
+	if err := mutation.EnsureConfirmCooldownLessThanTokenTTL(30*time.Second, 30*time.Second); err == nil {
+		t.Fatal("cooldown == ttl must fail closed")
+	} else if !strings.Contains(err.Error(), "must be <") {
+		t.Fatalf("equal error should cite ordering, got: %v", err)
+	}
+
+	// cooldown > ttl → fail closed
+	if err := mutation.EnsureConfirmCooldownLessThanTokenTTL(1*time.Minute, 30*time.Second); err == nil {
+		t.Fatal("cooldown > ttl must fail closed")
+	} else if !strings.Contains(err.Error(), "must be <") {
+		t.Fatalf("greater error should cite ordering, got: %v", err)
+	}
+	// Secret-free: error must not look like a token / credential leak.
+	err := mutation.EnsureConfirmCooldownLessThanTokenTTL(2*time.Minute, 10*time.Second)
+	if err == nil {
+		t.Fatal("cooldown > ttl must fail closed")
+	}
+	msg := err.Error()
+	for _, bad := range []string{"Bearer", "password", "api_token", "secret"} {
+		if strings.Contains(strings.ToLower(msg), bad) {
+			t.Fatalf("error must be secret-free, got: %q", msg)
+		}
+	}
+	// Durations appear for operator diagnosis (non-secret).
+	if !strings.Contains(msg, "2m") || !strings.Contains(msg, "10s") {
+		t.Fatalf("error should include resolved durations, got: %q", msg)
 	}
 }
 

@@ -250,6 +250,64 @@
       ]
     },
     {
+      "id": "job_disable",
+      "path_pattern": "/job/{segments}/disable",
+      "path_prefixes": [
+        "/disable"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "class": "mutation",
+      "tools": [
+        "jenkins_set_job_buildable"
+      ],
+      "auth_scheme_notes": "Crumb + RO; MUT-013 disable; no POST auto-retry.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/client_mutations.go"
+      ]
+    },
+    {
+      "id": "job_enable",
+      "path_pattern": "/job/{segments}/enable",
+      "path_prefixes": [
+        "/enable"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "class": "mutation",
+      "tools": [
+        "jenkins_set_job_buildable"
+      ],
+      "auth_scheme_notes": "Crumb + RO; MUT-013 enable; no POST auto-retry.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/client_mutations.go"
+      ]
+    },
+    {
+      "id": "kill_build",
+      "path_pattern": "/job/{segments}/{n}/kill",
+      "path_prefixes": [
+        "/kill"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "class": "mutation",
+      "tools": [
+        "jenkins_interrupt_build"
+      ],
+      "auth_scheme_notes": "Crumb + RO; MUT-010 mode=kill; preview/confirm; no POST auto-retry.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/client_mutations.go",
+        "internal/tools/mutation_power_tools.go"
+      ]
+    },
+    {
       "id": "pipeline_node_wfapi",
       "path_pattern": "/job/{segments}/{n}/execution/node/{id}/wfapi/{describe|log}",
       "path_prefixes": [
@@ -269,6 +327,25 @@
       "source_files": [
         "internal/jenkins/pipeline.go",
         "internal/jenkins/stagelog.go"
+      ]
+    },
+    {
+      "id": "pipeline_replay",
+      "path_pattern": "/job/{segments}/{n}/replay/rebuild",
+      "path_prefixes": [
+        "/replay"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "class": "mutation",
+      "tools": [
+        "jenkins_replay_pipeline"
+      ],
+      "auth_scheme_notes": "Crumb + RO; MUT-012 same-definition only; no script-edit default.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/client_mutations.go"
       ]
     },
     {
@@ -423,13 +500,53 @@
       ],
       "class": "mutation",
       "tools": [
-        "jenkins_stop_build"
+        "jenkins_stop_build",
+        "jenkins_interrupt_build"
       ],
-      "auth_scheme_notes": "Crumb + RO gate; classifier also matches /kill /term.",
+      "auth_scheme_notes": "Crumb + RO gate; MUT-003/MUT-010 mode=stop; no POST auto-retry.",
       "fixture_covered": true,
       "source_files": [
         "internal/jenkins/client_mutations.go",
         "internal/jenkins/requestclass.go"
+      ]
+    },
+    {
+      "id": "submit_description",
+      "path_pattern": "/job/{segments}/{n}/submitDescription",
+      "path_prefixes": [
+        "/submitdescription"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "class": "mutation",
+      "tools": [
+        "jenkins_set_build_description"
+      ],
+      "auth_scheme_notes": "Crumb + RO; MUT-014 length-capped; no POST auto-retry.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/client_mutations.go"
+      ]
+    },
+    {
+      "id": "term_build",
+      "path_pattern": "/job/{segments}/{n}/term",
+      "path_prefixes": [
+        "/term"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "class": "mutation",
+      "tools": [
+        "jenkins_interrupt_build"
+      ],
+      "auth_scheme_notes": "Crumb + RO; MUT-010 mode=term; preview/confirm; no POST auto-retry.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/client_mutations.go",
+        "internal/tools/mutation_power_tools.go"
       ]
     },
     {
@@ -452,6 +569,25 @@
       "source_files": [
         "internal/jenkins/testreport.go",
         "internal/jenkins/testanalyze.go"
+      ]
+    },
+    {
+      "id": "toggle_keep_forever",
+      "path_pattern": "/job/{segments}/{n}/toggleLogKeepForever",
+      "path_prefixes": [
+        "/togglelogkeepforever"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "class": "mutation",
+      "tools": [
+        "jenkins_set_build_keep_forever"
+      ],
+      "auth_scheme_notes": "Crumb + RO; MUT-014; no POST auto-retry.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/client_mutations.go"
       ]
     },
     {

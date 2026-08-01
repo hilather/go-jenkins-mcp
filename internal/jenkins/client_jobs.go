@@ -24,6 +24,64 @@ func BuildJobPath(jobName string) string {
 	return b.String()
 }
 
+// FullNameFromJobURL derives a Jenkins job full name from a job or queue-task URL.
+// Examples:
+//
+//	http://jenkins/job/demo/          → "demo"
+//	http://jenkins/job/folder/job/demo/ → "folder/demo"
+//	/job/a/job/b/job/c/                 → "a/b/c"
+//
+// Returns empty string when the path has no /job/ segments (ambiguous / unusable).
+// Segment values are path-unescaped. Does not include build numbers or trailing
+// actions (stop, api, etc.): only successive /job/{name} path pairs.
+func FullNameFromJobURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	// Prefer path component if absolute URL.
+	p := raw
+	if i := strings.Index(p, "://"); i >= 0 {
+		rest := p[i+3:]
+		if j := strings.Index(rest, "/"); j >= 0 {
+			p = rest[j:]
+		} else {
+			return ""
+		}
+	}
+	if k := strings.IndexAny(p, "?#"); k >= 0 {
+		p = p[:k]
+	}
+	// Normalize and walk segments.
+	parts := strings.Split(strings.Trim(p, "/"), "/")
+	var segs []string
+	for i := 0; i < len(parts); i++ {
+		if parts[i] != "job" {
+			continue
+		}
+		if i+1 >= len(parts) {
+			break
+		}
+		name := parts[i+1]
+		// Stop at build-number-looking trailing path if we already have segments
+		// and next is numeric only — but build URLs look like /job/x/1/ so after
+		// collecting job names we stop when segment is not after "job".
+		if unesc, err := url.PathUnescape(name); err == nil {
+			name = unesc
+		}
+		name = strings.TrimSpace(name)
+		if name == "" || name == "." || name == ".." {
+			continue
+		}
+		segs = append(segs, name)
+		i++ // skip name segment
+	}
+	if len(segs) == 0 {
+		return ""
+	}
+	return strings.Join(segs, "/")
+}
+
 // buildAction represents a Jenkins build action (used to extract parameters).
 type buildAction struct {
 	Class      string `json:"_class"`

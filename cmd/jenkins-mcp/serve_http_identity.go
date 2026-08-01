@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
@@ -27,6 +28,19 @@ const (
 	// EnvHTTPJWTRequired, when truthy with full JWKS config, forces RequireSubject
 	// (non-health requests need a verified JWT subject; transport secret alone fails).
 	EnvHTTPJWTRequired = "JENKINS_MCP_HTTP_JWT_REQUIRED"
+	// EnvHTTPJWKSRefreshTTL is the JWKS refresh interval (Go duration). Empty/zero →
+	// auth.DefaultJWKSRefreshTTL (5m); min 30s max 1h (fail closed via ParseJWKSRefreshTTL).
+	// Alias of auth.EnvHTTPJWKSRefreshTTL for cmd package discoverability.
+	EnvHTTPJWKSRefreshTTL = auth.EnvHTTPJWKSRefreshTTL
+	// EnvHTTPJWKSMaxStale is max age of last good JWKS after a failed refresh.
+	// Empty/zero → unlimited stale-if-error (default residual). When set: min 1m,
+	// max 24h (fail closed via ParseJWKSMaxStaleAge). Snapshot age (memory or file).
+	// Alias of auth.EnvHTTPJWKSMaxStale for cmd package discoverability.
+	EnvHTTPJWKSMaxStale = auth.EnvHTTPJWKSMaxStale
+	// EnvHTTPJWKSCachePath is the optional same-host multi-process JWKS snapshot
+	// file (public keys only). Empty → memory-only. HOST-001/HOST-008 lite.
+	// Alias of auth.EnvHTTPJWKSCachePath.
+	EnvHTTPJWKSCachePath = auth.EnvHTTPJWKSCachePath
 )
 
 // resolveHTTPRequireSubject combines --http-require-subject, --gateway (caller
@@ -140,9 +154,81 @@ func envHTTPJWTConfigured() bool {
 		envHTTPBoolTruthy(EnvHTTPJWTRequired)
 }
 
-// fetchHTTPJWKS loads JWKS from cfg.JWKSURL at serve start (fail closed).
-// client nil → DefaultClient with DefaultJWKSTimeout. Does not cache beyond
-// process lifetime; mid-session JWKS rebind / rotation under load is residual.
+// parseHTTPJWKSRefreshTTL loads EnvHTTPJWKSRefreshTTL via auth.ParseJWKSRefreshTTL.
+// getenv nil uses os.Getenv. Empty → DefaultJWKSRefreshTTL.
+func parseHTTPJWKSRefreshTTL(getenv func(string) string) (time.Duration, error) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	return auth.ParseJWKSRefreshTTL(getenv(EnvHTTPJWKSRefreshTTL))
+}
+
+// parseHTTPJWKSMaxStale loads EnvHTTPJWKSMaxStale via auth.ParseJWKSMaxStaleAge.
+// getenv nil uses os.Getenv. Empty/zero → 0 (unlimited stale-if-error residual).
+// Invalid / out-of-bounds values fail closed at serve start.
+func parseHTTPJWKSMaxStale(getenv func(string) string) (time.Duration, error) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	return auth.ParseJWKSMaxStaleAge(getenv(EnvHTTPJWKSMaxStale))
+}
+
+// formatJWKSMaxStaleLog is a secret-free log helper (duration or "unlimited").
+func formatJWKSMaxStaleLog(d time.Duration) string {
+	if d <= 0 {
+		return "unlimited"
+	}
+	return d.String()
+}
+
+// newHTTPJWKSSource builds a refreshable JWKS source for HTTP JWT subject validation.
+// Initial fetch is fail-closed (unless optional same-host file snapshot is fresh
+// enough). Refresh on TTL (default 5m) with stale-if-error.
+// client nil → DefaultClient with DefaultJWKSTimeout. refreshTTL 0 → default.
+// maxStaleAge 0 → unlimited stale-if-error; non-zero fails closed after last good
+// snapshot age exceeds the bound. cachePath empty → memory-only; when set, public
+// keys only under flock + 0600 (HOST-001/HOST-008 lite). Unconfigured jwtEnv →
+// nil source (no error). Invalid cachePath fails closed.
+//
+// Residual (HOST-001 honesty): multi-pod external JWKS HA and live Entra JWKS
+// under load are not claimed. Optional file is same-host multi-process lite only.
+// Mid-session *subject* rebind remains mcpserver fingerprint (separate).
+func newHTTPJWKSSource(
+	ctx context.Context,
+	client *http.Client,
+	cfg httpJWTEnv,
+	refreshTTL time.Duration,
+	maxStaleAge time.Duration,
+	cachePath string,
+) (*auth.RefreshingJWKS, error) {
+	if !cfg.Configured() {
+		return nil, nil
+	}
+	if client == nil {
+		client = &http.Client{Timeout: auth.DefaultJWKSTimeout}
+	}
+	if refreshTTL <= 0 {
+		refreshTTL = auth.DefaultJWKSRefreshTTL
+	}
+	src, err := auth.NewRefreshingJWKS(ctx, auth.RefreshingJWKSConfig{
+		Client:      client,
+		URI:         cfg.JWKSURL,
+		TTL:         refreshTTL,
+		MaxStaleAge: maxStaleAge,
+		CachePath:   cachePath,
+		// Logf nil → log.Printf inside auth (non-secret refresh errors only).
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Optional background refresh so kids rotate even without traffic.
+	// Stopped when serveCtx is cancelled (StartBackground respects parent).
+	src.StartBackground(ctx)
+	return src, nil
+}
+
+// fetchHTTPJWKS loads JWKS once (legacy helper for tests). Prefer newHTTPJWKSSource
+// for serve wiring. Initial fetch fail-closed; no continuous refresh.
 func fetchHTTPJWKS(ctx context.Context, client *http.Client, cfg httpJWTEnv) (*auth.JWKS, error) {
 	if !cfg.Configured() {
 		return nil, nil
@@ -164,26 +250,39 @@ func fetchHTTPJWKS(ctx context.Context, client *http.Client, cfg httpJWTEnv) (*a
 //  2. Maps sub (+ tenant when present) to RequestIdentity SourceJWT Verified=true
 //  3. Falls back to lab headers only when labEnabled (JENKINS_MCP_LAB_IDENTITY)
 //
-// When neither JWKS nor lab is enabled, returns nil (protectHandler ignores
+// jwksSource is consulted on every validation (Get) so rotated JWKS kids work
+// after refresh (HOST-001 continuous JWKS foundation). StaticJWKS is fine for tests.
+//
+// When neither JWKS source nor lab is enabled, returns nil (protectHandler ignores
 // identity headers; transport secret alone is never a subject).
 //
-// Fail closed: invalid JWT → error (→ 401). Never logs tokens.
-// Residual: mid-session subject rebind / session fingerprint (HOST-001 AC).
+// Fail closed: invalid JWT / JWKS Get error → error (→ 401). Never logs tokens.
+// Mid-session subject rebind is enforced in mcpserver.protectHandler via
+// Mcp-Session-Id + IdentityFingerprint (HOST-001).
 func newHTTPIdentityResolver(
 	labEnabled bool,
 	sharedSecret string,
-	jwks *auth.JWKS,
+	jwksSource auth.JWKSSource,
 	tokenParams auth.AccessTokenParams,
 ) mcpserver.IdentityResolver {
-	hasJWKS := jwks != nil && len(jwks.Keys) > 0
-	if !hasJWKS && !labEnabled {
+	if jwksSource == nil && !labEnabled {
 		return nil
 	}
-	var j *auth.JWKS
-	if hasJWKS {
-		j = jwks
-	}
 	return func(r *http.Request) (mcpserver.RequestIdentity, error) {
+		var j *auth.JWKS
+		if jwksSource != nil {
+			ctx := context.Background()
+			if r != nil && r.Context() != nil {
+				ctx = r.Context()
+			}
+			set, err := jwksSource.Get(ctx)
+			if err != nil {
+				// Fail closed on JWKS source failure when JWT path is configured.
+				// auth scrub: no tokens in error; RefreshingJWKS logs are non-secret.
+				return mcpserver.RequestIdentity{}, err
+			}
+			j = set
+		}
 		in, err := gateway.ResolveHTTPInbound(r, sharedSecret, labEnabled, j, tokenParams)
 		if err != nil {
 			// auth/gateway scrub raw tokens from errors.
@@ -199,11 +298,16 @@ func newHTTPIdentityResolver(
 		case "lab_header":
 			src = mcpserver.IdentitySourceLabHeader
 		}
+		var groups []string
+		if len(in.Groups) > 0 {
+			groups = append([]string(nil), in.Groups...)
+		}
 		return mcpserver.RequestIdentity{
 			ExternalSubject:  in.ExternalSubject,
 			Tenant:           in.Tenant,
 			WorkloadID:       in.WorkloadID,
 			JenkinsPrincipal: in.JenkinsPrincipal,
+			Groups:           groups,
 			Source:           src,
 			Verified:         in.Verified,
 		}, nil

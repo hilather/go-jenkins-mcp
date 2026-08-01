@@ -19,13 +19,22 @@ import (
 	"github.com/simonfxr/go-jenkins-mcp/internal/tools"
 )
 
-// mutFixture is a minimal Jenkins HTTP surface for MUT-002/003 tool tests.
+// mutFixture is a minimal Jenkins HTTP surface for MUT-002/003 and power-user tool tests.
 type mutFixture struct {
-	srv         *httptest.Server
-	startCalls  atomic.Int32
-	stopCalls   atomic.Int32
-	cancelCalls atomic.Int32
-	building    atomic.Bool
+	srv          *httptest.Server
+	startCalls   atomic.Int32
+	stopCalls    atomic.Int32
+	termCalls    atomic.Int32
+	killCalls    atomic.Int32
+	cancelCalls  atomic.Int32
+	enableCalls  atomic.Int32
+	disableCalls atomic.Int32
+	keepCalls    atomic.Int32
+	descCalls    atomic.Int32
+	replayCalls  atomic.Int32
+	building     atomic.Bool
+	keepLog      atomic.Bool
+	buildable    atomic.Bool
 	// queueMode: "waiting" (cancellable), "missing" (404), "cancelled", "assigned" (has executable).
 	queueMode atomic.Value // string
 	// jobPropertyJSON overrides property[] on job api/json (MUT-002 definitions).
@@ -33,13 +42,22 @@ type mutFixture struct {
 	jobPropertyJSON atomic.Value // string; "none" ⇒ empty property
 	// lastStartForm records the last buildWithParameters form body for preview==execute checks.
 	lastStartForm atomic.Value // string
+	lastDescForm  atomic.Value // string
+	// queueItemsJSON overrides /queue/api/json body when non-empty (folder isolation tests).
+	queueItemsJSON atomic.Value // string
+	// cancelledQueueIDs records cancelItem id= query values for regression asserts.
+	cancelledQueueIDs atomic.Value // []int under mutex-free append via Store of copy
 }
 
 func newMutFixture() *mutFixture {
 	f := &mutFixture{}
 	f.building.Store(true)
+	f.keepLog.Store(false)
+	f.buildable.Store(true)
 	f.queueMode.Store("waiting")
 	f.jobPropertyJSON.Store("")
+	f.queueItemsJSON.Store("")
+	f.cancelledQueueIDs.Store([]int(nil))
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -53,9 +71,81 @@ func newMutFixture() *mutFixture {
 		case strings.HasSuffix(path, "/stop"):
 			f.stopCalls.Add(1)
 			w.WriteHeader(http.StatusFound)
+		case strings.HasSuffix(path, "/term"):
+			f.termCalls.Add(1)
+			w.WriteHeader(http.StatusFound)
+		case strings.HasSuffix(path, "/kill"):
+			f.killCalls.Add(1)
+			w.WriteHeader(http.StatusFound)
+		case strings.HasSuffix(path, "/enable"):
+			f.enableCalls.Add(1)
+			f.buildable.Store(true)
+			w.WriteHeader(http.StatusFound)
+		case strings.HasSuffix(path, "/disable"):
+			f.disableCalls.Add(1)
+			f.buildable.Store(false)
+			w.WriteHeader(http.StatusFound)
+		case strings.Contains(path, "/toggleLogKeepForever"):
+			f.keepCalls.Add(1)
+			f.keepLog.Store(!f.keepLog.Load())
+			w.WriteHeader(http.StatusFound)
+		case strings.Contains(path, "/submitDescription"):
+			f.descCalls.Add(1)
+			_ = r.ParseForm()
+			f.lastDescForm.Store(r.Form.Encode())
+			w.WriteHeader(http.StatusFound)
+		case strings.Contains(path, "/replay"):
+			f.replayCalls.Add(1)
+			w.WriteHeader(http.StatusFound)
 		case path == "/queue/cancelItem" || strings.HasPrefix(path, "/queue/cancelItem"):
 			f.cancelCalls.Add(1)
+			if idStr := r.URL.Query().Get("id"); idStr != "" {
+				if n, err := atoiSafe(idStr); err == nil {
+					prev, _ := f.cancelledQueueIDs.Load().([]int)
+					next := append(append([]int(nil), prev...), n)
+					f.cancelledQueueIDs.Store(next)
+				}
+			}
 			w.WriteHeader(http.StatusFound)
+		case path == "/queue/api/json":
+			// Default: single top-level demo. Power-user folder isolation tests
+			// override via queueItemsJSON when set.
+			if raw, _ := f.queueItemsJSON.Load().(string); raw != "" {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(raw))
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []any{
+					map[string]any{
+						"id": 11,
+						"task": map[string]any{
+							"name":     "demo",
+							"fullName": "demo",
+							"url":      f.srv.URL + "/job/demo/",
+						},
+						"why":          "waiting",
+						"inQueueSince": 1,
+						"stuck":        true,
+						"buildable":    true,
+						"params":       "",
+					},
+					map[string]any{
+						"id": 12,
+						"task": map[string]any{
+							"name":     "demo",
+							"fullName": "demo",
+							"url":      f.srv.URL + "/job/demo/",
+						},
+						"why":          "waiting",
+						"inQueueSince": 1,
+						"stuck":        false,
+						"buildable":    true,
+						"params":       "",
+					},
+				},
+			})
+			return
 		case strings.HasPrefix(path, "/queue/item/") && strings.HasSuffix(path, "/api/json"):
 			// /queue/item/<id>/api/json
 			qid := 42
@@ -150,6 +240,15 @@ func newMutFixture() *mutFixture {
 					"url":      f.srv.URL + "/job/demo/" + parts[len(parts)-3] + "/",
 					"building": building,
 					"result":   result,
+					"keepLog":  f.keepLog.Load(),
+					"actions": []any{
+						map[string]any{
+							"_class": "hudson.model.ParametersAction",
+							"parameters": []any{
+								map[string]any{"name": "BRANCH", "value": "main"},
+							},
+						},
+					},
 				})
 				return
 			}
@@ -158,7 +257,7 @@ func newMutFixture() *mutFixture {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"name":      "demo",
 				"url":       f.srv.URL + "/job/demo/",
-				"buildable": true,
+				"buildable": f.buildable.Load(),
 				"property":  prop,
 			})
 		case path == "/crumbIssuer/api/json":

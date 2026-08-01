@@ -32,10 +32,24 @@ function StringList({ items }: { items?: string[] }) {
   );
 }
 
+/** Parse optional positive int draft field; empty string → omit field. */
+function parseOptionalPositiveInt(text: string): number | undefined {
+  const trim = text.trim();
+  if (trim === "") {
+    return undefined;
+  }
+  const n = Number(trim);
+  if (Number.isFinite(n) && n > 0) {
+    return Math.floor(n);
+  }
+  return undefined;
+}
+
 function emptyDraft(): PolicyOverlay {
   return {
     version: 1,
     force_read_only: true,
+    fleet_telemetry_force_off: false,
     mode: "pilot",
     deny_tools: [],
     deny_job_prefixes: [],
@@ -53,6 +67,7 @@ function overlayFromSource(src?: PolicyOverlay | null): PolicyOverlay {
   return {
     version: src.version || 1,
     force_read_only: Boolean(src.force_read_only),
+    fleet_telemetry_force_off: Boolean(src.fleet_telemetry_force_off),
     mode: src.mode || "pilot",
     deny_tools: [...(src.deny_tools ?? [])],
     deny_job_prefixes: [...(src.deny_job_prefixes ?? [])],
@@ -61,7 +76,13 @@ function overlayFromSource(src?: PolicyOverlay | null): PolicyOverlay {
     deny_artifact_paths: [...(src.deny_artifact_paths ?? [])],
     deny_branch_names: [...(src.deny_branch_names ?? [])],
     max_result_bytes: src.max_result_bytes,
+    max_tools_per_minute: src.max_tools_per_minute,
+    max_tools_burst: src.max_tools_burst,
   };
+}
+
+function formatOptionalNumber(n?: number | null): string {
+  return n != null ? String(n) : "";
 }
 
 export function PolicyPage() {
@@ -97,6 +118,8 @@ export function PolicyPage() {
     branches: "",
   });
   const [maxBytesText, setMaxBytesText] = useState("");
+  const [maxToolsPerMinText, setMaxToolsPerMinText] = useState("");
+  const [maxToolsBurstText, setMaxToolsBurstText] = useState("");
   const [seeded, setSeeded] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<PolicyFieldError[]>([]);
   const [preview, setPreview] = useState<PolicyValidateResponse | null>(null);
@@ -120,15 +143,16 @@ export function PolicyPage() {
         artifacts: formatDenyListText(next.deny_artifact_paths),
         branches: formatDenyListText(next.deny_branch_names),
       });
-      setMaxBytesText(
-        next.max_result_bytes != null ? String(next.max_result_bytes) : "",
-      );
+      setMaxBytesText(formatOptionalNumber(next.max_result_bytes));
+      setMaxToolsPerMinText(formatOptionalNumber(next.max_tools_per_minute));
+      setMaxToolsBurstText(formatOptionalNumber(next.max_tools_burst));
     } else if (effectiveQ.isSuccess) {
       // Fallback seed from effective (still pilot fields only).
       const e = effectiveQ.data;
       const next: PolicyOverlay = {
         version: 1,
         force_read_only: e.force_read_only,
+        fleet_telemetry_force_off: Boolean(e.fleet_telemetry_force_off),
         mode: e.mode || "pilot",
         deny_tools: [...(e.deny_tools ?? [])],
         deny_job_prefixes: [...(e.deny_job_prefixes ?? [])],
@@ -137,6 +161,8 @@ export function PolicyPage() {
         deny_artifact_paths: [...(e.deny_artifact_paths ?? [])],
         deny_branch_names: [...(e.deny_branch_names ?? [])],
         max_result_bytes: e.max_result_bytes,
+        max_tools_per_minute: e.max_tools_per_minute,
+        max_tools_burst: e.max_tools_burst,
       };
       setDraft(next);
       setDenyText({
@@ -147,25 +173,18 @@ export function PolicyPage() {
         artifacts: formatDenyListText(next.deny_artifact_paths),
         branches: formatDenyListText(next.deny_branch_names),
       });
-      setMaxBytesText(
-        next.max_result_bytes != null ? String(next.max_result_bytes) : "",
-      );
+      setMaxBytesText(formatOptionalNumber(next.max_result_bytes));
+      setMaxToolsPerMinText(formatOptionalNumber(next.max_tools_per_minute));
+      setMaxToolsBurstText(formatOptionalNumber(next.max_tools_burst));
     }
     setSeeded(true);
   }, [overlayQ.isSuccess, overlayQ.data, effectiveQ.isSuccess, effectiveQ.data, seeded]);
 
   const builtOverlay = useMemo((): PolicyOverlay => {
-    const maxTrim = maxBytesText.trim();
-    let max_result_bytes: number | undefined;
-    if (maxTrim !== "") {
-      const n = Number(maxTrim);
-      if (Number.isFinite(n) && n > 0) {
-        max_result_bytes = Math.floor(n);
-      }
-    }
     return {
       version: 1,
       force_read_only: draft.force_read_only,
+      fleet_telemetry_force_off: Boolean(draft.fleet_telemetry_force_off),
       mode: draft.mode || "pilot",
       deny_tools: parseDenyListText(denyText.tools),
       deny_job_prefixes: parseDenyListText(denyText.jobs),
@@ -173,9 +192,19 @@ export function PolicyPage() {
       deny_view_names: parseDenyListText(denyText.views),
       deny_artifact_paths: parseDenyListText(denyText.artifacts),
       deny_branch_names: parseDenyListText(denyText.branches),
-      max_result_bytes,
+      max_result_bytes: parseOptionalPositiveInt(maxBytesText),
+      max_tools_per_minute: parseOptionalPositiveInt(maxToolsPerMinText),
+      max_tools_burst: parseOptionalPositiveInt(maxToolsBurstText),
     };
-  }, [draft.force_read_only, draft.mode, denyText, maxBytesText]);
+  }, [
+    draft.force_read_only,
+    draft.fleet_telemetry_force_off,
+    draft.mode,
+    denyText,
+    maxBytesText,
+    maxToolsPerMinText,
+    maxToolsBurstText,
+  ]);
 
   const validateMut = useMutation({
     mutationFn: () => validatePolicyOverlay(builtOverlay, profileId),
@@ -249,12 +278,26 @@ export function PolicyPage() {
               <dd>{effectiveQ.data.signature_state}</dd>
               <dt>force_read_only</dt>
               <dd>{String(effectiveQ.data.force_read_only)}</dd>
+              <dt>fleet_telemetry_force_off</dt>
+              <dd>{String(Boolean(effectiveQ.data.fleet_telemetry_force_off))}</dd>
               <dt>mode</dt>
               <dd>{effectiveQ.data.mode || "—"}</dd>
               <dt>max_result_bytes</dt>
               <dd>
                 {effectiveQ.data.max_result_bytes != null
                   ? String(effectiveQ.data.max_result_bytes)
+                  : "—"}
+              </dd>
+              <dt>max_tools_per_minute</dt>
+              <dd>
+                {effectiveQ.data.max_tools_per_minute != null
+                  ? String(effectiveQ.data.max_tools_per_minute)
+                  : "—"}
+              </dd>
+              <dt>max_tools_burst</dt>
+              <dd>
+                {effectiveQ.data.max_tools_burst != null
+                  ? String(effectiveQ.data.max_tools_burst)
                   : "—"}
               </dd>
               <dt>bundle_seq</dt>
@@ -333,6 +376,17 @@ export function PolicyPage() {
           </div>
         )}
 
+        <div className="banner warn" role="note" style={{ marginBottom: "0.75rem" }}>
+          <strong>Subject rate residual (HOST-006 / HOST-008):</strong>{" "}
+          <code>max_tools_per_minute</code> / <code>max_tools_burst</code>{" "}
+          overlay knobs <strong>lower only</strong> under a live gateway serve
+          via <code>SubjectRateLimiter.LowerRate</code> (never raise above the
+          env bootstrap ceiling). Raising the bootstrap needs a serve restart
+          with higher <code>JENKINS_MCP_SUBJECT_RATE_*</code>. Rate is
+          process-local; multi-replica shared rate remains residual
+          (HOST-008). Empty draft fields omit the overlay keys (no change).
+        </div>
+
         <div className="form-grid">
           <label className="form-field">
             <span>force_read_only</span>
@@ -345,6 +399,29 @@ export function PolicyPage() {
               }
             />
             {errorsByField.get("force_read_only")?.map((m, i) => (
+              <span key={i} className="field-error">
+                {m}
+              </span>
+            ))}
+          </label>
+
+          <label className="form-field">
+            <span>fleet_telemetry_force_off</span>
+            <input
+              type="checkbox"
+              checked={Boolean(draft.fleet_telemetry_force_off)}
+              disabled={!canWrite}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  fleet_telemetry_force_off: e.target.checked,
+                }))
+              }
+            />
+            <span className="muted" style={{ fontSize: "0.85em" }}>
+              MGR-002: when true, env cannot re-enable fleet telemetry (lower-only pin)
+            </span>
+            {errorsByField.get("fleet_telemetry_force_off")?.map((m, i) => (
               <span key={i} className="field-error">
                 {m}
               </span>
@@ -381,6 +458,40 @@ export function PolicyPage() {
               onChange={(e) => setMaxBytesText(e.target.value)}
             />
             {errorsByField.get("max_result_bytes")?.map((m, i) => (
+              <span key={i} className="field-error">
+                {m}
+              </span>
+            ))}
+          </label>
+
+          <label className="form-field">
+            <span>max_tools_per_minute</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={maxToolsPerMinText}
+              disabled={!canWrite}
+              placeholder="optional positive int (lower only)"
+              onChange={(e) => setMaxToolsPerMinText(e.target.value)}
+            />
+            {errorsByField.get("max_tools_per_minute")?.map((m, i) => (
+              <span key={i} className="field-error">
+                {m}
+              </span>
+            ))}
+          </label>
+
+          <label className="form-field">
+            <span>max_tools_burst</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={maxToolsBurstText}
+              disabled={!canWrite}
+              placeholder="optional positive int (lower only)"
+              onChange={(e) => setMaxToolsBurstText(e.target.value)}
+            />
+            {errorsByField.get("max_tools_burst")?.map((m, i) => (
               <span key={i} className="field-error">
                 {m}
               </span>

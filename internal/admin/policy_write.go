@@ -200,9 +200,10 @@ func (s *server) handlePolicyApply(w http.ResponseWriter, r *http.Request) {
 	ex := explainDraft(profileID, draft, paths, outPath)
 	s.emitPolicyAudit(r.Context(), profileID, "policy_apply", audit.DecisionSuccess,
 		"applied", map[string]string{
-			"path_base":        filepath.Base(outPath),
-			"force_read_only":  fmt.Sprintf("%v", draft.ForceReadOnly),
-			"deny_tools_count": fmt.Sprintf("%d", len(draft.DenyTools)),
+			"path_base":                 filepath.Base(outPath),
+			"force_read_only":           fmt.Sprintf("%v", draft.ForceReadOnly),
+			"fleet_telemetry_force_off": fmt.Sprintf("%v", draft.FleetTelemetryForceOff),
+			"deny_tools_count":          fmt.Sprintf("%d", len(draft.DenyTools)),
 		})
 	writeJSON(w, http.StatusOK, PolicyApplyResponse{
 		Applied:   true,
@@ -313,11 +314,16 @@ func (s *server) validateDraftOverlay(paths config.Paths, draft *policy.Overlay,
 //
 // v1 rules (documented residual for multi-source merge complexity):
 //   - When current effective force_read_only is true, draft must keep force_read_only=true.
+//   - When current fleet_telemetry_force_off is true, draft must keep it true
+//     (MGR-002; admin cannot re-enable fleet telemetry against enterprise pin).
 //   - When a current overlay exists, each deny list on the draft must be a set
 //     superset of the corresponding current list (entries may only grow).
 //   - When current mode is strict, draft must remain strict (pilot would widen).
 //   - When current max_result_bytes is set, draft may only lower or keep the cap
 //     (nil draft cap would remove the enterprise-style bound — reject).
+//   - When current max_tools_per_minute / max_tools_burst is set, draft may only
+//     lower or keep (HOST-006; LowerRate never raises live rate; write path must
+//     not widen the overlay-enforced cap either).
 func checkMonotonicRestrict(current *policy.Overlay, draft *policy.Overlay, currentForceEffective bool) []PolicyFieldError {
 	var errs []PolicyFieldError
 	if draft == nil {
@@ -338,6 +344,15 @@ func checkMonotonicRestrict(current *policy.Overlay, draft *policy.Overlay, curr
 
 	if current == nil {
 		return errs
+	}
+
+	// MGR-002: fleet_telemetry_force_off is lower-only (true pin cannot be cleared
+	// via admin pilot apply — same fail-closed posture as force_read_only).
+	if current.FleetTelemetryForceOff && !draft.FleetTelemetryForceOff {
+		errs = append(errs, PolicyFieldError{
+			Field:   "fleet_telemetry_force_off",
+			Message: "cannot set fleet_telemetry_force_off=false when current overlay forces fleet telemetry off (admin cannot re-enable against enterprise pin)",
+		})
 	}
 
 	if current.NormalizeMode() == policy.ModeStrict && draft.NormalizeMode() != policy.ModeStrict {
@@ -366,6 +381,33 @@ func checkMonotonicRestrict(current *policy.Overlay, draft *policy.Overlay, curr
 			errs = append(errs, PolicyFieldError{
 				Field:   "max_result_bytes",
 				Message: fmt.Sprintf("cannot raise max_result_bytes above current cap %d", curN),
+			})
+		}
+	}
+	// max_tools_per_minute / max_tools_burst: same monotonic lower-or-keep.
+	if curN, ok := current.EffectiveMaxToolsPerMinute(); ok {
+		if draft.MaxToolsPerMinute == nil {
+			errs = append(errs, PolicyFieldError{
+				Field:   "max_tools_per_minute",
+				Message: "cannot clear max_tools_per_minute when current overlay enforces a cap",
+			})
+		} else if *draft.MaxToolsPerMinute > curN {
+			errs = append(errs, PolicyFieldError{
+				Field:   "max_tools_per_minute",
+				Message: fmt.Sprintf("cannot raise max_tools_per_minute above current cap %d", curN),
+			})
+		}
+	}
+	if curN, ok := current.EffectiveMaxToolsBurst(); ok {
+		if draft.MaxToolsBurst == nil {
+			errs = append(errs, PolicyFieldError{
+				Field:   "max_tools_burst",
+				Message: "cannot clear max_tools_burst when current overlay enforces a cap",
+			})
+		} else if *draft.MaxToolsBurst > curN {
+			errs = append(errs, PolicyFieldError{
+				Field:   "max_tools_burst",
+				Message: fmt.Sprintf("cannot raise max_tools_burst above current cap %d", curN),
 			})
 		}
 	}
@@ -644,6 +686,8 @@ func fieldErrorsFromValidate(err error) []PolicyFieldError {
 	field := "overlay"
 	lower := strings.ToLower(msg)
 	switch {
+	case strings.Contains(lower, "fleet_telemetry_force_off"):
+		field = "fleet_telemetry_force_off"
 	case strings.Contains(lower, "force_read_only"):
 		field = "force_read_only"
 	case strings.Contains(lower, "deny_tools"):
@@ -660,6 +704,10 @@ func fieldErrorsFromValidate(err error) []PolicyFieldError {
 		field = "deny_branch_names"
 	case strings.Contains(lower, "max_result_bytes"):
 		field = "max_result_bytes"
+	case strings.Contains(lower, "max_tools_per_minute"):
+		field = "max_tools_per_minute"
+	case strings.Contains(lower, "max_tools_burst"):
+		field = "max_tools_burst"
 	case strings.Contains(lower, "mode"):
 		field = "mode"
 	case strings.Contains(lower, "version"):

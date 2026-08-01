@@ -2155,7 +2155,13 @@
         "Local and gateway auth providers remain independent and testable."
       ],
       "acceptance_criteria_count": 9,
-      "evidence_tests": [],
+      "evidence_tests": [
+        "TestOAUTH010_ModeC_OfflinePrototypeMatrix",
+        "qualify/oauth010_mode_c_offline_matrix",
+        "qualify/mode_c_agentcore_live_matrix",
+        "TestRunDoctor_ModeC_GatewayStatusResidual"
+      ],
+      "status_note": "Partial/offline prototype matrix Done*; live Entra 3LO/OBO + AgentCore pin residual — do not claim live Entra Done",
       "source_line": 1344,
       "dependency_depth": 13,
       "dependents": [
@@ -3568,7 +3574,11 @@
         "Runbook covers consent/provider/vault/JWKS/Entra/Jenkins incidents and user reauthorization."
       ],
       "acceptance_criteria_count": 6,
-      "evidence_tests": [],
+      "evidence_tests": [
+        "go test ./internal/gateway/ ./internal/gateway/qualify/ -count=1",
+        "jenkins-mcp gateway qualify --offline"
+      ],
+      "status_note": "Partial Done* offline modes A/B/C + HOST-011 fallthrough in qualify; live Entra/AgentCore/jwt-auth-filter residual. docs/gateway/qualification.md",
       "source_line": 2396,
       "dependency_depth": 16,
       "dependents": [
@@ -4603,16 +4613,21 @@
       "dependency_text": "GWY-002, MCP-001",
       "parallel_safe": null,
       "objective": "Authenticated individual subjects on MCP HTTP in gateway mode.",
-      "implementation": "Per-user authn on Streamable HTTP; shared secret not multi-user identity; bind to policy.Subject.",
+      "implementation": "Per-user authn on Streamable HTTP; shared secret not multi-user identity; bind to policy.Subject. Mid-session IdentityFingerprint (subject+groups) fail-closed offline expand; live Entra residual.",
       "acceptance_criteria": [
         "Non-local bind requires authenticated subject.",
         "Shared-secret alone is not multi-user identity.",
         "Session binds to policy.Subject; subject change fails closed.",
+        "Mid-session rebind residual offline expand: PathPrefix, multi-user, lab JWT Alice/Bob, group claim change, order-stable groups, health exempt, secret-free 401.",
         "Tokens never in logs/errors/metrics/support bundles.",
         "Gateway mode cannot enable anonymous multi-user."
       ],
-      "acceptance_criteria_count": 5,
-      "evidence_tests": [],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [
+        "internal/mcpserver/http_host001_rebind_expand_test.go",
+        "TestMultiUserHTTP_PathPrefix_MidSessionSubjectSwap_401Canary",
+        "TestHTTPHandler_LabJWT_MidSessionAliceBobSwapAndGroups"
+      ],
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": [
@@ -4635,7 +4650,7 @@
       "dependency_text": "HOST-001",
       "parallel_safe": null,
       "objective": "Safe reverse-proxy and non-loopback placement for gateway HTTP.",
-      "implementation": "Document TLS/path-prefix/Host/Origin matrix; fail closed empty allow lists.",
+      "implementation": "Document TLS/path-prefix/Host/Origin matrix; fail closed empty allow lists; offline Host/Origin fixtures residual lite; live edge residual.",
       "acceptance_criteria": [
         "Documented deployment shapes without CORS wildcard.",
         "Empty AllowedHosts/Origins fail closed for non-local.",
@@ -4643,7 +4658,11 @@
         "Health does not leak secrets without auth."
       ],
       "acceptance_criteria_count": 4,
-      "evidence_tests": [],
+      "evidence_tests": [
+        "TestHOST002_PathPrefixOriginPinFixtureMatrix",
+        "TestHOST002_StreamableHTTPOriginHostMatrix",
+        "TestHOST002_TrustedProxyTrueStillIgnoresXForwarded"
+      ],
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": []
@@ -4699,7 +4718,11 @@
         "Support-bundle/doctor secret-free."
       ],
       "acceptance_criteria_count": 4,
-      "evidence_tests": [],
+      "evidence_tests": [
+        "internal/gateway/token_cache_test.go:TestMemoryTokenCache_HOST004_TwoUserNoCrossHit",
+        "internal/jenkins/pagetoken_test.go:TestPageToken_SubjectIsolation_AliceTokenRejectedForBob"
+      ],
+      "status_note": "Foundation package APIs + offline tests done; residual list-tool serve wire + durable archive namespace",
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": [
@@ -4745,7 +4768,7 @@
       "dependency_text": "HOST-001",
       "parallel_safe": null,
       "objective": "Per-subject budgets so one user cannot exhaust process for others.",
-      "implementation": "Per-subject concurrent caps under process absolute ceilings.",
+      "implementation": "SubjectLimiter + SubjectRateLimiter (token-bucket); serve Allow then Hold; overlay LowerRate; optional same-host FileSubjectRateLimiter via JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH (HOST-008 lite); optional MaxSubjects rate map hygiene via JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS (HOST-008 residual lite); optional MaxSubjects concurrent map hygiene via JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS (HOST-006 residual lite; idle LRU; fail closed if all hold slots).",
       "acceptance_criteria": [
         "Per-subject concurrent tool/preview caps.",
         "Process absolute ceilings remain.",
@@ -4753,7 +4776,16 @@
         "Mutation confirms cannot replay across subjects."
       ],
       "acceptance_criteria_count": 4,
-      "evidence_tests": [],
+      "evidence_tests": [
+        "internal/gateway/subject_limits_test.go",
+        "internal/gateway/subject_limits_test.go:TestSubjectLimiter_MaxSubjectsEvictOldestIdle",
+        "internal/gateway/subject_limits_test.go:TestSubjectLimiter_MaxSubjectsFailClosedAllHolders",
+        "internal/gateway/subject_rate_test.go",
+        "internal/gateway/subject_rate_test.go:TestSubjectRateLimiter_MaxSubjectsEvictOldest",
+        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_CrossInstanceSharedBudget",
+        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_MaxSubjectsEvictOldest"
+      ],
+      "status_note": "Done* process-local rate + concurrent; Done* lite same-host FileSubjectRateLimiter; Done* lite rate MaxSubjects hygiene; Done* lite SubjectLimiter MaxSubjects hygiene; multi-pod shared rate/concurrency residual (HOST-008)",
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": []
@@ -4771,15 +4803,19 @@
       "dependency_text": "UI-003",
       "parallel_safe": null,
       "objective": "Operator admin for team gateway without multi-tenant SaaS control plane.",
-      "implementation": "Document non-loopback admin; no vault material in browser; residual multi-operator sessions.",
+      "implementation": "Document non-loopback admin; no vault material in browser; residual multi-operator sessions; residual-status BFF/SPA (GET /admin/v1/gateway/residual-status); subject-invalidate BFF/SPA residual lite (POST /admin/v1/gateway/subject-invalidate, gateway_ops); consent-purge BFF/SPA residual lite (POST /admin/v1/gateway/consent-purge, gateway_ops); clear_all requires confirm CLEAR_ALL (BFF/CLI/SPA, parity cache EVICT).",
       "acceptance_criteria": [
         "Non-loopback admin documented with token/mTLS residual.",
         "No Jenkins tokens/vault in browser responses.",
         "Multi-operator residual or designed sessions.",
         "localStorage token pilot-only.",
-        "Enabled auth modes listed secret-free."
+        "Enabled auth modes listed secret-free.",
+        "Admin residual-status surface (BFF + SPA) parity with CLI gateway residual-status.",
+        "Admin subject-invalidate residual lite (BFF + SPA) mirrors CLI; gateway_ops; multi-pod residual.",
+        "Admin consent-purge residual lite (BFF + SPA) mirrors CLI; gateway_ops; secret-free counts; multi-pod residual.",
+        "Consent clear_all confirm token residual lite: exact CLEAR_ALL (BFF/CLI/SPA); purge_expired/delete_session unchanged."
       ],
-      "acceptance_criteria_count": 5,
+      "acceptance_criteria_count": 9,
       "evidence_tests": [],
       "source_line": 0,
       "dependency_depth": 0,
@@ -4799,14 +4835,31 @@
       "dependency_text": "HOST-003, HOST-004",
       "parallel_safe": null,
       "objective": "Define multi-replica only after durable vault.",
-      "implementation": "Single-replica Tier A default; multi-replica checklist.",
+      "implementation": "Single-replica Tier A default; multi-replica checklist; file vault flock Done* lite; optional FileTokenCache Obtain cache same-host lite (JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH); optional FileSubjectRateLimiter same-host lite (JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH); optional MaxSubjects subject-map hygiene lite (JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS); sticky Service sessionAffinity Done* scaffold (residual runtime). Multi-pod external Obtain cache / shared rate / Redis still residual.",
       "acceptance_criteria": [
         "Single-replica Tier A default documented.",
-        "Multi-replica checklist (vault, affinity, audit).",
-        "Non-goal until vault exists."
+        "Multi-replica checklist (vault, affinity, audit, Obtain cache).",
+        "Shared vault path + flock multi-process lite (not multi-pod Done).",
+        "Obtain FileTokenCache same-host flock lite (not multi-pod external Done).",
+        "Shared subject rate FileSubjectRateLimiter same-host flock lite (not multi-pod Done).",
+        "Subject rate MaxSubjects map hygiene residual lite (not multi-pod Done).",
+        "Sticky session Service scaffold (ClientIP) Done* packaging only.",
+        "Non-goal until multi-pod durable vault + sticky sessions exist."
       ],
-      "acceptance_criteria_count": 3,
-      "evidence_tests": [],
+      "acceptance_criteria_count": 8,
+      "evidence_tests": [
+        "internal/gateway/file_token_cache_test.go:TestFileTokenCache_RoundTripIsolationTTL",
+        "internal/gateway/file_token_cache_test.go:TestFileTokenCache_StatusMapSecretFree",
+        "internal/gateway/file_token_cache_test.go:TestFileTokenCache_MultiInstanceConcurrentSetNoCorrupt",
+        "internal/gateway/file_token_cache_test.go:TestCredentialProviderFromEnviron_ModeC_FileTokenCache",
+        "internal/gateway/file_token_cache_test.go:TestMemoryTokenCache_StatusMapSharedFalse",
+        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_CrossInstanceSharedBudget",
+        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_FileContentsSecretFree",
+        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_StatusMapSecretFree",
+        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_MaxSubjectsEvictOldest",
+        "internal/gateway/subject_rate_test.go:TestSubjectRateLimiter_MaxSubjectsEvictOldest"
+      ],
+      "status_note": "Done* lite same-host vault flock + FileTokenCache Obtain lite + FileSubjectRateLimiter rate lite + MaxSubjects hygiene lite + sticky scaffold; multi-pod external residual (not multi-replica Done)",
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": []
@@ -4994,7 +5047,7 @@
       "dependency_text": "GWY-001",
       "parallel_safe": null,
       "objective": "Mock token/3LO peer for gateway Obtain integration without live AgentCore.",
-      "implementation": "Docker Compose opt-in lab; not default make test. See docs/roadmap/server-team-hosted.md and AGENTS.md Docker scaffolds.",
+      "implementation": "Docker Compose opt-in lab; go test -tags=live_oauth Mode C Obtain via TLS test shim; not default make test; not live Entra Done. See docs/roadmap/server-team-hosted.md and AGENTS.md Docker scaffolds.",
       "acceptance_criteria": [
         "Obtain Live against mock returns correct audience credential.",
         "Wrong audience/errors fail closed without shared SA.",
@@ -5003,7 +5056,10 @@
         "Opt-in Makefile; secret-free compose."
       ],
       "acceptance_criteria_count": 5,
-      "evidence_tests": [],
+      "evidence_tests": [
+        "internal/gateway/qualify/live_oauth_stub_test.go (//go:build live_oauth)",
+        "make live-oauth-up/smoke/test/down"
+      ],
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": []

@@ -1,12 +1,14 @@
-# GWY-004 MVP scaffold: near-source managed gateway (optional).
+# GWY-004 / HOST-005 scaffold: near-source managed gateway (optional).
 #
-# This file is illustrative packaging only:
+# Illustrative packaging only:
 #   - No real AgentCore sidecar binary is bundled
 #   - Image name is a placeholder; org supplies signed images
-#   - No secrets in this file or committed .env
+#   - No secrets in this file or committed .env (copy .env.example → .env)
+#   - Non-root (65532), read-only root, resource limits, health probes
+#   - Single replica semantics (HOST-008: multi-replica HA non-goal until durable vault)
 #
 # Platforms: Rocky Linux / Ubuntu hosts (Tier-1). Windows out of scope.
-# Docs: docs/gateway/deployment.md
+# Docs: docs/gateway/deployment.md  |  deploy/gateway/README.md
 #
 # Validate: docker compose -f deploy/gateway/docker-compose.yml config
 # Do not `up` in production until image signing + live AgentCore pin exist.
@@ -20,12 +22,16 @@ services:
     build:
       context: ../..
       dockerfile: deploy/gateway/Dockerfile
+    # Distroless nonroot UID/GID (gcr.io/distroless/static-debian12:nonroot).
     user: "65532:65532"
     read_only: true
     security_opt:
       - no-new-privileges:true
     # Optional: cap_drop ALL when your runtime supports it.
+    # cap_drop:
+    #   - ALL
     environment:
+      # Non-secret only — never inject tokens, client secrets, or JENKINS_MCP_AUTH.
       JENKINS_MCP_GATEWAY_MODE: ${JENKINS_MCP_GATEWAY_MODE:-1}
       JENKINS_MCP_READ_ONLY: ${JENKINS_MCP_READ_ONLY:-true}
       JENKINS_MCP_AGENTCORE_AS_URL: ${JENKINS_MCP_AGENTCORE_AS_URL:-}
@@ -38,6 +44,25 @@ services:
       JENKINS_MCP_GATEWAY_TENANT: ${JENKINS_MCP_GATEWAY_TENANT:-}
       JENKINS_MCP_GATEWAY_WORKLOAD: ${JENKINS_MCP_GATEWAY_WORKLOAD:-}
       JENKINS_MCP_GATEWAY_JENKINS_PRINCIPAL: ${JENKINS_MCP_GATEWAY_JENKINS_PRINCIPAL:-}
+      # HOST-011 mode matrix (mode ids only; no secrets)
+      JENKINS_MCP_GATEWAY_CREDENTIAL_MODE: ${JENKINS_MCP_GATEWAY_CREDENTIAL_MODE:-}
+      JENKINS_MCP_GATEWAY_ENABLED_MODES: ${JENKINS_MCP_GATEWAY_ENABLED_MODES:-}
+      # Multi-user Obtain opt-in + subject concurrency (foundation residual; not HA).
+      JENKINS_MCP_GATEWAY_MULTI_USER: ${JENKINS_MCP_GATEWAY_MULTI_USER:-}
+      JENKINS_MCP_SUBJECT_MAX_CONCURRENT: ${JENKINS_MCP_SUBJECT_MAX_CONCURRENT:-}
+      JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT: ${JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT:-}
+      # HOST-006 rate (process-local; empty → serve default; 0 = disabled residual).
+      JENKINS_MCP_SUBJECT_RATE_PER_MINUTE: ${JENKINS_MCP_SUBJECT_RATE_PER_MINUTE:-}
+      JENKINS_MCP_SUBJECT_RATE_BURST: ${JENKINS_MCP_SUBJECT_RATE_BURST:-}
+      # HTTP path prefix + process-local JWKS (no credentials in URL).
+      JENKINS_MCP_HTTP_PATH_PREFIX: ${JENKINS_MCP_HTTP_PATH_PREFIX:-}
+      JENKINS_MCP_HTTP_JWKS_URL: ${JENKINS_MCP_HTTP_JWKS_URL:-}
+      JENKINS_MCP_HTTP_JWT_ISSUER: ${JENKINS_MCP_HTTP_JWT_ISSUER:-}
+      JENKINS_MCP_HTTP_JWT_AUDIENCE: ${JENKINS_MCP_HTTP_JWT_AUDIENCE:-}
+      JENKINS_MCP_HTTP_JWKS_REFRESH_TTL: ${JENKINS_MCP_HTTP_JWKS_REFRESH_TTL:-}
+      JENKINS_MCP_HTTP_JWKS_MAX_STALE: ${JENKINS_MCP_HTTP_JWKS_MAX_STALE:-}
+      # Enterprise signed-policy pin (bool only; never private keys).
+      JENKINS_MCP_REQUIRE_SIGNED_POLICY: ${JENKINS_MCP_REQUIRE_SIGNED_POLICY:-}
       # XDG under container home (volume-mounted); no secrets on these volumes.
       XDG_CONFIG_HOME: /home/nonroot/.config
       XDG_DATA_HOME: /home/nonroot/.local/share
@@ -46,7 +71,8 @@ services:
     # Profile must already exist under the config volume (created offline).
     # HTTP default is loopback inside the container (matches mcpserver validator).
     # All-interfaces + mesh/mTLS is residual: requires --http-allow-non-local AND
-    # explicit --http-allowed-origin entries (never ship bare :8081 alone).
+    # explicit --http-allowed-host + --http-allowed-origin (never CORS wildcard;
+    # never ship bare :8081 alone). See docs/gateway/deployment.md HOST-002.
     command:
       - serve
       - --profile
@@ -66,7 +92,7 @@ services:
     tmpfs:
       - /tmp:size=64M,mode=1777
     restart: "no"
-    # Resource bounds (tune per site).
+    # HOST-005 pilot resource envelope (tune per site; not a production SLO).
     deploy:
       resources:
         limits:
@@ -75,6 +101,22 @@ services:
         reservations:
           cpus: "0.1"
           memory: 128M
+    # Secret-free probes (no inventory / tokens). /readyz may 503 when
+    # gateway Obtain is not Ready (HOST-005).
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "jenkins-mcp version >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    # Note: distroless has no curl/wget. Prefer k8s HTTP probes against
+    # /healthz and /readyz (see kustomize/deployment.yaml). Compose healthcheck
+    # uses the binary version subcommand as a process liveness residual when
+    # no shell HTTP client is present in the image.
 
 volumes:
   gateway-config:

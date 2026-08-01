@@ -266,11 +266,15 @@ func TestResolveConfirmCooldown_EnvNameAndConstants(t *testing.T) {
 		t.Fatalf("absolute %v must exceed default %v",
 			mutation.AbsoluteMaxConfirmCooldown, mutation.DefaultConfirmCooldown)
 	}
-	// DefaultTokenTTL remains the confirmation window; cooldown is independent
-	// of TTL ordering (no Ensure* cross-check; both may be operator-tuned later).
+	// DefaultTokenTTL remains the confirmation window; serve fail-closes when
+	// resolved cooldown ≥ TTL (EnsureConfirmCooldownLessThanTokenTTL).
 	if mutation.DefaultConfirmCooldown >= mutation.DefaultTokenTTL {
 		t.Fatalf("DefaultConfirmCooldown %s must be < DefaultTokenTTL %s",
 			mutation.DefaultConfirmCooldown, mutation.DefaultTokenTTL)
+	}
+	if err := mutation.EnsureConfirmCooldownLessThanTokenTTL(
+		mutation.DefaultConfirmCooldown, mutation.DefaultTokenTTL); err != nil {
+		t.Fatalf("default ordering Ensure: %v", err)
 	}
 }
 

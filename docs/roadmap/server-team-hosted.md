@@ -3,7 +3,7 @@
 **Status:** Planning SoT for optional **team/server-hosted** Jenkins MCP  
 **Audience:** engineering leads, security, platform operators, implementation agents  
 **Not a claim of production readiness:** local Cursor stdio pilot remains the default product path (ADR 0002).  
-**Related SoT:** [architecture](../jenkins-mcp-enterprise-architecture.md) (§§1–2, §6.6, §19.7, Phase 4), [agent todo](../jenkins-mcp-enterprise-agent-todo.md) (GWY/MGR/OAUTH/REL/UI/**HOST**), [task index](../jenkins-mcp-enterprise-task-index.json), [gateway](../gateway/README.md), [auth-architecture](../auth-architecture.md), ADRs 0002 / 0003 / 0004 / 0013 / 0014  
+**Related SoT:** [architecture](../jenkins-mcp-enterprise-architecture.md) (§§1–2, §6.6, §19.7, Phase 4), [agent todo](../jenkins-mcp-enterprise-agent-todo.md) (GWY/MGR/OAUTH/REL/UI/**HOST**), [task index](../jenkins-mcp-enterprise-task-index.json), [gateway](../gateway/README.md), **[live pin blockers](../gateway/live-pin-blockers.md)** (OAUTH-009/010 + HOST-008 production GO residual), [auth-architecture](../auth-architecture.md), ADRs 0002 / 0003 / 0004 / 0013 / 0014  
 
 **Auth decision for Tier A (binding):** implement **all three** Jenkins credential paths as first-class, tested gateway modes — sites pick the default; engineering does **not** pick only one:
 
@@ -28,8 +28,8 @@ JWT on Jenkins (**mode B/C**) and “OAuth” (**Entra AS + obtain path**) are *
 | **Global RO + deny-only MCP RBAC** | **Done** (local) | ADR 0004; `internal/policy`; tool AuthGate |
 | **Local OIDC PKCE → Jenkins-audience token** | **Partial** — offline claim validation, refresh, epoch, whoAmI re-verify landed; **live Entra / jwt-auth-filter lab residual** | OAUTH-001…008 foundations; OAUTH-003/004/006/007 lite; OAUTH-009 residual |
 | **Tool contracts, budgets, progressive logs, L2 multi-frame** | **Done*** (MVP) | Phase 0–2 waves; native Go L2 required path |
-| **Signed policy bundles (Ed25519)** | **Partial / lite** — envelope verify + multi-sig lite + ForceOff lite offline | MGR-001 lite; `docs/security/policy-bundles.md`; fleet ForceOff residual pin |
-| **Fleet telemetry** | **Partial** — opt-in queue/export schema; force-off lite; privacy pack | MGR-002 lite; `docs/security/fleet-telemetry.md` |
+| **Signed policy bundles (Ed25519)** | **Partial / lite** — envelope verify + multi-sig lite + ForceOff overlay pin lite | MGR-001 lite; `docs/security/policy-bundles.md`; fleet `fleet_telemetry_force_off` |
+| **Fleet telemetry** | **Partial** — opt-in queue/export schema; overlay force-off pin lite; privacy pack | MGR-002 lite; `docs/security/fleet-telemetry.md` |
 | **Admin console** | **Partial (Phase 6 mid-flight)** — SPA + loopback BFF + RBAC roles + CSP/packaging | UI-000…UI-008; ADR 0014; multi-user residual |
 | **Package / pilot evidence** | **Partial** — RPM/DEB/tar, offline release-evidence, pilot kit | PKG-001 lite; REL-001/002 lite |
 | **Adapters framework** | **Partial** — INT-001 MVP offline; production SaaS clients residual | `docs/adapters/` |
@@ -47,11 +47,13 @@ JWT on Jenkins (**mode B/C**) and “OAuth” (**Entra AS + obtain path**) are *
 | `serve --gateway` | Requires provider config; logs not-ready; **still uses local keyring Jenkins session** until live Obtain | Wire Obtain → Jenkins AuthProvider |
 | `gateway qualify --offline` | GWY-003 **lite** offline suite (isolation, wrong audience, IdP mock chaos) | Live AgentCore pin + SLOs |
 | Streamable HTTP (`--http`) | Loopback default, body/Host/Origin caps, optional shared-secret | **Not multi-tenant session auth**; loopback deny-anonymous **opt-in default off** (KD-008) |
-| `deploy/gateway/` | Dockerfile, compose, kustomize **scaffold**, non-root docs | Signed image, AgentCore sidecar, HA |
+| `deploy/gateway/` | Non-root, limits, probes, secret-free compose/kustomize (**HOST-005** envelope) | Signed image, AgentCore sidecar, HA runtime |
 | Multi-user cache/audit isolation on one process | Docs recommend **one logical user per process** for MVP | True multi-tenant process isolation |
-| Admin for gateway operators | Same loopback admin SPA | Non-loopback, multi-operator sessions, mTLS/OIDC |
+| Admin for gateway operators | Loopback SPA + HOST-007 residual docs; secret-free `enabledModes` | Non-loopback mTLS/OIDC multi-operator sessions |
 
 **Bottom line:** the repo has a **credible foundation and offline contracts** for managed gateway, not a shippable multi-user server. Local stdio + personal credentials is the production-shaped pilot. Team-hosted requires finishing **all three auth modes**, HTTP multi-user authn, isolation, packaging, and REL gates — primarily by **executing existing GWY/OAUTH/MGR tasks plus HOST-***, not inventing a parallel product.
+
+**Live production GO residual runbook:** [docs/gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) consolidates what still blocks production Mode B/C and multi-pod HA (OAUTH-009 jwt-auth-filter pin, OAUTH-010 Entra/AgentCore, HOST-008 multi-pod checklist, and what `make residual-smoke` proves vs does not). **Do not claim live Entra / multi-replica Done** from offline qualify alone.
 
 ### 1.3 Code / deploy map (for agents)
 
@@ -66,6 +68,7 @@ JWT on Jenkins (**mode B/C**) and “OAuth” (**Entra AS + obtain path**) are *
 | `internal/admin/` + `web/admin/` | Operator console (loopback BFF + SPA) |
 | `deploy/gateway/` | Optional container/kustomize scaffold |
 | `docs/gateway/*` | Gateway operator/security narrative |
+| `docs/gateway/live-pin-blockers.md` | Live production GO residual checklists (OAUTH-009/010, HOST-008) |
 
 ---
 
@@ -141,25 +144,26 @@ Legend: **Done** / **Partial** / **Not started** relative to Tier A needs.
 | Capability | Local today | Needed for Tier A | Task IDs (existing or NEW) | Priority | Notes |
 |------------|-------------|-------------------|----------------------------|----------|-------|
 | Transport (stdio default) | **Done** | Keep default; server mode optional | ADR 0002, MCP-001 | P0 | Do not flip product default |
-| Streamable HTTP hardened multi-user | **Partial** (loopback + shared-secret) | Per-user bearer/mTLS, session bind, non-loopback fail-closed | GWY-004, MCP-001 residual, **HOST-001**, **HOST-002** | P0 | KD-008 residual today |
+| Streamable HTTP hardened multi-user | **Partial*** (RequireSubject + session fingerprint offline; HOST-002 matrix docs) | Live Entra/JWKS rotation, path-prefix pin, mTLS residual | GWY-004, MCP-001 residual, **HOST-001**, **HOST-002** | P0 | Mid-session subject swap fail-closed offline |
+
 | Authn (Entra/OIDC, gateway subject) | **Partial** (local OIDC; gateway env labels) | Live inbound claims → `policy.Subject` | OAUTH-001…003, GWY-002, OAUTH-010 | P0 | Env binding is foundation only |
 | Authz (deny-only + Jenkins AND) | **Done** local | Same contracts on gateway path | POL-*, GWY-002 | P0 | Tool args never set identity |
 | Token acquisition **mode A** API token vault | Local keyring **Done** | Per-user vault on gateway host; Obtain path | **HOST-009**, HOST-003 | P0 | Never shared SA |
 | Token acquisition **mode B** JWT RS bearer | OIDC offline **Partial**; RS live residual | Live jwt-auth-filter + claim matrix + bearer wire | **OAUTH-009**, OAUTH-003/005, **HOST-010** | P0 | JWT = Jenkins half |
 | Token acquisition **mode C** 3LO/OBO Obtain | Gateway Obtain **stub** | Live Entra 3LO + OBO + vault | **OAUTH-010**, **GWY-001**, HOST-003 | P0 | AS = Entra, not Jenkins |
 | Mode matrix / fail-closed switch | N/A | Config selects modes; no silent cross-mode fallthrough | **HOST-011**, GWY-003 | P0 | Qualify all three |
-| Session/subject binding | Local re-verify **Done*** | Mid-session rebind, fingerprint, TTL on gateway | AUTH-004, GWY-002, **HOST-003** | P0 | Cross-user session confusion is top risk |
+| Session/subject binding | Local re-verify **Done***; HTTP `Mcp-Session-Id` fingerprint **Done*** offline (+ rebind expand: PathPrefix, groups, lab JWT Alice/Bob) | Continuous JWKS rotation; durable multi-replica session store; **live Entra** | AUTH-004, GWY-002, **HOST-001**, **HOST-003** | P0 | Mid-session subject/group swap → 401 offline; live Entra residual (not Done) |
 | Cache isolation by user/tenant/profile | Local XDG per OS user **Partial** | Namespace + ACL on multi-user host | GWY-004, STO-*, **HOST-004** | P0 | MVP: one process per subject OK |
 | Audit isolation + correlation | Local audit **Done*** | Per-subject + correlation ID across hops | AUD-001, GWY-004, OBS-* | P1 | No secrets in events |
 | Network placement near Jenkins | N/A (local) | Deploy next to controller; measure bytes | GWY-004, PERF-* | P1 | Prove near-source benefit |
-| Packaging (container, non-root, health) | Scaffold **Partial** | Signed non-root image, readiness, limits | GWY-004, PKG-001, **HOST-005** | P1 | `deploy/gateway/` exists |
+| Packaging (container, non-root, health) | Scaffold envelope **Done*** | Signed image + live AgentCore | GWY-004, PKG-001, **HOST-005** | P1 | limits+probes; signing residual |
 | Rate limits / multi-tenant budgets | Process budgets **Done*** | Per-subject quotas + fan-out caps | MCP-001, GWY-004, **HOST-006** | P1 | Mutations multi-tenant residual |
-| Policy distribution (signed bundles) | **Partial** lite | Enforce on gateway host | MGR-001 | P1 | ForceOff enterprise pin residual |
+| Policy distribution (signed bundles) | **Partial** lite | Enforce on gateway host | MGR-001 | P1 | HSM / true multi-sig residual; ForceOff overlay pin Done* lite |
 | Observability / correlation | Metrics/doctor **Partial** | Jenkins↔gateway vs gateway↔client byte metrics | OBS-*, GWY-004, MGR-002 | P2 | Fleet export privacy board |
-| Admin console multi-operator | Loopback SPA **Partial** | Gateway operator path; optional non-loopback later | UI-003…010, **HOST-007** | P2 | Not SaaS control plane |
-| jwt-auth-filter / RS pin | Offline classifier **Partial** | Live lab for OAuth-required profiles | OAUTH-009 | P0 for OAuth path | Blocks live OBO usefulness |
+| Admin console multi-operator | Loopback SPA **Partial** + HOST-007 docs | Cookie/OIDC multi-operator | UI-003…010, **HOST-007** | P2 | enabledModes secret-free; not SaaS |
+| jwt-auth-filter / RS pin | Offline **Done***; mock lab scaffold | Live plugin pin + Entra | OAUTH-009 | P0 for OAuth path | `make live-oauth-*` ≠ production |
 | Docker OAuth/JWT labs | Mode A compose **Done*** (jenkins-compose) | Mock IdP + JWT RS + token peer scaffolds | **HOST-012…015** | P0 | Opt-in; not default make test |
-| HA / multi-replica | **Not started** | External vault + sticky or shared cache policy | Tier B: **HOST-008** | P3 | Out of Tier A MVP |
+| HA / multi-replica | **Docs residual Done*** | Runtime multi-replica | Tier B: **HOST-008** | P3 | Single-replica Tier A default documented |
 | Multi-controller chaos | **Not started** | Live matrix residual | NET-*, TST-* | P3 | Tier B / REL |
 | Full Jenkins AS plugin | **No-go default** | Only if OAUTH-011 **go** | OAUTH-011, JAS-* | — | Do not schedule unless go |
 
@@ -327,6 +331,7 @@ Also keep **OAUTH-011** as a scheduled decision gate after OAUTH-010/009 evidenc
 **Priority:** P0  
 **Dependencies:** GWY-002 (subject binding), MCP-001 HTTP guards  
 **Maps to:** GWY-004 transport AC; KD-008 residual  
+**Status:** **Partial Done*** offline (not live Entra production)
 
 **Objective**
 
@@ -334,11 +339,13 @@ Replace “optional shared secret on loopback” as the multi-user story with **
 
 **Acceptance criteria**
 
-- [ ] Non-local bind always requires authenticated subject (not anonymous).
-- [ ] Shared-secret alone is **not** documented as multi-user identity; if retained, it is transport gate only and still requires per-user token/OIDC.
-- [ ] Session or request credentials bind to `policy.Subject`; mid-session subject change fails closed.
-- [ ] Tokens never appear in logs, errors, metrics labels, or support bundles (canary tests).
-- [ ] Regression: loopback pilot without gateway may keep KD-008 residual **explicitly documented**; gateway mode cannot enable anonymous multi-user.
+- [x] Non-local bind always requires authenticated subject (not anonymous).
+- [x] Shared-secret alone is **not** documented as multi-user identity; if retained, it is transport gate only and still requires per-user token/OIDC.
+- [x] Session or request credentials bind to identity fingerprint; mid-session subject change fails closed (`Mcp-Session-Id` + `IdentityFingerprint` in `internal/mcpserver`; gateway `Binding.Revalidate` for policy.Subject).
+- [x] Tokens never appear in logs, errors, metrics labels, or support bundles (canary tests).
+- [x] Regression: loopback pilot without gateway may keep KD-008 residual **explicitly documented**; gateway mode cannot enable anonymous multi-user.
+
+**Residual (do not claim Done):** multi-instance / under-load JWKS HA (process-local `RefreshingJWKS` TTL refresh + stale-if-error + optional `JENKINS_MCP_HTTP_JWKS_MAX_STALE` fail-closed landed; multi-instance shared JWKS still residual); live Entra / jwt-auth-filter production pin; multi-replica durable session store (HOST-008).
 
 ---
 
@@ -347,6 +354,7 @@ Replace “optional shared secret on loopback” as the multi-user story with **
 **Priority:** P1  
 **Dependencies:** HOST-001, NET-001 origin pin  
 **Maps to:** GWY-004 deployment  
+**Progress:** **Partial / Done*** — docs matrix + fail-closed tests + `PathPrefix` strip/`--http-path-prefix` + offline Host/Origin fixture expansion residual lite; live edge origin pin residual  
 
 **Objective**
 
@@ -354,10 +362,11 @@ Prove safe placement behind site reverse-proxy (TLS terminate, path prefix, Host
 
 **Acceptance criteria**
 
-- [ ] Documented allowed deployment shapes (TLS at proxy vs app; no CORS wildcard).
-- [ ] Empty AllowedHosts / AllowedOrigins fail closed for non-local.
-- [ ] Live or fixture matrix for path-prefix origin pin (extends NET-001 residual).
-- [ ] Health endpoints do not leak secrets or broad tool inventory without auth.
+- [x] Documented allowed deployment shapes (TLS at proxy vs app; no CORS wildcard).
+- [x] Empty AllowedHosts / AllowedOrigins fail closed for non-local.
+- [x] Offline fixture matrix for path-prefix + Host/Origin pin (app-side). — `TestHOST002_PathPrefixOriginPinFixtureMatrix` + `TestHOST002_StreamableHTTPOriginHostMatrix` residual lite expand
+- [ ] Live edge path-prefix origin pin matrix (extends NET-001 residual). — offline Done*; live edge residual
+- [x] Health endpoints do not leak secrets or broad tool inventory without auth.
 
 ---
 
@@ -393,10 +402,16 @@ Ensure derived cache, L1/L2 handles, and list continuations cannot cross users/p
 
 **Acceptance criteria**
 
-- [ ] Cache key material includes subject/tenant/profile (or process isolation enforced and tested).
-- [ ] Continuation tokens are not an auth boundary; when multi-tenant, they fail closed across subjects.
-- [ ] Two-user offline test: no shared archive handle / cache hit leakage.
-- [ ] Support-bundle and doctor remain secret-free under multi-user layout.
+- [x] Cache key material includes subject/tenant/profile (or process isolation enforced and tested).
+- [x] Continuation tokens are not an auth boundary; when multi-tenant, they fail closed across subjects.
+- [x] Two-user offline test: no shared archive handle / cache hit leakage.
+- [x] Support-bundle and doctor remain secret-free under multi-user layout.
+
+**Foundation (done):** `CacheKey.Tenant`, `Caller.CacheKey`/`SubjectKey`,
+`jenkins.*WithSubject` page tokens, offline Alice/Bob tests,
+`docs/gateway/README.md` §3c. **Serve wire Done*:** `tools.RegisterOptions.SubjectKey`
++ list tools subject-bound pagination when `--gateway`. **Residual:**
+per-HTTP-request SubjectKey rebind; durable L1/L2 namespace; multi-replica (HOST-008).
 
 ---
 
@@ -405,6 +420,7 @@ Ensure derived cache, L1/L2 handles, and list continuations cannot cross users/p
 **Priority:** P1  
 **Dependencies:** GWY-004 scaffold  
 **Maps to:** GWY-004 packaging ACs  
+**Progress:** **Done*** scaffold (probes + limits); live AgentCore residual  
 
 **Objective**
 
@@ -412,10 +428,10 @@ Production-shaped liveness/readiness and cgroup/memory limits for container/syst
 
 **Acceptance criteria**
 
-- [ ] Readiness fails when provider not configured in gateway mode (or reports residual clearly).
-- [ ] Non-root image runs with read-only root where practical; writable only cache/config volumes.
-- [ ] Documented CPU/memory/file descriptor limits for pilot.
-- [ ] Compose/kustomize examples remain secret-free (`.env.example` only).
+- [x] Readiness fails when provider not configured in gateway mode (or reports residual clearly).
+- [x] Non-root image runs with read-only root where practical; writable only cache/config volumes.
+- [x] Documented CPU/memory/file descriptor limits for pilot.
+- [x] Compose/kustomize examples remain secret-free (`.env.example` only).
 
 ---
 
@@ -431,10 +447,21 @@ Prevent one user from exhausting process-wide budgets for others.
 
 **Acceptance criteria**
 
-- [ ] Per-subject concurrent tool / preview rate caps (config via policy, not elevation).
-- [ ] Process absolute ceilings still apply (fail closed).
-- [ ] Tests: subject A spam does not starve subject B below documented floor (or fair-share policy documented).
-- [ ] Mutation confirm cooldown tokens cannot be replayed across subjects.
+- [x] Per-subject concurrent tool / preview rate caps (config via policy, not elevation).
+- [x] Process absolute ceilings still apply (fail closed).
+- [x] Tests: subject A spam does not starve subject B below documented floor (or fair-share policy documented).
+- [x] Mutation confirm cooldown tokens cannot be replayed across subjects.
+
+**Foundation (done):** `gateway.SubjectLimiter` + fair-share tests; mutation
+`Binding` = profile + principal + ExternalSubject + tenant with multi-user
+`BindingFromContext` (Alice/Bob tests). **Token-bucket rate Done* foundation:**
+`gateway.SubjectRateLimiter` (30/min + burst 10 default; process ceiling).
+**Serve wire Done*:** `SubjectSlotLimiter` + `SubjectRateLimiter`; Allow then Hold;
+`MutationBindingFromContext` prefers Valid PolicySubject PrincipalID (HTTP claim)
+else Caller + PrincipalCache (Obtain) else process principal. **Done\*** Obtain→
+Binding + policy RBAC JenkinsUserID via PrincipalCache + rate `LowerRate` +
+admin read-only rate knobs.
+**Done\* lite:** optional same-host `FileSubjectRateLimiter` (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`). **Residual:** HOST-008 multi-pod external shared rate. **Done\* SPA:** Policy page overlay edit of `max_tools_per_minute` / `max_tools_burst` (policy_admin; lower only).
 
 ---
 
@@ -443,6 +470,7 @@ Prevent one user from exhausting process-wide budgets for others.
 **Priority:** P2  
 **Dependencies:** UI-003…UI-008, ADR 0014  
 **Maps to:** Phase 6 residual; architecture admin  
+**Progress:** **Done*** residual docs + secret-free `enabledModes`; cookie multi-op residual  
 
 **Objective**
 
@@ -450,11 +478,11 @@ Operators of a **team gateway** can use admin BFF safely; still **not** a multi-
 
 **Acceptance criteria**
 
-- [ ] Document when admin may bind non-loopback (token required; prefer reverse-proxy mTLS/OIDC residual design).
-- [ ] No Jenkins API tokens or gateway vault material in browser responses.
-- [ ] Multi-user admin sessions: either explicit residual “single process role” or designed session table with CSRF for cookies.
-- [ ] Remove or quarantine localStorage token UX for non-pilot (httpOnly cookie or OS-broker residual).
-- [ ] CSP remains fail-closed; reverse-proxy guidance updated.
+- [x] Document when admin may bind non-loopback (token required; prefer reverse-proxy mTLS/OIDC residual design).
+- [x] No Jenkins API tokens or gateway vault material in browser responses.
+- [x] Multi-user admin sessions: either explicit residual “single process role” or designed session table with CSRF for cookies.
+- [x] Remove or quarantine localStorage token UX for non-pilot (httpOnly cookie or OS-broker residual).
+- [x] CSP remains fail-closed; reverse-proxy guidance updated.
 
 ---
 
@@ -463,6 +491,8 @@ Operators of a **team gateway** can use admin BFF safely; still **not** a multi-
 **Priority:** P3  
 **Dependencies:** HOST-003, HOST-004, durable vault  
 **Maps to:** architecture HA session notes  
+**Progress:** **Done* lite** — same-host file vault flock + optional FileTokenCache + optional FileSubjectRateLimiter + sticky Service scaffold + docs residual (no multi-replica runtime)  
+**Operator residual runbook:** [live-pin-blockers.md §4](../gateway/live-pin-blockers.md) + [deployment.md §9](../gateway/deployment.md)
 
 **Objective**
 
@@ -470,9 +500,12 @@ Define when multi-replica is allowed (external vault, sticky sessions, no split-
 
 **Acceptance criteria**
 
-- [ ] Architecture note: single-replica Tier A default.
-- [ ] Checklist for multi-replica: shared vault, session affinity, audit aggregation.
-- [ ] Explicit non-goal until vault exists.
+- [x] Architecture note: single-replica Tier A default.
+- [x] Checklist for multi-replica: shared vault, session affinity, audit aggregation.
+- [x] Shared vault path + flock multi-process lite (not multi-pod Done).
+- [x] Sticky session kustomize Service scaffold (`sessionAffinity: ClientIP`) — Done* packaging; residual runtime HA.
+- [x] Shared subject rate same-host file lite (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` / `FileSubjectRateLimiter`) — not multi-pod Done.
+- [x] Explicit non-goal until multi-pod durable vault + sticky sessions exist.
 
 ---
 
@@ -637,7 +670,7 @@ When implementing, agents may **close ACs on GWY-*/OAUTH-*** and mark HOST-* as 
 
 | Gate | Blocking? | Default | Owner | Notes |
 |------|-----------|---------|-------|-------|
-| **OAUTH-011** Jenkins-as-AS | Yes for JAS epic only | **No-go** | Security + eng | Enforced in code (ADR 0013); do not build JAS-* without go |
+| **OAUTH-011** Jenkins-as-AS | Yes for JAS epic only | **No-go** (formal residual log) | Security + eng | Enforced in code (ADR 0013); decision log [`docs/auth/jas-no-go.md`](../auth/jas-no-go.md) §4.1; do not build JAS-* without go |
 | **OAUTH-009** RS production pin | Yes for **mode B** (and C when Bearer to Jenkins) | Open until lab | Platform + security | Fallthrough risk |
 | **Ship all three modes A/B/C** | Yes for Tier A “complete” claim | **Implement all**; site picks default | Eng + security | HOST-011 matrix; no silent fallthrough |
 | **Within mode C:** 3LO vs OBO vs exact JWT passthrough | Yes for GWY-003 close | Prefer OBO/3LO; passthrough most restricted | Security | Document residuals |
@@ -669,36 +702,40 @@ When implementing, agents may **close ACs on GWY-*/OAUTH-*** and mark HOST-* as 
 
 ## 9. Immediate next 30 / 60 / 90 days
 
-Assumptions: local pilot largely green; Phase 6 admin mid-flight (UI-008 done; UI-009 residual); leadership wants a **path** to team-hosted without pausing local value.
+Assumptions: local pilot largely green; Phase 6 admin mid-flight (UI-008/009 adversarial foundations landed; HOST-007 residual for non-loopback multi-operator). Leadership wants a **path** to team-hosted without pausing local value.
 
-### Days 0–30
+**Honesty (2026-08):** Offline **foundations landed** for modes A/B/C Obtain, multi-user opt-in, JWKS process-local refresh, packaging scaffold, doctor/admin residual fields, REL lite residual ids (`multi_user_offline`, `oauth009_offline`, `host008_single_replica`). **Live pins remain residual** — do not treat offline Done\* as live Entra / AgentCore / multi-replica GO.
 
-1. Socialize this roadmap; confirm **Tier A ships modes A+B+C** (site chooses default).  
-2. **HOST-012** Docker lab umbrella + Makefile opt-in targets (extend jenkins-compose).  
-3. **HOST-001** design + spike: per-user credentials on Streamable HTTP.  
-4. **HOST-009** (mode A) vault design — uses existing `live-jenkins` for Basic path.  
-5. Scaffold **HOST-014** mock OIDC + **HOST-013** JWT RS lab (mode B) — mocks before real Entra.  
-6. Scaffold **HOST-015** mock token/3LO peer (mode C).  
-7. Charter **OAUTH-010** + real Entra app reg (residual parallel to mocks).  
-8. Freeze anti-patterns (no shared SA, no Jenkins-as-AS).
+### Days 0–30 (foundations — largely Done\*)
 
-### Days 31–60
+| Item | State | Residual |
+|------|-------|----------|
+| Socialize Tier A ships modes A+B+C (site chooses) | **Ongoing** | Site enablement evidence |
+| **HOST-012…015** Docker lab umbrella + mock IdP/RS/token peers | **Done\*** opt-in (`make live-oauth-*`, jenkins-compose) | Not production Entra |
+| **HOST-001** Streamable HTTP subject + JWKS refresh | **Done\*** process-local | Multi-instance JWKS HA; live Entra under load |
+| **HOST-009** Mode A vault Obtain | **Done\*** offline + CLI vault | Live multi-user personal-token lab cohort |
+| **HOST-010** Mode B JWT vault + **OAUTH-009** offline matrix | **Done\*** | **Live** jwt-auth-filter / Entra pin |
+| **GWY-001** Mode C Live opt-in foundation | **Done\*** Live=false + mock Fetcher | Live AgentCore / Entra Obtain |
+| **HOST-011** mode matrix + no fallthrough | **Done\*** | Ops mode-switch evidence |
+| Anti-patterns freeze (no shared SA, no Jenkins-as-AS) | **Done** ADR 0003/0013 | OAUTH-011 formal sign-off residual |
 
-1. Land **HOST-009** offline + docker lab (mode A Obtain + HOST-003 Basic wire).  
-2. Land **OAUTH-009** + **HOST-010** against **HOST-013/014** compose; residual real Entra/RS pin.  
-3. Land **OAUTH-010** matrix; start **GWY-001** Live against **HOST-015** mock, then real AgentCore residual.  
-4. **GWY-002** live claim binding; **HOST-011** mode switch scaffold.  
-5. **HOST-001/002** HTTP multi-user hardening.  
-6. MGR-001 planning (keys, rollout).
+### Days 31–60 (live pins + pilot path)
 
-### Days 61–90
+1. **Live OAUTH-009** pin: jwt-auth-filter version + JCasC + route re-prove (wrong aud/exp/iss, no Basic fallthrough).  
+2. **Live HOST-009** multi-user Mode A cohort on lab Jenkins (personal tokens; no shared SA).  
+3. **OAUTH-010** / **GWY-001** Live against mock peer first, then real AgentCore residual.  
+4. **HOST-001/002** reverse-proxy path-prefix + mTLS non-local production pin.  
+5. **MGR-001** enterprise `REQUIRE_SIGNED_POLICY` roll-out with trusted keys (gateway hosts).  
+6. Team pilot checklist §0 mode matrix filled (REL-001); `release-evidence --offline` residual ids reviewed.
 
-1. **HOST-004** isolation green for all enabled modes.  
-2. **GWY-003** live qualify rows for **A, B, and C** (or residual honesty per mode).  
-3. **GWY-004** + **HOST-005** package runbook for one team.  
-4. Team pilot enabling ≥2 modes (recommend A + B or A + C).  
+### Days 61–90 (package + dual-mode pilot)
+
+1. **HOST-004** isolation green under live multi-user load for enabled modes.  
+2. **GWY-003** live qualify rows for **A, B, and/or C** (or residual honesty per mode — never invent GO).  
+3. **GWY-004** + **HOST-005** package runbook for one team (`deploy/gateway/` scaffold → signed image residual).  
+4. Team pilot enabling ≥2 modes (recommend A + B or A + C); record evidence paths.  
 5. **OAUTH-011** formal no-go (expected) for Jenkins-as-AS.  
-6. REL-001/002 evidence pack lists which modes were piloted.
+6. REL-001/002 evidence pack lists which modes were piloted; **host008_single_replica** residual explicit until durable vault HA.
 
 ---
 
@@ -760,4 +797,4 @@ Do not mark GWY-001…004 DoD complete without live evidence called out in backl
 | Docs index | `docs/README.md` |
 | Task graph | Prefer existing IDs; add HOST-* to todo/index when implementation starts |
 
-**Last updated:** 2026-08-01 — planning only; no gateway production claim.
+**Last updated:** 2026-08-01 — foundations landed offline; live pins residual; no gateway production claim.

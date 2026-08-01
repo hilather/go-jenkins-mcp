@@ -11,9 +11,10 @@ import (
 // start_job validation (MUT-002). Independent of the Jenkins client types so
 // mutation stays free of HTTP/client imports.
 type ParamDefinition struct {
-	Name    string
-	Type    string   // Jenkins type or short class name (e.g. StringParameterDefinition)
-	Choices []string // for ChoiceParameterDefinition
+	Name     string
+	Type     string   // Jenkins type or short class name (e.g. StringParameterDefinition)
+	Choices  []string // for ChoiceParameterDefinition
+	Required bool     // residual: only when Jenkins exposes a required flag (MUT-015)
 }
 
 // paramKind classifies definition types for validation.
@@ -86,6 +87,27 @@ func ValidateAgainstDefinitions(params map[string]any, defs []ParamDefinition) e
 			if err := validateStringLikeValue(name, value); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// ValidateRequiredParams fails closed when a definition is marked Required and
+// missing from params (MUT-015 residual). When Required is false/unknown on all
+// defs (typical Jenkins free-style), this is a no-op — omitted params remain
+// allowed so Jenkins can apply defaults.
+func ValidateRequiredParams(params map[string]any, defs []ParamDefinition) error {
+	for _, d := range defs {
+		if !d.Required {
+			continue
+		}
+		name := strings.TrimSpace(d.Name)
+		if name == "" {
+			continue
+		}
+		if _, ok := params[name]; !ok {
+			return apperr.New(apperr.CodeInvalidArgument,
+				fmt.Sprintf("required parameter %q is missing", name))
 		}
 	}
 	return nil

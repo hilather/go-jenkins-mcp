@@ -1,6 +1,7 @@
 package policy_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -20,10 +21,13 @@ func TestLoadValidOverlay(t *testing.T) {
 	const body = `{
 		"version": 1,
 		"force_read_only": true,
+		"fleet_telemetry_force_off": true,
 		"mode": "pilot",
 		"deny_tools": ["jenkins_get_build_logs", "jenkins_start_job"],
 		"deny_job_prefixes": ["secret-folder"],
-		"max_result_bytes": 4096
+		"max_result_bytes": 4096,
+		"max_tools_per_minute": 15,
+		"max_tools_burst": 5
 	}`
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
@@ -39,6 +43,9 @@ func TestLoadValidOverlay(t *testing.T) {
 	if !res.Overlay.ForceReadOnly {
 		t.Fatal("force_read_only")
 	}
+	if !res.Overlay.FleetTelemetryForceOff {
+		t.Fatal("fleet_telemetry_force_off")
+	}
 	if res.Overlay.NormalizeMode() != policy.ModePilot {
 		t.Fatalf("mode=%s", res.Overlay.NormalizeMode())
 	}
@@ -50,6 +57,12 @@ func TestLoadValidOverlay(t *testing.T) {
 	}
 	if n, ok := res.Overlay.EffectiveMaxResultBytes(); !ok || n != 4096 {
 		t.Fatalf("max_result_bytes=%d ok=%v", n, ok)
+	}
+	if n, ok := res.Overlay.EffectiveMaxToolsPerMinute(); !ok || n != 15 {
+		t.Fatalf("max_tools_per_minute=%d ok=%v", n, ok)
+	}
+	if n, ok := res.Overlay.EffectiveMaxToolsBurst(); !ok || n != 5 {
+		t.Fatalf("max_tools_burst=%d ok=%v", n, ok)
 	}
 	if res.SignatureState != "unverified_pilot" {
 		t.Fatalf("signature_state=%s", res.SignatureState)
@@ -128,6 +141,47 @@ func TestLoadEmptyDenyJobPrefixFailClosed(t *testing.T) {
 	}
 	if apperr.CodeOf(err) != apperr.CodePolicyDenial && apperr.CodeOf(err) != apperr.CodeInvalidArgument {
 		t.Fatalf("code=%s", apperr.CodeOf(err))
+	}
+}
+
+// HOST-006: max_tools_per_minute / max_tools_burst must be positive when set;
+// omitted fields leave Effective* empty (serve treats as no LowerRate change).
+func TestOverlayMaxToolsRateValidate(t *testing.T) {
+	t.Parallel()
+	o := &policy.Overlay{Version: 1}
+	if _, ok := o.EffectiveMaxToolsPerMinute(); ok {
+		t.Fatal("empty EffectiveMaxToolsPerMinute")
+	}
+	if _, ok := o.EffectiveMaxToolsBurst(); ok {
+		t.Fatal("empty EffectiveMaxToolsBurst")
+	}
+	zero := 0
+	o.MaxToolsPerMinute = &zero
+	if err := o.Validate(); err == nil {
+		t.Fatal("zero max_tools_per_minute must fail closed")
+	}
+	neg := -3
+	o.MaxToolsPerMinute = &neg
+	if err := o.Validate(); err == nil {
+		t.Fatal("negative max_tools_per_minute must fail closed")
+	}
+	pos := 12
+	o.MaxToolsPerMinute = &pos
+	burstZero := 0
+	o.MaxToolsBurst = &burstZero
+	if err := o.Validate(); err == nil {
+		t.Fatal("zero max_tools_burst must fail closed")
+	}
+	burst := 3
+	o.MaxToolsBurst = &burst
+	if err := o.Validate(); err != nil {
+		t.Fatalf("valid rate fields: %v", err)
+	}
+	if n, ok := o.EffectiveMaxToolsPerMinute(); !ok || n != 12 {
+		t.Fatalf("rpm=%d ok=%v", n, ok)
+	}
+	if n, ok := o.EffectiveMaxToolsBurst(); !ok || n != 3 {
+		t.Fatalf("burst=%d ok=%v", n, ok)
 	}
 }
 
@@ -456,6 +510,8 @@ func TestEnvPolicyFileAndDefaultPath(t *testing.T) {
 	}
 	t.Setenv(policy.EnvPolicyFileVar, path)
 	t.Setenv(policy.EnvPolicyRequiredVar, "")
+	t.Setenv(policy.EnvRequireSignedPolicyVar, "")
+	t.Setenv(policy.EnvPolicyTrustedKeysVar, "")
 
 	res, err := policy.LoadFromEnviron()
 	if err != nil {
@@ -516,7 +572,12 @@ func TestRequiringSignatureVerifier(t *testing.T) {
 
 func TestOverlayStatusMapNoSecrets(t *testing.T) {
 	t.Parallel()
-	o := &policy.Overlay{Version: 1, ForceReadOnly: true, DenyTools: []string{"jenkins_get_job"}}
+	o := &policy.Overlay{
+		Version:                1,
+		ForceReadOnly:          true,
+		FleetTelemetryForceOff: true,
+		DenyTools:              []string{"jenkins_get_job"},
+	}
 	res := policy.LoadResult{
 		Overlay:        o,
 		Path:           "/home/alice/.config/jenkins-mcp/policy/overlay.json",
@@ -533,6 +594,43 @@ func TestOverlayStatusMapNoSecrets(t *testing.T) {
 	// Path should be basenamed, not full home path.
 	if m["policy_path_base"] != "overlay.json" {
 		t.Fatalf("path_base=%v", m["policy_path_base"])
+	}
+	if m["fleet_telemetry_force_off"] != true {
+		t.Fatalf("fleet_telemetry_force_off missing: %+v", m)
+	}
+}
+
+// MGR-002: ExplainEffective / Document surface fleet_telemetry_force_off (secret-free).
+func TestExplainEffectiveFleetTelemetryForceOff(t *testing.T) {
+	t.Parallel()
+	o := &policy.Overlay{Version: 1, FleetTelemetryForceOff: true}
+	res := policy.LoadResult{
+		Overlay:        o,
+		Present:        true,
+		SignatureState: "unverified_pilot",
+		Path:           "/tmp/overlay.json",
+	}
+	ex := policy.ExplainEffective("corp", res, policy.Inputs{})
+	if !ex.FleetTelemetryForceOff {
+		t.Fatal("ExplainEffective must surface fleet_telemetry_force_off")
+	}
+	doc := policy.DocumentFromOverlay(o)
+	if !doc.FleetTelemetryForceOff {
+		t.Fatal("Document must mirror fleet_telemetry_force_off")
+	}
+	// Secret-free JSON canary.
+	raw, err := json.Marshal(ex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(raw)
+	if !strings.Contains(s, `"fleet_telemetry_force_off":true`) {
+		t.Fatalf("json: %s", s)
+	}
+	for _, bad := range []string{"api_token", "Authorization", "password"} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("secret-ish %q in explain", bad)
+		}
 	}
 }
 

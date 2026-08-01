@@ -10,7 +10,8 @@ const (
 	TypeLoginFail    = "login_fail"
 	TypeServeStart   = "serve_start"
 	TypeToolDeny     = "tool_deny"
-	TypeToolSuccess  = "tool_success" // optional summary; not emitted by default
+	TypeToolError    = "tool_error"   // handler/budget/subject-limiter failure (non-deny)
+	TypeToolSuccess  = "tool_success" // optional summary; off by default (JENKINS_MCP_AUDIT_TOOL_OK)
 	TypeAuthFail     = "auth_fail"    // serve-time identity / credential failures
 )
 
@@ -36,6 +37,15 @@ type Event struct {
 	ProfileID string `json:"profileId,omitempty"`
 	// PrincipalID is a verified Jenkins user id or opaque hash — never a token.
 	PrincipalID string `json:"principalId,omitempty"`
+	// ExternalSubject is an optional validated IdP subject label (OAuth/gateway).
+	// Never a token or vault material; redacted and length-capped like PrincipalID.
+	// Empty for API-token / stdio single-user residual.
+	ExternalSubject string `json:"externalSubject,omitempty"`
+	// SubjectKeyHash is an optional opaque hash of the multi-user subject key
+	// (tenant|subject|profile) for cross-event correlation without storing the
+	// raw key. Prefer audit.HashOpaque(subjectKey); never tokens or vault bytes.
+	// Multi-pod fleet aggregation of per-process audit files remains residual.
+	SubjectKeyHash string `json:"subjectKeyHash,omitempty"`
 	// Tool is the MCP tool name when applicable.
 	Tool string `json:"tool,omitempty"`
 	// Action is a short verb/class (e.g. read, mutate, login, serve).

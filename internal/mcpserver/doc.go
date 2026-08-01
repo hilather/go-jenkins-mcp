@@ -10,9 +10,27 @@
 //
 // HTTP mode is for local debugging and future gateway paths. Optional
 // shared-secret gate (HTTPConfig.BearerToken / --http-token-env|--http-token-file)
-// is KD-008 lite — transport only, not multi-user identity. HOST-001 foundation:
+// is KD-008 lite — transport only, not multi-user identity. HOST-001:
 // RequireSubject / gateway / non-local require per-request RequestIdentity from
-// lab headers (JENKINS_MCP_LAB_IDENTITY=1) or an IdentityResolver (JWT residual).
+// lab headers (JENKINS_MCP_LAB_IDENTITY=1) or an IdentityResolver (JWT/JWKS).
+// When RequireSubject is on, Mcp-Session-Id binds to IdentityFingerprint on the
+// first authenticated request; mid-session subject/group fingerprint change
+// fails closed (401). Fingerprint includes sorted Groups (order-stable).
+// IdentityFromContext exposes the accepted RequestIdentity to handlers.
+// HOST-002: optional HTTPConfig.PathPrefix / --http-path-prefix /
+// JENKINS_MCP_HTTP_PATH_PREFIX mounts MCP under a reverse-proxy path (stripped
+// before the SDK); /healthz and /readyz remain at root and under the prefix.
+// PathPrefix strip does not weaken mid-session bind (HOST-001 expand offline).
+// X-Forwarded-Host / X-Forwarded-Prefix are not trusted by default
+// (HTTPConfig.TrustedProxy residual, default false — fail closed).
+// AfterIdentity (optional) enriches request context after trusted identity for
+// multi-user gateway (Caller + policy.Subject injection by serve). Contract
+// tests: multi_user_http_test.go (protect→inner) + multi_user_tools_call_test.go
+// (Streamable tools/call Alice/Bob AuthProviderCtx, session-scoped Connect ctx) +
+// http_host001_rebind_expand_test.go (PathPrefix/groups/table mid-session).
 // Residual: loopback without require-token/subject still open to local processes;
-// production JWT/JWKS pin incomplete; prefer stdio for pilot (ADR 0002).
+// continuous JWKS rotation under load incomplete; **live Entra residual (offline
+// lab JWT expand is not live Entra Done)**; live edge reverse-proxy origin pin
+// residual; per-POST (intra-session) handler-ctx rebind not the multi-user model
+// (session-scoped Connect context is); prefer stdio for pilot (ADR 0002).
 package mcpserver

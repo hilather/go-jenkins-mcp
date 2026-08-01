@@ -29,7 +29,22 @@ const (
 // Used for OIDC mid-serve refresh; leave nil for static api_token sessions.
 // Implementations must never put secrets into returned errors.
 // scheme may be empty (treated as Basic by applyAuth).
+//
+// Prefer AuthProviderCtx for per-request multi-user Obtain (HOST multi-user):
+// AuthProvider captures a process-bound identity and cannot see request context.
 type AuthProvider func() (user, secret string, scheme AuthScheme, err error)
+
+// AuthProviderCtx returns live wire credentials for a single Jenkins HTTP request
+// using the request context (HOST multi-user / per-request Obtain).
+//
+// Used when gateway multi-user mode injects a Caller into ctx. Leave nil for
+// single-subject AuthProvider or static api_token sessions.
+// Implementations must never put secrets into returned errors.
+// scheme may be empty (treated as Basic by applyAuth).
+//
+// When AuthProviderCtx is set, applyAuth does not write secrets back onto
+// Client.User/Token (avoids cross-request races under concurrent multi-user).
+type AuthProviderCtx func(ctx context.Context) (user, secret string, scheme AuthScheme, err error)
 
 // Client bundles configuration for jenkins api calls.
 //
@@ -44,6 +59,8 @@ type AuthProvider func() (user, secret string, scheme AuthScheme, err error)
 // Auth (OAUTH-005): AuthSchemeBasic (default) uses HTTP Basic; AuthSchemeBearer
 // uses Authorization: Bearer with Token as the access token (never log Token).
 // Optional AuthProvider refreshes OIDC credentials before each request (wave 14).
+// Optional AuthProviderCtx supplies per-request credentials from context
+// (gateway multi-user Obtain). AuthProviderCtx wins when both are set.
 //
 // The package must not import MCP packages (FND-004).
 type Client struct {
@@ -56,12 +73,18 @@ type Client struct {
 	// AuthScheme selects Basic vs Bearer. Empty defaults to Basic (api_token).
 	AuthScheme AuthScheme
 	// AuthProvider optionally supplies live credentials before each request
-	// (OIDC mid-serve refresh). Nil keeps static User/Token/AuthScheme (api_token).
-	// On error, CallJenkins fails closed without sending the request.
-	// Secrets must never appear in returned errors. Concurrent-safe.
+	// (OIDC mid-serve refresh / single-subject gateway Obtain). Nil keeps static
+	// User/Token/AuthScheme (api_token). On error, CallJenkins fails closed
+	// without sending the request. Secrets must never appear in returned errors.
+	// Concurrent-safe for single-subject use; multi-user prefers AuthProviderCtx.
 	AuthProvider AuthProvider
-	Client       *http.Client
-	LogsClient   *http.Client
+	// AuthProviderCtx optionally supplies live credentials from request context
+	// (per-request multi-user Obtain). When non-nil, takes precedence over
+	// AuthProvider and does not write User/Token on the Client (race residual).
+	// Concurrent-safe. Secrets must never appear in returned errors.
+	AuthProviderCtx AuthProviderCtx
+	Client          *http.Client
+	LogsClient      *http.Client
 
 	// acceptGzip advertises Accept-Encoding: gzip (opt-in; see TransportConfig).
 	acceptGzip bool
@@ -127,22 +150,39 @@ func NewClientWithTransportScheme(baseURL, user, token string, scheme AuthScheme
 }
 
 // applyAuth sets Authorization on req from User/Token/AuthScheme, optionally
-// refreshing via AuthProvider first (OIDC mid-serve continuity).
+// refreshing via AuthProviderCtx (preferred) or AuthProvider first
+// (OIDC mid-serve continuity / gateway Obtain).
 // Bearer never sets Basic; Basic never sets Bearer.
-// On AuthProvider failure the request is not authorized and err is returned
+// On provider failure the request is not authorized and err is returned
 // (fail closed; secrets must not appear in err).
 func (opts *Client) applyAuth(req *http.Request) error {
 	if opts == nil || req == nil {
 		return nil
 	}
 	user, token, scheme := opts.User, opts.Token, opts.AuthScheme
-	if opts.AuthProvider != nil {
+	// Prefer context-scoped provider (multi-user Obtain) so concurrent requests
+	// never share a process-bound subject or write secrets onto Client fields.
+	if opts.AuthProviderCtx != nil {
+		ctx := req.Context()
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		u, s, sch, err := opts.AuthProviderCtx(ctx)
+		if err != nil {
+			return err
+		}
+		user, token, scheme = u, s, sch
+		// Intentionally do not write User/Token/AuthScheme — concurrent multi-user
+		// requests would race and could leak another subject's credentials into
+		// static fields used by diagnostics or a cleared-provider fallthrough.
+	} else if opts.AuthProvider != nil {
 		u, s, sch, err := opts.AuthProvider()
 		if err != nil {
 			return err
 		}
 		user, token, scheme = u, s, sch
-		// Keep static fields in sync for diagnostics / subsequent static reads.
+		// Keep static fields in sync for diagnostics / subsequent static reads
+		// (single-subject path only).
 		opts.User = u
 		opts.Token = s
 		opts.AuthScheme = sch
@@ -164,13 +204,35 @@ func (opts *Client) applyAuth(req *http.Request) error {
 	return nil
 }
 
-// WithAuthProvider installs a live credential source (OIDC refresh). Nil clears it.
-// Returns the receiver for chaining. api_token paths leave AuthProvider nil.
+// HasLiveAuthProvider reports whether a dynamic credential provider is installed
+// (AuthProviderCtx or AuthProvider). Used by gateway session-start whoAmI to
+// refuse local static fallthrough when Obtain is expected.
+func (opts *Client) HasLiveAuthProvider() bool {
+	if opts == nil {
+		return false
+	}
+	return opts.AuthProviderCtx != nil || opts.AuthProvider != nil
+}
+
+// WithAuthProvider installs a live credential source (OIDC refresh / single-subject
+// gateway Obtain). Nil clears it. Returns the receiver for chaining.
+// api_token paths leave AuthProvider nil. Does not clear AuthProviderCtx.
 func (opts *Client) WithAuthProvider(p AuthProvider) *Client {
 	if opts == nil {
 		return nil
 	}
 	opts.AuthProvider = p
+	return opts
+}
+
+// WithAuthProviderCtx installs a context-scoped live credential source
+// (per-request multi-user Obtain). Nil clears it. Returns the receiver for chaining.
+// Does not clear AuthProvider; when both are set, AuthProviderCtx wins in applyAuth.
+func (opts *Client) WithAuthProviderCtx(p AuthProviderCtx) *Client {
+	if opts == nil {
+		return nil
+	}
+	opts.AuthProviderCtx = p
 	return opts
 }
 

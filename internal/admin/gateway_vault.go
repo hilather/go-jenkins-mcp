@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
+	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 )
 
@@ -19,6 +21,42 @@ type gatewayVaultResponse struct {
 	Mode string `json:"mode"`
 	// EnabledModes is the allow-list (primary-only when ENABLED_MODES unset).
 	EnabledModes []string `json:"enabledModes"`
+	// MultiUserEnabled is true when JENKINS_MCP_GATEWAY_MULTI_USER is truthy
+	// (foundation residual; not a production GO pin). Secret-free bool only.
+	MultiUserEnabled bool `json:"multiUserEnabled"`
+	// HAMultiReplica is always false (HOST-008 Tier A single-replica default).
+	HAMultiReplica bool `json:"haMultiReplica"`
+	// SessionAffinityRecommended is true when multi-user env is set (HOST-008
+	// sticky Service scaffold honesty). Not multi-replica Done.
+	SessionAffinityRecommended bool `json:"sessionAffinityRecommended"`
+	// MultiPodVaultResidual is always true (HOST-008 multi-pod durable vault residual).
+	MultiPodVaultResidual bool `json:"multiPodVaultResidual"`
+	// KubernetesEnvDetected is true when KUBERNETES_SERVICE_HOST is set.
+	KubernetesEnvDetected bool `json:"kubernetesEnvDetected"`
+	// RateEnabled is secret-free HOST-006 residual (env parse only; process-local).
+	// Empty rate env → true (default); explicit 0 → false. Not multi-replica shared rate.
+	RateEnabled bool `json:"rateEnabled"`
+	// RatePerMinute is resolved bootstrap tools/min (default or env); 0 when disabled.
+	RatePerMinute int `json:"ratePerMinute"`
+	// RateBurst is resolved bootstrap burst; 0 when rate disabled. Never tokens.
+	RateBurst int `json:"rateBurst"`
+	// SharedSubjectRateFile is true when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH is
+	// non-empty (HOST-008 same-host FileSubjectRateLimiter lite). Not multi-pod HA.
+	// Path value is never returned (bool only; secret-free).
+	SharedSubjectRateFile bool `json:"sharedSubjectRateFile"`
+	// SharedPrincipalCacheFile is true when JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH
+	// is non-empty (HOST-008 same-host FilePrincipalCache lite). Not multi-pod HA.
+	// Path value is never returned (bool only; secret-free; never tokens).
+	SharedPrincipalCacheFile bool `json:"sharedPrincipalCacheFile"`
+	// SharedJwksFile is true when JENKINS_MCP_HTTP_JWKS_CACHE_PATH is non-empty
+	// (HOST-001 / HOST-008 same-host public JWKS snapshot lite). Not multi-pod
+	// external JWKS HA. Path value is never returned (bool only; public keys only).
+	SharedJwksFile bool `json:"sharedJwksFile"`
+	// SharedTokenCacheFile is true when JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH is
+	// non-empty (HOST-008 same-host FileTokenCache lite). Not multi-pod Redis/HA.
+	// Path value is never returned (bool only; secret-free). Residual never opens
+	// the cache file — never tokens.
+	SharedTokenCacheFile bool `json:"sharedTokenCacheFile"`
 	// VaultConfigured is true when the Mode A vault file exists on disk.
 	VaultConfigured bool `json:"vaultConfigured"`
 	// EntryCount is the number of subject entries (0 when missing/unreadable).
@@ -48,10 +86,52 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	multiUser := gateway.MultiUserEnabled(os.Getenv)
+	rateEnabled, ratePerMinute, rateBurst := gateway.SubjectRateConfigFromEnviron(os.Getenv)
+	sharedSubjectRateFile := gateway.SubjectRatePathConfiguredFromEnviron(os.Getenv)
+	sharedPrincipalCacheFile := gateway.PrincipalCachePathConfiguredFromEnviron(os.Getenv)
+	sharedJwksFile := auth.JWKSCachePathConfiguredFromEnviron(os.Getenv)
+	sharedTokenCacheFile := gateway.TokenCachePathConfiguredFromEnviron(os.Getenv)
+	mp := diagnostics.MultiPodResidualFromEnviron(os.Getenv)
 	resp := gatewayVaultResponse{
-		Subjects:     []string{},
-		EnabledModes: []string{},
-		Residual:     "vault write is CLI-only: jenkins-mcp gateway vault-put / vault-delete (never put tokens in the browser)",
+		Subjects:                   []string{},
+		EnabledModes:               []string{},
+		MultiUserEnabled:           multiUser,
+		HAMultiReplica:             false, // HOST-008 Tier A; no multi-replica runtime
+		SessionAffinityRecommended: multiUser,
+		MultiPodVaultResidual:      true, // HOST-008 multi-pod vault residual honesty
+		KubernetesEnvDetected:      mp.KubernetesEnvDetected,
+		RateEnabled:                rateEnabled,
+		RatePerMinute:              ratePerMinute,
+		RateBurst:                  rateBurst,
+		SharedSubjectRateFile:      sharedSubjectRateFile,
+		SharedPrincipalCacheFile:   sharedPrincipalCacheFile,
+		SharedJwksFile:             sharedJwksFile,
+		SharedTokenCacheFile:       sharedTokenCacheFile,
+		// HOST-006 rate: process-local default; optional same-host file when path set.
+		// HOST-007 parity: shared*File bools only — never path values (HOST-008 lite).
+		// sharedTokenCacheFile never opens the token cache file.
+		// Multi-pod shared rate residual (HOST-008). Never tokens.
+		Residual: "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser); subject rate default process-local (HOST-006); optional same-host FileSubjectRateLimiter when path set (HOST-008 lite); multi-pod shared rate residual; multiPodVaultResidual=true",
+	}
+	if resp.SharedSubjectRateFile {
+		resp.Residual = "sharedSubjectRateFile=true (same-host file rate lite only — not multi-pod HA); " + resp.Residual
+	}
+	if resp.SharedPrincipalCacheFile {
+		resp.Residual = "sharedPrincipalCacheFile=true (same-host FilePrincipalCache lite only — not multi-pod HA); " + resp.Residual
+	}
+	if resp.SharedJwksFile {
+		resp.Residual = "sharedJwksFile=true (same-host public JWKS file lite only — not multi-pod external JWKS HA); " + resp.Residual
+	}
+	if resp.SharedTokenCacheFile {
+		resp.Residual = "sharedTokenCacheFile=true (same-host FileTokenCache lite only — not multi-pod Redis/HA); " + resp.Residual
+	}
+	if multiUser {
+		// Secret-free; SPA residual banner (no embed rebuild). host008_single_replica honesty.
+		resp.Residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO; haMultiReplica=false HOST-008; sessionAffinityRecommended=true scaffold only); " + resp.Residual
+	}
+	if mp.KubernetesEnvDetected {
+		resp.Residual = "kubernetes env detected (KUBERNETES_SERVICE_HOST): multi-pod residual (sticky, shared vault, rate, Obtain cache — HOST-008; haMultiReplica=false); " + resp.Residual
 	}
 
 	mx, err := gateway.ModeMatrixFromEnviron(os.Getenv)
@@ -63,7 +143,7 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 			resp.Mode = ""
 		}
 		resp.Residual = "gateway credential mode config invalid: " + err.Error() +
-			"; vault write is CLI-only (jenkins-mcp gateway vault-put)"
+			"; vault write is CLI-only (jenkins-mcp gateway vault put)"
 		return resp
 	}
 	resp.Mode = mx.Primary.String()

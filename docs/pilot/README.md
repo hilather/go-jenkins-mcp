@@ -13,6 +13,8 @@ provides:
 | [`checklist.md`](checklist.md) | Step-by-step install → diagnose → cache → rollback |
 | `jenkins-mcp pilot-check` | Offline/online evidence JSON (doctor + cache + sample verify) |
 | `scripts/pilot-evidence.sh` / `make pilot-evidence` | Offline/local secret-free evidence bundle under `dist/pilot-evidence/<ts>/` |
+| `scripts/gateway-residual-smoke.sh` / `make residual-smoke` | Opt-in offline residual honesty (qualify + release-evidence residual ids + residual-status honesty canaries; not live GO) |
+| [gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) | Live production GO residual runbook (OAUTH-009/010, HOST-008; residual-smoke proves-vs-not) |
 | Deterministic chaos tests (QA-002 lite) | Recovery under truncated fetch, corrupt L1/L2, disk-full pack, mid-evict kill, cancel |
 
 **User path:** [../user/README.md](../user/README.md)  
@@ -30,6 +32,21 @@ provides:
    enable mutations unless a separate approved exception exists.
 3. **Profile-only Cursor config** — `command` + `args: ["serve", "--profile", "<id>", "--read-only", "--stdio"]` and `JENKINS_MCP_READ_ONLY=true`. **Never** `JENKINS_MCP_AUTH` or `-auth`.
 4. **No Windows** — do not collect or claim Windows pilot evidence.
+5. **Modes honesty (REL-001)** — record which surfaces/modes were piloted
+   (stdio vs gateway **A/B/C**). Offline `gateway qualify` is **not** live
+   multi-user production evidence. See [checklist §0](checklist.md).
+
+## Auth modes matrix (pilot evidence)
+
+| Mode | Id | Typical pilot path | Offline evidence | Live residual |
+|------|-----|--------------------|------------------|---------------|
+| Local stdio | (default) | Cursor + personal API token / OIDC profile | `pilot-check`, doctor | — |
+| **A** | `api_token_vault` | Gateway vault per subject (HOST-009) | vault CLI + unit/lab | Multi-user Obtain under load |
+| **B** | `jwt_rs_bearer` | Jenkins JWT RS bearer (HOST-010) | offline vault + oauth-lab | Entra + jwt-auth-filter pin |
+| **C** | AgentCore Live | 3LO/OBO Obtain (GWY-001) | `gateway qualify --offline` | Live AgentCore / Entra pin |
+
+Default pilot for REL-001 is **local stdio + personal credentials**. Gateway
+cohorts are optional and must list modes explicitly on the checklist.
 
 ## Prerequisites
 
@@ -95,7 +112,8 @@ Also run `security self-check` / `support-bundle` for scrubbed posture packs.
 
 ## Automated offline evidence pack (`make pilot-evidence`)
 
-Collect version, security self-check, gateway offline qualify, optional
+Collect version, security self-check, gateway offline qualify, gateway
+residual-status (residual honesty), optional consent-residual, optional
 doctor/pilot-check, and optional `go test` summary into a timestamped directory:
 
 ```bash
@@ -118,22 +136,56 @@ Output: `dist/pilot-evidence/<UTC-timestamp>/` with:
 | `version.json` | `jenkins-mcp version --json` |
 | `security-self-check.json` | `security self-check --json` |
 | `gateway-qualify.json` | `gateway qualify --offline` (when available) |
+| `gateway-residual-status.json` | `gateway residual-status` (always when subcommand exists; residual honesty canaries hard-fail) |
+| `gateway-consent-residual.json` | `gateway consent-residual` (optional when subcommand exists) |
 | `doctor.txt` | `doctor --profile … --offline` when `PROFILE` set |
 | `pilot-check.json` | `pilot-check --profile … --offline` when `PROFILE` set |
 | `go-test-summary.txt` | Bounded `go test` unless `SKIP_GO_TEST=1` |
 
 The pack is **secret-free** by construction (CLI paths that already scrub). Do not
 copy live tokens into the evidence directory. Exit code is non-zero when overall
-is `fail`. Without `PROFILE`, overall is **`incomplete`** (doctor/pilot-check
-skipped) when the offline generators pass.
+is `fail` (including residual-status honesty canary failure). Without `PROFILE`,
+overall is **`incomplete`** (doctor/pilot-check skipped) when the offline
+generators pass. Residual-status in this pack is **offline honesty only** — not
+live multi-user GO. Honesty canaries include `shared_*_file` default-false,
+`progressive_consent.file_backed` / `same_host_reload_before_persist` default-false
+(when `CONSENT_STORE_PATH` unset), `subject_limiter_max_subjects` omit default,
+lightweight path-not-dumped checks (shared_*_file + consent store path),
+and optional `SUBJECT_LIMITER_MAX_SUBJECTS=64` → field 64 (align residual-smoke residual lite).
 
 See also REL-002 gates: [`../release/gates.md`](../release/gates.md).
+
+## Residual honesty smoke (`make residual-smoke`)
+
+Opt-in check that offline lite evidence still lists the residual ids operators
+must not treat as live multi-user / Entra / multi-replica GO:
+
+```bash
+make residual-smoke
+# alias:
+make gateway-residual-smoke
+# optional doctor gateway_residual_status embed when a profile exists
+# (doctor requires --profile; PROFILE empty → doctor step skipped):
+make residual-smoke PROFILE=corp
+```
+
+Runs `gateway qualify --offline`, `release-evidence --offline`, and
+`gateway residual-status`, asserts
+`multi_user_offline` · `oauth009_offline` · `oauth010_offline` ·
+`progressive_consent_offline` · `host008_single_replica` · `gateway_modes_live`
+(**offline only** — not live Entra / AgentCore / multi-replica GO), and writes
+artifacts under `dist/residual-smoke/<ts>/`. With `PROFILE=`, also runs
+`doctor --offline --json` and asserts nested `gateway_residual_status` honesty
+(same map as residual-status; never live GO).
+**Not** part of default `make test` / `make ci`. See [release gates](../release/gates.md),
+[checklist §0](checklist.md), and [live-pin-blockers.md](../gateway/live-pin-blockers.md)
+(what residual-smoke proves vs live pin checklists for OAUTH-009 / OAUTH-010 / HOST-008).
 
 ## Doctor / cache / support-bundle / policy
 
 | Command | Use in pilot |
 |---------|----------------|
-| `jenkins-mcp doctor --profile <id> [--offline]` | Local + optional whoAmI; never prints secrets |
+| `jenkins-mcp doctor --profile <id> [--offline] [--json]` | Local + optional whoAmI; `gateway_residual_status` embed (same residual-status map); never prints secrets |
 | `jenkins-mcp security self-check [--json] [--profile <id>]` | Secret-free posture (RO, policy residual, RS residual) |
 | `jenkins-mcp pilot-check --profile <id> [--offline]` | Combines doctor + cache status + sample verify → exit non-zero on fail + evidence JSON |
 | `jenkins-mcp cache status --profile <id>` | L1 data-dir / schema summary |
@@ -158,6 +210,7 @@ Record for **both** Rocky and Ubuntu cohorts (macOS optional):
 - [ ] `cache status` healthy; `cache verify` sample has `pack_fail=0` (or empty cache)
 - [ ] `pilot-check --profile <id>` overall `pass` or `warn` (not `fail`) with saved JSON
 - [ ] Optional: `make pilot-evidence PROFILE=<id> SKIP_GO_TEST=1` MANIFEST overall not `fail`
+- [ ] **Modes piloted** recorded (stdio and/or A/B/C); gateway residuals named if gateway was in scope
 - [ ] No secret/privacy incident; support-bundle used if debugging is needed
 - [ ] Rollback path exercised or documented (see [checklist](checklist.md))
 

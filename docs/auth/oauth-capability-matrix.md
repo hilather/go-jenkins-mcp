@@ -21,7 +21,7 @@ constants so tests fail if classifications drift.
 | `api_token` | Personal Jenkins `username:api_token` (Basic) via Linux Secret Service | **supported** | Pilot default (AUTH / ADR 0009) |
 | `external_idp_jwt_bearer` | Authorization Code + PKCE at **external IdP**; access token audience = exact Jenkins API resource; Jenkins validates bearer as RS | **conditional** | OAUTH-001 profile/discovery; OAUTH-002+ login/token; needs `jwt-auth-filter` or approved proxy |
 | `agentcore_3lo_obo` | Managed-gateway AgentCore 3LO/OBO against **Entra (or approved AS)** → Jenkins-audience token | **residual** | GWY-* / OAUTH-010+; AS endpoints are never stock Jenkins |
-| `custom_jenkins_as_plugin` | Full Jenkins-hosted OAuth authorization server (consent, codes, tokens) | **no_go_default** | ADR 0011/0013; threat model [jas-no-go.md](jas-no-go.md); JAS-002…005 only after OAUTH-011 **go** |
+| `custom_jenkins_as_plugin` | Full Jenkins-hosted OAuth authorization server (consent, codes, tokens) | **no_go_default** | ADR 0011/0013; threat model + OAUTH-011 decision log [jas-no-go.md](jas-no-go.md) §4.1; JAS-002…005 only after explicit OAUTH-011 **go** |
 | `jwt_auth_filter` | Bearer JWT **resource-server** filter (not an AS) | **conditional** | OAUTH-009: offline contracts + `oauth probe-rs`; **live lab residual** |
 
 ### Level definitions
@@ -73,7 +73,11 @@ Code constant: `auth.FallbackAuthMethodWhenOnlyOICAuth == MethodAPIToken`.
 
 ---
 
-## 4. AgentCore 3LO/OBO (gateway residual)
+## 4. AgentCore 3LO/OBO (gateway residual — OAUTH-010)
+
+**Live production residual checklist (Entra app reg + AgentCore pin):**
+[../gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) §3.
+**Do not claim live Entra Done** from the offline matrix below.
 
 | Item | Decision |
 |------|----------|
@@ -81,6 +85,53 @@ Code constant: `auth.FallbackAuthMethodWhenOnlyOICAuth == MethodAPIToken`.
 | Resource / audience | Dedicated Jenkins API |
 | Flows | User-delegated auth code, then OBO/exchange as needed |
 | Full Jenkins AS | Only after ADR 0011 go decision |
+
+### Offline Mode C prototype matrix (OAUTH-010 Done*)
+
+**Do not claim live Entra Done.** Offline + mock lab only.
+
+| Flow / gate | Offline contract | Evidence |
+|-------------|------------------|----------|
+| `authorization_code` mock | `ConsentRequired` with **auth URL + session only** (no tokens/secrets) | `TestOAUTH010_*` + qualify `oauth010_mode_c_offline_matrix` |
+| `token_exchange` / OBO mock | Success → **Bearer** Jenkins-audience credential | same + HOST-011 `mode_c_agentcore_live_matrix` |
+| Wrong audience | Fail closed; canary absent from errors | same + `TestHTTPTokenFetcher_WrongAudience` |
+| `Live=false` | `not_configured` / capability_missing; Ready=false; cache ignored | `TestOAUTH010_*` / `TestAgentCoreProvider_LiveFalse*` |
+| `Live=true` without Fetcher | Fail closed (capability_missing); Ready=false | `TestOAUTH010_*` / `TestAgentCoreProvider_LiveTrueNilFetcher` |
+| `HTTPTokenFetcher` mock AS | HTTPS mock success, wrong aud, consent; https-only; no redirects | `TestOAUTH010_ModeC_OfflinePrototypeMatrix/http_token_fetcher_mock_as` + `TestHTTPTokenFetcher_*` |
+| ModeMatrix residual honesty | Mode C residual notes **OAUTH-010** + live pin residual | `ModeMatrixFromEnviron` + doctor `gateway_status` |
+| Doctor residual | Mode C enabled → warn offline foundation only; `mode_c_live_agentcore_qualified=false` | `TestRunDoctor_ModeC_GatewayStatusResidual` |
+
+**Qualify rows (not redundant):**
+
+| Case | Role |
+|------|------|
+| `mode_c_agentcore_live_matrix` | HOST-011 Mode C row (Live=false / mock Bearer / wrong aud / consent) |
+| `oauth010_mode_c_offline_matrix` | OAUTH-010 prototype matrix: flow-mode separation (auth_code vs token_exchange), Live=true nil Fetcher, ModeMatrix residual, Jenkins-as-AS reject |
+
+### Offline / mock vs live (OAUTH-010 honesty)
+
+| Path | Status | Evidence |
+|------|--------|----------|
+| Gateway Obtain contract (`Live=false` fail-closed) | **Done*** foundation | `internal/gateway` unit tests; no shared SA |
+| Offline prototype matrix (auth_code + OBO + Live gates) | **Done*** offline | `oauth010_mode_c_offline_matrix` + `TestOAUTH010_*` |
+| Offline mock `TokenFetcher` / `HTTPTokenFetcher` + consent URL metadata | **Done*** offline | Mock AS / https-only tests (never live Entra) |
+| Docker mock token peer (HOST-015) | **Scaffold** opt-in | `testdata/oauth-lab/` `mock-token`; `make live-oauth-*` |
+| Opt-in Mode C Obtain vs mock-token | **Residual lab** (not Entra) | `go test -tags=live_oauth ./internal/gateway/qualify/` — healthz skip; Live Obtain + `HTTPTokenFetcher` via TLS test shim; https pin rejects raw HTTP lab URL |
+| Live Entra 3LO + OBO + durable vault | **Residual** | OAUTH-010 / GWY-001 / GWY-003 production pin — **not Done** |
+| AgentCore production binary pin | **Residual** | GWY-003 / GWY-004 |
+
+```bash
+# Offline (default make test path)
+go test ./internal/gateway/ ./internal/gateway/qualify/ ./internal/diagnostics/ -count=1 -run 'OAUTH010|ModeC|oauth010'
+
+# Opt-in HOST-015 mock-token peer (not production Entra; TLS residual)
+make live-oauth-up    # mock-token :18083
+make live-oauth-smoke
+go test -tags=live_oauth ./internal/gateway/qualify/ -count=1   # skip if lab down
+make live-oauth-down
+```
+
+Cross-links: [gateway/README.md](../gateway/README.md), [gateway/qualification.md](../gateway/qualification.md), [jwt-auth-filter-qualification.md](jwt-auth-filter-qualification.md) §9, HOST-012…015 in [roadmap](../roadmap/server-team-hosted.md), lab [`testdata/oauth-lab/README.md`](../../testdata/oauth-lab/README.md).
 
 ---
 
@@ -94,7 +145,7 @@ Code constant: `auth.FallbackAuthMethodWhenOnlyOICAuth == MethodAPIToken`.
 |-------|----------------|----------|
 | Role | RS only — validates externally issued JWTs | — |
 | Does **not** | Issue codes, host consent, or act as 3LO AS | — |
-| `invalid_bearer_fallthrough` | `Done*` offline classifier (`OfflineFallthroughFixtures` + simulated RS); Wave 33 empty/HTML error/Bearer WWW-Authenticate | Must re-prove on real plugin |
+| `invalid_bearer_fallthrough` | `Done*` offline classifier (`OfflineFallthroughFixtures` + simulated RS + OAuth-required Basic/anon deny fixtures); Wave 33 empty/HTML/Bearer WWW-Authenticate + OAUTH-009 Basic/anon expand | Must re-prove on real plugin — **not live Entra Done** |
 | `incomplete_route_coverage` | **contract_tested** (`RequiredMCPRoutes`, inventory completeness, progressive OutsideAPIGlob) | Path includes in JCasC |
 | `multi_issuer` / `alg_none` | **contract_tested** (`ValidateAccessToken`) | RS must match |
 | `jwks_outage` | **contract_tested** (MCP fail-closed); **live residual** for Jenkins RS cache TTL | Fail-closed + cache TTL on controller |

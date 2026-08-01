@@ -1,5 +1,11 @@
 # Documentation index — go-jenkins-mcp
 
+<p>
+  <a href="https://hilather.github.io/go-jenkins-mcp/"><strong>Product site</strong></a>
+  · <a href="../README.md">Repository README</a>
+  · <a href="https://github.com/hilather/go-jenkins-mcp/releases">Releases</a>
+</p>
+
 **Wave 20 (DOC-001 / DOC-002):** short user/admin/agent docs synced to waves 16–19 code.  
 Do **not** treat this tree as a claim of full production OAuth / gateway readiness — residuals stay explicit.
 
@@ -22,6 +28,7 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [admin/README.md](admin/README.md) | Packages, policy CLI, gateway, telemetry, HTTP loopback; admin SPA (UI-000–UI-009) |
 | [`../deploy/local/README.md`](../deploy/local/README.md) | **First-class** disposable admin BFF/SPA + optional lab Jenkins (Docker; not Cursor stdio) |
 | [agent-usage.md](agent-usage.md) | Triage flow; Wave 18–19 tools (queue cancel, ext-logs ACL, change correlation, search re-eval, start_job params) |
+| [mutations/power-user-backlog.md](mutations/power-user-backlog.md) | Remaining write / power-user mutations (opt-in; MUT-001 gate; admin out of scope) |
 | [tool-contracts.md](tool-contracts.md) | MCP tool inventory, budgets, error codes, side effects |
 | [packaging.md](packaging.md) | RPM/DEB/tar, XDG paths, update-check, HTTP mode notes, local Docker pointer |
 | [policy-rbac.md](policy-rbac.md) | Deny-only RBAC + overlay schema |
@@ -55,6 +62,7 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [gateway/README.md](gateway/README.md) | Managed gateway foundation |
 | [gateway/deployment.md](gateway/deployment.md) | Deploy scaffold + non-secret env |
 | [gateway/qualification.md](gateway/qualification.md) | Offline qualify residual |
+| [gateway/live-pin-blockers.md](gateway/live-pin-blockers.md) | Live production GO residual (OAUTH-009/010, HOST-008) |
 | [adapters/README.md](adapters/README.md) | Optional adapters (default off) |
 | [adapters/ext-logs.md](adapters/ext-logs.md) | External logs + Jenkins ACL preflight |
 | [adapters/work-items.md](adapters/work-items.md) | Change / work-item correlation |
@@ -79,7 +87,7 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 
 ## Residual honesty (do not over-claim)
 
-- Live Entra / jwt-auth-filter lab / AgentCore obtain pin — residual  
+- Live Entra / jwt-auth-filter lab / AgentCore obtain pin — residual (runbook: [gateway/live-pin-blockers.md](gateway/live-pin-blockers.md))  
 - SaaS log/ticket clients — residual  
 - Cursor host stdio CI — residual (Wave 25 offline binary `make stdio-smoke` does not close it) 
 - HTTP MCP: loopback-hardened but **no** socket client auth (KD-008)  

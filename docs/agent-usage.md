@@ -144,6 +144,23 @@ If they are listed (host must have used `--allow-mutations` without stronger RO)
 - Preview shows the redacted params that will be enqueued; confirm re-validates definitions so mid-flight job config changes fail closed.
 - Do not retry a failed enqueue with the same token (single-use); request a new preview if needed.
 - Enqueue POST is never auto-retried (NET-003).
+- Disabled / non-buildable jobs refuse start (no preview token).
+
+### Power-user mutations (when listed)
+
+All still require preview → confirm. Prefer the least powerful action:
+
+| Need | Tool | Notes |
+|------|------|-------|
+| Soft stop | `jenkins_stop_build` or `jenkins_interrupt_build` `mode=stop` | Finished builds fail closed |
+| Harder interrupt | `mode=term` then `mode=kill` | Same wrong-state rules |
+| Re-run last params | `jenkins_rebuild_build` | Params from **source build only**; secret-typed params cannot be replayed |
+| Pipeline re-run | `jenkins_replay_pipeline` | **Same definition only** — no model-authored Jenkinsfile |
+| Disable/enable job | `jenkins_set_job_buildable` | Not config.xml / not delete |
+| Keep / describe build | `jenkins_set_build_keep_forever` / `jenkins_set_build_description` | Description max 4096 chars |
+| Clear queue for one job | `jenkins_cancel_queue_items_for_job` | Cap 20; optional `stuck_only` |
+
+**Never** request script console, config.xml write, credentials, plugins, or quiet-down — those are not MCP tools.
 
 MCP policy and global RO can still return `policy_denial` — that is success of the safety system, not a bug to circumvent.
 

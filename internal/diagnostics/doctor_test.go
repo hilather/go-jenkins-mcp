@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/config"
 	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
+	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
 	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
 	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
@@ -25,6 +27,14 @@ const doctorCanary = "DOCTOR_CANARY_token_must_never_appear_xyz789"
 func TestRunDoctor_OfflineNoSecrets(t *testing.T) {
 	// Not parallel with Setenv: isolate LKG path so update_lkg resolves under Paths.
 	t.Setenv(update.EnvUpdateLKGPath, "")
+	t.Setenv(gateway.EnvGatewayMultiUser, "")
+	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAPITokenVault))
+	// HOST-008: clear multi-pod signals so gateway_status stays OK (default vault under HOME).
+	t.Setenv("KUBERNETES_SERVICE_HOST", "")
+	t.Setenv("JENKINS_MCP_GATEWAY_REPLICAS", "")
+	t.Setenv("REPLICAS", "")
+	t.Setenv(gateway.EnvGatewayVaultPath, "")
+	t.Setenv(gateway.EnvGatewayJWTVaultPath, "")
 	root := t.TempDir()
 	paths := config.Paths{
 		ConfigDir: filepath.Join(root, "cfg"),
@@ -74,7 +84,7 @@ func TestRunDoctor_OfflineNoSecrets(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{"binary", "profile", "keyring", "data_dir", "store", "policy", "read_only", "mutations", "identity", "rs_auth", "jenkins_as_as", "metrics", "circuit_breaker", "update_lkg"} {
+	for _, want := range []string{"binary", "profile", "keyring", "data_dir", "store", "policy", "read_only", "mutations", "identity", "rs_auth", "jenkins_as_as", "metrics", "circuit_breaker", "gateway_status", "update_lkg"} {
 		if !names[want] {
 			t.Errorf("missing check %q", want)
 		}
@@ -99,6 +109,49 @@ func TestRunDoctor_OfflineNoSecrets(t *testing.T) {
 			// Isolated temp Paths with no LKG → skip.
 			t.Fatalf("update_lkg without LKG: %s %s", c.Status, c.Message)
 		}
+		if c.Name == "gateway_status" {
+			if c.Status != diagnostics.StatusOK {
+				t.Fatalf("gateway_status multi_user off: %s %s", c.Status, c.Message)
+			}
+			if c.Details["multi_user_enabled"] != false {
+				t.Fatalf("multi_user_enabled=%v", c.Details["multi_user_enabled"])
+			}
+			if c.Details["ha_multi_replica"] != false {
+				t.Fatalf("HOST-008 residual must report ha_multi_replica=false: %+v", c.Details)
+			}
+			// HOST-008 multi-pod residual honesty: always true; not multi-replica Done.
+			if c.Details["multi_pod_vault_residual"] != true {
+				t.Fatalf("multi_pod_vault_residual must always be true: %+v", c.Details)
+			}
+			if c.Details["kubernetes_env_detected"] != false {
+				t.Fatalf("kubernetes_env_detected want false offline: %+v", c.Details)
+			}
+			if c.Details["session_affinity_recommended"] != false {
+				t.Fatalf("session_affinity_recommended want false when multi_user off: %+v", c.Details)
+			}
+			if c.Details["gateway_ready"] != false {
+				t.Fatalf("offline gateway_ready must be false residual: %+v", c.Details)
+			}
+			if c.Details["credential_mode"] != string(gateway.CredentialModeAPITokenVault) {
+				t.Fatalf("credential_mode=%v", c.Details["credential_mode"])
+			}
+			// Unified modes A/B/C residual honesty (Mode A only in this test).
+			if c.Details["mode_a_enabled"] != true || c.Details["mode_b_enabled"] != false || c.Details["mode_c_enabled"] != false {
+				t.Fatalf("modes A/B/C flags: %+v", c.Details)
+			}
+			if c.Details["mode_a_live_obtain_qualified"] != false ||
+				c.Details["mode_b_live_rs_qualified"] != false ||
+				c.Details["mode_c_live_agentcore_qualified"] != false {
+				t.Fatalf("offline must never claim live mode pins: %+v", c.Details)
+			}
+			if c.Details["oauth009_offline_only"] != true {
+				t.Fatalf("oauth009_offline_only residual: %+v", c.Details)
+			}
+			res, _ := c.Details["mode_matrix_residual"].(string)
+			if !strings.Contains(res, "mode_a") {
+				t.Fatalf("want mode_a residual honesty: %q", res)
+			}
+		}
 	}
 
 	var buf bytes.Buffer
@@ -109,6 +162,377 @@ func TestRunDoctor_OfflineNoSecrets(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(out), "api_token:") || strings.Contains(out, "token:") {
 		t.Fatalf("token field in doctor output: %s", out)
+	}
+	// OPS doctor residual-status embed: gateway_residual_status always present offline.
+	if rep.GatewayResidualStatus == nil {
+		t.Fatal("gateway_residual_status missing on offline doctor report")
+	}
+	if rep.GatewayResidualStatus["residual_id"] != "oauth009_offline" {
+		t.Fatalf("gateway_residual_status.residual_id=%v", rep.GatewayResidualStatus["residual_id"])
+	}
+	if rep.GatewayResidualStatus["ha_multi_replica"] != false {
+		t.Fatal("gateway_residual_status ha_multi_replica must be false")
+	}
+	if !strings.Contains(out, "gateway_residual_status:") {
+		t.Fatal("text report must surface gateway_residual_status section")
+	}
+}
+
+// OPS doctor residual-status embed: Report.gateway_residual_status matches
+// BuildGatewayResidualStatus honesty (secret-free; never live GO).
+func TestRunDoctor_GatewayResidualStatusEmbed(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	t.Setenv(gateway.EnvGatewayMultiUser, "1")
+	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeJWTRSBearer))
+	t.Setenv("KUBERNETES_SERVICE_HOST", "")
+	t.Setenv("JENKINS_MCP_GATEWAY_REPLICAS", "")
+	t.Setenv("REPLICAS", "")
+	t.Setenv(gateway.EnvGatewayVaultPath, "")
+	t.Setenv(gateway.EnvGatewayJWTVaultPath, "")
+	t.Setenv(gateway.EnvGatewaySubjectRatePath, "")
+	// Plant canary in env that residual builder must never echo.
+	t.Setenv("HOST_DOCTOR_RESIDUAL_CANARY", doctorCanary)
+
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.ProfilesDir(), 0o700)
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	kr := keyring.NewStore(keyring.NewMemory())
+
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     kr,
+		Version:     "test",
+		Commit:      "abc",
+		SkipNetwork: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grs := rep.GatewayResidualStatus
+	if grs == nil {
+		t.Fatal("gateway_residual_status required")
+	}
+	// Parity with BuildGatewayResidualStatus core honesty fields.
+	if grs["residual_id"] != "oauth009_offline" {
+		t.Fatalf("residual_id=%v", grs["residual_id"])
+	}
+	if grs["oauth009_offline"] != true {
+		t.Fatalf("oauth009_offline=%v", grs["oauth009_offline"])
+	}
+	if grs["mode_b_enabled"] != true {
+		t.Fatalf("mode_b_enabled=%v", grs["mode_b_enabled"])
+	}
+	if grs["multi_user_enabled"] != true {
+		t.Fatalf("multi_user_enabled=%v", grs["multi_user_enabled"])
+	}
+	if grs["ha_multi_replica"] != false {
+		t.Fatal("ha_multi_replica must be false")
+	}
+	if grs["gateway_ready"] != false {
+		t.Fatal("gateway_ready must be false on doctor residual")
+	}
+	if grs["mode_a_live_obtain_qualified"] != false ||
+		grs["mode_b_live_rs_qualified"] != false ||
+		grs["mode_c_live_agentcore_qualified"] != false {
+		t.Fatalf("live mode pins must stay false: %+v", grs)
+	}
+	if grs["multi_pod_vault_residual"] != true {
+		t.Fatal("multi_pod_vault_residual always true")
+	}
+	// residual_ids list honesty (BuildGatewayResidualStatus returns []string).
+	idSet := map[string]bool{}
+	switch v := grs["residual_ids"].(type) {
+	case []string:
+		for _, id := range v {
+			idSet[id] = true
+		}
+	case []any:
+		for _, id := range v {
+			if s, ok := id.(string); ok {
+				idSet[s] = true
+			}
+		}
+	default:
+		t.Fatalf("residual_ids type %T: %+v", grs["residual_ids"], grs["residual_ids"])
+	}
+	for _, want := range []string{
+		"multi_user_offline", "oauth009_offline", "oauth010_offline",
+		"progressive_consent_offline", "host008_single_replica", "gateway_modes_live",
+	} {
+		if !idSet[want] {
+			t.Errorf("residual_ids missing %q: %+v", want, grs["residual_ids"])
+		}
+	}
+	note, _ := grs["residual_note"].(string)
+	doc, _ := grs["doc"].(string)
+	if !strings.Contains(note, "live-pin-blockers") && !strings.Contains(doc, "live-pin-blockers") {
+		t.Fatalf("want live-pin-blockers pointer: note=%q doc=%q", note, doc)
+	}
+	// Informational: embed must not alone force overall fail (checks may warn for Mode B).
+	if rep.Overall == diagnostics.StatusFail {
+		// Mode B multi-user is warn not fail; fail would be unrelated.
+		for _, c := range rep.Checks {
+			if c.Status == diagnostics.StatusFail && c.Name != "keyring" {
+				// keyring fail without cred is expected; residual embed is not a fail driver.
+				t.Logf("check fail %s: %s", c.Name, c.Message)
+			}
+		}
+	}
+
+	// Secret-free canaries (JSON + text).
+	blob, err := json.Marshal(rep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	for _, bad := range []string{
+		doctorCanary,
+		"access_token=",
+		"refresh_token=",
+		"client_secret=",
+		"Authorization: Bearer",
+		"production go complete",
+	} {
+		if strings.Contains(strings.ToLower(s), strings.ToLower(bad)) {
+			t.Fatalf("forbidden %q in doctor JSON (gateway_residual_status canary)", bad)
+		}
+	}
+	// Must never claim live GO via residual map.
+	if grs["mode_b_live_rs_qualified"] == true {
+		t.Fatal("must not claim mode_b_live_rs_qualified")
+	}
+	// Wave 15 residual honesty: sanitizeResidualStatusMap must keep
+	// shared_token_cache_file (bool) — not drop it via naive "token" key match.
+	if grs["shared_token_cache_file"] != false {
+		t.Fatalf("shared_token_cache_file default false after doctor sanitize: %+v", grs["shared_token_cache_file"])
+	}
+	if grs["subject_slots_process_local"] != true {
+		t.Fatalf("subject_slots_process_local after doctor sanitize: %+v", grs["subject_slots_process_local"])
+	}
+
+	var buf bytes.Buffer
+	diagnostics.FormatReportText(&buf, rep)
+	text := buf.String()
+	if strings.Contains(text, doctorCanary) {
+		t.Fatal("canary in text doctor report")
+	}
+	if !strings.Contains(text, "gateway_residual_status:") {
+		t.Fatal("text must include gateway_residual_status section")
+	}
+	if !strings.Contains(text, "oauth009_offline") {
+		t.Fatal("text residual section must mention oauth009_offline")
+	}
+	if !strings.Contains(text, "ha_multi_replica: false") && !strings.Contains(text, "ha_multi_replica:false") {
+		// Format uses "%v" → "false"
+		if !strings.Contains(text, "ha_multi_replica") {
+			t.Fatal("text residual section must surface ha_multi_replica")
+		}
+	}
+}
+
+// Regression: doctor gateway_residual_status keeps shared_token_cache_file=true when
+// TOKEN_CACHE_PATH is set; sanitize must not drop the residual honesty bool, never
+// dumps path, never opens the token file contents.
+func TestRunDoctor_GatewayResidualStatus_SharedTokenCacheFileSurvivesSanitize(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	marker := "doctor-token-cache-path-CANARY-never-in-json"
+	path := filepath.Join(t.TempDir(), marker+".json")
+	seedToken := "doctor-seed-access-token-CANARY-never-in-residual"
+	if err := os.WriteFile(path, []byte(`{"version":1,"entries":{"k":{"access_token":"`+seedToken+`","expires_at":"2099-01-01T00:00:00Z"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(gateway.EnvGatewayTokenCachePath, path)
+	t.Setenv("HOST_DOCTOR_TOKEN_CANARY", doctorCanary)
+
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.ProfilesDir(), 0o700)
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	kr := keyring.NewStore(keyring.NewMemory())
+
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     kr,
+		Version:     "test",
+		Commit:      "abc",
+		SkipNetwork: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grs := rep.GatewayResidualStatus
+	if grs == nil {
+		t.Fatal("gateway_residual_status required")
+	}
+	if grs["shared_token_cache_file"] != true {
+		t.Fatalf("Regression: shared_token_cache_file dropped or false after doctor sanitize: %+v", grs["shared_token_cache_file"])
+	}
+	blob, err := json.Marshal(grs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: TOKEN_CACHE_PATH leaked into doctor gateway_residual_status")
+	}
+	if strings.Contains(s, seedToken) {
+		t.Fatal("Regression: token cache file contents leaked into doctor residual")
+	}
+	if strings.Contains(s, doctorCanary) {
+		t.Fatal("canary in residual map")
+	}
+}
+
+// HOST-008 / multi-user residual: doctor surfaces multi_user_enabled warn + secret-free fields.
+func TestRunDoctor_GatewayStatus_MultiUserResidual(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	t.Setenv(gateway.EnvGatewayMultiUser, "1")
+	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAgentCore))
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		Version:     "test",
+		SkipNetwork: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gs *diagnostics.Check
+	for i := range rep.Checks {
+		if rep.Checks[i].Name == "gateway_status" {
+			gs = &rep.Checks[i]
+			break
+		}
+	}
+	if gs == nil {
+		t.Fatal("missing gateway_status check")
+	}
+	if gs.Status != diagnostics.StatusWarn {
+		t.Fatalf("multi_user env set → warn residual, got %s %s", gs.Status, gs.Message)
+	}
+	if gs.Details["multi_user_enabled"] != true {
+		t.Fatalf("multi_user_enabled=%v", gs.Details["multi_user_enabled"])
+	}
+	if gs.Details["ha_multi_replica"] != false || gs.Details["gateway_ready"] != false {
+		t.Fatalf("HOST-008 residual fields: %+v", gs.Details)
+	}
+	// HOST-008 sticky scaffold honesty when multi-user env set (not multi-replica Done).
+	if gs.Details["session_affinity_recommended"] != true {
+		t.Fatalf("session_affinity_recommended want true when multi_user: %+v", gs.Details)
+	}
+	if gs.Details["credential_mode"] != string(gateway.CredentialModeAgentCore) {
+		t.Fatalf("credential_mode=%v", gs.Details["credential_mode"])
+	}
+	if gs.Details["mode_c_enabled"] != true {
+		t.Fatalf("mode_c_enabled=%v", gs.Details["mode_c_enabled"])
+	}
+	if gs.Details["mode_c_live_agentcore_qualified"] != false {
+		t.Fatalf("must not claim live AgentCore pin offline: %+v", gs.Details)
+	}
+	res, _ := gs.Details["mode_matrix_residual"].(string)
+	if !strings.Contains(res, "mode_c") {
+		t.Fatalf("want mode_c residual honesty: %q", res)
+	}
+	// Canary: message/details never include vault tokens.
+	blob := gs.Message
+	for k, v := range gs.Details {
+		blob += k
+		if s, ok := v.(string); ok {
+			blob += s
+		}
+	}
+	if strings.Contains(blob, doctorCanary) {
+		t.Fatal("canary in gateway_status")
+	}
+}
+
+// Unified offline residual honesty for gateway Mode B (OAUTH-009).
+func TestRunDoctor_GatewayStatus_ModeBResidualHonesty(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	t.Setenv(gateway.EnvGatewayMultiUser, "")
+	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeJWTRSBearer))
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		Version:     "test",
+		SkipNetwork: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gs *diagnostics.Check
+	for i := range rep.Checks {
+		if rep.Checks[i].Name == "gateway_status" {
+			gs = &rep.Checks[i]
+			break
+		}
+	}
+	if gs == nil {
+		t.Fatal("missing gateway_status")
+	}
+	if gs.Status != diagnostics.StatusWarn {
+		t.Fatalf("mode B residual should warn: %s %s", gs.Status, gs.Message)
+	}
+	if gs.Details["mode_b_enabled"] != true || gs.Details["mode_b_live_rs_qualified"] != false {
+		t.Fatalf("mode B residual fields: %+v", gs.Details)
+	}
+	res, _ := gs.Details["mode_matrix_residual"].(string)
+	if !strings.Contains(res, "OAUTH-009") || !strings.Contains(res, "mode_b") {
+		t.Fatalf("mode B residual honesty: %q", res)
+	}
+	if !strings.Contains(gs.Message, "OAUTH-009") && !strings.Contains(gs.Message, "jwt-auth-filter") {
+		t.Fatalf("message should note Mode B live residual: %s", gs.Message)
 	}
 }
 
@@ -894,4 +1318,202 @@ func TestCheckUpdateLKG_WarnMismatch(t *testing.T) {
 func sha256SumDoctor(b []byte) string {
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
+}
+
+// OAUTH-010: when gateway Mode C (agentcore_3lo_obo) is explicitly enabled,
+// doctor gateway_status must warn live AgentCore residual (offline matrix is not a pin).
+func TestRunDoctor_ModeC_GatewayStatusResidual(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.ProfilesDir(), 0o700)
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	getenv := func(k string) string {
+		if k == gateway.EnvGatewayCredentialMode {
+			return string(gateway.CredentialModeAgentCore)
+		}
+		return ""
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true,
+		Version:     "test",
+		Getenv:      getenv,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gs diagnostics.Check
+	for _, c := range rep.Checks {
+		if c.Name == "gateway_status" {
+			gs = c
+			break
+		}
+	}
+	if gs.Name == "" {
+		t.Fatal("gateway_status missing")
+	}
+	if gs.Status != diagnostics.StatusWarn {
+		t.Fatalf("Mode C gateway_status want warn got %s %s", gs.Status, gs.Message)
+	}
+	if !strings.Contains(gs.Message, "Mode C") && !strings.Contains(gs.Message, "agentcore") {
+		t.Fatalf("message must note Mode C: %s", gs.Message)
+	}
+	if !strings.Contains(gs.Message, "OAUTH-010") {
+		t.Fatalf("message must note OAUTH-010: %s", gs.Message)
+	}
+	if gs.Details["gateway_mode_c_enabled"] != true {
+		t.Fatalf("gateway_mode_c_enabled: %+v", gs.Details)
+	}
+	if gs.Details["mode_c_live_agentcore_qualified"] != false {
+		t.Fatalf("must not claim live AgentCore qualified: %+v", gs.Details)
+	}
+	if gs.Details["gateway_ready"] != false {
+		t.Fatalf("offline gateway_ready must stay false: %+v", gs.Details)
+	}
+	// Progressive consent residual (OAUTH-010): browser 3LO not automated; metadata Done*.
+	if gs.Details["progressive_consent_browser_3lo_automated"] != false {
+		t.Fatalf("browser_3lo_automated: %+v", gs.Details)
+	}
+	if gs.Details["progressive_consent_metadata_path_done_star"] != true {
+		t.Fatalf("metadata_path_done_star: %+v", gs.Details)
+	}
+	if gs.Details["progressive_consent_last_would_apply"] != true {
+		t.Fatalf("last_would_apply: %+v", gs.Details)
+	}
+	resNote, _ := gs.Details["progressive_consent_residual"].(string)
+	if !strings.Contains(resNote, "OAUTH-010") || !strings.Contains(strings.ToLower(resNote), "not automated") {
+		t.Fatalf("progressive_consent_residual honesty: %q", resNote)
+	}
+	if !strings.Contains(gs.Message, "progressive consent") && !strings.Contains(gs.Message, "browser 3LO") {
+		t.Fatalf("Mode C message should note progressive consent residual: %s", gs.Message)
+	}
+	// Residual text secret-free.
+	if strings.Contains(gs.Message, doctorCanary) {
+		t.Fatal("canary in message")
+	}
+	if strings.Contains(resNote, doctorCanary) {
+		t.Fatal("canary in progressive residual")
+	}
+	// Mode A primary must not elevate Mode C warn.
+	getenvA := func(k string) string {
+		if k == gateway.EnvGatewayCredentialMode {
+			return string(gateway.CredentialModeAPITokenVault)
+		}
+		return ""
+	}
+	repA, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true,
+		Version:     "test",
+		Getenv:      getenvA,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range repA.Checks {
+		if c.Name == "gateway_status" {
+			if c.Details["gateway_mode_c_enabled"] == true {
+				t.Fatalf("Mode A must not report Mode C enabled: %+v", c.Details)
+			}
+			if c.Status == diagnostics.StatusWarn && strings.Contains(c.Message, "Mode C") {
+				t.Fatalf("Mode A must not Mode C warn: %s", c.Message)
+			}
+			return
+		}
+	}
+	t.Fatal("gateway_status missing on Mode A run")
+}
+
+// OAUTH-009: when gateway Mode B (jwt_rs_bearer) is enabled, doctor rs_auth
+// must warn live RS residual (offline vault is not a production pin).
+func TestRunDoctor_ModeB_RSAuthResidual(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.ProfilesDir(), 0o700)
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	getenv := func(k string) string {
+		if k == "JENKINS_MCP_GATEWAY_CREDENTIAL_MODE" {
+			return "jwt_rs_bearer"
+		}
+		return ""
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true,
+		Version:     "test",
+		Getenv:      getenv,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rs diagnostics.Check
+	for _, c := range rep.Checks {
+		if c.Name == "rs_auth" {
+			rs = c
+			break
+		}
+	}
+	if rs.Name == "" {
+		t.Fatal("rs_auth missing")
+	}
+	if rs.Status != diagnostics.StatusWarn {
+		t.Fatalf("Mode B rs_auth want warn got %s %s", rs.Status, rs.Message)
+	}
+	if !strings.Contains(rs.Message, "Mode B") && !strings.Contains(rs.Message, "jwt_rs_bearer") {
+		t.Fatalf("message must note Mode B: %s", rs.Message)
+	}
+	if rs.Details["gateway_mode_b_enabled"] != true {
+		t.Fatalf("gateway_mode_b_enabled: %+v", rs.Details)
+	}
+	if rs.Details["mode_b_live_rs_qualified"] != false {
+		t.Fatalf("must not claim live RS qualified: %+v", rs.Details)
+	}
+	if rs.Details["id_jwt_never_api_credential"] != true {
+		t.Fatalf("id_jwt note: %+v", rs.Details)
+	}
+	if rs.Details["live_lab_still_required"] != true {
+		t.Fatalf("live_lab_still_required: %+v", rs.Details)
+	}
+	// residual_id oauth009_offline links REL lite / pilot checklist.
+	if rs.Details["residual_id"] != "oauth009_offline" {
+		t.Fatalf("Mode B rs_auth residual_id want oauth009_offline: %+v", rs.Details)
+	}
+	if rs.Details["oauth009_offline"] != true {
+		t.Fatalf("oauth009_offline flag: %+v", rs.Details)
+	}
+	if !strings.Contains(rs.Message, "oauth009_offline") && !strings.Contains(rs.Message, "OAUTH-009") {
+		t.Fatalf("message must link oauth009_offline / OAUTH-009: %s", rs.Message)
+	}
+	// Residual text secret-free.
+	if strings.Contains(rs.Message, doctorCanary) {
+		t.Fatal("canary in message")
+	}
 }

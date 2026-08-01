@@ -28,18 +28,19 @@ import (
 
 // Bundle category names (stable, listed before creation).
 const (
-	BundleCatManifest            = "manifest"
-	BundleCatVersion             = "version"
-	BundleCatProfile             = "profile_effective_no_secrets"
-	BundleCatDoctor              = "doctor_report"
-	BundleCatCacheStatus         = "cache_status"
-	BundleCatCapabilities        = "capability_summary"
-	BundleCatMetrics             = "metrics_snapshot"
-	BundleCatErrorSigs           = "recent_error_signatures"
-	BundleCatRuntime             = "runtime_goos_goarch"
-	BundleCatSecuritySelfCheck   = "security_self_check"
-	BundleCatReleaseEvidenceLite = "release_evidence_lite"
-	BundleCatRSQualification     = "rs_qualification_summary"
+	BundleCatManifest              = "manifest"
+	BundleCatVersion               = "version"
+	BundleCatProfile               = "profile_effective_no_secrets"
+	BundleCatDoctor                = "doctor_report"
+	BundleCatCacheStatus           = "cache_status"
+	BundleCatCapabilities          = "capability_summary"
+	BundleCatMetrics               = "metrics_snapshot"
+	BundleCatErrorSigs             = "recent_error_signatures"
+	BundleCatRuntime               = "runtime_goos_goarch"
+	BundleCatSecuritySelfCheck     = "security_self_check"
+	BundleCatReleaseEvidenceLite   = "release_evidence_lite"
+	BundleCatRSQualification       = "rs_qualification_summary"
+	BundleCatGatewayResidualStatus = "gateway_residual_status"
 )
 
 // BundleExcludedCategories documents what is never included (operator-facing).
@@ -57,6 +58,8 @@ var BundleExcludedCategories = []string{
 }
 
 // DefaultBundleCategories is the include set for offline-safe members (Wave 23).
+// gateway_residual_status is always included so residual honesty is present even
+// when doctor fails or a prebuilt DoctorReport omits gateway_residual_status.
 func DefaultBundleCategories() []string {
 	return []string{
 		BundleCatManifest,
@@ -71,6 +74,7 @@ func DefaultBundleCategories() []string {
 		BundleCatSecuritySelfCheck,
 		BundleCatReleaseEvidenceLite,
 		BundleCatRSQualification,
+		BundleCatGatewayResidualStatus,
 	}
 }
 
@@ -330,6 +334,11 @@ func CreateSupportBundle(ctx context.Context, opts SupportBundleOptions) (Suppor
 		members["rs_qualification_summary.json"] = mustJSON(buildRSQualificationMember(opts))
 	}
 
+	// gateway-residual-status.json — always, independent of doctor success.
+	// Same secret-free map as CLI gateway residual-status / doctor embed.
+	// Ensures residual honesty when doctor fails or prebuilt DoctorReport omits it.
+	members["gateway-residual-status.json"] = mustJSON(buildGatewayResidualStatusMember())
+
 	// Cap individual members.
 	for k, v := range members {
 		if len(v) > maxBundleFileBytes {
@@ -548,6 +557,14 @@ func buildReleaseEvidenceLiteMember(opts SupportBundleOptions, now time.Time) ma
 	}
 }
 
+// buildGatewayResidualStatusMember returns the sanitized BuildGatewayResidualStatus
+// map for the top-level gateway-residual-status.json zip member (OPS support-bundle
+// residual lite). Always secret-free; never tokens/subjects/paths of secrets.
+// Uses os.Getenv (same as BuildGatewayResidualStatus(nil)); sanitize matches doctor.
+func buildGatewayResidualStatusMember() map[string]any {
+	return sanitizeResidualStatusMap(BuildGatewayResidualStatus(os.Getenv))
+}
+
 func buildRSQualificationMember(opts SupportBundleOptions) map[string]any {
 	if opts.RSQualification != nil {
 		sum := *opts.RSQualification
@@ -724,6 +741,8 @@ func supportBundleREADME(included []string) string {
 	b.WriteString("\nRedaction: secret-like keys dropped; token/password patterns scrubbed.\n")
 	b.WriteString("Do not place API tokens into this tree. Path is under XDG cache.\n")
 	b.WriteString("security_self_check / release_evidence_lite / rs_qualification_summary are offline-safe only.\n")
+	b.WriteString("gateway-residual-status.json is always present (same map as gateway residual-status / doctor embed);\n")
+	b.WriteString("informational residual honesty only — never production GO; see docs/gateway/live-pin-blockers.md.\n")
 	return b.String()
 }
 

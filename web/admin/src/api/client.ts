@@ -16,6 +16,11 @@ import type {
   DoctorReport,
   EffectivePolicy,
   EvictionPlanResponse,
+  GatewayConsentPurgeRequest,
+  GatewayConsentPurgeResponse,
+  GatewayResidualStatusResponse,
+  GatewaySubjectInvalidateRequest,
+  GatewaySubjectInvalidateResponse,
   GatewayVaultResponse,
   HealthResponse,
   MeResponse,
@@ -208,6 +213,74 @@ export function fetchGatewayVault(): Promise<GatewayVaultResponse> {
   return adminFetch<GatewayVaultResponse>("/gateway/vault");
 }
 
+/**
+ * GET /admin/v1/gateway/residual-status — unified gateway residual snapshot
+ * (same secret-free fields as `jenkins-mcp gateway residual-status`).
+ * Hide card on 404 (older BFF residual). Never tokens/subjects.
+ */
+
+export function fetchGatewayResidualStatus(): Promise<GatewayResidualStatusResponse> {
+  return adminFetch<GatewayResidualStatusResponse>("/gateway/residual-status");
+}
+
+/**
+ * POST /admin/v1/gateway/subject-invalidate — force re-auth residual lite
+ * (HOST-007). Requires gateway_ops (operator|policy_admin). Never sends tokens.
+ * Secret-free StatusMap response (same fields as CLI subject-invalidate).
+ */
+
+export function postGatewaySubjectInvalidate(
+  body: GatewaySubjectInvalidateRequest,
+): Promise<GatewaySubjectInvalidateResponse> {
+  // Only identity key parts — never tokens / Authorization material.
+  const payload: GatewaySubjectInvalidateRequest = {};
+  const sk = body.subject_key?.trim();
+  if (sk) {
+    payload.subject_key = sk;
+  } else {
+    if (body.tenant?.trim()) payload.tenant = body.tenant.trim();
+    if (body.subject_id?.trim()) payload.subject_id = body.subject_id.trim();
+    if (body.profile?.trim()) payload.profile = body.profile.trim();
+  }
+  if (body.workload?.trim()) payload.workload = body.workload.trim();
+  return adminFetch<GatewaySubjectInvalidateResponse>(
+    "/gateway/subject-invalidate",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+/**
+ * POST /admin/v1/gateway/consent-purge — Mode C progressive consent metadata
+ * purge residual lite (HOST-007). Requires gateway_ops. Never sends tokens.
+ * Secret-free summary (same fields as CLI consent-purge); session_id not echoed.
+ */
+
+export function postGatewayConsentPurge(
+  body: GatewayConsentPurgeRequest = {},
+): Promise<GatewayConsentPurgeResponse> {
+  const payload: GatewayConsentPurgeRequest = {};
+  const action = body.action?.trim();
+  if (action) payload.action = action;
+  const sid = body.session_id?.trim();
+  if (sid) payload.session_id = sid;
+  if (body.clear_all === true) payload.clear_all = true;
+  // clear_all requires exact confirm:"CLEAR_ALL" (server-enforced; no trim).
+  if (body.confirm !== undefined && body.confirm !== "") {
+    payload.confirm = body.confirm;
+  }
+  const path = body.path?.trim();
+  if (path) payload.path = path;
+  return adminFetch<GatewayConsentPurgeResponse>("/gateway/consent-purge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 /** Process role + permissions (UI-003). Never returns the token value. */
 
 export function fetchMe(): Promise<MeResponse> {
@@ -336,6 +409,16 @@ export function fetchSecuritySelfCheck(
 
 export function hasCacheDestructive(me: MeResponse | null | undefined): boolean {
   return Boolean(me?.permissions?.includes("cache_destructive"));
+}
+
+/**
+ * True when /me permissions include gateway_ops (operator or policy_admin).
+ * Gates POST /admin/v1/gateway/subject-invalidate and
+ * POST /admin/v1/gateway/consent-purge (HOST-007).
+ */
+
+export function hasGatewayOps(me: MeResponse | null | undefined): boolean {
+  return Boolean(me?.permissions?.includes("gateway_ops"));
 }
 
 /** Format AdminApiError (or unknown) for UI — never includes tokens. */

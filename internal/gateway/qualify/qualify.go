@@ -2,9 +2,12 @@ package qualify
 
 import (
 	"context"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -16,6 +19,7 @@ import (
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
 	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
+	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 )
 
@@ -55,6 +59,9 @@ type Summary struct {
 
 // RunOffline executes the in-process security + performance suite without
 // network I/O. Suitable for `jenkins-mcp gateway qualify --offline`.
+//
+// Includes HOST-011 modes A/B/C offline Obtain matrix and no-silent-fallthrough.
+// Does not claim live Entra / AgentCore / jwt-auth-filter production pin.
 func RunOffline(ctx context.Context) Summary {
 	if ctx == nil {
 		ctx = context.Background()
@@ -63,9 +70,19 @@ func RunOffline(ctx context.Context) Summary {
 		Suite: "offline",
 		Residuals: []string{
 			"Live AgentCore / Entra network acquisition not exercised (GWY-003 full pin residual)",
-			// Offline vault hit/miss + mock IdP outage + JWKS kid-lite are exercised below (Done*).
+			// Offline vault hit/miss + mock IdP outage + JWKS kid-lite + mode A/B/C matrix are exercised below (Done*).
 			// Live Entra JWKS rotation under load / real IdP outage remain residual.
-			"Live Entra JWKS rotation under load and live IdP outage chaos remain residual (offline vault hit/miss + mock IdP outage + JWKS kid-lite Done*)",
+			"Live Entra JWKS rotation under load and live IdP outage chaos remain residual (offline vault hit/miss + mock IdP outage + JWKS kid-lite + mode A/B/C matrix Done*)",
+			"Mode B live jwt-auth-filter / IdP pin residual (OAUTH-009); offline JWT vault Bearer + claim fail-closed matrix Done*",
+			"OAUTH-009 offline: wrong aud/exp/iss rejected; ID token never API credential; Mode B Obtain never Basic fallthrough — live RS pin still open",
+			"Mode C live Entra 3LO/OBO + AgentCore Identity vault residual (OAUTH-010 / GWY-003); offline Live=false / mock Fetcher / auth_code consent / token_exchange / wrong audience Done* (oauth010_mode_c_offline_matrix + mode_c_agentcore_live_matrix)",
+			gateway.ProgressiveConsentResidualNote,
+			"OAUTH-010: HTTPTokenFetcher https mock AS covered in package tests (TestOAUTH010_* / TestHTTPTokenFetcher_*); do not claim live Entra Done",
+			"Opt-in residual lab: testdata/oauth-lab + make live-oauth-* (HOST-012…015); go test -tags=live_oauth Mode C Obtain vs mock-token via TLS test shim (HTTPTokenFetcher https-only; lab is HTTP loopback — TLS residual; not production Entra / jwt-auth-filter / AgentCore vault)",
+			"Cross-link: docs/auth/oauth-capability-matrix.md §4 + docs/auth/jwt-auth-filter-qualification.md + docs/gateway/qualification.md (GWY-003 / OAUTH-010)",
+			// Residual-status honesty case (BuildGatewayResidualStatus / CLI residual-status) is offline Done*.
+			// Live mode pins / multi-pod shared rate+vault+principal+JWKS HA remain residual — never production GO.
+			"gateway residual-status offline honesty Done* (gateway_residual_status_offline_honesty): residual_ids + ha_multi_replica=false + live mode pins false + oauth009_offline + shared_*_file default false; no secrets — live Entra/AgentCore pin residual",
 			"P95/P99 live token acquisition SLOs require production pin evidence",
 			"Generic-token passthrough remains disabled; exact-audience exception is residual approval",
 		},
@@ -101,6 +118,22 @@ func RunOffline(ctx context.Context) Summary {
 	run("vault_hit_miss", "security", caseVaultHitMiss)
 	run("idp_outage_chaos", "security", caseIdPOutageChaos)
 	run("jwks_key_rotation_lite", "security", caseJWKSKeyRotationLite)
+
+	// --- HOST-011 modes A/B/C offline Obtain matrix (GWY-003 qualify rows) ---
+	run("mode_a_vault_obtain_basic", "security", caseModeAVaultObtainBasic)
+	run("mode_b_jwt_vault_bearer", "security", caseModeBJWTVaultBearer)
+	run("mode_c_agentcore_live_matrix", "security", caseModeCAgentCoreLiveMatrix)
+	run("host011_no_silent_fallthrough", "security", caseHOST011NoSilentFallthrough)
+	// OAUTH-009 offline foundations (claim fail-closed + classifier + Mode B no Basic).
+	run("oauth009_offline_bearer_matrix", "security", caseOAUTH009OfflineBearerMatrix)
+	// OAUTH-010 Mode C prototype matrix (auth_code consent + OBO exchange + Live gates).
+	// Complements mode_c_agentcore_live_matrix (HOST-011 row) with flow-mode honesty.
+	run("oauth010_mode_c_offline_matrix", "security", caseOAUTH010ModeCOfflineMatrix)
+	// Progressive consent residual honesty (metadata Done*; browser 3LO residual).
+	run("progressive_consent_residual", "security", caseProgressiveConsentResidual)
+	// Unified residual-status snapshot honesty (BuildGatewayResidualStatus / CLI residual-status).
+	// Env-empty: residual_ids, live pins false, ha_multi_replica false, shared_*_file false; no secrets.
+	run("gateway_residual_status_offline_honesty", "security", caseGatewayResidualStatusOfflineHonesty)
 
 	// --- Performance cases (mock) ---
 	run("concurrent_obtain_stub_under_budget", "performance", caseConcurrentObtain)
@@ -330,6 +363,214 @@ func caseConsentURLNoToken(ctx context.Context) error {
 	// only at the application layer; harness documents the rule.
 	if strings.Contains(info.AuthorizationURL, CanaryToken) {
 		return fmt.Errorf("authorization URL must not embed canary token")
+	}
+	return nil
+}
+
+// caseGatewayResidualStatusOfflineHonesty runs diagnostics.BuildGatewayResidualStatus
+// (same map as CLI `gateway residual-status` / doctor embed / admin BFF) with an
+// empty environ and asserts residual honesty for GWY-003 lite:
+// residual_ids present, ha_multi_replica false, live mode pins false,
+// oauth009_offline, shared_*_file false by default, no secrets.
+// Not live Entra / AgentCore / multi-pod HA Done.
+func caseGatewayResidualStatusOfflineHonesty(ctx context.Context) error {
+	_ = ctx
+	// Empty environ → default residual honesty (no same-host shared file paths).
+	getenv := func(string) string { return "" }
+	out := diagnostics.BuildGatewayResidualStatus(getenv)
+	if out == nil {
+		return fmt.Errorf("BuildGatewayResidualStatus returned nil")
+	}
+
+	// residual_ids must be present and include REL/GWY residual honesty ids.
+	wantIDs := []string{
+		"multi_user_offline",
+		"oauth009_offline",
+		"oauth010_offline",
+		"progressive_consent_offline",
+		"host008_single_replica",
+		"gateway_modes_live",
+	}
+	rawIDs, ok := out["residual_ids"]
+	if !ok {
+		return fmt.Errorf("residual_ids missing")
+	}
+	idSet := map[string]bool{}
+	switch ids := rawIDs.(type) {
+	case []string:
+		if len(ids) == 0 {
+			return fmt.Errorf("residual_ids empty")
+		}
+		for _, id := range ids {
+			idSet[id] = true
+		}
+	case []any:
+		if len(ids) == 0 {
+			return fmt.Errorf("residual_ids empty")
+		}
+		for _, id := range ids {
+			s, _ := id.(string)
+			if s != "" {
+				idSet[s] = true
+			}
+		}
+	default:
+		return fmt.Errorf("residual_ids type %T", rawIDs)
+	}
+	for _, want := range wantIDs {
+		if !idSet[want] {
+			return fmt.Errorf("residual_ids missing %q: %+v", want, rawIDs)
+		}
+	}
+
+	// Mode B residual id + oauth009_offline flag always advertised offline.
+	if rid, _ := out["residual_id"].(string); rid != "oauth009_offline" {
+		return fmt.Errorf("residual_id=%v want oauth009_offline", out["residual_id"])
+	}
+	if out["oauth009_offline"] != true {
+		return fmt.Errorf("oauth009_offline=%v want true", out["oauth009_offline"])
+	}
+	if out["oauth009_offline_only"] != true {
+		return fmt.Errorf("oauth009_offline_only=%v want true", out["oauth009_offline_only"])
+	}
+
+	// Live mode pins stay false (never production GO from residual-status).
+	for _, k := range []string{
+		"mode_a_live_obtain_qualified",
+		"mode_b_live_rs_qualified",
+		"mode_c_live_agentcore_qualified",
+	} {
+		if out[k] != false {
+			return fmt.Errorf("%s must be false (live pin residual): %+v", k, out[k])
+		}
+	}
+
+	// HOST-008 Tier A: single-replica default; Ready only on serve /readyz.
+	if out["ha_multi_replica"] != false {
+		return fmt.Errorf("ha_multi_replica must be false: %+v", out["ha_multi_replica"])
+	}
+	if out["gateway_ready"] != false {
+		return fmt.Errorf("gateway_ready must be false on residual-status: %+v", out["gateway_ready"])
+	}
+	if out["multi_pod_vault_residual"] != true {
+		return fmt.Errorf("multi_pod_vault_residual always true: %+v", out["multi_pod_vault_residual"])
+	}
+
+	// shared_*_file default false when paths unset (HOST-008 lite residual).
+	// Vault path residual uses env-explicit helpers (default XDG path does not count).
+	for _, k := range []string{
+		"shared_subject_rate_file",
+		"shared_principal_cache_file",
+		"shared_jwks_file",
+		"shared_token_cache_file",
+		"shared_api_token_vault_file",
+		"shared_jwt_vault_file",
+	} {
+		if out[k] != false {
+			return fmt.Errorf("%s default false when path unset: %+v", k, out[k])
+		}
+	}
+
+	// Progressive consent residual object: browser 3LO not automated.
+	pc, ok := out["progressive_consent"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("progressive_consent object required: %+v", out["progressive_consent"])
+	}
+	if pc["browser_3lo_automated"] != false {
+		return fmt.Errorf("browser_3lo_automated must be false: %+v", pc["browser_3lo_automated"])
+	}
+
+	// Secret-free: canary + token markers never appear in residual map JSON.
+	blob, err := json.Marshal(out)
+	if err != nil {
+		return fmt.Errorf("marshal residual-status: %w", err)
+	}
+	s := string(blob)
+	for _, bad := range []string{
+		CanaryToken,
+		"access_token=",
+		"refresh_token=",
+		"client_secret=",
+		"Bearer " + CanaryToken,
+		"Authorization: Bearer",
+	} {
+		if strings.Contains(s, bad) {
+			return fmt.Errorf("residual-status surface contained %q", bad)
+		}
+	}
+	if strings.Contains(strings.ToLower(s), "production go complete") {
+		return fmt.Errorf("must not claim production GO complete")
+	}
+
+	// Operator pointer to live pin runbook.
+	note, _ := out["residual_note"].(string)
+	doc, _ := out["doc"].(string)
+	if !strings.Contains(note, "live-pin-blockers") && !strings.Contains(doc, "live-pin-blockers") {
+		return fmt.Errorf("want live-pin-blockers pointer: note=%q doc=%q", note, doc)
+	}
+	return nil
+}
+
+// caseProgressiveConsentResidual proves Mode C progressive consent residual honesty:
+// browser 3LO not automated; metadata path Done*; ConsentRequired surfaces only
+// auth URL + session id; residual note secret-free (no canary tokens).
+func caseProgressiveConsentResidual(ctx context.Context) error {
+	_ = ctx
+	pc := gateway.NewProgressiveConsentResidual()
+	if pc.Browser3LOAutomated {
+		return fmt.Errorf("browser_3lo_automated must be false (residual)")
+	}
+	if !pc.MetadataPathDoneStar {
+		return fmt.Errorf("metadata_path_done_star must be true (Done*)")
+	}
+	if !pc.ProcessLocalConsentMetadataStore {
+		return fmt.Errorf("process_local_consent_metadata_store must be true (Done*)")
+	}
+	if pc.DurableConsentSessionStore || pc.MultiReplicaConsentCorrelation {
+		return fmt.Errorf("AgentCore durable vault / multi-replica must stay residual false")
+	}
+	if !pc.LastConsentWouldApply {
+		return fmt.Errorf("last_consent_would_apply residual marker must be true")
+	}
+	if !strings.Contains(pc.ResidualNote, "OAUTH-010") {
+		return fmt.Errorf("residual note must mention OAUTH-010: %q", pc.ResidualNote)
+	}
+	if !strings.Contains(strings.ToLower(pc.ResidualNote), "browser") ||
+		!strings.Contains(strings.ToLower(pc.ResidualNote), "not automated") {
+		return fmt.Errorf("residual note must say browser 3LO not automated: %q", pc.ResidualNote)
+	}
+	if !strings.Contains(strings.ToLower(pc.Surfaces), "authorization_url") ||
+		!strings.Contains(strings.ToLower(pc.Surfaces), "session_id") {
+		return fmt.Errorf("surfaces must name authorization_url + session_id: %q", pc.Surfaces)
+	}
+	// ConsentRequired progressive helpers + Error() canaries.
+	authURL := "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?state=prog-consent"
+	sessionID := "sess-prog-consent-qualify"
+	cerr := gateway.NewConsentRequired(gateway.ConsentInfo{
+		AuthorizationURL: authURL,
+		SessionID:        sessionID,
+		Provider:         "agentcore",
+	})
+	cr, ok := gateway.AsConsentRequired(cerr)
+	if !ok || cr == nil || !cr.Info.Valid() {
+		return fmt.Errorf("want ConsentRequired: %v", cerr)
+	}
+	if cr.ConsentAuthorizationURL() != authURL || cr.ConsentSessionID() != sessionID {
+		return fmt.Errorf("progressive helpers mismatch")
+	}
+	// Error() is log-safe: host + truncated session (not full authorize query).
+	if strings.Contains(cerr.Error(), "state=prog-consent") {
+		return fmt.Errorf("Error() must not dump full authorize URL with state: %q", cerr.Error())
+	}
+	// Residual / Error / StatusMap must never embed live canary token material.
+	// Note: Surfaces may mention the words access_token/refresh_token as denials
+	// ("never access_token…"); only material markers and CanaryToken fail.
+	blob := cerr.Error() + " " + cr.Info.String() + " " + fmt.Sprint(cr.Info.StatusMap()) +
+		" " + pc.ResidualNote + " " + fmt.Sprint(pc.StatusMap())
+	for _, bad := range []string{CanaryToken, "access_token=", "refresh_token=", "client_secret=", "Bearer " + CanaryToken} {
+		if strings.Contains(blob, bad) {
+			return fmt.Errorf("progressive consent residual surface contained %q", bad)
+		}
 	}
 	return nil
 }
@@ -699,6 +940,708 @@ func caseJWKSKeyRotationLite(ctx context.Context) error {
 		return fmt.Errorf("canary in Credential.String after key_id ok")
 	}
 	return nil
+}
+
+// caseModeAVaultObtainBasic — HOST-011 Mode A offline row:
+// vault Obtain → Basic for subject; cross-subject miss; secret canary.
+func caseModeAVaultObtainBasic(ctx context.Context) error {
+	v := gateway.NewMemoryAPITokenVault()
+	callerA := gateway.Caller{
+		Subject: "user-mode-a", Tenant: "t", WorkloadID: "wl",
+		ProfileID: contracts.ProfileID("corp"),
+	}
+	callerB := gateway.Caller{
+		Subject: "user-mode-a-other", Tenant: "t", WorkloadID: "wl",
+		ProfileID: contracts.ProfileID("corp"),
+	}
+	if err := v.Put(ctx, gateway.SubjectKey(callerA), "alice", CanaryToken+"-modeA"); err != nil {
+		return fmt.Errorf("vault put: %w", err)
+	}
+	p, err := gateway.RequireAPITokenVaultSetup(v)
+	if err != nil {
+		return err
+	}
+	if p.Mode() != gateway.ModeAPITokenVault {
+		return fmt.Errorf("mode want api_token_vault got %s", p.Mode())
+	}
+
+	// Obtain + HTTP auth shape = Basic for subject.
+	auth, err := gateway.ObtainHTTPAuth(ctx, p, callerA)
+	if err != nil {
+		return fmt.Errorf("mode A obtain: %w", err)
+	}
+	if auth.Scheme != gateway.HTTPAuthSchemeBasic || auth.Username != "alice" {
+		return fmt.Errorf("mode A must be Basic alice: %+v", auth)
+	}
+	if auth.Token != CanaryToken+"-modeA" {
+		return fmt.Errorf("mode A token material mismatch")
+	}
+	if strings.Contains(auth.String(), CanaryToken) {
+		return fmt.Errorf("mode A HTTPAuth.String leaked canary")
+	}
+
+	// Cross-subject miss: other subject has no vault entry.
+	cred, err := p.Obtain(ctx, callerB)
+	if err == nil || apperr.CodeOf(err) != apperr.CodeNotFound {
+		return fmt.Errorf("cross-subject miss want not_found: err=%v", err)
+	}
+	if cred.AccessToken != "" {
+		return fmt.Errorf("cross-subject must not return token")
+	}
+	if strings.Contains(err.Error(), CanaryToken) {
+		return fmt.Errorf("mode A canary in cross-subject error")
+	}
+
+	// Credential.String / Status never leak canary.
+	okCred, err := p.Obtain(ctx, callerA)
+	if err != nil {
+		return err
+	}
+	if strings.Contains(okCred.String(), CanaryToken) {
+		return fmt.Errorf("mode A Credential.String leaked canary")
+	}
+	st := p.Status(ctx)
+	if strings.Contains(fmt.Sprintf("%+v", st), CanaryToken) {
+		return fmt.Errorf("mode A Status leaked canary")
+	}
+	return nil
+}
+
+// caseModeBJWTVaultBearer — HOST-011 Mode B offline row:
+// JWT vault Obtain → Bearer; ID token reject; wrong subject miss.
+func caseModeBJWTVaultBearer(ctx context.Context) error {
+	v := gateway.NewMemoryJWTVault()
+	callerA := gateway.Caller{
+		Subject: "user-mode-b", Tenant: "t", WorkloadID: "wl",
+		ProfileID: contracts.ProfileID("corp"),
+	}
+	callerB := gateway.Caller{
+		Subject: "user-mode-b-other", Tenant: "t", WorkloadID: "wl",
+		ProfileID: contracts.ProfileID("corp"),
+	}
+	// Access-token shaped JWT (token_use=access_token) accepted.
+	at := compactJWTClaims(map[string]string{
+		"sub": "user-mode-b", "token_use": "access_token", "aud": "api://jenkins-api",
+	})
+	if err := v.Put(ctx, gateway.SubjectKey(callerA), at); err != nil {
+		return fmt.Errorf("jwt vault put access: %w", err)
+	}
+	// Opaque lab token for second subject isolation path is separate.
+
+	p, err := gateway.RequireJWTRSBearerSetup(v)
+	if err != nil {
+		return err
+	}
+	if p.Mode() != gateway.ModeJWTRSBearer {
+		return fmt.Errorf("mode want jwt_rs_bearer got %s", p.Mode())
+	}
+
+	auth, err := gateway.ObtainHTTPAuth(ctx, p, callerA)
+	if err != nil {
+		return fmt.Errorf("mode B obtain: %w", err)
+	}
+	if auth.Scheme != gateway.HTTPAuthSchemeBearer || auth.Username != "" {
+		return fmt.Errorf("mode B must be Bearer without username: %+v", auth)
+	}
+	if auth.Token != at {
+		return fmt.Errorf("mode B token material mismatch")
+	}
+	if strings.Contains(auth.String(), at) || strings.Contains(auth.String(), CanaryToken) {
+		return fmt.Errorf("mode B HTTPAuth.String leaked token")
+	}
+
+	// Wrong subject miss.
+	cred, err := p.Obtain(ctx, callerB)
+	if err == nil || apperr.CodeOf(err) != apperr.CodeNotFound {
+		return fmt.Errorf("wrong subject miss want not_found: err=%v", err)
+	}
+	if cred.AccessToken != "" {
+		return fmt.Errorf("wrong subject must not return token")
+	}
+	if strings.Contains(err.Error(), at) || strings.Contains(err.Error(), CanaryToken) {
+		return fmt.Errorf("mode B canary/token in wrong-subject error")
+	}
+
+	// ID token reject (HOST-010): vault Put and Obtain must fail closed.
+	idTok := compactJWTClaims(map[string]string{
+		"sub": "user-mode-b", "token_use": "id_token",
+	})
+	putErr := v.Put(ctx, gateway.SubjectKey(callerB), idTok)
+	if putErr == nil {
+		return fmt.Errorf("id_token must be rejected at vault Put")
+	}
+	if apperr.CodeOf(putErr) != apperr.CodeInvalidArgument {
+		return fmt.Errorf("id_token Put code %v", apperr.CodeOf(putErr))
+	}
+	if strings.Contains(putErr.Error(), idTok) {
+		return fmt.Errorf("id_token material in Put error")
+	}
+	// Defense-in-depth: even if put bypassed via corrupt path, Obtain rejects.
+	// Memory vault cannot store id_token; assert residual wording path via Put only.
+	// Canary check on Status.
+	st := p.Status(ctx)
+	if strings.Contains(fmt.Sprintf("%+v", st), CanaryToken) || strings.Contains(fmt.Sprintf("%+v", st), at) {
+		return fmt.Errorf("mode B Status leaked token material")
+	}
+	return nil
+}
+
+// caseModeCAgentCoreLiveMatrix — HOST-011 Mode C offline row:
+// Live=false → not_configured; Live+mock Fetcher → Bearer; wrong audience fail;
+// ConsentRequired metadata only (no tokens).
+func caseModeCAgentCoreLiveMatrix(ctx context.Context) error {
+	cfg := validASCfg()
+	cfg.Mode = gateway.ModeTokenExchange
+	cache := gateway.NewMemoryTokenCache(time.Hour)
+	p, err := gateway.NewAgentCoreProvider(cfg, cache)
+	if err != nil {
+		return err
+	}
+	caller := gateway.Caller{
+		Subject: "user-mode-c", Tenant: "t", WorkloadID: "wl",
+		ProfileID: contracts.ProfileID("corp"),
+	}
+
+	// Live=false (default) → not_configured; no token elevation from empty cache.
+	if p.Live {
+		return fmt.Errorf("default AgentCore Live must be false")
+	}
+	cred, err := p.Obtain(ctx, caller)
+	if err == nil || apperr.CodeOf(err) != apperr.CodeCapabilityMissing {
+		return fmt.Errorf("Live=false want not_configured/capability_missing: err=%v", err)
+	}
+	if cred.AccessToken != "" {
+		return fmt.Errorf("Live=false must not return token")
+	}
+	if strings.Contains(err.Error(), CanaryToken) {
+		return fmt.Errorf("Live=false error leaked canary")
+	}
+	st := p.Status(ctx)
+	if st.Ready {
+		return fmt.Errorf("Live=false Status must not be Ready: %+v", st)
+	}
+
+	// Live + mock Fetcher → Bearer credential.
+	p.Live = true
+	p.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, c gateway.Caller, cfg gateway.AgentCoreConfig) (gateway.Credential, error) {
+		return gateway.Credential{
+			AccessToken:      CanaryToken + "-modeC-" + c.Subject,
+			ExpiresAt:        time.Now().Add(time.Hour),
+			JenkinsPrincipal: "jp-" + c.Subject,
+			Mode:             gateway.ModeTokenExchange,
+		}, nil
+	})
+	auth, err := gateway.ObtainHTTPAuth(ctx, p, caller)
+	if err != nil {
+		return fmt.Errorf("mode C live mock obtain: %w", err)
+	}
+	if auth.Scheme != gateway.HTTPAuthSchemeBearer || auth.Username != "" {
+		return fmt.Errorf("mode C must be Bearer: %+v", auth)
+	}
+	if auth.Token != CanaryToken+"-modeC-"+caller.Subject {
+		return fmt.Errorf("mode C token mismatch")
+	}
+	if strings.Contains(auth.String(), CanaryToken) {
+		return fmt.Errorf("mode C HTTPAuth.String leaked canary")
+	}
+
+	// Wrong audience fail closed (no token; canary absent).
+	// Clear cache so fetcher runs again.
+	cache.Clear()
+	p.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, c gateway.Caller, cfg gateway.AgentCoreConfig) (gateway.Credential, error) {
+		// Same residual shape as HTTPTokenFetcher wrong-audience path.
+		return gateway.Credential{}, apperr.New(apperr.CodeAuthentication,
+			"token audience does not match configured Jenkins API resource")
+	})
+	cred, err = p.Obtain(ctx, caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("wrong audience must fail closed without token: err=%v", err)
+	}
+	if apperr.CodeOf(err) != apperr.CodeAuthentication {
+		return fmt.Errorf("wrong audience code %v", apperr.CodeOf(err))
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "audience") {
+		return fmt.Errorf("wrong audience wording: %v", err)
+	}
+	if strings.Contains(err.Error(), CanaryToken) {
+		return fmt.Errorf("wrong audience error leaked canary")
+	}
+
+	// ConsentRequired metadata only (URL + session; no access/refresh tokens).
+	p.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, c gateway.Caller, cfg gateway.AgentCoreConfig) (gateway.Credential, error) {
+		return gateway.Credential{}, gateway.NewConsentRequired(gateway.ConsentInfo{
+			AuthorizationURL: "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?client_id=public&state=xyz",
+			SessionID:        "sess-mode-c-qualify",
+			Provider:         "agentcore",
+		})
+	})
+	cred, err = p.Obtain(ctx, caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("consent path must fail closed without token")
+	}
+	cr, ok := gateway.AsConsentRequired(err)
+	if !ok || cr == nil {
+		return fmt.Errorf("want ConsentRequired got %T %v", err, err)
+	}
+	if !cr.Info.Valid() {
+		return fmt.Errorf("consent info invalid: %+v", cr.Info)
+	}
+	blob := err.Error() + " " + cr.Info.String() + " " + fmt.Sprint(cr.Info.StatusMap()) + " " + cr.Info.AuthorizationURL
+	for _, bad := range []string{CanaryToken, "access_token=", "refresh_token=", "client_secret="} {
+		if strings.Contains(strings.ToLower(blob), strings.ToLower(bad)) {
+			return fmt.Errorf("consent surface contained %q", bad)
+		}
+	}
+	return nil
+}
+
+// caseHOST011NoSilentFallthrough proves disabled/failed mode does not use
+// another mode's or another subject's credential (HOST-011 cross-link).
+// Invoked from the GWY-003 qualify suite so qualify coverage cannot drift
+// away from the mode matrix contract.
+func caseHOST011NoSilentFallthrough(ctx context.Context) error {
+	caller := gateway.Caller{
+		Subject: "user-fallthrough", Tenant: "t", WorkloadID: "wl",
+		ProfileID: contracts.ProfileID("corp"),
+	}
+	canaryA := CanaryToken + "-fallthrough-A"
+	canaryB := CanaryToken + "-fallthrough-B"
+
+	// Provision Mode A vault for the same subject.
+	apiVault := gateway.NewMemoryAPITokenVault()
+	if err := apiVault.Put(ctx, gateway.SubjectKey(caller), "alice", canaryA); err != nil {
+		return err
+	}
+
+	// Mode B primary with empty JWT vault — must not fall through to Mode A.
+	jwtVault := gateway.NewMemoryJWTVault()
+	pB, err := gateway.RequireJWTRSBearerSetup(jwtVault)
+	if err != nil {
+		return err
+	}
+	cred, err := pB.Obtain(ctx, caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("empty Mode B vault must fail closed without token")
+	}
+	if apperr.CodeOf(err) != apperr.CodeNotFound {
+		return fmt.Errorf("empty Mode B code %v want not_found", apperr.CodeOf(err))
+	}
+	if strings.Contains(err.Error(), canaryA) {
+		return fmt.Errorf("Mode A canary in Mode B error (silent fallthrough)")
+	}
+
+	// Residual Mode B also no fallthrough / no ambient SA.
+	res := gateway.NewResidualJWTRSProvider()
+	cred, err = res.Obtain(ctx, caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("residual Mode B must not return credentials")
+	}
+	if apperr.CodeOf(err) != apperr.CodeCapabilityMissing {
+		return fmt.Errorf("residual Mode B code %v", apperr.CodeOf(err))
+	}
+
+	// Mode A primary never returns Bearer JWT scheme.
+	pA, err := gateway.RequireAPITokenVaultSetup(apiVault)
+	if err != nil {
+		return err
+	}
+	authA, err := gateway.ObtainHTTPAuth(ctx, pA, caller)
+	if err != nil {
+		return err
+	}
+	if authA.Scheme != gateway.HTTPAuthSchemeBasic {
+		return fmt.Errorf("Mode A must stay Basic: %+v", authA)
+	}
+
+	// Mode B with its own vault never returns Basic / Mode A material.
+	if err := jwtVault.Put(ctx, gateway.SubjectKey(caller), canaryB); err != nil {
+		return err
+	}
+	authB, err := gateway.ObtainHTTPAuth(ctx, pB, caller)
+	if err != nil {
+		return err
+	}
+	if authB.Scheme != gateway.HTTPAuthSchemeBearer || authB.Token != canaryB {
+		return fmt.Errorf("Mode B must be Bearer with own token: %+v", authB)
+	}
+	if authB.Token == canaryA || authB.Username != "" {
+		return fmt.Errorf("Mode B must not use Mode A material: %+v", authB)
+	}
+	if strings.Contains(authA.String(), canaryA) || strings.Contains(authB.String(), canaryB) {
+		return fmt.Errorf("HTTPAuth.String leaked canary on fallthrough matrix")
+	}
+
+	// CredentialProviderFromEnviron: invalid mode fails start (no silent AgentCore).
+	env := map[string]string{
+		gateway.EnvGatewayCredentialMode: "not_a_real_mode",
+	}
+	getenv := func(k string) string { return env[k] }
+	_, err = gateway.CredentialProviderFromEnviron("https://jenkins.example.com", getenv)
+	if err == nil {
+		return fmt.Errorf("invalid mode must fail start")
+	}
+	if apperr.CodeOf(err) != apperr.CodeInvalidArgument {
+		return fmt.Errorf("invalid mode code %v", apperr.CodeOf(err))
+	}
+
+	// HOST-011: primary not in ENABLED_MODES fails closed (no silent fallthrough).
+	env = map[string]string{
+		gateway.EnvGatewayCredentialMode: string(gateway.CredentialModeAgentCore),
+		gateway.EnvGatewayEnabledModes:   "api_token_vault,jwt_rs_bearer",
+	}
+	_, err = gateway.ModeMatrixFromEnviron(getenv)
+	if err == nil {
+		return fmt.Errorf("primary agentcore not in enabled A+B must fail closed")
+	}
+	if apperr.CodeOf(err) != apperr.CodeInvalidArgument {
+		return fmt.Errorf("primary-not-enabled code %v", apperr.CodeOf(err))
+	}
+	return nil
+}
+
+// caseOAUTH010ModeCOfflineMatrix — OAUTH-010 Mode C prototype matrix (GWY-003 qualify):
+// authorization_code → ConsentRequired (URL+session only); token_exchange → Bearer
+// Jenkins audience; wrong audience fail; Live=false not_configured; Live=true nil
+// Fetcher fail closed; ModeMatrix residual honesty.
+// Complements mode_c_agentcore_live_matrix (HOST-011 row) with flow-mode separation.
+// Does not claim live Entra 3LO/OBO + AgentCore production pin.
+// HTTPTokenFetcher mock-AS TLS paths: package TestOAUTH010_* / TestHTTPTokenFetcher_*.
+// Opt-in lab residual: make live-oauth-* HOST-015 mock-token.
+func caseOAUTH010ModeCOfflineMatrix(ctx context.Context) error {
+	caller := gateway.Caller{
+		Subject: "oauth010-qualify", Tenant: "t", WorkloadID: "wl",
+		ProfileID: contracts.ProfileID("corp"),
+	}
+
+	// --- Live=false → not_configured (cache ignored even if Fetcher would succeed) ---
+	cfg := validASCfg()
+	cfg.Mode = gateway.ModeTokenExchange
+	p, err := gateway.NewAgentCoreProvider(cfg, gateway.NewMemoryTokenCache(time.Hour))
+	if err != nil {
+		return err
+	}
+	p.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, c gateway.Caller, cfg gateway.AgentCoreConfig) (gateway.Credential, error) {
+		return gateway.Credential{AccessToken: CanaryToken + "-must-not-run"}, nil
+	})
+	if p.Live {
+		return fmt.Errorf("default AgentCore Live must be false")
+	}
+	cred, err := p.Obtain(ctx, caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("Live=false must not_configured without token: err=%v", err)
+	}
+	if apperr.CodeOf(err) != apperr.CodeCapabilityMissing {
+		return fmt.Errorf("Live=false code %v", apperr.CodeOf(err))
+	}
+	if strings.Contains(err.Error(), CanaryToken) {
+		return fmt.Errorf("Live=false error leaked canary")
+	}
+	if p.Status(ctx).Ready {
+		return fmt.Errorf("Live=false Status must not be Ready")
+	}
+
+	// --- Live=true + nil Fetcher → fail closed ---
+	p.Live = true
+	p.Fetcher = nil
+	cred, err = p.Obtain(ctx, caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("Live=true nil Fetcher must fail closed: err=%v", err)
+	}
+	if apperr.CodeOf(err) != apperr.CodeCapabilityMissing {
+		return fmt.Errorf("nil Fetcher code %v", apperr.CodeOf(err))
+	}
+	low := strings.ToLower(err.Error())
+	if !strings.Contains(low, "tokenfetcher") && !strings.Contains(low, "fetcher") {
+		return fmt.Errorf("nil Fetcher wording: %v", err)
+	}
+	if p.Status(ctx).Ready {
+		return fmt.Errorf("nil Fetcher Status must not be Ready")
+	}
+
+	// --- authorization_code mock: ConsentRequired with auth URL + session only ---
+	cfgAuth := validASCfg()
+	cfgAuth.Mode = gateway.ModeAuthorizationCode
+	pAuth, err := gateway.NewAgentCoreProvider(cfgAuth, nil)
+	if err != nil {
+		return err
+	}
+	pAuth.Live = true
+	authURL := "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?client_id=public&state=oauth010-qualify"
+	sessionID := "sess-oauth010-qualify"
+	pAuth.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, c gateway.Caller, cfg gateway.AgentCoreConfig) (gateway.Credential, error) {
+		if gateway.NormalizeMode(cfg.Mode) != gateway.ModeAuthorizationCode {
+			return gateway.Credential{}, fmt.Errorf("want authorization_code got %s", cfg.Mode)
+		}
+		return gateway.Credential{}, gateway.NewConsentRequired(gateway.ConsentInfo{
+			AuthorizationURL: authURL,
+			SessionID:        sessionID,
+			Provider:         "agentcore",
+		})
+	})
+	cred, err = pAuth.Obtain(ctx, caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("authorization_code consent must fail closed without token")
+	}
+	cr, ok := gateway.AsConsentRequired(err)
+	if !ok || cr == nil || !cr.Info.Valid() {
+		return fmt.Errorf("want ConsentRequired got %T %v", err, err)
+	}
+	if cr.Info.AuthorizationURL != authURL || cr.Info.SessionID != sessionID {
+		return fmt.Errorf("consent metadata mismatch: %+v", cr.Info)
+	}
+	blob := err.Error() + " " + cr.Info.String() + " " + fmt.Sprint(cr.Info.StatusMap()) + " " + cr.Info.AuthorizationURL
+	for _, bad := range []string{CanaryToken, "access_token=", "refresh_token=", "client_secret="} {
+		if strings.Contains(strings.ToLower(blob), strings.ToLower(bad)) {
+			return fmt.Errorf("consent surface contained %q", bad)
+		}
+	}
+
+	// --- token_exchange / OBO mock: success Bearer Jenkins audience ---
+	cfgEx := validASCfg()
+	cfgEx.Mode = gateway.ModeTokenExchange
+	cache := gateway.NewMemoryTokenCache(time.Hour)
+	pEx, err := gateway.NewAgentCoreProvider(cfgEx, cache)
+	if err != nil {
+		return err
+	}
+	pEx.Live = true
+	wantTok := CanaryToken + "-oauth010-obo"
+	pEx.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, c gateway.Caller, cfg gateway.AgentCoreConfig) (gateway.Credential, error) {
+		if gateway.NormalizeMode(cfg.Mode) != gateway.ModeTokenExchange {
+			return gateway.Credential{}, fmt.Errorf("want token_exchange got %s", cfg.Mode)
+		}
+		return gateway.Credential{
+			AccessToken:      wantTok,
+			ExpiresAt:        time.Now().Add(time.Hour),
+			JenkinsPrincipal: "jp-" + c.Subject,
+			Mode:             gateway.ModeTokenExchange,
+		}, nil
+	})
+	ha, err := gateway.ObtainHTTPAuth(ctx, pEx, caller)
+	if err != nil {
+		return fmt.Errorf("token_exchange obtain: %w", err)
+	}
+	if ha.Scheme != gateway.HTTPAuthSchemeBearer || ha.Username != "" {
+		return fmt.Errorf("token_exchange must be Bearer: %+v", ha)
+	}
+	if ha.Token != wantTok {
+		return fmt.Errorf("token_exchange token material mismatch")
+	}
+	if strings.Contains(ha.String(), CanaryToken) {
+		return fmt.Errorf("token_exchange HTTPAuth.String leaked canary")
+	}
+
+	// --- wrong audience fail closed (no token; canary absent) ---
+	cache.Clear()
+	pEx.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, c gateway.Caller, cfg gateway.AgentCoreConfig) (gateway.Credential, error) {
+		return gateway.Credential{}, apperr.New(apperr.CodeAuthentication,
+			"token audience does not match configured Jenkins API resource")
+	})
+	cred, err = pEx.Obtain(ctx, caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("wrong audience must fail closed without token: err=%v", err)
+	}
+	if apperr.CodeOf(err) != apperr.CodeAuthentication {
+		return fmt.Errorf("wrong audience code %v", apperr.CodeOf(err))
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "audience") {
+		return fmt.Errorf("wrong audience wording: %v", err)
+	}
+	if strings.Contains(err.Error(), CanaryToken) {
+		return fmt.Errorf("wrong audience error leaked canary")
+	}
+
+	// --- ModeMatrix residual honesty when Mode C primary ---
+	env := map[string]string{
+		gateway.EnvGatewayCredentialMode: string(gateway.CredentialModeAgentCore),
+	}
+	mx, err := gateway.ModeMatrixFromEnviron(func(k string) string { return env[k] })
+	if err != nil {
+		return err
+	}
+	if mx.Primary != gateway.CredentialModeAgentCore {
+		return fmt.Errorf("primary %s", mx.Primary)
+	}
+	if mx.Residual == "" || !strings.Contains(mx.Residual, "OAUTH-010") {
+		return fmt.Errorf("Mode C residual must note OAUTH-010: %q", mx.Residual)
+	}
+	lowRes := strings.ToLower(mx.Residual)
+	if !strings.Contains(lowRes, "live") && !strings.Contains(lowRes, "entra") && !strings.Contains(lowRes, "agentcore") {
+		return fmt.Errorf("Mode C residual must be honest about live pin: %q", mx.Residual)
+	}
+
+	// AS endpoints never stock Jenkins (OAUTH-010 / ADR 0003).
+	if err := gateway.ValidateProviderConfig(gateway.AgentCoreConfig{
+		AuthorizationServerBaseURL: "https://jenkins.example.com",
+		Audience:                   "api://jenkins-api",
+		JenkinsBaseURL:             "https://jenkins.example.com",
+	}); err == nil {
+		return fmt.Errorf("Jenkins-as-AS must be rejected under OAUTH-010 matrix")
+	}
+	return nil
+}
+
+// caseOAUTH009OfflineBearerMatrix — OAUTH-009 offline foundations (GWY-003 qualify):
+// wrong aud / exp / iss rejected via ValidateAccessToken; ID token rejected;
+// OfflineFallthroughFixtures self-consistent; Mode B Obtain never Basic fallthrough.
+// Does not claim live jwt-auth-filter / Entra production pin.
+func caseOAUTH009OfflineBearerMatrix(ctx context.Context) error {
+	_ = ctx
+	// --- Claim fail-closed (MCP validator) ---
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return err
+	}
+	n := base64.RawURLEncoding.EncodeToString(priv.N.Bytes())
+	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(priv.E)).Bytes())
+	jwks := &auth.JWKS{Keys: []auth.JWK{{
+		Kty: "RSA", Kid: "gwy-oauth009", Use: "sig", Alg: "RS256", N: n, E: e,
+	}}}
+	now := time.Unix(1_700_200_000, 0)
+	const (
+		issuer = "https://idp.example.com/gwy-oauth009"
+		aud    = "api://jenkins-api"
+	)
+	params := auth.AccessTokenParams{
+		Issuer: issuer, Audience: aud,
+		Now: func() time.Time { return now },
+	}
+	sign := func(claims map[string]any) (string, error) {
+		return signRS256Compact(priv, "gwy-oauth009", claims)
+	}
+	good, err := sign(map[string]any{
+		"iss": issuer, "sub": "u1", "aud": aud,
+		"exp": now.Add(time.Hour).Unix(), "token_use": "access_token",
+	})
+	if err != nil {
+		return err
+	}
+	if _, err := auth.ValidateAccessToken(good, jwks, params); err != nil {
+		return fmt.Errorf("good token: %w", err)
+	}
+	for _, row := range []struct {
+		name   string
+		claims map[string]any
+	}{
+		{"wrong_aud", map[string]any{
+			"iss": issuer, "sub": "u1", "aud": "https://graph.microsoft.com",
+			"exp": now.Add(time.Hour).Unix(), "token_use": "access_token",
+		}},
+		{"wrong_iss", map[string]any{
+			"iss": "https://evil.example", "sub": "u1", "aud": aud,
+			"exp": now.Add(time.Hour).Unix(), "token_use": "access_token",
+		}},
+		{"expired", map[string]any{
+			"iss": issuer, "sub": "u1", "aud": aud,
+			"exp": now.Add(-time.Hour).Unix(), "token_use": "access_token",
+		}},
+		{"id_token", map[string]any{
+			"iss": issuer, "sub": "u1", "aud": aud,
+			"exp": now.Add(time.Hour).Unix(), "token_use": "id_token",
+		}},
+	} {
+		tok, serr := sign(row.claims)
+		if serr != nil {
+			return serr
+		}
+		_, verr := auth.ValidateAccessToken(tok, jwks, params)
+		if verr == nil {
+			return fmt.Errorf("%s must fail closed", row.name)
+		}
+		if strings.Contains(verr.Error(), good) || (len(tok) > 24 && strings.Contains(verr.Error(), tok[:24])) {
+			return fmt.Errorf("%s error leaked token material", row.name)
+		}
+	}
+
+	// --- Classifier fixtures ---
+	fixtures := auth.OfflineFallthroughFixtures()
+	if len(fixtures) < 12 {
+		return fmt.Errorf("OfflineFallthroughFixtures floor: %d", len(fixtures))
+	}
+	for _, f := range fixtures {
+		got := auth.ClassifyFallthroughProbe(f.Input)
+		if got.Denied != f.WantDenied || got.FallthroughDetected != f.WantFallthrough {
+			return fmt.Errorf("fixture %s mismatch denied=%v fall=%v", f.ID, got.Denied, got.FallthroughDetected)
+		}
+	}
+	// Invalid bearer authenticated success → FallthroughDetected.
+	ft := auth.ClassifyFallthroughProbe(auth.FallthroughProbeInput{
+		StatusCode: 200, BodyClass: auth.BodyClassWhoAmIAuthenticated, WhoAmIAuthenticated: true,
+	})
+	if !ft.FallthroughDetected {
+		return fmt.Errorf("authenticated success must be FallthroughDetected")
+	}
+
+	// --- Mode B Obtain: never Basic fallthrough to Mode A vault ---
+	caller := gateway.Caller{
+		Subject: "oauth009-qualify", Tenant: "t", ProfileID: contracts.ProfileID("corp"),
+	}
+	apiVault := gateway.NewMemoryAPITokenVault()
+	if err := apiVault.Put(context.Background(), gateway.SubjectKey(caller), "alice", CanaryToken+"-A"); err != nil {
+		return err
+	}
+	jwtVault := gateway.NewMemoryJWTVault()
+	pB, err := gateway.RequireJWTRSBearerSetup(jwtVault)
+	if err != nil {
+		return err
+	}
+	cred, err := pB.Obtain(context.Background(), caller)
+	if err == nil || cred.AccessToken != "" {
+		return fmt.Errorf("empty Mode B vault must fail closed (no Mode A fallthrough)")
+	}
+	if strings.Contains(err.Error(), CanaryToken) {
+		return fmt.Errorf("Mode A canary in Mode B Obtain error")
+	}
+	// Mode matrix residual honesty when Mode B primary.
+	env := map[string]string{
+		gateway.EnvGatewayCredentialMode: string(gateway.CredentialModeJWTRSBearer),
+	}
+	mx, err := gateway.ModeMatrixFromEnviron(func(k string) string { return env[k] })
+	if err != nil {
+		return err
+	}
+	if mx.Residual == "" || !strings.Contains(mx.Residual, "OAUTH-009") {
+		return fmt.Errorf("Mode B residual must note OAUTH-009: %q", mx.Residual)
+	}
+	// ID token never API credential.
+	idTok := compactJWTClaims(map[string]string{"sub": "u", "token_use": "id_token"})
+	if putErr := jwtVault.Put(context.Background(), gateway.SubjectKey(caller), idTok); putErr == nil {
+		return fmt.Errorf("id_token must be rejected at JWT vault Put")
+	}
+	return nil
+}
+
+// signRS256Compact signs claims as compact JWT for offline OAUTH-009 qualify.
+func signRS256Compact(priv *rsa.PrivateKey, kid string, claims map[string]any) (string, error) {
+	hdr, err := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT", "kid": kid})
+	if err != nil {
+		return "", err
+	}
+	pl, err := json.Marshal(claims)
+	if err != nil {
+		return "", err
+	}
+	h := base64.RawURLEncoding.EncodeToString(hdr)
+	p := base64.RawURLEncoding.EncodeToString(pl)
+	input := h + "." + p
+	sum := sha256.Sum256([]byte(input))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, priv, crypto.SHA256, sum[:])
+	if err != nil {
+		return "", err
+	}
+	return input + "." + base64.RawURLEncoding.EncodeToString(sig), nil
+}
+
+// compactJWTClaims builds an unsigned compact JWT for offline id_token /
+// access_token shape checks (HOST-010). Never a production credential.
+func compactJWTClaims(claims map[string]string) string {
+	hdr := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
+	parts := make([]string, 0, len(claims))
+	for k, v := range claims {
+		parts = append(parts, fmt.Sprintf("%q:%q", k, v))
+	}
+	pl := base64.RawURLEncoding.EncodeToString([]byte("{" + strings.Join(parts, ",") + "}"))
+	return hdr + "." + pl + ".sig"
 }
 
 // stubObtainProvider is an offline CredentialProvider that returns per-caller

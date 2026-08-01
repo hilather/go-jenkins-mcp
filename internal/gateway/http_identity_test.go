@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
+	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
 )
 
 func TestLabIdentityEnabled(t *testing.T) {
@@ -174,6 +176,248 @@ func TestResolveHTTPInbound_LabAndJWT(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), raw) {
 		t.Fatalf("Regression: raw JWT in error: %v", err)
+	}
+}
+
+// OAUTH-006 / GWY-002 residual lite: lab groups header + JWT groups wire-through.
+func TestParseLabHTTPInbound_Groups(t *testing.T) {
+	t.Parallel()
+	h := http.Header{}
+	h.Set(gateway.HeaderLabSubject, "alice")
+	h.Set(gateway.HeaderLabGroups, " ops,dev, ops , ")
+	// Lab off: groups spoof ignored with whole inbound.
+	if in := gateway.ParseLabHTTPInbound(h, false); in.Present() || len(in.Groups) != 0 {
+		t.Fatalf("lab off must ignore groups header: %+v", in)
+	}
+	in := gateway.ParseLabHTTPInbound(h, true)
+	if len(in.Groups) != 3 || in.Groups[0] != "ops" || in.Groups[1] != "dev" || in.Groups[2] != "ops" {
+		// parse keeps order; dedupe happens at bind.
+		t.Fatalf("groups: %v", in.Groups)
+	}
+	// BindSubject dedupes + bounds.
+	s, err := gateway.BindSubjectFromHTTP(in, "corp", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Groups) != 2 {
+		t.Fatalf("deduped groups: %v", s.Groups)
+	}
+}
+
+func TestParseLabHTTPInbound_GroupsHeaderOversizeRaw(t *testing.T) {
+	t.Parallel()
+	h := http.Header{}
+	h.Set(gateway.HeaderLabSubject, "alice")
+	// Oversize raw header → nil groups (fail closed).
+	huge := strings.Repeat("a", gateway.MaxLabGroupsHeaderBytes+1)
+	h.Set(gateway.HeaderLabGroups, huge)
+	in := gateway.ParseLabHTTPInbound(h, true)
+	if !in.Present() {
+		t.Fatal("subject still present")
+	}
+	if len(in.Groups) != 0 {
+		t.Fatalf("oversize header must yield nil groups: %d", len(in.Groups))
+	}
+}
+
+func TestResolveHTTPInbound_JWTGroupsAndRoles(t *testing.T) {
+	t.Parallel()
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwks := rsaJWKS(t, priv, "k1")
+	now := time.Now()
+	raw := mustSignRS256JWT(t, priv, map[string]any{
+		"iss":                "https://issuer.example",
+		"sub":                "jwt-sub-g",
+		"aud":                "https://jenkins.example/api",
+		"exp":                now.Add(time.Hour).Unix(),
+		"nbf":                now.Add(-time.Minute).Unix(),
+		"tid":                "tenant-1",
+		"preferred_username": "alice-j",
+		"groups":             []string{"g1", "g2"},
+		"roles":              []string{"r1"},
+	}, "k1")
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	params := auth.AccessTokenParams{
+		Issuer:   "https://issuer.example",
+		Audience: "https://jenkins.example/api",
+		Now:      func() time.Time { return now },
+	}
+	in, err := gateway.ResolveHTTPInbound(req, "transport-secret", false, jwks, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !in.Present() || in.Source != "jwt" {
+		t.Fatalf("%+v", in)
+	}
+	if in.JenkinsPrincipal != "alice-j" {
+		t.Fatalf("preferred_username: %q", in.JenkinsPrincipal)
+	}
+	// groups + roles merged into AccessTokenClaims.Groups then HTTPInbound.
+	if len(in.Groups) < 2 {
+		t.Fatalf("expected groups from JWT: %v", in.Groups)
+	}
+	seen := map[string]bool{}
+	for _, g := range in.Groups {
+		seen[g] = true
+	}
+	if !seen["g1"] || !seen["g2"] || !seen["r1"] {
+		t.Fatalf("want g1,g2,r1 got %v", in.Groups)
+	}
+	// Lab groups header ignored when JWT wins (and lab off).
+	req.Header.Set(gateway.HeaderLabGroups, "spoof-admin")
+	in2, err := gateway.ResolveHTTPInbound(req, "transport-secret", false, jwks, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, g := range in2.Groups {
+		if g == "spoof-admin" {
+			t.Fatal("lab groups spoof must not appear when lab off / JWT path")
+		}
+	}
+}
+
+// OAUTH-006: Entra group overage without full groups → gateway JWT resolve fail closed.
+// Lab path unchanged (headers still work when lab on / no JWT).
+func TestResolveHTTPInbound_EntraGroupOverage_FailClosed(t *testing.T) {
+	t.Parallel()
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwks := rsaJWKS(t, priv, "k1")
+	now := time.Now()
+	const canary = "CANARY_GATEWAY_OVERAGE_TOKEN_XYZ"
+	raw := mustSignRS256JWT(t, priv, map[string]any{
+		"iss":                "https://issuer.example",
+		"sub":                "jwt-sub-overage",
+		"aud":                "https://jenkins.example/api",
+		"exp":                now.Add(time.Hour).Unix(),
+		"nbf":                now.Add(-time.Minute).Unix(),
+		"tid":                "tenant-1",
+		"preferred_username": "alice-j",
+		"_claim_names":       map[string]any{"groups": "src1"},
+		"_claim_sources": map[string]any{
+			"src1": map[string]any{
+				"endpoint": "https://graph.microsoft.com/v1.0/users/" + canary + "/getMemberObjects",
+			},
+		},
+	}, "k1")
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	params := auth.AccessTokenParams{
+		Issuer:   "https://issuer.example",
+		Audience: "https://jenkins.example/api",
+		Now:      func() time.Time { return now },
+	}
+	_, err = gateway.ResolveHTTPInbound(req, "transport-secret", false, jwks, params)
+	if err == nil {
+		t.Fatal("overage-only JWT must fail closed at ResolveHTTPInbound")
+	}
+	if !strings.Contains(err.Error(), "overage") {
+		t.Fatalf("want overage wording: %v", err)
+	}
+	if strings.Contains(err.Error(), raw) || strings.Contains(err.Error(), canary) ||
+		strings.Contains(err.Error(), "graph.microsoft.com") {
+		t.Fatalf("secret/endpoint canary leaked: %v", err)
+	}
+
+	// Hybrid: concrete groups + markers → bind OK; PolicySubject gets groups.
+	hybrid := mustSignRS256JWT(t, priv, map[string]any{
+		"iss":                "https://issuer.example",
+		"sub":                "jwt-sub-hybrid",
+		"aud":                "https://jenkins.example/api",
+		"exp":                now.Add(time.Hour).Unix(),
+		"nbf":                now.Add(-time.Minute).Unix(),
+		"tid":                "tenant-1",
+		"preferred_username": "bob-j",
+		"groups":             []string{"ops", "dev"},
+		"_claim_names":       map[string]any{"groups": "src1"},
+		"_claim_sources": map[string]any{
+			"src1": map[string]any{"endpoint": "https://graph.microsoft.com/v1.0/users/x/getMemberObjects"},
+		},
+	}, "k1")
+	reqH := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", nil)
+	reqH.Header.Set("Authorization", "Bearer "+hybrid)
+	in, err := gateway.ResolveHTTPInbound(reqH, "transport-secret", false, jwks, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !in.Verified || in.Source != "jwt" || len(in.Groups) < 2 {
+		t.Fatalf("hybrid inbound: %+v", in)
+	}
+	// Process defaults must not invent / substitute groups for JWT subject.
+	process := policy.Subject{
+		ProfileID:       contracts.ProfileID("corp"),
+		JenkinsUserID:   "process-bob",
+		ExternalSubject: "process-sub",
+		Verified:        true,
+		Groups:          []string{"process-only"},
+	}
+	ps := gateway.PolicySubjectFromHTTPInbound(in, "corp", process)
+	if len(ps.Groups) < 2 {
+		t.Fatalf("policy groups from hybrid: %v", ps.Groups)
+	}
+	for _, g := range ps.Groups {
+		if g == "process-only" {
+			t.Fatal("must not inherit process groups")
+		}
+	}
+	// BindSubject (RequireVerified default) accepts hybrid inbound claims.
+	claims, err := gateway.InboundClaimsFromRequestIdentity(in, "corp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := gateway.DefaultBindOptions()
+	opts.RequireTenant = true
+	opts.RequireWorkload = false
+	opts.RequireJenkinsPrincipal = true
+	bound, err := gateway.BindSubject(claims, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bound.Verified || len(bound.Groups) < 2 {
+		t.Fatalf("bind hybrid: %+v", bound)
+	}
+
+	// Lab path unchanged: lab headers still bind when lab on (no JWT).
+	h := http.Header{}
+	h.Set(gateway.HeaderLabSubject, "lab-alice")
+	h.Set(gateway.HeaderLabJenkinsPrincipal, "lab-alice")
+	h.Set(gateway.HeaderLabGroups, "lab-g1,lab-g2")
+	labIn := gateway.ParseLabHTTPInbound(h, true)
+	if !labIn.Present() || len(labIn.Groups) != 2 {
+		t.Fatalf("lab path: %+v", labIn)
+	}
+	labPS := gateway.PolicySubjectFromHTTPInbound(labIn, "corp", process)
+	if len(labPS.Groups) != 2 || !labPS.Verified {
+		t.Fatalf("lab policy subject: %+v", labPS)
+	}
+}
+
+func TestInboundClaimsFromHTTP_Groups(t *testing.T) {
+	t.Parallel()
+	in := gateway.HTTPInbound{
+		ExternalSubject:  "s",
+		Tenant:           "t",
+		WorkloadID:       "w",
+		JenkinsPrincipal: "j",
+		Groups:           []string{"a", "b"},
+		Verified:         true,
+	}
+	claims := gateway.InboundClaimsFromHTTP(in, "corp")
+	if len(claims.Groups) != 2 {
+		t.Fatalf("%+v", claims)
+	}
+	reqClaims, err := gateway.InboundClaimsFromRequestIdentity(in, "corp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reqClaims.Groups) != 2 {
+		t.Fatalf("%+v", reqClaims)
 	}
 }
 

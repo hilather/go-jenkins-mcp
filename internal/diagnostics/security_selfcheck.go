@@ -80,6 +80,9 @@ type SelfCheckOptions struct {
 	Now func() time.Time
 	// SkipSupportBundleCanary skips the cheap bundle category plan check.
 	SkipSupportBundleCanary bool
+	// Getenv optional env reader for gateway Mode B residual (OAUTH-009).
+	// nil → os.Getenv (via gatewayModeBResidual).
+	Getenv func(string) string
 }
 
 // hardMaxResolveCanary is installed by internal/tools init (MCP-001 / Wave 38).
@@ -146,7 +149,7 @@ func RunSecuritySelfCheck(ctx context.Context, opts SelfCheckOptions) (SelfCheck
 	}
 	rep.Items = append(rep.Items, checkPolicySignatureMode(opts))
 	rep.Items = append(rep.Items, checkOIDCStructural(opts.Profile))
-	rep.Items = append(rep.Items, checkRSQualificationResidual(opts.Profile))
+	rep.Items = append(rep.Items, checkRSQualificationResidual(opts.Profile, opts.Getenv))
 	rep.Items = append(rep.Items, checkHTTPRequireTokenResidual())
 	rep.Items = append(rep.Items, checkHTTPAllowedHostsResidual())
 	rep.Items = append(rep.Items, checkTelemetryDefaultOff())
@@ -165,6 +168,7 @@ func RunSecuritySelfCheck(ctx context.Context, opts SelfCheckOptions) (SelfCheck
 	rep.Items = append(rep.Items, checkFleetTelemetryForceOffResidual())
 	rep.Items = append(rep.Items, checkUpdateLKGResidual())
 	rep.Items = append(rep.Items, checkMutationConfirmCooldownResidual())
+	rep.Items = append(rep.Items, checkGatewayResidualStatusHonesty(opts.Getenv))
 
 	// Final canary: planted secret must not appear anywhere in serialized report.
 	if leak := reportContainsCanary(rep, securityCanary); leak {
@@ -1017,7 +1021,7 @@ func checkPolicyResourceDenyResidual() SelfCheckItem {
 // checkRSQualificationResidual reports OAUTH-009 offline RS matrix + live-lab residual
 // (secret-free). Never claims production go for jwt-auth-filter without lab evidence.
 // Wave 34: requires OfflineFallthroughFixtures count ≥ floor and live_lab_still_required.
-func checkRSQualificationResidual(p *profile.Profile) SelfCheckItem {
+func checkRSQualificationResidual(p *profile.Profile, getenv func(string) string) SelfCheckItem {
 	method := ""
 	if p != nil {
 		method = string(p.AuthMethod)
@@ -1028,6 +1032,7 @@ func checkRSQualificationResidual(p *profile.Profile) SelfCheckItem {
 		// Defense in depth if summary field regresses: count fixtures directly.
 		fixtureN = len(auth.OfflineFallthroughFixtures())
 	}
+	modeB, modeResidual := gatewayModeBResidual(getenv)
 	details := map[string]any{
 		"fallthrough_must_deny":       sum.FallthroughMustDeny,
 		"jwks_outage_behavior":        sum.JWKSOutageBehavior,
@@ -1044,9 +1049,19 @@ func checkRSQualificationResidual(p *profile.Profile) SelfCheckItem {
 		"offline_automated":           sum.OfflineAutomated,
 		"live_lab_residuals":          sum.LiveLabResiduals,
 		"doc":                         sum.Doc,
+		// Note: detail keys must not contain "token" (SanitizeCheck drops them).
+		"id_jwt_never_api_credential": true,
+		"gateway_mode_b_enabled":      modeB,
 	}
 	if method != "" {
 		details["auth_method"] = method
+	}
+	if modeB {
+		details["gateway_mode_matrix_residual"] = modeResidual
+		details["mode_b_live_rs_qualified"] = false
+		// residual_id oauth009_offline links REL lite / pilot checklist residual.
+		details["residual_id"] = "oauth009_offline"
+		details["oauth009_offline"] = true
 	}
 
 	item := SelfCheckItem{
@@ -1079,7 +1094,7 @@ func checkRSQualificationResidual(p *profile.Profile) SelfCheckItem {
 		return item
 	}
 
-	// Always surface live_lab residual in message/details; oidc_bearer elevates warn.
+	// Always surface live_lab residual in message/details; oidc_bearer / Mode B elevates warn.
 	baseMsg := fmt.Sprintf(
 		"RS offline matrix present (%d fixtures ≥%d, %d routes, fallthrough_must_deny); live_lab_still_required residual",
 		fixtureN, minOfflineFallthroughFixtures, sum.RequiredRouteCount)
@@ -1087,6 +1102,14 @@ func checkRSQualificationResidual(p *profile.Profile) SelfCheckItem {
 	if method == string(profile.AuthMethodOIDC) {
 		item.Status = SelfCheckWarn
 		item.Message = baseMsg + "; oidc_bearer needs live jwt-auth-filter lab"
+		if modeB {
+			item.Message += "; gateway Mode B also residual"
+		}
+		return item
+	}
+	if modeB {
+		item.Status = SelfCheckWarn
+		item.Message = baseMsg + "; gateway Mode B (jwt_rs_bearer) enabled — offline vault not live RS pin (residual_id=oauth009_offline / OAUTH-009)"
 		return item
 	}
 

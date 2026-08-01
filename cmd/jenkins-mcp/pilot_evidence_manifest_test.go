@@ -192,11 +192,75 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), "set -euo pipefail") {
+	bodyStr := string(body)
+	if !strings.Contains(bodyStr, "set -euo pipefail") {
 		t.Fatal("scripts/pilot-evidence.sh must use set -euo pipefail")
 	}
-	if !strings.Contains(string(body), pilotEvidenceManifestSchema) {
+	if !strings.Contains(bodyStr, pilotEvidenceManifestSchema) {
 		t.Fatalf("script must emit schema %s", pilotEvidenceManifestSchema)
+	}
+	// Residual lite: pilot pack must capture residual-status + honesty canaries.
+	if !strings.Contains(bodyStr, "gateway residual-status") {
+		t.Fatal("scripts/pilot-evidence.sh must invoke gateway residual-status")
+	}
+	if !strings.Contains(bodyStr, "gateway-residual-status.json") {
+		t.Fatal("scripts/pilot-evidence.sh must write gateway-residual-status.json")
+	}
+	if !strings.Contains(bodyStr, "ha_multi_replica") {
+		t.Fatal("scripts/pilot-evidence.sh must assert ha_multi_replica honesty")
+	}
+	// Wave 13: shared_*_file residual-status honesty (align residual-smoke).
+	for _, key := range []string{
+		"shared_subject_rate_file",
+		"shared_principal_cache_file",
+		"shared_jwks_file",
+		"shared_token_cache_file",
+		"shared_api_token_vault_file",
+		"shared_jwt_vault_file",
+	} {
+		if !strings.Contains(bodyStr, key) {
+			t.Fatalf("scripts/pilot-evidence.sh must assert %s honesty canary", key)
+		}
+	}
+	if !strings.Contains(bodyStr, "path must never dump") {
+		t.Fatal("scripts/pilot-evidence.sh must include path-not-dumped canaries for shared_*_file")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary SUBJECT_RATE_PATH → shared_subject_rate_file=true")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary PRINCIPAL_CACHE_PATH → shared_principal_cache_file=true")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_HTTP_JWKS_CACHE_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary JWKS_CACHE_PATH → shared_jwks_file=true")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary TOKEN_CACHE_PATH → shared_token_cache_file=true")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_GATEWAY_VAULT_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary VAULT_PATH → shared_api_token_vault_file=true")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_GATEWAY_JWT_VAULT_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary JWT_VAULT_PATH → shared_jwt_vault_file=true")
+	}
+	// Wave 17 residual lite: progressive_consent store path honesty.
+	if !strings.Contains(bodyStr, "file_backed") {
+		t.Fatal("scripts/pilot-evidence.sh must assert progressive_consent.file_backed honesty")
+	}
+	if !strings.Contains(bodyStr, "same_host_reload_before_persist") {
+		t.Fatal("scripts/pilot-evidence.sh must assert progressive_consent.same_host_reload_before_persist honesty")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_CONSENT_STORE_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary CONSENT_STORE_PATH → progressive_consent file_backed")
+	}
+	if !strings.Contains(bodyStr, "LIMITER_MAX_CANARY") && !strings.Contains(bodyStr, "SUBJECT_LIMITER_MAX_SUBJECTS") {
+		t.Fatal("scripts/pilot-evidence.sh must canary SUBJECT_LIMITER_MAX_SUBJECTS residual lite")
+	}
+	if !strings.Contains(bodyStr, "subject_limiter_max_subjects") {
+		t.Fatal("scripts/pilot-evidence.sh must assert subject_limiter_max_subjects residual field")
+	}
+	if !strings.Contains(bodyStr, "gateway consent-residual") {
+		t.Fatal("scripts/pilot-evidence.sh must optionally capture gateway consent-residual")
 	}
 
 	// Build binary into temp dir so we do not race with developer's bin/.
@@ -255,12 +319,189 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 		t.Fatal("canary in MANIFEST")
 	}
 	// version.json present when version artifact passed.
+	evidDir := filepath.Join(outRoot, entries[0].Name())
 	for _, a := range m.Artifacts {
 		if a.Name == "version" && a.Status == "pass" {
-			vpath := filepath.Join(outRoot, entries[0].Name(), a.Path)
+			vpath := filepath.Join(evidDir, a.Path)
 			if _, err := os.Stat(vpath); err != nil {
 				t.Fatalf("version artifact missing: %v", err)
 			}
+		}
+	}
+	// Residual lite: gateway_residual_status listed; when pass, JSON + honesty.
+	var residualArt *pilotEvidenceArtifact
+	for i := range m.Artifacts {
+		if m.Artifacts[i].Name == "gateway_residual_status" {
+			residualArt = &m.Artifacts[i]
+			break
+		}
+	}
+	if residualArt == nil {
+		t.Fatal("MANIFEST missing gateway_residual_status artifact (residual lite)")
+	}
+	switch residualArt.Status {
+	case "pass":
+		if residualArt.Path != "gateway-residual-status.json" {
+			t.Fatalf("gateway_residual_status path want gateway-residual-status.json got %q", residualArt.Path)
+		}
+		rsPath := filepath.Join(evidDir, residualArt.Path)
+		rsRaw, err := os.ReadFile(rsPath)
+		if err != nil {
+			t.Fatalf("gateway-residual-status.json: %v", err)
+		}
+		var rs map[string]any
+		if err := json.Unmarshal(rsRaw, &rs); err != nil {
+			t.Fatalf("parse residual-status: %v\n%s", err, rsRaw)
+		}
+		if ha, ok := rs["ha_multi_replica"].(bool); !ok || ha {
+			t.Fatalf("ha_multi_replica want false got %v", rs["ha_multi_replica"])
+		}
+		if o9, ok := rs["oauth009_offline"].(bool); !ok || !o9 {
+			t.Fatalf("oauth009_offline want true got %v", rs["oauth009_offline"])
+		}
+		ids, _ := rs["residual_ids"].([]any)
+		idSet := map[string]bool{}
+		for _, x := range ids {
+			idSet[fmt.Sprint(x)] = true
+		}
+		for _, need := range []string{
+			"multi_user_offline",
+			"oauth009_offline",
+			"oauth010_offline",
+			"progressive_consent_offline",
+			"host008_single_replica",
+			"gateway_modes_live",
+		} {
+			if !idSet[need] {
+				t.Fatalf("residual_ids missing %q in pilot pack residual-status", need)
+			}
+		}
+		// shared_*_file default false (or absent) when pilot pack runs without path env.
+		// Regression: residual-status honesty weaker than residual-smoke without these.
+		for _, key := range []string{
+			"shared_subject_rate_file",
+			"shared_principal_cache_file",
+			"shared_jwks_file",
+			"shared_token_cache_file",
+			"shared_api_token_vault_file",
+			"shared_jwt_vault_file",
+		} {
+			v, ok := rs[key]
+			if !ok || v == nil {
+				continue // absent-as-false acceptable
+			}
+			b, ok := v.(bool)
+			if !ok || b {
+				t.Fatalf("%s want false|absent on default pilot residual-status got %v", key, v)
+			}
+		}
+		// progressive_consent store honesty (default CONSENT_STORE_PATH unset).
+		if pcRaw, ok := rs["progressive_consent"]; ok && pcRaw != nil {
+			pc, ok := pcRaw.(map[string]any)
+			if !ok {
+				t.Fatalf("progressive_consent want object got %T", pcRaw)
+			}
+			for _, key := range []string{"file_backed", "same_host_reload_before_persist"} {
+				v, ok := pc[key]
+				if !ok || v == nil {
+					continue // absent-as-false acceptable
+				}
+				b, ok := v.(bool)
+				if !ok || b {
+					t.Fatalf("progressive_consent.%s want false|absent on default pilot residual-status got %v", key, v)
+				}
+			}
+			if st, ok := pc["stores_tokens"].(bool); ok && st {
+				t.Fatal("progressive_consent.stores_tokens must be false")
+			}
+		}
+		// Path values must never appear in residual-status JSON (bool residual only).
+		for _, envKey := range []string{
+			"JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH",
+			"JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH",
+			"JENKINS_MCP_HTTP_JWKS_CACHE_PATH",
+			"JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH",
+			"JENKINS_MCP_GATEWAY_VAULT_PATH",
+			"JENKINS_MCP_GATEWAY_JWT_VAULT_PATH",
+			"JENKINS_MCP_CONSENT_STORE_PATH",
+		} {
+			if strings.Contains(string(rsRaw), envKey) {
+				t.Fatalf("path env name %q must not appear in gateway-residual-status.json", envKey)
+			}
+		}
+		// Secret-shaped material must not appear in residual-status artifact.
+		low := strings.ToLower(string(rsRaw))
+		for _, needle := range []string{"access_token=", "refresh_token=", "client_secret=", "authorization: bearer"} {
+			if strings.Contains(low, needle) {
+				t.Fatalf("secret-shaped material %q in gateway-residual-status.json", needle)
+			}
+		}
+		// Path canary artifacts (when produced) must not dump markers / secrets.
+		for _, name := range []string{
+			"gateway-residual-status-rate-path.json",
+			"gateway-residual-status-principal-path.json",
+			"gateway-residual-status-jwks-path.json",
+			"gateway-residual-status-token-path.json",
+			"gateway-residual-status-vault-path.json",
+			"gateway-residual-status-jwt-vault-path.json",
+			"gateway-residual-status-consent-path.json",
+		} {
+			p := filepath.Join(evidDir, name)
+			rawPath, err := os.ReadFile(p)
+			if err != nil {
+				// Optional when python3 path canaries skipped; default honesty already checked.
+				if os.IsNotExist(err) {
+					continue
+				}
+				t.Fatalf("read %s: %v", name, err)
+			}
+			if strings.Contains(string(rawPath), "CANARY-never-in-json") {
+				t.Fatalf("path marker leaked into %s", name)
+			}
+			if strings.Contains(strings.ToLower(string(rawPath)), "authorization: bearer") {
+				t.Fatalf("secret-shaped material in %s", name)
+			}
+			// Consent path canary: file_backed true, stores_tokens false, path not dumped.
+			if name == "gateway-residual-status-consent-path.json" {
+				var pathRS map[string]any
+				if err := json.Unmarshal(rawPath, &pathRS); err != nil {
+					t.Fatalf("parse %s: %v", name, err)
+				}
+				pc, _ := pathRS["progressive_consent"].(map[string]any)
+				if pc == nil {
+					t.Fatalf("%s missing progressive_consent", name)
+				}
+				if fb, ok := pc["file_backed"].(bool); !ok || !fb {
+					t.Fatalf("%s progressive_consent.file_backed want true got %v", name, pc["file_backed"])
+				}
+				if shr, ok := pc["same_host_reload_before_persist"].(bool); !ok || !shr {
+					t.Fatalf("%s progressive_consent.same_host_reload_before_persist want true got %v", name, pc["same_host_reload_before_persist"])
+				}
+				if st, ok := pc["stores_tokens"].(bool); ok && st {
+					t.Fatalf("%s progressive_consent.stores_tokens must be false", name)
+				}
+			}
+		}
+	case "skip":
+		// Older binary without residual-status is acceptable.
+		t.Logf("gateway_residual_status skipped: %s", residualArt.Note)
+	case "fail":
+		t.Fatalf("gateway_residual_status failed on healthy binary: %+v\n%s", residualArt, out)
+	default:
+		t.Fatalf("gateway_residual_status unexpected status %q", residualArt.Status)
+	}
+	// Optional consent-residual may pass, skip, or warn — never secret material when file present.
+	for _, a := range m.Artifacts {
+		if a.Name != "gateway_consent_residual" || a.Status != "pass" || a.Path == "" {
+			continue
+		}
+		cpath := filepath.Join(evidDir, a.Path)
+		craw, err := os.ReadFile(cpath)
+		if err != nil {
+			t.Fatalf("gateway-consent-residual.json: %v", err)
+		}
+		if strings.Contains(strings.ToLower(string(craw)), "authorization: bearer") {
+			t.Fatal("secret-shaped material in gateway-consent-residual.json")
 		}
 	}
 }

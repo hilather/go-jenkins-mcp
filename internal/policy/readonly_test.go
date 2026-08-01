@@ -248,7 +248,7 @@ func TestToolEffectClassification(t *testing.T) {
 	}
 	for _, name := range seed {
 		eff := policy.ToolEffect(name)
-		wantMut := name == policy.ToolStartJob || name == policy.ToolStopBuild || name == policy.ToolCancelQueueItem
+		wantMut := policy.IsMutationTool(name)
 		if wantMut && eff != policy.EffectMutate {
 			t.Errorf("%s: want mutate got %s", name, eff)
 		}

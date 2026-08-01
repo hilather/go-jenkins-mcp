@@ -3,6 +3,7 @@ package auth_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -286,8 +287,9 @@ func TestClassifyResponseBodyClass(t *testing.T) {
 	}
 }
 
-// Wave 33: OfflineFallthroughFixtures matrix is self-consistent and covers
-// empty body, HTML error, WWW-Authenticate Bearer, authenticated fail-closed.
+// Wave 33 + OAUTH-009 expand: OfflineFallthroughFixtures matrix is self-consistent
+// and covers empty body, HTML error, WWW-Authenticate Bearer, Basic/anonymous
+// fallthrough fail-closed, and 401 status-wins rows.
 func TestOfflineFallthroughFixtures_Matrix(t *testing.T) {
 	t.Parallel()
 	fixtures := auth.OfflineFallthroughFixtures()
@@ -296,6 +298,7 @@ func TestOfflineFallthroughFixtures_Matrix(t *testing.T) {
 	}
 	seen := map[string]bool{}
 	var hasEmpty, hasHTMLErr, hasBearerWWW, hasAuthnFailClosed bool
+	var hasBasicAuthnFall, hasAnonFall, has401StatusWins bool
 	for _, f := range fixtures {
 		if f.ID == "" || seen[f.ID] {
 			t.Fatalf("bad/duplicate fixture id %q", f.ID)
@@ -318,15 +321,37 @@ func TestOfflineFallthroughFixtures_Matrix(t *testing.T) {
 		if f.WantFallthrough && (f.Input.BodyClass == auth.BodyClassWhoAmIAuthenticated || f.Input.WhoAmIAuthenticated) {
 			hasAuthnFailClosed = true
 		}
+		if f.ID == "200_whoami_authenticated_basic_www" {
+			hasBasicAuthnFall = true
+			if !f.WantFallthrough {
+				t.Fatal("Basic+authn 200 must be FallthroughDetected")
+			}
+		}
+		if f.ID == "200_whoami_anonymous" || f.ID == "200_whoami_anonymous_bearer_www" {
+			hasAnonFall = true
+		}
+		if f.ID == "401_whoami_authn_body_still_deny" || f.ID == "401_whoami_anon_body_still_deny" {
+			has401StatusWins = true
+			if !f.WantDenied || f.WantFallthrough {
+				t.Fatalf("%s must be Denied only", f.ID)
+			}
+		}
 	}
 	if !hasEmpty || !hasHTMLErr || !hasBearerWWW || !hasAuthnFailClosed {
 		t.Fatalf("matrix incomplete empty=%v htmlErr=%v bearerWWW=%v authnFail=%v",
 			hasEmpty, hasHTMLErr, hasBearerWWW, hasAuthnFailClosed)
 	}
+	if !hasBasicAuthnFall || !hasAnonFall || !has401StatusWins {
+		t.Fatalf("OAUTH-009 Basic/anon expand missing basicAuthn=%v anon=%v statusWins=%v",
+			hasBasicAuthnFall, hasAnonFall, has401StatusWins)
+	}
 	// Format is secret-free and mentions live lab residual.
 	text := auth.FormatFallthroughClassifierMatrix()
 	if !strings.Contains(text, "401_empty_bearer_www") || !strings.Contains(text, "live jwt-auth-filter") {
 		t.Fatalf("format matrix: %s", text)
+	}
+	if !strings.Contains(text, "200_whoami_authenticated_basic_www") {
+		t.Fatalf("format matrix missing Basic fallthrough row: %s", text)
 	}
 	canary := "CANARY_secret_bearer_must_not_appear_xyz"
 	if strings.Contains(text, canary) || strings.Contains(text, "password=") {
@@ -886,9 +911,404 @@ func TestRSQualificationDocPresent(t *testing.T) {
 		"OfflineFallthroughFixtures",
 		"Done*",
 		"live lab",
+		"wrong_aud",
+		"live-oauth",
+		"GWY-003",
+		"Mode B",
 	} {
 		if !strings.Contains(text, s) {
 			t.Errorf("qualification doc missing %q", s)
 		}
+	}
+}
+
+// OAUTH-009 expand: offline fail-closed Bearer claim matrix on Jenkins-shaped
+// paths (RequiredMCPRoutes). Wrong aud / exp / iss rejected; ID token never
+// accepted as API credential; invalid Bearer does not fall through to session.
+// Live jwt-auth-filter / Entra pin remains residual — this does not claim Done.
+func TestOAUTH009_OfflineBearerClaimMatrix_JenkinsShapedPaths(t *testing.T) {
+	t.Parallel()
+	priv, jwks := testRSAJWKS(t, "oauth009-kid")
+	now := time.Unix(1_700_100_000, 0)
+	const (
+		issuer = "https://idp.example.com/oauth009"
+		aud    = "api://jenkins-corp-resource"
+	)
+	params := auth.AccessTokenParams{
+		Issuer:   issuer,
+		Audience: aud,
+		Now:      func() time.Time { return now },
+	}
+	goodClaims := func(mut func(map[string]any)) string {
+		c := map[string]any{
+			"iss":       issuer,
+			"sub":       "alice-oauth009",
+			"aud":       aud,
+			"exp":       now.Add(time.Hour).Unix(),
+			"token_use": "access_token",
+		}
+		if mut != nil {
+			mut(c)
+		}
+		return mustSignRS256(t, priv, "oauth009-kid", c)
+	}
+	goodTok := goodClaims(nil)
+
+	// Claim-level fail-closed (MCP ValidateAccessToken for JWT-shaped tokens).
+	// Note: non-JWT "opaque" strings are intentionally accepted at MCP layer
+	// (whoAmI residual); simulated RS below still rejects non-JWT Bearer.
+	claimCases := []struct {
+		name string
+		tok  string
+	}{
+		{"wrong_aud", goodClaims(func(m map[string]any) { m["aud"] = "https://graph.microsoft.com" })},
+		{"wrong_iss", goodClaims(func(m map[string]any) { m["iss"] = "https://evil.example.com" })},
+		{"expired", goodClaims(func(m map[string]any) { m["exp"] = now.Add(-time.Hour).Unix() })},
+		{"id_token_use", goodClaims(func(m map[string]any) { m["token_use"] = "id_token" })},
+		{"empty", ""},
+		// Three-segment JWT shape with garbage signature/payload.
+		{"malformed_jwt", "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4In0.not-a-real-sig"},
+	}
+	for _, tc := range claimCases {
+		tc := tc
+		t.Run("validate_"+tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := auth.ValidateAccessToken(tc.tok, jwks, params)
+			if err == nil {
+				t.Fatalf("%s must fail closed", tc.name)
+			}
+			if strings.Contains(err.Error(), goodTok) || (tc.tok != "" && len(tc.tok) > 24 && strings.Contains(err.Error(), tc.tok[:24])) {
+				t.Fatalf("%s error leaked token material", tc.name)
+			}
+		})
+	}
+	// Good token accepted offline.
+	if _, err := auth.ValidateAccessToken(goodTok, jwks, params); err != nil {
+		t.Fatalf("good token: %v", err)
+	}
+
+	// Simulated JWT RS: only valid Jenkins-audience JWTs succeed; when Bearer is
+	// present and invalid/opaque/wrong-claim → 401 even with JSESSIONID (no fallthrough).
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		authz := r.Header.Get("Authorization")
+		if strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+			tok := strings.TrimSpace(authz[len("Bearer "):])
+			// jwt-auth-filter-shaped RS: Bearer present must be JWT and validate;
+			// opaque/garbage never fall through to session/Basic.
+			if auth.ClassifyAccessToken(tok) != auth.TokenFormJWT {
+				w.Header().Set("WWW-Authenticate", `Bearer realm="Jenkins", error="invalid_token"`)
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":"invalid_token"}`))
+				return
+			}
+			res, err := auth.ValidateAccessToken(tok, jwks, params)
+			if err != nil || res.Form != auth.TokenFormJWT {
+				// Fail closed: never consult Cookie or Basic after invalid Bearer.
+				w.Header().Set("WWW-Authenticate", `Bearer realm="Jenkins", error="invalid_token"`)
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":"invalid_token"}`))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"alice-oauth009","authenticated":true,"anonymous":false}`))
+			return
+		}
+		// No Bearer: optional UI session (not MCP OAuth path).
+		if c, err := r.Cookie("JSESSIONID"); err == nil && c.Value == "ui-session" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"bob-ui","authenticated":true,"anonymous":false}`))
+			return
+		}
+		if strings.HasPrefix(strings.ToLower(authz), "basic ") {
+			// Basic alone may work for non-OAuth pilot — but not as Bearer fallthrough.
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"basic-user","authenticated":true,"anonymous":false}`))
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	client := srv.Client()
+
+	// Every RequiredMCPRoutes example path: invalid claim tokens → 401, classifier Denied.
+	paths := make([]string, 0, len(auth.RequiredMCPRoutes))
+	for _, r := range auth.RequiredMCPRoutes {
+		paths = append(paths, r.ExamplePath)
+	}
+	// Ensure outside-api-glob routes present.
+	if len(auth.RequiredOutsideAPIGlobRoutes()) < 3 {
+		t.Fatal("outside api glob inventory too small")
+	}
+
+	badTokens := []struct {
+		name string
+		tok  string
+	}{
+		{"wrong_aud", goodClaims(func(m map[string]any) { m["aud"] = "https://graph.microsoft.com" })},
+		{"wrong_iss", goodClaims(func(m map[string]any) { m["iss"] = "https://evil.example.com" })},
+		{"expired", goodClaims(func(m map[string]any) { m["exp"] = now.Add(-time.Hour).Unix() })},
+		{"id_token", goodClaims(func(m map[string]any) { m["token_use"] = "id_token" })},
+		// Opaque non-JWT Bearer (RS must still 401 — no session fallthrough).
+		{"opaque_garbage", "totally-invalid-bearer"},
+		{"malformed_jwt", "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4In0.not-a-real-sig"},
+	}
+
+	for _, pth := range paths {
+		pth := pth
+		for _, bt := range badTokens {
+			bt := bt
+			name := "path_" + strings.ReplaceAll(strings.Trim(pth, "/"), "/", "_") + "_" + bt.name
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				req, err := http.NewRequest(http.MethodGet, srv.URL+pth, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				req.Header.Set("Authorization", "Bearer "+bt.tok)
+				// Tempt fallthrough: session + Basic must not rescue invalid Bearer.
+				req.AddCookie(&http.Cookie{Name: "JSESSIONID", Value: "ui-session"})
+				req.Header.Add("X-Lab-Basic-Hint", "admin:test") // not Authorization Basic
+				resp, err := client.Do(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer resp.Body.Close()
+				body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+				bc := auth.ClassifyResponseBodyClass(body)
+				eval := auth.ClassifyFallthroughProbe(auth.FallthroughProbeInput{
+					StatusCode:      resp.StatusCode,
+					WWWAuthenticate: resp.Header.Get("WWW-Authenticate"),
+					BodyClass:       bc,
+				})
+				if !eval.Denied || eval.FallthroughDetected {
+					t.Fatalf("Regression: invalid bearer (%s) on %s must deny without fallthrough: status=%d eval=%+v",
+						bt.name, pth, resp.StatusCode, eval)
+				}
+				if resp.StatusCode == http.StatusOK {
+					t.Fatalf("Regression: invalid bearer must not return 200 (session/Basic fallthrough) on %s", pth)
+				}
+			})
+		}
+	}
+
+	// Good token on progressive log path (outside /**/api/**) succeeds.
+	prog := "/job/demo/1/logText/progressiveText?start=0"
+	req, err := http.NewRequest(http.MethodGet, srv.URL+prog, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+goodTok)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("good bearer on progressive path: %d", resp.StatusCode)
+	}
+
+	// Contrast: Basic alone (no Bearer) may authenticate — proves fallthrough
+	// risk if RS ignored Bearer; classifier would flag 200 on invalid Bearer.
+	reqB, _ := http.NewRequest(http.MethodGet, srv.URL+"/whoAmI/api/json", nil)
+	reqB.Header.Set("Authorization", "Basic YWRtaW46dGVzdA==")
+	respB, err := client.Do(reqB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer respB.Body.Close()
+	if respB.StatusCode != http.StatusOK {
+		t.Fatalf("basic-only fixture: %d", respB.StatusCode)
+	}
+}
+
+// OfflineFallthroughFixtures rows must remain consistent with classifier (export used by doctor).
+func TestOfflineFallthroughFixtures_ExportedContract(t *testing.T) {
+	t.Parallel()
+	// Ensure BuildOfflineRSQualificationSummary still marks live residual.
+	sum := auth.BuildOfflineRSQualificationSummary("oidc_bearer")
+	if !sum.LiveLabStillRequired {
+		t.Fatal("offline must never clear live_lab_still_required")
+	}
+	foundClaim := false
+	foundBasicAnon := false
+	for _, line := range sum.OfflineAutomated {
+		if strings.Contains(line, "wrong aud") || strings.Contains(strings.ToLower(line), "claim") {
+			foundClaim = true
+		}
+		if strings.Contains(strings.ToLower(line), "basic") || strings.Contains(strings.ToLower(line), "anonymous") {
+			foundBasicAnon = true
+		}
+	}
+	if !foundClaim {
+		t.Fatalf("offline automated must mention claim matrix: %v", sum.OfflineAutomated)
+	}
+	if !foundBasicAnon {
+		t.Fatalf("offline automated must mention Basic/anonymous fallthrough: %v", sum.OfflineAutomated)
+	}
+	// Mode B residual honesty in residuals.
+	joined := strings.Join(sum.LiveLabResiduals, " ")
+	if !strings.Contains(joined, "Mode B") && !strings.Contains(joined, "jwt-auth-filter") {
+		t.Fatalf("residuals must note Mode B / jwt-auth-filter: %v", sum.LiveLabResiduals)
+	}
+}
+
+// OAUTH-009 expand: OAuth-required route fixtures — invalid Bearer must not
+// succeed as Basic or anonymous. Models qualified jwt-auth-filter (fail closed)
+// vs unqualified anti-pattern (FallthroughDetected). Live pin residual.
+func TestOAUTH009_InvalidBearerMustNotSucceedAsBasicOrAnonymous(t *testing.T) {
+	t.Parallel()
+
+	// --- Qualified OAuth-required RS: Bearer invalid → 401; Basic alone → 401;
+	// anonymous → 401. Session cookie never rescues invalid Bearer.
+	qualified := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authz := r.Header.Get("Authorization")
+		lower := strings.ToLower(authz)
+		if strings.HasPrefix(lower, "bearer ") {
+			// Invalid / empty Bearer always denied (OAuth-required).
+			w.Header().Set("WWW-Authenticate", `Bearer realm="Jenkins", error="invalid_token"`)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"invalid_token"}`))
+			return
+		}
+		// OAuth-required: Basic alone and anonymous are not accepted.
+		w.Header().Set("WWW-Authenticate", `Bearer realm="Jenkins"`)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"invalid_request","error_description":"bearer required"}`))
+	}))
+	t.Cleanup(qualified.Close)
+
+	// Paths include all RequiredMCPRoutes examples (outside-api-glob included).
+	paths := make([]string, 0, len(auth.RequiredMCPRoutes))
+	for _, r := range auth.RequiredMCPRoutes {
+		paths = append(paths, r.ExamplePath)
+	}
+	if len(paths) < 8 {
+		t.Fatalf("RequiredMCPRoutes too small: %d", len(paths))
+	}
+
+	authzCases := []struct {
+		name  string
+		authz string
+		// optional session cookie to tempt session fallthrough
+		session bool
+	}{
+		{"invalid_bearer", "Bearer totally-invalid", false},
+		{"invalid_bearer_plus_session", "Bearer totally-invalid", true},
+		{"empty_bearer", "Bearer ", false},
+		{"basic_alone", "Basic YWRtaW46dGVzdA==", false}, // admin:test — must 401 on OAuth-required
+		{"none", "", false},
+		{"none_plus_session", "", true},
+	}
+
+	client := qualified.Client()
+	for _, pth := range paths {
+		pth := pth
+		for _, ac := range authzCases {
+			ac := ac
+			name := "qualified_" + strings.ReplaceAll(strings.Trim(pth, "/"), "/", "_") + "_" + ac.name
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				req, err := http.NewRequest(http.MethodGet, qualified.URL+pth, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if ac.authz != "" {
+					req.Header.Set("Authorization", ac.authz)
+				}
+				if ac.session {
+					req.AddCookie(&http.Cookie{Name: "JSESSIONID", Value: "ui-session"})
+				}
+				resp, err := client.Do(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer resp.Body.Close()
+				body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+				eval := auth.ClassifyFallthroughProbe(auth.FallthroughProbeInput{
+					StatusCode:      resp.StatusCode,
+					WWWAuthenticate: resp.Header.Get("WWW-Authenticate"),
+					BodyClass:       auth.ClassifyResponseBodyClass(body),
+				})
+				if !eval.Denied || eval.FallthroughDetected {
+					t.Fatalf("Regression: OAuth-required %s on %s must deny (no Basic/anon success): status=%d eval=%+v body=%q",
+						ac.name, pth, resp.StatusCode, eval, string(body))
+				}
+				if resp.StatusCode == http.StatusOK {
+					t.Fatalf("Regression: must not return 200 for %s on %s", ac.name, pth)
+				}
+			})
+		}
+	}
+
+	// --- Unqualified anti-pattern: invalid Bearer falls through to Basic principal → 200.
+	// Classifier must mark FallthroughDetected so probes fail closed.
+	unqualified := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authz := r.Header.Get("Authorization")
+		// Anti-pattern: ignore failed Bearer and succeed as Basic/session/anon.
+		if strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+			// Fall through: pretend Basic authenticated.
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"basic-user","authenticated":true,"anonymous":false}`))
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(unqualified.Close)
+
+	req, err := http.NewRequest(http.MethodGet, unqualified.URL+"/whoAmI/api/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer invalid")
+	resp, err := unqualified.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	bc := auth.ClassifyResponseBodyClass(body)
+	eval := auth.ClassifyFallthroughProbe(auth.FallthroughProbeInput{
+		StatusCode: resp.StatusCode,
+		BodyClass:  bc,
+	})
+	if !eval.FallthroughDetected {
+		t.Fatalf("Regression: Basic fallthrough after invalid Bearer must be FallthroughDetected: status=%d bc=%s eval=%+v",
+			resp.StatusCode, bc, eval)
+	}
+	if !strings.Contains(eval.Reason, "authenticated") {
+		t.Fatalf("reason should note authenticated/Basic fallthrough: %q", eval.Reason)
+	}
+
+	// Anonymous fallthrough anti-pattern.
+	anonSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(strings.ToLower(r.Header.Get("Authorization")), "bearer ") {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"anonymous","authenticated":false,"anonymous":true}`))
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(anonSrv.Close)
+	reqA, _ := http.NewRequest(http.MethodGet, anonSrv.URL+"/job/demo/1/logText/progressiveText?start=0", nil)
+	reqA.Header.Set("Authorization", "Bearer garbage")
+	respA, err := anonSrv.Client().Do(reqA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer respA.Body.Close()
+	bA, _ := io.ReadAll(io.LimitReader(respA.Body, 4096))
+	evalA := auth.ClassifyFallthroughProbe(auth.FallthroughProbeInput{
+		StatusCode: respA.StatusCode,
+		BodyClass:  auth.ClassifyResponseBodyClass(bA),
+	})
+	if !evalA.FallthroughDetected {
+		t.Fatalf("Regression: anonymous fallthrough after invalid Bearer must be FallthroughDetected: %+v", evalA)
+	}
+	if !strings.Contains(evalA.Reason, "anonymous") {
+		t.Fatalf("reason should note anon fallthrough: %q", evalA.Reason)
 	}
 }

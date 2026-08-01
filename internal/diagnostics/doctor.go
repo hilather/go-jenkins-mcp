@@ -12,6 +12,7 @@ import (
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
 	"github.com/simonfxr/go-jenkins-mcp/internal/config"
+	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
 	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
 	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
@@ -63,6 +64,9 @@ type DoctorOptions struct {
 	Gate *policy.ReadOnlyGate
 	// Now is optional clock for tests.
 	Now func() time.Time
+	// Getenv optional env reader for gateway Mode B/C residual (OAUTH-009/010).
+	// nil → os.Getenv.
+	Getenv func(string) string
 }
 
 // CircuitStateProvider reports the NET-003 circuit breaker snapshot for doctor
@@ -161,12 +165,19 @@ func RunDoctor(ctx context.Context, opts DoctorOptions) (Report, error) {
 	// NET-003 / OBS Wave 27: circuit state when a client is available (no network).
 	rep.Checks = append(rep.Checks, checkCircuit(opts))
 
+	// HOST-008 / multi-user residual: secret-free gateway env posture (offline).
+	rep.Checks = append(rep.Checks, checkGatewayStatus(opts.Getenv))
+
 	// UPD-001 Wave 35: LKG on-disk re-verify when a record exists (offline).
 	rep.Checks = append(rep.Checks, checkUpdateLKG(opts.Paths))
 
 	for i := range rep.Checks {
 		rep.Checks[i] = SanitizeCheck(rep.Checks[i])
 	}
+	// Unified residual snapshot (OPS doctor residual-status embed): same map as
+	// `gateway residual-status`. Informational only — does not affect Overall.
+	// Live mode_*_qualified flags stay false; points at live-pin-blockers.md.
+	rep.GatewayResidualStatus = sanitizeResidualStatusMap(BuildGatewayResidualStatus(opts.Getenv))
 	rep.Overall = OverallStatus(rep.Checks)
 	return rep, nil
 }
@@ -778,6 +789,8 @@ func checkIdentity(ctx context.Context, opts DoctorOptions, p *profile.Profile) 
 // Offline: capability matrix + residual checklist. Online (oidc_bearer with
 // keyring tokens): best-effort bearer whoAmI + invalid-bearer sample.
 // Never claims live jwt-auth-filter lab complete without residual wording.
+// When gateway Mode B (jwt_rs_bearer) is enabled, elevates warn residual:
+// offline vault Ready does not close live RS pin.
 func checkRSAuth(ctx context.Context, opts DoctorOptions, p *profile.Profile) Check {
 	method := ""
 	if p != nil {
@@ -799,6 +812,11 @@ func checkRSAuth(ctx context.Context, opts DoctorOptions, p *profile.Profile) Ch
 		"path_level":              rep.PathLevel,
 		"plugin_role":             string(rep.PluginRole),
 		"doc":                     sum.Doc,
+		"live_lab_still_required": sum.LiveLabStillRequired,
+		// Note: detail keys must not contain "token" (SanitizeCheck drops them).
+		"id_jwt_never_api_credential": true,
+		"classifier_matrix_done_star": sum.ClassifierMatrixDoneStar,
+		"fallthrough_fixture_count":   sum.FallthroughFixtureCount,
 	}
 	status := StatusOK
 	msg := fmt.Sprintf("RS qualification matrix: %d routes, fallthrough_must_deny=%v, inventory_ok=%v (live lab residual)",
@@ -821,6 +839,27 @@ func checkRSAuth(ctx context.Context, opts DoctorOptions, p *profile.Profile) Ch
 		}
 		details["warning"] = auth.WarnOnlyOICAuthWithoutRS
 		details["residuals"] = rep.Residuals
+	}
+
+	// Mode B gateway: honest residual when jwt_rs_bearer primary/enabled.
+	// residual_id oauth009_offline links REL lite / pilot checklist residual.
+	modeB, modeResidual := gatewayModeBResidual(opts.Getenv)
+	details["gateway_mode_b_enabled"] = modeB
+	if modeB {
+		details["gateway_mode_matrix_residual"] = modeResidual
+		details["mode_b_live_rs_qualified"] = false // offline never claims live pin
+		details["residual_id"] = "oauth009_offline"
+		details["oauth009_offline"] = true
+		if status != StatusFail {
+			status = StatusWarn
+			msg = "gateway Mode B (jwt_rs_bearer) enabled: offline vault foundation only; live jwt-auth-filter / Entra pin residual (oauth009_offline / OAUTH-009)"
+		}
+		details["residuals"] = append([]string{
+			"Mode B offline JWT vault Obtain → Bearer is not a live RS production pin (residual_id=oauth009_offline)",
+			"ID tokens must never be used as Jenkins API credentials",
+			"Re-prove wrong aud/exp/iss + invalid-bearer no fallthrough on live controller",
+			"Opt-in lab: make live-oauth-* (mock RS); production pin still open",
+		}, rep.Residuals...)
 	}
 
 	// Online optional: bearer whoAmI when OIDC tokens present and network allowed.
@@ -885,6 +924,31 @@ func checkRSAuth(ctx context.Context, opts DoctorOptions, p *profile.Profile) Ch
 		Message: msg,
 		Details: details,
 	})
+}
+
+// gatewayModeBResidual reports whether gateway Mode B (jwt_rs_bearer) is the
+// primary or in the enabled list, plus ModeMatrix residual text (OAUTH-009).
+// getenv nil → os.Getenv. Invalid mode env returns false (start fail is separate).
+func gatewayModeBResidual(getenv func(string) string) (enabled bool, residual string) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	mx, err := gateway.ModeMatrixFromEnviron(getenv)
+	if err != nil {
+		// Soft residual: if env explicitly sets jwt_rs_bearer but matrix fails
+		// (e.g. primary not in ENABLED_MODES), still surface Mode B intent.
+		raw := strings.TrimSpace(getenv(gateway.EnvGatewayCredentialMode))
+		enabledRaw := strings.TrimSpace(getenv(gateway.EnvGatewayEnabledModes))
+		if strings.Contains(raw, string(gateway.CredentialModeJWTRSBearer)) ||
+			strings.Contains(enabledRaw, string(gateway.CredentialModeJWTRSBearer)) {
+			return true, "jwt_rs_bearer referenced in env; mode matrix invalid — fix ENABLED_MODES; live RS pin residual (OAUTH-009)"
+		}
+		return false, ""
+	}
+	if gateway.ModeEnabledIn(gateway.CredentialModeJWTRSBearer, mx.Enabled, mx.Primary) {
+		return true, mx.Residual
+	}
+	return false, ""
 }
 
 // checkJenkinsNotAS is an offline structural check (JAS-001 / ADR 0003):

@@ -16,7 +16,16 @@ import (
 const (
 	EndpointBuildWithParameters = "buildWithParameters"
 	EndpointStop                = "stop"
+	EndpointTerm                = "term"
+	EndpointKill                = "kill"
 	EndpointCancelItem          = "cancelItem"
+	EndpointRebuild             = "rebuild"
+	EndpointReplay              = "replay"
+	EndpointEnable              = "enable"
+	EndpointDisable             = "disable"
+	EndpointToggleKeepForever   = "toggleLogKeepForever"
+	EndpointSubmitDescription   = "submitDescription"
+	EndpointCancelItemBulk      = "cancelItemBulk"
 )
 
 // NormalizeParams copies and normalizes a parameter map for binding and
@@ -107,10 +116,11 @@ func RedactParams(params map[string]any) map[string]any {
 	return out
 }
 
-// TargetHash binds action + job + optional build + optional queue id + param fingerprint.
-// Never includes secret values — only the fingerprint of normalized params.
+// TargetHash binds action + job + optional build + optional queue id + param fingerprint
+// + optional mode/extra bind material (interrupt mode, description, keep flag, bulk queue ids).
+// Never includes secret values — only the fingerprint of normalized params and non-secret mode/extra.
 // QueueID is required for cancel_queue binding; omitted (0) for start/stop.
-func TargetHash(action Action, job string, buildNumber, queueID int, paramFP string) string {
+func TargetHash(action Action, job string, buildNumber, queueID int, paramFP string, modeExtra ...string) string {
 	job = strings.TrimSpace(job)
 	var b strings.Builder
 	b.WriteString("action=")
@@ -127,6 +137,23 @@ func TargetHash(action Action, job string, buildNumber, queueID int, paramFP str
 	}
 	b.WriteString(";params=")
 	b.WriteString(paramFP)
+	mode := ""
+	extra := ""
+	if len(modeExtra) > 0 {
+		mode = strings.TrimSpace(modeExtra[0])
+	}
+	if len(modeExtra) > 1 {
+		extra = strings.TrimSpace(modeExtra[1])
+	}
+	if mode != "" {
+		b.WriteString(";mode=")
+		b.WriteString(mode)
+	}
+	if extra != "" {
+		// Hash extra so long descriptions do not bloat the target string.
+		b.WriteString(";extra=")
+		b.WriteString(hashBytes([]byte(extra)))
+	}
 	return hashBytes([]byte(b.String()))
 }
 

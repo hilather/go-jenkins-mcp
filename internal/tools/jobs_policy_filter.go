@@ -232,6 +232,41 @@ func listJobsNormalizedFilter(args jenkins.ListJobsToolArgs) (folderPrefix, name
 	return folderPrefix, nameContains, view, maxDepth
 }
 
+// listJobsDirectWithSubject is the empty-policy ListJobs path with HOST-004
+// subject-bound page_token resolve + next_page_token mint.
+//
+// Strategy: resolve pagination under the subject-bound fingerprint at the tools
+// layer, call Client.ListJobs with offset/limit only (no page_token) so the
+// client does not re-check an unbound fingerprint, then rebind next_page_token.
+// Empty subjectKey is a pure no-op vs unbound tokens (stdio pilot).
+func listJobsDirectWithSubject(ctx context.Context, client *jenkins.Client, st regState, args jenkins.ListJobsToolArgs) (*jenkins.ListJobsToolResponse, error) {
+	sk := effectiveSubjectKey(st, ctx)
+	folderPrefix, nameContains, view, maxDepth := listJobsNormalizedFilter(args)
+	filterFP := jenkins.ListJobsFilterFingerprint(folderPrefix, nameContains, view, maxDepth, args.IncludeFolders)
+	off, lim, err := jenkins.ResolveListPaginationWithSubject(
+		args.PageToken, args.Offset, args.Limit,
+		jenkins.DefaultListJobsLimit, jenkins.MaxListJobsLimit, filterFP, sk,
+	)
+	if err != nil {
+		return nil, err
+	}
+	call := args
+	call.PageToken = ""
+	call.Offset = off
+	call.Limit = lim
+	res, err := client.ListJobs(ctx, call)
+	if err != nil {
+		return nil, err
+	}
+	if res == nil {
+		return nil, nil
+	}
+	// Client mints unbound next tokens; rebind so Alice/Bob cannot cross-continue.
+	res.NextPageToken = jenkins.NextPageTokenIfMoreWithSubject(
+		res.Offset, res.Limit, len(res.Jobs), res.Total, filterFP, sk)
+	return res, nil
+}
+
 // PaginateJobs applies offset/limit like jenkins.Client.ListJobs page slicing.
 // Exported for filter→paginate composition tests (Wave 39).
 func PaginateJobs(all []jenkins.JobSummary, offset, limit int) (page []jenkins.JobSummary, off, lim int) {
@@ -302,22 +337,27 @@ func collectAllJobs(ctx context.Context, client *jenkins.Client, args jenkins.Li
 // old tokens instead of silently skewing pages. Empty-patterns single ListJobs
 // keeps the Jenkins user-filter-only fingerprint (no policy applied after).
 //
+// HOST-004: when regState.subjectKey is non-empty, page tokens are subject-bound
+// (Alice's next_page_token fails closed for Bob). Empty subjectKey leaves tokens
+// unbound (stdio pilot residual).
+//
 // Deny-only: never invents jobs. Empty after filter → empty jobs, total 0.
 func listJobsWithPolicyFilter(ctx context.Context, client *jenkins.Client, st regState, args jenkins.ListJobsToolArgs) (*jenkins.ListJobsToolResponse, error) {
 	keeps := listJobsPolicyKeeps(st)
 	if len(keeps) == 0 {
-		// Empty patterns: single ListJobs; fingerprint stays user-filter only
-		// (Client.ListJobs). No post-fetch policy filter is applied.
-		return client.ListJobs(ctx, args)
+		// Empty patterns: single ListJobs; fingerprint stays user-filter only.
+		// HOST-004: still subject-bind page tokens when SubjectKey is set.
+		return listJobsDirectWithSubject(ctx, client, st, args)
 	}
 
+	sk := effectiveSubjectKey(st, ctx)
 	folderPrefix, nameContains, view, maxDepth := listJobsNormalizedFilter(args)
-	// Collect path: bind page_token to user filters + live deny patterns.
+	// Collect path: bind page_token to user filters + live deny patterns + subject.
 	policyParts := PolicyFingerprintMaterial(st)
 	filterFP := jenkins.ListJobsFilterFingerprint(folderPrefix, nameContains, view, maxDepth, args.IncludeFolders, policyParts...)
-	userOffset, userLimit, err := jenkins.ResolveListPagination(
+	userOffset, userLimit, err := jenkins.ResolveListPaginationWithSubject(
 		args.PageToken, args.Offset, args.Limit,
-		jenkins.DefaultListJobsLimit, jenkins.MaxListJobsLimit, filterFP,
+		jenkins.DefaultListJobsLimit, jenkins.MaxListJobsLimit, filterFP, sk,
 	)
 	if err != nil {
 		return nil, err
@@ -334,7 +374,7 @@ func listJobsWithPolicyFilter(ctx context.Context, client *jenkins.Client, st re
 	}
 	total := len(kept)
 	page, off, lim := PaginateJobs(kept, userOffset, userLimit)
-	nextTok := jenkins.NextPageTokenIfMore(off, lim, len(page), total, filterFP)
+	nextTok := jenkins.NextPageTokenIfMoreWithSubject(off, lim, len(page), total, filterFP, sk)
 
 	// Truncated honesty: preserve Jenkins scan/depth truncation and force true
 	// when collection hit the safety page cap (may have missed jobs).

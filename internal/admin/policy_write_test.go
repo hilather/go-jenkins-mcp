@@ -252,6 +252,69 @@ func TestPolicyWrite_ForceReadOnlyWidenRejected(t *testing.T) {
 	}
 }
 
+// MGR-002: admin cannot clear fleet_telemetry_force_off when current overlay pins it.
+func TestPolicyWrite_FleetTelemetryForceOffWidenRejected(t *testing.T) {
+	t.Setenv(policy.EnvPolicyRequiredVar, "")
+	t.Setenv(policy.EnvPolicyFileVar, "")
+	paths := testPaths(t)
+	path := writeTestOverlay(t, paths, policy.Overlay{
+		Version:                1,
+		ForceReadOnly:          true,
+		FleetTelemetryForceOff: true,
+		Mode:                   policy.ModePilot,
+	})
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newPolicyAdminHandler(t, admin.RolePolicyAdmin, policyWriteCanary, paths)
+	draft := map[string]any{
+		"overlay": map[string]any{
+			"version":                   1,
+			"force_read_only":           true,
+			"fleet_telemetry_force_off": false, // widen attempt
+			"mode":                      "pilot",
+		},
+		"profileId": "corp",
+	}
+	rr := doJSON(t, h, http.MethodPost, "/admin/v1/policy/validate", policyWriteCanary, draft)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("validate status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), policyWriteCanary) {
+		t.Fatal("canary in validate body")
+	}
+	var vresp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &vresp); err != nil {
+		t.Fatal(err)
+	}
+	if vresp["valid"] != false {
+		t.Fatalf("valid=%v want false", vresp["valid"])
+	}
+	errs, _ := vresp["errors"].([]any)
+	found := false
+	for _, e := range errs {
+		m, _ := e.(map[string]any)
+		if m["field"] == "fleet_telemetry_force_off" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("errors=%v want fleet_telemetry_force_off field", errs)
+	}
+	rr2 := doJSON(t, h, http.MethodPost, "/admin/v1/policy/apply", policyWriteCanary, draft)
+	if rr2.Code != http.StatusBadRequest {
+		t.Fatalf("apply widen want 400, got %d body=%s", rr2.Code, rr2.Body.String())
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("invalid apply must not rewrite overlay file")
+	}
+}
+
 func TestPolicyWrite_DenyListMustBeSuperset(t *testing.T) {
 	t.Setenv(policy.EnvPolicyRequiredVar, "")
 	t.Setenv(policy.EnvPolicyFileVar, "")
@@ -467,6 +530,137 @@ func TestCheckMonotonicRestrict_Unit(t *testing.T) {
 	// Exported helpers are package-private; exercise via validate HTTP.
 	// Covered by ForceReadOnlyWiden + DenyListMustBeSuperset above.
 	t.Parallel()
+}
+
+// HOST-006: overlay max_tools_* must be positive when set (policy.Validate);
+// BFF maps field errors and monotonic lower-or-keep on raise/clear.
+func TestPolicyWrite_MaxToolsRateFields(t *testing.T) {
+	t.Setenv(policy.EnvPolicyRequiredVar, "")
+	t.Setenv(policy.EnvPolicyFileVar, "")
+	paths := testPaths(t)
+	rpm := 20
+	burst := 8
+	writeTestOverlay(t, paths, policy.Overlay{
+		Version:           1,
+		ForceReadOnly:     true,
+		Mode:              policy.ModePilot,
+		MaxToolsPerMinute: &rpm,
+		MaxToolsBurst:     &burst,
+	})
+	h := newPolicyAdminHandler(t, admin.RolePolicyAdmin, policyWriteCanary, paths)
+
+	// Zero must fail closed via Overlay.Validate field mapping.
+	zeroDraft := map[string]any{
+		"overlay": map[string]any{
+			"version":              1,
+			"force_read_only":      true,
+			"mode":                 "pilot",
+			"max_tools_per_minute": 0,
+			"max_tools_burst":      8,
+		},
+	}
+	rr := doJSON(t, h, http.MethodPost, "/admin/v1/policy/validate", policyWriteCanary, zeroDraft)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("validate status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var zeroResp struct {
+		Valid  bool `json:"valid"`
+		Errors []struct {
+			Field   string `json:"field"`
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &zeroResp); err != nil {
+		t.Fatal(err)
+	}
+	if zeroResp.Valid {
+		t.Fatal("zero max_tools_per_minute must be invalid")
+	}
+	foundZero := false
+	for _, e := range zeroResp.Errors {
+		if e.Field == "max_tools_per_minute" {
+			foundZero = true
+		}
+	}
+	if !foundZero {
+		t.Fatalf("want max_tools_per_minute field error, got %+v", zeroResp.Errors)
+	}
+
+	// Raise above current overlay cap must fail monotonic restrict.
+	raiseDraft := map[string]any{
+		"overlay": map[string]any{
+			"version":              1,
+			"force_read_only":      true,
+			"mode":                 "pilot",
+			"max_tools_per_minute": 30, // current 20
+			"max_tools_burst":      8,
+		},
+	}
+	rr = doJSON(t, h, http.MethodPost, "/admin/v1/policy/validate", policyWriteCanary, raiseDraft)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("raise validate status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var raiseResp struct {
+		Valid  bool `json:"valid"`
+		Errors []struct {
+			Field string `json:"field"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &raiseResp); err != nil {
+		t.Fatal(err)
+	}
+	if raiseResp.Valid {
+		t.Fatal("raise max_tools_per_minute must be invalid")
+	}
+	foundRaise := false
+	for _, e := range raiseResp.Errors {
+		if e.Field == "max_tools_per_minute" {
+			foundRaise = true
+		}
+	}
+	if !foundRaise {
+		t.Fatalf("want raise error on max_tools_per_minute, got %+v", raiseResp.Errors)
+	}
+
+	// Lower (or keep) is allowed; apply writes positive rate fields.
+	lowerDraft := map[string]any{
+		"overlay": map[string]any{
+			"version":              1,
+			"force_read_only":      true,
+			"mode":                 "pilot",
+			"max_tools_per_minute": 10,
+			"max_tools_burst":      4,
+		},
+		"profileId": "corp",
+	}
+	rr = doJSON(t, h, http.MethodPost, "/admin/v1/policy/apply", policyWriteCanary, lowerDraft)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("apply lower status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), policyWriteCanary) {
+		t.Fatal("canary in apply body")
+	}
+	var applyResp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &applyResp); err != nil {
+		t.Fatal(err)
+	}
+	if applyResp["applied"] != true {
+		t.Fatalf("applied=%v body=%s", applyResp["applied"], rr.Body.String())
+	}
+	raw, err := os.ReadFile(paths.DefaultPolicyFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got policy.Overlay
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if n, ok := got.EffectiveMaxToolsPerMinute(); !ok || n != 10 {
+		t.Fatalf("written max_tools_per_minute=%v ok=%v", n, ok)
+	}
+	if n, ok := got.EffectiveMaxToolsBurst(); !ok || n != 4 {
+		t.Fatalf("written max_tools_burst=%v ok=%v", n, ok)
+	}
 }
 
 func TestCanWidenForceReadOnly_StillAlwaysFalse(t *testing.T) {

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture — go-jenkins-mcp</title>
+    <meta name="description" content="Package layout, auth surfaces, policy, and deployment modes for go-jenkins-mcp." />
+    <meta name="theme-color" content="#09090b" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container nav">
+        <a class="brand" href="index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16M4 12h10M4 17h14" stroke-linecap="round"/><circle cx="18" cy="12" r="2.2"/></svg>
+          </span>
+          <span class="brand-text">
+            <span class="brand-name">go-jenkins-mcp</span>
+            <span class="brand-tag">enterprise · v0.2.0</span>
+          </span>
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="index.html" data-nav="index.html">Overview</a>
+          <a href="getting-started.html" data-nav="getting-started.html">Start</a>
+          <a href="architecture.html" data-nav="architecture.html">Architecture</a>
+          <a href="security.html" data-nav="security.html">Security</a>
+          <a href="docs.html" data-nav="docs.html">Docs</a>
+        </nav>
+        <div class="nav-actions">
+          <a class="btn btn-primary" href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/jenkins-mcp-enterprise-architecture.md">Architecture SoT</a>
+          <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="false" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="mobile-nav" data-mobile-nav>
+        <a href="index.html" data-nav="index.html">Overview</a>
+        <a href="getting-started.html" data-nav="getting-started.html">Start</a>
+        <a href="architecture.html" data-nav="architecture.html">Architecture</a>
+        <a href="security.html" data-nav="security.html">Security</a>
+        <a href="docs.html" data-nav="docs.html">Docs</a>
+      </div>
+    </header>
+
+    <main>
+      <div class="page-hero">
+        <div class="container">
+          <div class="eyebrow"><span class="eyebrow-dot"></span> FND packages · ADRs</div>
+          <h1>Designed as an enterprise product, not a script with tools.</h1>
+          <p>Clear package boundaries: Jenkins HTTP never imports MCP, tools never own raw transport, contracts and error taxonomies are shared.</p>
+        </div>
+      </div>
+
+      <section class="section">
+        <div class="container">
+          <div class="section-head">
+            <div class="section-kicker">Layout</div>
+            <h2>Where the weight lives.</h2>
+          </div>
+          <div class="tool-list">
+            <div class="tool-item"><code>cmd/jenkins-mcp</code><span>Process entry — stdio default, optional HTTP, admin, gateway, doctor CLIs</span></div>
+            <div class="tool-item"><code>internal/jenkins</code><span>Jenkins client, resilience, pagination, route matrix — no MCP imports</span></div>
+            <div class="tool-item"><code>internal/tools</code><span>MCP tool registration, budgets, diagnose/compare/survey surfaces</span></div>
+            <div class="tool-item"><code>internal/auth · policy · redact</code><span>Identity, deny-only RBAC, signed overlays, secret scrubbing</span></div>
+            <div class="tool-item"><code>internal/store · archive · logmirror</code><span>Local cache, L1/L2 packs, progressive log materialization</span></div>
+            <div class="tool-item"><code>internal/admin · web/admin</code><span>BFF + embedded React SPA for operators</span></div>
+            <div class="tool-item"><code>deploy/local · deploy/gateway</code><span>Disposable Docker lab and gateway scaffold</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" style="padding-top:0">
+        <div class="container">
+          <div class="section-head">
+            <div class="section-kicker">Control planes</div>
+            <h2>Two modes, one binary family.</h2>
+          </div>
+          <div class="grid-2">
+            <article class="card">
+              <h3>Local stdio client</h3>
+              <p>Per-user pilot path. Cursor spawns <code>jenkins-mcp serve</code>. Credentials from keyring. RO default. Optional mutations with preview/confirm. This is the supported first production path.</p>
+            </article>
+            <article class="card">
+              <h3>Managed gateway foundation</h3>
+              <p>Team-hosted HTTP path with identity and vault scaffolding. Qualification and multi-tenant mutation isolation remain residual — use for lab / roadmap, not as a silent upgrade claim.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" style="padding-top:0">
+        <div class="container">
+          <div class="section-head">
+            <div class="section-kicker">Hard invariants</div>
+            <h2>Architecture decisions you can rely on.</h2>
+          </div>
+          <div class="grid-3">
+            <article class="card"><h3>Jenkins is not an AS</h3><p>ADR 0003 — stock Jenkins is never treated as an OAuth authorization server. External IdP + resource-server path only.</p></article>
+            <article class="card"><h3>RO + deny-only RBAC</h3><p>ADR 0004 — global read-only default; overlays deny, they do not invent privilege.</p></article>
+            <article class="card"><h3>Official MCP Go SDK</h3><p>ADR 0006 — protocol pin via <code>modelcontextprotocol/go-sdk</code>; contracts stay budgeted (ADR 0010).</p></article>
+            <article class="card"><h3>Signed policy bundles</h3><p>ADR 0012 — Ed25519 envelopes for fleet distribution with last-good fallbacks.</p></article>
+            <article class="card"><h3>Admin SPA embedded</h3><p>ADR 0014 — reactive admin UI build embedded for single-binary operator flows.</p></article>
+            <article class="card"><h3>Tool response budgets</h3><p>Soft 64 KiB targets, hard max ceilings, opaque list pagination — agents cannot request unbounded dumps.</p></article>
+          </div>
+          <p style="margin-top:1.5rem;color:var(--fg-subtle);font-size:var(--text-sm)">
+            Full ADR index:
+            <a href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/adr/README.md" style="color:var(--fg);text-decoration:underline;text-underline-offset:3px">docs/adr/README.md</a>
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-bottom" style="border:0;padding:0">
+        <span><a href="index.html" style="color:var(--fg-muted)">← Overview</a></span>
+        <span>MIT · go-jenkins-mcp</span>
+      </div>
+    </footer>
+    <script src="assets/main.js"></script>
+  </body>
+</html>

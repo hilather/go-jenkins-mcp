@@ -23,13 +23,21 @@ type Caller struct {
 	ProfileID contracts.ProfileID
 }
 
-// CacheKey returns the token-cache key for this caller.
+// CacheKey returns the token-cache key for this caller (HOST-004: includes tenant).
 func (c Caller) CacheKey() CacheKey {
 	return CacheKey{
 		User:     strings.TrimSpace(c.Subject),
+		Tenant:   strings.TrimSpace(c.Tenant),
 		Workload: strings.TrimSpace(c.WorkloadID),
 		Profile:  strings.TrimSpace(string(c.ProfileID)),
 	}
+}
+
+// SubjectKey returns the stable multi-tenant namespace key for this caller
+// (tenant|subject|profile). Same as package SubjectKey(c); convenience for
+// cache / continuation / limiter isolation (HOST-004 / HOST-006).
+func (c Caller) SubjectKey() string {
+	return SubjectKey(c)
 }
 
 // Valid reports whether the caller has the minimum binding fields.
@@ -113,6 +121,17 @@ type AgentCoreProvider struct {
 	// Fetcher is the optional pluggable token acquisition backend.
 	// Required when Live=true; nil + Live=true → capability_missing (not silent success).
 	Fetcher TokenFetcher
+	// ConsentStore holds progressive consent metadata only when Obtain returns
+	// ConsentRequired (auth URL + session id; never tokens). nil → process-local
+	// default (ProcessConsentSessionStore). Optional file-backed path is residual
+	// crash recovery of metadata only; same-host reload-before-persist flock lite —
+	// not multi-replica shared store.
+	ConsentStore ConsentSessionStore
+	// Principals is the optional companion PrincipalStore cleared on Invalidate
+	// (GWY-002 / HOST-003 force re-auth residual lite). When nil, Invalidate
+	// uses ProcessPrincipalCache so multi-user Binding/policy principals drop
+	// with the token cache. Tests may inject a private *PrincipalCache.
+	Principals PrincipalStore
 }
 
 // NewAgentCoreProvider constructs a provider after validating cfg.
@@ -192,7 +211,13 @@ func (p *AgentCoreProvider) Obtain(ctx context.Context, caller Caller) (Credenti
 
 	cred, err := p.Fetcher.FetchJenkinsCredential(ctx, caller, p.Config)
 	if err != nil {
-		return Credential{}, mapFetcherError(err)
+		mapped := mapFetcherError(err)
+		// Process-local consent metadata residual (OAUTH-010 / GWY-001):
+		// remember auth URL + session id only when ConsentRequired — never tokens.
+		if cr, ok := AsConsentRequired(mapped); ok && cr != nil {
+			RememberConsentRequired(p.consentStore(), SubjectKey(caller), cr.Info)
+		}
+		return Credential{}, mapped
 	}
 	if strings.TrimSpace(cred.AccessToken) == "" {
 		return Credential{}, apperr.New(apperr.CodeAuthentication,
@@ -214,14 +239,21 @@ func (p *AgentCoreProvider) Obtain(ctx context.Context, caller Caller) (Credenti
 }
 
 // Invalidate implements CredentialProvider.
+// Drops token-cache material for the caller and the companion PrincipalCache
+// entry (SubjectKey) so the next Obtain / Binding re-binds (force re-auth residual lite).
+// Never logs tokens. Multi-pod / live Entra revocation remain residual.
 func (p *AgentCoreProvider) Invalidate(ctx context.Context, caller Caller) error {
 	if err := ctx.Err(); err != nil {
 		return apperr.Wrap(apperr.CodeCancelled, "gateway invalidate cancelled", err)
 	}
-	if p == nil || p.Cache == nil {
+	if p == nil {
 		return nil
 	}
-	p.Cache.Delete(caller.CacheKey())
+	principals := p.Principals
+	if principals == nil {
+		principals = ProcessPrincipalCache()
+	}
+	_ = InvalidateSubjectLocal(caller, principals, p.Cache)
 	return nil
 }
 
@@ -251,6 +283,15 @@ func (p *AgentCoreProvider) Status(ctx context.Context) ProviderStatus {
 		st.ErrorMessageSafe = "agentcore live acquisition requires a TokenFetcher"
 	}
 	return st
+}
+
+// consentStore returns the provider consent metadata store or the process default.
+// Metadata only — never tokens.
+func (p *AgentCoreProvider) consentStore() ConsentSessionStore {
+	if p != nil && p.ConsentStore != nil {
+		return p.ConsentStore
+	}
+	return ProcessConsentSessionStore()
 }
 
 // notConfigured returns a stable capability_missing error for unconfigured paths.

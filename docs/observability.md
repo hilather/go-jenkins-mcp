@@ -21,9 +21,11 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 | Field | Notes |
 |-------|--------|
 | `time` | RFC3339 UTC |
-| `type` | `login_success`, `login_fail`, `serve_start`, `tool_deny`, `auth_fail`, optional `tool_success` |
+| `type` | `login_success`, `login_fail`, `serve_start`, `tool_deny`, `tool_error`, `auth_fail`, optional `tool_success` |
 | `profileId` | Connection profile id |
 | `principalId` | Verified Jenkins user id (never a token) |
+| `externalSubject` | Optional IdP subject label (gateway multi-user); redacted + length-capped like `principalId` — never a token |
+| `subjectKeyHash` | Optional `audit.HashOpaque(tenant\|subject\|profile)` for multi-user correlation — **never** raw subject key, vault material, or tokens |
 | `tool` / `action` | MCP tool name / short class |
 | `decision` | `allow` / `deny` / `success` / `fail` / `error` |
 | `reasonCode` | Stable code (policy reason, auth code) |
@@ -37,7 +39,20 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 
 - `login` success / fail (profile data dir)
 - `serve` start after identity bind; `auth_fail` on serve-time verify failure
-- Tool dispatch **deny** (global read-only + deny-only MCP RBAC)
+- Tool dispatch **deny** (global read-only + deny-only MCP RBAC) and **tool_error**
+  (handler / budget / subject limiter failures): multi-user tool dispatch
+  attributes `profileId` / `principalId` from **effective** subject when wired,
+  plus optional `externalSubject` + `subjectKeyHash` (opaque) when SubjectKey /
+  ExternalSubject are available. Metrics tool_ok / tool_deny / tool_error remain
+  separate (OBS-001). `tool_error` audit reason is the stable `apperr` code only
+  (never ModelMessage / tokens).
+- Optional **tool_success** audit: residual/off by default; set
+  `JENKINS_MCP_AUDIT_TOOL_OK=1` (truthy) to emit (high volume). Metrics
+  `mcp_tool_ok` always record regardless.
+- **Mutation Manager** (`mutation_preview` / `mutation_confirm` / `mutation_deny`):
+  ProfileID/PrincipalID from effective `mutation.Binding`; when Binding has
+  ExternalSubject also `externalSubject` + `subjectKeyHash` =
+  `audit.HashOpaque(tenant|external|profile)`. Never confirmation tokens or raw keys.
 - Mid-serve **identity re-verify** fail-closed (`IdentityReverifyGate`, AUTH-004 / Wave 28):
   - `type=auth_fail`, `action=identity_reverify`, `decision=fail`
   - `reasonCode`: `identity_principal_drift` | `identity_reverify_fail` | `identity_unbound`
@@ -46,10 +61,25 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 
 Audit emit is **best-effort**: failures never authorize mutations and never elevate access.
 
+### Multi-user correlation residual
+
+| Surface | Status |
+|---------|--------|
+| Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+| Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
+| Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
+| Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+| Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; BFF `external_subject` exact match + client residual) | **Done\*** lite (same-host BFF filter; multi-pod aggregation still residual) |
+| Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **Done\*** lite — multi-user correlation more complete on one host after rotation |
+| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod / per-host JSONL only; no fleet merge |
+| Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
+| Subject quota metrics (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`) | **Done\* lite** process-local (HOST-006 CodeQuota); multi-pod metric aggregation residual |
+
 ### Rotation / retention
 
 - Default max active file size: **8 MiB**, keep **3** rotated siblings (`audit.jsonl.1` …).
 - Retention is size-based for the pilot; enterprise export/retention policy is residual.
+- **Admin audit list (same-host lite):** `GET /admin/v1/profiles/{id}/audit` merges the active file with numbered rotates (`audit.jsonl.1` …) and optional timestamp-like siblings next to the active path; newest matching events first; corrupt lines skipped. **Not** multi-pod aggregation.
 
 ## Metrics & logging (OBS-001)
 
@@ -255,6 +285,8 @@ secrets. Constants live in `internal/telemetry` (`Metric*`).
 | `mcp_tool_ok` | Handler completed (budget enforced) without error | `tools.addTool` |
 | `mcp_tool_error` | Handler or budget returned an error (non-deny) | `tools.addTool` |
 | `mcp_tool_deny` | RO / MCP RBAC / session-gate denial (registration or dispatch) | `tools.emitToolDeny` |
+| `mcp_subject_rate_quota` | HOST-006 subject **rate** CodeQuota (token-bucket `Allow` deny) | `tools.addTool` (subject rate path) |
+| `mcp_subject_slot_quota` | HOST-006 subject **concurrent slot** CodeQuota (`Hold` deny) | `tools.addTool` (subject limiter path) |
 | `jenkins_http_requests_total` | Upstream HTTP attempts that reached `Do` (incl. retries) | `jenkins.Client` via `MetricsHook` |
 | `jenkins_http_errors_total` | Transport failure or HTTP status ≥ 400 | `jenkins.Client` via `MetricsHook` |
 | `jenkins_http_wire_bytes_total` | Encoded response bytes read from the wire | `MetricsHook` + `ByteCounters` |
@@ -273,6 +305,13 @@ secrets. Constants live in `internal/telemetry` (`Metric*`).
 **Aliases (same string value):** `MetricPolicyDenials` → `mcp_tool_deny`;
 `MetricJenkinsRequests` → `jenkins_http_requests_total`;
 `MetricBytesWire` → `jenkins_http_wire_bytes_total`.
+
+**Subject quota (HOST-006 / OBS residual lite):** `mcp_subject_rate_quota` and
+`mcp_subject_slot_quota` increment on CodeQuota from subject rate `Allow` or
+slot `Hold` (also counted in `mcp_tool_error`). Process-local totals only —
+**never** subject keys, principal ids, or tokens as labels. Multi-pod
+aggregation residual (HOST-008); optional same-host file rate does not change
+the metric surface.
 
 **Circuit breaker state (Wave 27):** current state is **not** a labeled time
 series. Doctor check `circuit_breaker` reports `Client.CircuitState()` when a
@@ -309,21 +348,21 @@ operator residual: **Cursor host stdio CI** still open — see
 
 | Surface | Command / tool | Notes |
 |---------|----------------|--------|
-| Doctor | `jenkins-mcp doctor --profile <id> [--offline] [--allow-mutations] [--read-only]` · MCP `jenkins_doctor` | Local checks; never returns secrets; `mutations` reports register vs executable posture (Wave 32); `circuit_breaker` when client wired; optional pack verify (ARC-008) |
+| Doctor | `jenkins-mcp doctor --profile <id> [--offline] [--json] [--allow-mutations] [--read-only]` · MCP `jenkins_doctor` · admin `GET …/doctor?offline=1` | Local checks; never returns secrets; `mutations` reports register vs executable posture (Wave 32); `circuit_breaker` when client wired; optional pack verify (ARC-008). **`gateway_residual_status`**: embeds the same secret-free map as `gateway residual-status` / `BuildGatewayResidualStatus` (informational; does not drive overall fail; live `mode_*_qualified` stay false; pointer to [gateway/live-pin-blockers.md](gateway/live-pin-blockers.md)). Prefer `--json` for machine parse; text surfaces a `gateway_residual_status:` section. Requires `--profile` (no profile-less offline doctor). |
 | Cache status | `jenkins-mcp cache status --profile <id>` | L1 store schema / counts only |
 | Cache verify | `jenkins-mcp cache verify --profile <id> [--full] [--sample N]` | ARC-008 integrity; issue kinds pack/entry/checksum/catalog/index; support-safe |
 | Cache repair | `jenkins-mcp cache repair --profile <id> [--index-only]` | Rebuild sidecar indexes only after pack verify; never mutates pack body |
-| Support bundle | `jenkins-mcp support-bundle --profile <id> [--preview]` · `doctor --bundle` / `--bundle-preview` | Privacy-scrubbed zip under XDG cache |
+| Support bundle | `jenkins-mcp support-bundle --profile <id> [--preview]` · `doctor --bundle` / `--bundle-preview` | Privacy-scrubbed zip under XDG cache. Always includes top-level **`gateway-residual-status.json`** (`BuildGatewayResidualStatus` + same sanitize as doctor) so residual honesty is present even when doctor fails or a prebuilt doctor report omits the nest. `doctor.json` also embeds `gateway_residual_status` when doctor ran successfully. Never tokens/subjects; live `mode_*_qualified` stay false; `ha_multi_replica` false; pointer to [gateway/live-pin-blockers.md](gateway/live-pin-blockers.md). |
 
 ### Support bundle path and redaction
 
 - **Default path:** `$XDG_CACHE_HOME/jenkins-mcp/support-bundles/<profileId>/support-bundle-<id>-<timestamp>.zip` (file mode **0600**, dir **0700**).
-- **Included (OPS-001 / Wave 23):** manifest, binary version/build, effective profile **without secrets**, doctor report, cache status, optional capability summary, metrics snapshot, recent error signature hashes (optional `ExtractCandidates` from a size-capped in-memory sample only — raw sample never zipped), `GOOS`/`GOARCH`/Go version, offline `security_self_check.json`, diagnostics-local `release_evidence_lite.json` (version/runtime only), offline `rs_qualification_summary.json`.
+- **Included (OPS-001 / Wave 23):** manifest, binary version/build, effective profile **without secrets**, doctor report, cache status, optional capability summary, metrics snapshot, recent error signature hashes (optional `ExtractCandidates` from a size-capped in-memory sample only — raw sample never zipped), `GOOS`/`GOARCH`/Go version, offline `security_self_check.json`, diagnostics-local `release_evidence_lite.json` (version/runtime only), offline `rs_qualification_summary.json`, always-on **`gateway-residual-status.json`** (unified residual honesty — same map as CLI `gateway residual-status` / doctor embed; independent of doctor success).
 - **Explicitly excluded:** API tokens, keyring material, full build logs, raw log samples, artifact bodies, cookies, `Authorization` headers, private keys, raw HTTP transcripts, cache encryption keys.
 - **Before write:** CLI prints included and excluded category lists (also with `--preview` / `--bundle-preview`, which write nothing).
-- **Scrubbing:** secret-like JSON keys dropped; string values pass `redact.Secrets`; canary tests plant a token in keyring + capability map (+ log sample) and assert it never appears in the zip.
+- **Scrubbing:** secret-like JSON keys dropped; string values pass `redact.Secrets`; canary tests plant a token in keyring + capability map (+ log sample) and assert it never appears in the zip. Residual status map is additionally sanitized via the same `sanitizeResidualStatusMap` path as doctor.
 - Doctor embedded in the bundle defaults to **offline** (no whoAmI) for the standalone `support-bundle` command.
-- Wave 23 offline members default **on**; callers may disable via `SupportBundleOptions` include flags (`IncludeSecuritySelfCheck`, `IncludeReleaseEvidenceLite`, `IncludeRSQualification`).
+- Wave 23 offline members default **on**; callers may disable via `SupportBundleOptions` include flags (`IncludeSecuritySelfCheck`, `IncludeReleaseEvidenceLite`, `IncludeRSQualification`). **`gateway-residual-status.json` is not optional** (always written for residual honesty).
 
 ### Health / queue diagnose tools (related)
 
@@ -426,9 +465,11 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 | Field | Notes |
 |-------|--------|
 | `time` | RFC3339 UTC |
-| `type` | `login_success`, `login_fail`, `serve_start`, `tool_deny`, `auth_fail`, optional `tool_success` |
+| `type` | `login_success`, `login_fail`, `serve_start`, `tool_deny`, `tool_error`, `auth_fail`, optional `tool_success` |
 | `profileId` | Connection profile id |
 | `principalId` | Verified Jenkins user id (never a token) |
+| `externalSubject` | Optional IdP subject label (gateway multi-user); redacted + length-capped like `principalId` — never a token |
+| `subjectKeyHash` | Optional `audit.HashOpaque(tenant\|subject\|profile)` for multi-user correlation — **never** raw subject key, vault material, or tokens |
 | `tool` / `action` | MCP tool name / short class |
 | `decision` | `allow` / `deny` / `success` / `fail` / `error` |
 | `reasonCode` | Stable code (policy reason, auth code) |
@@ -442,7 +483,20 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 
 - `login` success / fail (profile data dir)
 - `serve` start after identity bind; `auth_fail` on serve-time verify failure
-- Tool dispatch **deny** (global read-only + deny-only MCP RBAC)
+- Tool dispatch **deny** (global read-only + deny-only MCP RBAC) and **tool_error**
+  (handler / budget / subject limiter failures): multi-user tool dispatch
+  attributes `profileId` / `principalId` from **effective** subject when wired,
+  plus optional `externalSubject` + `subjectKeyHash` (opaque) when SubjectKey /
+  ExternalSubject are available. Metrics tool_ok / tool_deny / tool_error remain
+  separate (OBS-001). `tool_error` audit reason is the stable `apperr` code only
+  (never ModelMessage / tokens).
+- Optional **tool_success** audit: residual/off by default; set
+  `JENKINS_MCP_AUDIT_TOOL_OK=1` (truthy) to emit (high volume). Metrics
+  `mcp_tool_ok` always record regardless.
+- **Mutation Manager** (`mutation_preview` / `mutation_confirm` / `mutation_deny`):
+  ProfileID/PrincipalID from effective `mutation.Binding`; when Binding has
+  ExternalSubject also `externalSubject` + `subjectKeyHash` =
+  `audit.HashOpaque(tenant|external|profile)`. Never confirmation tokens or raw keys.
 - Mid-serve **identity re-verify** fail-closed (`IdentityReverifyGate`, AUTH-004 / Wave 28):
   - `type=auth_fail`, `action=identity_reverify`, `decision=fail`
   - `reasonCode`: `identity_principal_drift` | `identity_reverify_fail` | `identity_unbound`
@@ -451,10 +505,25 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 
 Audit emit is **best-effort**: failures never authorize mutations and never elevate access.
 
+### Multi-user correlation residual
+
+| Surface | Status |
+|---------|--------|
+| Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+| Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
+| Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
+| Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+| Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; BFF `external_subject` exact match + client residual) | **Done\*** lite (same-host BFF filter; multi-pod aggregation still residual) |
+| Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **Done\*** lite — multi-user correlation more complete on one host after rotation |
+| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod / per-host JSONL only; no fleet merge |
+| Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
+| Subject quota metrics (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`) | **Done\* lite** process-local (HOST-006 CodeQuota); multi-pod metric aggregation residual |
+
 ### Rotation / retention
 
 - Default max active file size: **8 MiB**, keep **3** rotated siblings (`audit.jsonl.1` …).
 - Retention is size-based for the pilot; enterprise export/retention policy is residual.
+- **Admin audit list (same-host lite):** `GET /admin/v1/profiles/{id}/audit` merges the active file with numbered rotates (`audit.jsonl.1` …) and optional timestamp-like siblings next to the active path; newest matching events first; corrupt lines skipped. **Not** multi-pod aggregation.
 
 ## Metrics & logging (OBS-001)
 
@@ -637,6 +706,8 @@ secrets. Constants live in `internal/telemetry` (`Metric*`).
 | `mcp_tool_ok` | Handler completed (budget enforced) without error | `tools.addTool` |
 | `mcp_tool_error` | Handler or budget returned an error (non-deny) | `tools.addTool` |
 | `mcp_tool_deny` | RO / MCP RBAC / session-gate denial (registration or dispatch) | `tools.emitToolDeny` |
+| `mcp_subject_rate_quota` | HOST-006 subject **rate** CodeQuota (token-bucket `Allow` deny) | `tools.addTool` (subject rate path) |
+| `mcp_subject_slot_quota` | HOST-006 subject **concurrent slot** CodeQuota (`Hold` deny) | `tools.addTool` (subject limiter path) |
 | `jenkins_http_requests_total` | Upstream HTTP attempts that reached `Do` (incl. retries) | `jenkins.Client` via `MetricsHook` |
 | `jenkins_http_errors_total` | Transport failure or HTTP status ≥ 400 | `jenkins.Client` via `MetricsHook` |
 | `jenkins_http_wire_bytes_total` | Encoded response bytes read from the wire | `MetricsHook` + `ByteCounters` |
@@ -691,28 +762,33 @@ Prefer `context` values (`audit.WithSink`, `telemetry.WithRegistry`) over global
 - KD-008 residual: loopback HTTP without require-token / deny-anonymous still open to local processes (default for pilot); opt-in via `--http-require-token` or `JENKINS_MCP_HTTP_REQUIRE_TOKEN` / `JENKINS_MCP_HTTP_DENY_ANONYMOUS`; self-check warns (`http_require_token_residual`); Host allow-list fail-closed covered by `http_allowed_hosts_residual`
 
 
-### Wave 46 fleet ForceOff residual canary
+### Wave 46 / MGR-002 fleet ForceOff + overlay pin canary
 
 Offline self-check item `fleet_telemetry_force_off_residual` (MGR-002) proves
-`ForceOff` disables fleet telemetry offline without network or export.
-Details mark `policy_overlay_pin=false` — signed-policy enterprise pin remains residual.
+`ForceOff` and overlay `fleet_telemetry_force_off` disable fleet telemetry
+offline without network or export (`policy_overlay_pin=true` lite).
+HSM / true multi-sig t-of-n and privacy board remain residual.
 Env enable path (`JENKINS_MCP_TELEMETRY`) remains separate from force-off.
 
 ## Residual
 
-- OTLP export / remote collector query (approved backend adapter) → INT-002 residual
-- Per-request latency histograms / compression-ratio gauges / decoder CPU (OBS follow-on)
-- Circuit gauges / half-open+closed transition counters (optional; Wave 27 ships open-events + doctor `State()` only)
-- Wire `DoctorOptions.Circuit` / metrics from serve into MCP `jenkins_doctor` when that tool is registered
-- Per-tool allowlisted counters (only if a closed seed name set is required; default is total ok/error/deny only)
-- Optional tool-success audit summaries (not emitted by default)
-- Policy-controlled retention/export beyond size rotation
-- Support bundle: optional live capability attach from a running `serve` process; signed/encrypted export
-- Post-pack L1 release metrics: `cache_l1_released`, `cache_l1_release_bytes_reclaimed`
-- Authenticated Streamable HTTP / gateway session binding (GWY-*)
-- MGR-002 enterprise force-off via signed overlay; formal privacy board sign-off
-- KD-004 residual: migrate remaining `log.Printf` to `telemetry.Logger`; bare high-entropy detectors (Wave 25) + Writer line buffering (Wave 33) landed — residual sub-threshold hex FN / git-SHA FP / force-flush boundary only; Wave 34 self-check `writer_split_line_canary` guards line reassembly
-- KD-008 residual: loopback HTTP without require-token / deny-anonymous still open to local processes (default for pilot); opt-in via `--http-require-token` or `JENKINS_MCP_HTTP_REQUIRE_TOKEN` / `JENKINS_MCP_HTTP_DENY_ANONYMOUS`; self-check warns (`http_require_token_residual`); Host allow-list fail-closed covered by `http_allowed_hosts_residual`
+| Surface | Status |
+|---------|--------|
+| Subject quota metrics (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`) | **Done\* lite** — process-local counters on HOST-006 CodeQuota (rate `Allow` / slot `Hold`); also counted in `mcp_tool_error`; **never** subject keys, tokens, or free-form labels. Fleet allowlist includes both names. Multi-pod aggregation / shared rate still **residual** (HOST-008). |
+| Multi-pod / multi-replica audit aggregation (central sink) | **Residual** — per-pod JSONL only. **Done\* lite:** same-host admin merge of rotated siblings (`audit.jsonl.N`) for a single profile path — not fleet timeline |
+| Optional tool-success audit summaries | **Residual** opt-in (`JENKINS_MCP_AUDIT_TOOL_OK`, default off; metrics always on) |
+| Per-tool allowlisted counters | **Residual** (only if a closed seed name set is required; default is total ok/error/deny + subject quota) |
+| OTLP export / remote collector query | **Residual** (INT-002 approved backend adapter) |
+| Per-request latency histograms / compression-ratio gauges / decoder CPU | **Residual** (OBS follow-on) |
+| Circuit gauges / half-open+closed transition counters | **Residual** optional (Wave 27 ships open-events + doctor `State()` only) |
+| Wire `DoctorOptions.Circuit` / metrics from serve into MCP `jenkins_doctor` | **Residual** when that tool is registered |
+| Policy-controlled retention/export beyond size rotation | **Residual** |
+| Support bundle: optional live capability attach; signed/encrypted export | **Residual** |
+| Post-pack L1 release metrics (`cache_l1_released`, `cache_l1_release_bytes_reclaimed`) | Named residual (constants exist; wiring honesty in support/doctor paths as shipped) |
+| Authenticated Streamable HTTP / gateway session binding | GWY-* residual |
+| MGR-002 formal privacy board + HSM/multi-sig | **Residual** (overlay force-off pin is **Done\* lite**) |
+| KD-004 logging migration / bare high-entropy FN-FP | Residual sub-threshold hex FN / git-SHA FP / force-flush boundary only; Wave 34 `writer_split_line_canary` guards line reassembly |
+| KD-008 loopback HTTP without require-token | Residual open to local processes (default pilot); opt-in `--http-require-token` / `JENKINS_MCP_HTTP_REQUIRE_TOKEN` / `JENKINS_MCP_HTTP_DENY_ANONYMOUS`; self-check `http_require_token_residual` / `http_allowed_hosts_residual` |
 
 ## Pilot evidence
 

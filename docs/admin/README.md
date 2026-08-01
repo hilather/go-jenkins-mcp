@@ -59,7 +59,7 @@ jenkins-mcp admin serve \
 | `--require-token` | Fail start if no secret configured |
 | `--admin-role` | `viewer` (default) \| `operator` \| `policy_admin` (UI-003) |
 | `--assets-dir` | Optional SPA static root (overrides package/dev/embed defaults) |
-| `--admin-allow-non-local` | Residual non-loopback bind; **requires** token (not for production) |
+| `--admin-allow-non-local` | Residual non-loopback bind; **requires** token (HOST-007; not multi-tenant production) |
 
 #### SPA asset resolution (UI-008)
 
@@ -104,11 +104,35 @@ HTTP server timeouts (local admin, not multi-tenant gateway): `ReadHeaderTimeout
 |---------|---------------------|
 | Overview / policy effective / doctor read | Scaffold (UI-001) + BFF (UI-002) + role badge / token control (UI-003) + serve/CSP packaging (UI-008) |
 | **Metrics** (UI-005) | Auto-refresh (15s) with pause on hidden tab + manual pause, session sparklines (≤60 pts), secret-free JSON export. **Residual:** process-local only; no fleet aggregation |
-| **Audit** (UI-006) | type/limit/before filters, detail drawer, load-older via `before` cursor, export loaded events. **Residual:** no live SSE tail; page-capped client export only |
+| **Audit** (UI-006) | type dropdown (tool_deny/error/success, mutation_*), limit/before, BFF **`external_subject`** exact match (case-sensitive) on multi-user `externalSubject`, **externalSubject** / **subjectKeyHash** table columns (muted/truncated), SPA client exact filter residual for older BFF, detail drawer, load-older, export includes multi-user fields. **Residual:** no live SSE tail; page-capped client export only; multi-pod aggregation residual |
 | Policy write editor | Not yet (UI-004) |
 | Destructive ops | Not yet (UI-007) |
 
 **Residuals:** loopback without token is pilot-only (any local process can call the API with the configured role); token-in-`localStorage` SPA UX is pilot-only; v1 Bearer/header auth (CSRF N/A); cookie sessions / OIDC not implemented; policy apply not exposed yet (UI-004); no CDN/SRI; multi-arch SPA packaging is the same static tree for all arches.
+
+### HOST-007 — Gateway operator admin residual (non-SaaS)
+
+The admin console is an **operator** surface for a single process / host — **not**
+a multi-tenant end-user control plane or SaaS console.
+
+| Topic | Guidance |
+|-------|----------|
+| Non-loopback bind | Only with **token required** (`--admin-allow-non-local` + `--require-token` / token env). Prefer reverse-proxy **mTLS or OIDC** residual design before exposing beyond loopback. |
+| Vault / Jenkins tokens | **Never** in browser JSON or SPA. Mode A vault inventory is hash-only subjects via `GET /admin/v1/gateway/vault`; writes remain CLI (`gateway vault-put` / `vault-delete`). |
+| Enabled auth modes | Secret-free mode **ids** on `GET /admin/v1/health` (`enabledModes`) and `GET /admin/v1/gateway/vault` (`mode` + `enabledModes`). No secrets, no vault material. |
+| Unified residual-status | **HOST-007:** `GET /admin/v1/gateway/residual-status` returns the same secret-free map as CLI `gateway residual-status` (`diagnostics.BuildGatewayResidualStatus`). Modes, multi_user, HA, multi-pod, consent, rate knobs, `shared_subject_rate_file` / `shared_principal_cache_file` / `shared_jwks_file` / `shared_token_cache_file` / `shared_api_token_vault_file` / `shared_jwt_vault_file` (same-host lite bools only; paths never returned; token/vault residual never opens files; vault bools env-explicit only), `principal_cache_entries` (count; this admin process), optional `principal_cache_max_entries` / `principal_cache_ttl_seconds`, `oauth009_offline`. SPA Overview residual card shows live pin bools (`mode_*_live_*_qualified`, `gateway_ready`, `ha_multi_replica`) as **no/false** with honesty **offline residual — not production GO**; hides on 404 (older BFF). **Progressive consent nest:** SPA Overview residual + Mode C card + Doctor residual surface `progressive_consent.file_backed` / `same_host_reload_before_persist` (when `JENKINS_MCP_CONSENT_STORE_PATH` set), `multi_replica_shared=false`, `stores_tokens=false` (path never shown; not multi-pod HA). Health/vault also surface camelCase parity bools `sharedSubjectRateFile` / `sharedPrincipalCacheFile` / `sharedJwksFile` / `sharedTokenCacheFile` (paths never returned; not multi-pod HA; token residual never opens cache file). **Health progressive consent store camelCase parity:** `progressiveConsentFileBacked` / `progressiveConsentSameHostReload` (true when `CONSENT_STORE_PATH` set; same helper residual-status uses; path never returned; residual never opens consent file) + always-false `progressiveConsentStoresTokens` / `progressiveConsentMultiReplicaShared` (SPA Mode C card honesty: same-host lite; not multi-pod HA). Pointer: [live-pin-blockers.md](../gateway/live-pin-blockers.md). Never tokens/subjects / production GO. |
+| Doctor `gateway_residual_status` SPA | **HOST-007 residual lite:** doctor BFF already embeds the same secret-free map under `gateway_residual_status` (informational; does not drive overall). SPA **Doctor** page shows a residual card **after Overall** when the field is present (hides on older BFF that omits it). Surfaces explicit `mode_*_live_*_qualified=no/false`, `gateway_ready=no/false`, `ha_multi_replica=no/false` with honesty **offline residual — not production GO** (same fields residual-status always emits). Reuses Overview helpers (`pickResidualLivePinFields` + `pickResidualRateCacheFields` / shared_*_file / principal count). Live pin pointer: [live-pin-blockers.md](../gateway/live-pin-blockers.md). Never tokens/subjects / live GO. |
+| Subject invalidate (force re-auth residual lite) | **HOST-007:** `POST /admin/v1/gateway/subject-invalidate` mirrors CLI `gateway subject-invalidate`. Requires `gateway_ops` (`operator` / `policy_admin`). Body: `subject_key` or `tenant`+`subject_id`+`profile`. Clears process or same-host FilePrincipalCache / FileTokenCache when env paths set. Secret-free StatusMap response. **Not** live Entra revocation; **not** multi-pod fan-out. SPA Overview form when role has `gateway_ops`. See [api-v1.md](api-v1.md). |
+| Consent purge (Mode C progressive consent residual lite) | **HOST-007:** `POST /admin/v1/gateway/consent-purge` mirrors CLI `gateway consent-purge` / `consent-expire`. Requires `gateway_ops`. Body: optional `action` `purge_expired` (default) \| `delete_session`+`session_id` \| `clear_all` + exact `confirm: "CLEAR_ALL"` (parity with cache `EVICT`; CLI `--all --confirm=CLEAR_ALL`). Uses `OpenConsentSessionStoreForPurge` / `JENKINS_MCP_CONSENT_STORE_PATH`. Optional body `path` is **jailed** to a direct file under the configured consent store directory (absolute only; outside-dir / relative / nested → 400 — no arbitrary overwrite). Secret-free counts (`deleted_count`, `remaining_count`); never tokens; `session_id` / full path not echoed. Persist fail closed (500 secret-free when file write fails). Same-host file reload-before-persist lite; **not** multi-pod HA; browser 3LO not automated. SPA Overview Mode C residual card form (type `CLEAR_ALL` for clear_all). See [api-v1.md](api-v1.md). |
+| Mode C progressive consent | **OAUTH-010 residual (static):** health always exposes `progressiveConsentMetadataDoneStar: true` and `progressiveConsentBrowser3loAutomated: false` via `gateway.NewProgressiveConsentResidual`. When Mode C is enabled, `progressiveConsentResidual` carries the secret-free residual note. **HOST-007 store residual:** health also always surfaces camelCase `progressiveConsentFileBacked` / `progressiveConsentSameHostReload` (env path configured via `ConsentStorePathConfiguredFromEnviron`) and always-false `progressiveConsentStoresTokens` / `progressiveConsentMultiReplicaShared` — same honesty as residual-status nest; path never shown; not multi-pod HA. **Never** `authorization_url` with query secrets, tokens, or client secrets. SPA Overview shows this card when Mode C / residual is present. |
+| Multi-operator sessions | **Residual: single process role** (`--admin-role`) for the whole BFF. No multi-user admin session table / CSRF cookies in v1. |
+| localStorage token UX | **Pilot / quarantine for production.** SPA may store admin Bearer in `localStorage` for loopback labs only — **not** a production multi-host authn story. Prefer httpOnly cookie + CSRF or reverse-proxy mTLS/OIDC residual (ADR 0014). |
+| Multi-user MCP gateway pin | **Foundation residual:** `JENKINS_MCP_GATEWAY_MULTI_USER=1` enables per-request Obtain + SubjectKey from HTTP Caller (not a production GO flip). Policy.Subject still process-bound; live Entra residual. Shared admin token ≠ per-user MCP subject. Admin never surfaces tokens/subjects raw. Health/vault expose secret-free `multiUserEnabled` + residual note when env is set. |
+| Gateway Ready / HA | Admin health always reports `gatewayReady: false` and `haMultiReplica: false` (admin BFF ≠ MCP serve `/readyz`; HOST-008 single-replica Tier A). Always `multiPodVaultResidual: true` (multi-pod vault residual honesty — not multi-replica Done). When multi-user env is set, `sessionAffinityRecommended: true` (kustomize sticky scaffold honesty only). When `KUBERNETES_SERVICE_HOST` is set, `kubernetesEnvDetected: true` and `residual` includes multi-pod checklist (sticky, shared vault, rate, Obtain cache). **SPA Overview** surfaces `multiPodVaultResidual` / `kubernetesEnvDetected` on Health and Gateway vault cards, and shows the multi-pod residual checklist card when `kubernetesEnvDetected` is true (secret-free; never multi-replica Done from k8s env alone). Live Ready is on the gateway serve process only. Doctor parity: `gateway_status.multi_pod_vault_residual` — see [gateway/deployment.md §9](../gateway/deployment.md). |
+| CSP under reverse-proxy | Prefer **same-origin** (SPA + `/admin/v1`). Do not strip CSP; re-apply if TLS terminates upstream. |
+| HA admin | Not multi-replica admin plane (HOST-008 Tier B). See [gateway/deployment.md §9](../gateway/deployment.md). |
+
+See also [`api-v1.md`](api-v1.md) health + gateway/vault + gateway/residual-status; [`../gateway/deployment.md`](../gateway/deployment.md); [`../gateway/live-pin-blockers.md`](../gateway/live-pin-blockers.md).
 ---
 
 ## 1. Packaging (RPM / DEB / tar)
@@ -191,7 +215,9 @@ Optional JSON under the policy path can **only restrict** privileges further (fo
   "deny_view_names": ["secret-view"],
   "deny_artifact_paths": ["secrets/**", "*.pem"],
   "deny_branch_names": ["release/*", "main"],
-  "max_result_bytes": 65536
+  "max_result_bytes": 65536,
+  "max_tools_per_minute": 15,
+  "max_tools_burst": 5
 }
 ```
 
@@ -205,6 +231,8 @@ Optional JSON under the policy path can **only restrict** privileges further (fo
 | `deny_artifact_paths` | Call-time deny for relative artifact `path` / `artifact_path` (e.g. `jenkins_get_artifact_text`; Wave 36). Same pattern language as jobs |
 | `deny_branch_names` | Call-time deny for `branch_name` / seed `branch` (Wave 37). Also omits matching `kind=branch` / `matrix_child` rows from `jenkins_list_jobs` (`policy_filtered` / `policy_omitted_count`; Wave 39 collect+filter+repaginate; Wave 40 policy-bound page tokens). Same pattern language as jobs |
 | `max_result_bytes` | Bounds hard MCP result budget; mid-serve raise/lower ≤ serve-bootstrap ceiling (Wave 31) |
+| `max_tools_per_minute` | Per-subject tools/min cap under `--gateway` (HOST-006); **lower only** vs env bootstrap; omitted = no change. Admin SPA Policy editor (policy_admin / `policy_write`) can set on plain pilot overlays. |
+| `max_tools_burst` | Per-subject burst cap (HOST-006 LowerRate; lower only). Admin SPA Policy editor (same as rate/min). Process-local; multi-replica residual (HOST-008). |
 
 **Signed fleets (MGR-001):** prefer `overlay.bundle.json` + Ed25519 public keys under `policy/trusted_keys/` (or `JENKINS_MCP_POLICY_TRUSTED_KEYS`). Invalid, expired, untrusted, or rolled-back bundles fail closed. Operator guide: [`../security/policy-bundles.md`](../security/policy-bundles.md).
 
@@ -220,7 +248,7 @@ jenkins-mcp policy verify \
 
 # Secret-free effective policy for a profile
 jenkins-mcp policy show-effective --profile corp --json
-# Prints force_read_only, deny_tools, deny_job_prefixes, deny_node_names, deny_view_names, deny_artifact_paths, deny_branch_names, max_result_bytes, signature_state
+# Prints force_read_only, fleet_telemetry_force_off, deny_tools, deny_job_prefixes, deny_node_names, deny_view_names, deny_artifact_paths, deny_branch_names, max_result_bytes, max_tools_per_minute, max_tools_burst, signature_state
 
 # DEV ONLY — requires JENKINS_MCP_POLICY_SIGN_DEV=1; never commit private keys
 export JENKINS_MCP_POLICY_SIGN_DEV=1
@@ -280,7 +308,7 @@ jenkins-mcp oauth probe-rs --profile corp --offline   # RS residual matrix (OAUT
 
 | Command | Use |
 |---------|-----|
-| `doctor` | Local integrity + optional whoAmI; includes `rs_auth` residual and Wave 32 **`mutations`** check (registration vs executable; pass `--allow-mutations` / `--read-only` to mirror serve). MCP `jenkins_doctor` uses the live RO gate |
+| `doctor` | Local integrity + optional whoAmI; includes `rs_auth` residual and Wave 32 **`mutations`** check (registration vs executable; pass `--allow-mutations` / `--read-only` to mirror serve). MCP `jenkins_doctor` uses the live RO gate. JSON/BFF embed `gateway_residual_status` (same residual-status map; informational). SPA Doctor residual card when present (HOST-007 lite) |
 | `support-bundle` / `doctor --bundle` | Privacy-scrubbed zip (OPS-001 / Wave 23): doctor, cache, metrics, offline security self-check, release-evidence lite (version/runtime), RS qualification summary, error signature hashes — **no** tokens/keyring/full logs |
 | `security self-check` | Secret-free posture items (RO default, policy, keyring, RS residual, …); also embedded in support-bundle |
 | `pilot-check` | Combines doctor + cache status + sample verify → JSON (REL-001) |
@@ -806,10 +834,11 @@ flag/env fail closed at serve start (no silent clamp). Empty/whitespace/`0`/`0s`
 at all layers means default **5s**. Serve `SetConfirmCooldown` installs the live
 process value used when library `Config.ConfirmCooldown` is 0 (Managers created
 at tool registration). Serve logs non-secret `mutation_confirm_cooldown=…`
-(combined with resilience log fields). Residual honesty: library
-`Config.ConfirmCooldown` negative still turns cooldown off for tests; the
-operator resolve path cannot set 0/disable. Mutations remain opt-in
-(`--allow-mutations`); pilot default is still read-only.
+(combined with resilience log fields). After TokenTTL also resolves, serve
+fail-closes when cooldown ≥ token TTL (`EnsureConfirmCooldownLessThanTokenTTL`).
+Residual honesty: library `Config.ConfirmCooldown` negative still turns cooldown
+off for tests; the operator resolve path cannot set 0/disable. Mutations remain
+opt-in (`--allow-mutations`); pilot default is still read-only.
 
 ### Mutation MaxPreviewsPerMinute (Wave 52 Track C / MUT-001)
 
@@ -846,12 +875,13 @@ flag/env fail closed at serve start (no silent clamp). Empty/whitespace/`0`/`0s`
 at all layers means default **2m**. Serve `SetTokenTTL` installs the live
 process value used when library `Config.TTL` ≤ 0 (Managers created at tool
 registration). Serve logs non-secret `mutation_token_ttl=…` (combined with
-resilience/mutation log fields). Residual honesty: ConfirmCooldown and TokenTTL
-are independent operator caps — serve does not fail closed when cooldown ≥ TTL;
-package defaults keep DefaultConfirmCooldown (5s) < DefaultTokenTTL (2m). No
-unlimited/disabled TTL path (library `Config.TTL` ≤0 still yields a positive
-TTL). Mutations remain opt-in (`--allow-mutations`); pilot default is still
-read-only.
+resilience/mutation log fields). After both ConfirmCooldown and TokenTTL
+resolve, serve fail-closes when cooldown ≥ TTL
+(`EnsureConfirmCooldownLessThanTokenTTL`) so cooldown cannot exhaust (or equal)
+the confirmation window; package defaults keep DefaultConfirmCooldown (5s) <
+DefaultTokenTTL (2m). No unlimited/disabled TTL path (library `Config.TTL` ≤0
+still yields a positive TTL). Mutations remain opt-in (`--allow-mutations`);
+pilot default is still read-only.
 
 ### UI-009 testing
 

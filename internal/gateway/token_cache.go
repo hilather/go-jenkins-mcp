@@ -10,18 +10,26 @@ import (
 // Refresh material is never stored in this MVP cache (vault later).
 const DefaultTokenCacheTTL = 5 * time.Minute
 
-// CacheKey isolates token entries per user, workload, and profile (GWY-001).
-// Never put token bytes in the key.
+// CacheKey isolates token entries per tenant, user, workload, and profile
+// (GWY-001 / HOST-004 multi-tenant cache isolation).
+// Never put token bytes in the key. Prefer Caller.CacheKey() so Tenant is set.
 type CacheKey struct {
-	User     string
+	// User is the Entra/OIDC subject (sub).
+	User string
+	// Tenant is the IdP tenant (HOST-004: required for multi-tenant isolation).
+	// Empty is allowed for single-tenant labs; production should always set it.
+	Tenant string
+	// Workload is the AgentCore / gateway workload identity.
 	Workload string
-	Profile  string
+	// Profile is the MCP profile namespace.
+	Profile string
 }
 
 // Normalize returns a trimmed key suitable for map lookup.
 func (k CacheKey) Normalize() CacheKey {
 	return CacheKey{
 		User:     strings.TrimSpace(k.User),
+		Tenant:   strings.TrimSpace(k.Tenant),
 		Workload: strings.TrimSpace(k.Workload),
 		Profile:  strings.TrimSpace(k.Profile),
 	}
@@ -36,7 +44,20 @@ func (k CacheKey) Valid() bool {
 // String is non-secret (no tokens).
 func (k CacheKey) String() string {
 	n := k.Normalize()
-	return "user=" + n.User + " workload=" + n.Workload + " profile=" + n.Profile
+	return "tenant=" + n.Tenant + " user=" + n.User +
+		" workload=" + n.Workload + " profile=" + n.Profile
+}
+
+// NamespaceSubjectKey returns the stable multi-tenant namespace string
+// tenant|user|profile (HOST-004 / SubjectKey shape). Workload is intentionally
+// omitted here — it remains a CacheKey dimension for OBO isolation but is not
+// part of vault SubjectKey. Empty user yields "".
+func (k CacheKey) NamespaceSubjectKey() string {
+	n := k.Normalize()
+	if n.User == "" {
+		return ""
+	}
+	return SubjectKeyParts(n.Tenant, n.User, n.Profile)
 }
 
 // CachedToken is memory-only credential material. It must never be logged,
@@ -75,6 +96,13 @@ func (t CachedToken) String() string {
 
 // TokenCache stores short-lived access tokens keyed by (user, workload, profile).
 // Implementations must never log token bytes.
+//
+// HOST-008 residual:
+//   - MemoryTokenCache — process-local only (StatusMap shared_token_cache=false).
+//   - FileTokenCache — optional same-host multi-process lite via flock + 0600 file
+//     (StatusMap shared_token_cache_file=true). Not multi-pod external Redis/HA.
+//
+// Multi-replica shared Obtain cache remains residual until an external store exists.
 type TokenCache interface {
 	Get(key CacheKey) (CachedToken, bool)
 	Set(key CacheKey, token CachedToken)
@@ -85,6 +113,8 @@ type TokenCache interface {
 
 // MemoryTokenCache is a process-local TTL token cache (GWY-001 foundation).
 // Not shared across processes; not a durable vault.
+// HOST-008: multi-pod / multi-process shared Obtain cache residual — use
+// FileTokenCache only for same-host lite (not multi-pod external).
 type MemoryTokenCache struct {
 	mu      sync.Mutex
 	entries map[CacheKey]CachedToken
@@ -174,4 +204,48 @@ func (c *MemoryTokenCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries = make(map[CacheKey]CachedToken)
+}
+
+// DeleteBySubjectKey removes all entries whose NamespaceSubjectKey matches
+// subjectKey (tenant|user|profile, all workloads). Returns the number of
+// entries removed. Secret-free (never logs tokens). Used by force re-auth
+// residual lite (GWY-002 / HOST-003 InvalidateSubjectLocal).
+func (c *MemoryTokenCache) DeleteBySubjectKey(subjectKey string) int {
+	if c == nil {
+		return 0
+	}
+	sk := strings.TrimSpace(subjectKey)
+	if sk == "" {
+		return 0
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.entries == nil {
+		return 0
+	}
+	n := 0
+	for k := range c.entries {
+		if k.NamespaceSubjectKey() == sk {
+			delete(c.entries, k)
+			n++
+		}
+	}
+	return n
+}
+
+// StatusMap is a non-secret doctor/status summary (HOST-008 residual honesty).
+// Never includes tokens, keys, or subject inventory dumps.
+func (c *MemoryTokenCache) StatusMap() map[string]any {
+	entries := 0
+	if c != nil {
+		c.mu.Lock()
+		entries = len(c.entries)
+		c.mu.Unlock()
+	}
+	return map[string]any{
+		"kind":               "memory",
+		"shared_token_cache": false, // HOST-008: process-local only
+		"entries":            entries,
+		"ha_multi_replica":   false, // HOST-008 residual
+	}
 }

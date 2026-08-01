@@ -91,7 +91,7 @@ misconfigured profiles that set Graph as `jenkinsAudience` still fail the known-
 | **`LoginOIDC`** | After code exchange: JWT-shaped `access_token` → discovery JWKS + `ValidateAccessToken` before keyring persist. Opaque → skip JWT parse. |
 | **`serve` start** | `ValidateServeAccessToken` → discovery JWKS + `ValidateAccessToken` for JWT; opaque → log and continue to whoAmI. |
 | **Mid-serve refresh** | New access tokens obtained via refresh are used as bearer; re-validation at next serve restart / residual continuous re-check is not a second validation stack. |
-| **Groups (OAUTH-006 light)** | After JWT validation: `GroupsFromValidatedToken` / `ExtractGroups*` with `MaxStoredGroups` (64) and `MaxGroupNameBytes` (256). Overage: truncate + residual, or fail when `FailOnOverage`. Oversize **names** always fail closed. |
+| **Groups (OAUTH-006 light)** | After JWT validation: `GroupsFromValidatedToken` / `ExtractGroups*` with `MaxStoredGroups` (64) and `MaxGroupNameBytes` (256). Count overage: truncate + residual, or fail when `FailOnOverage`. Oversize **names** always fail closed. **Entra group overage foundation (Done\*):** `_claim_names.groups` / `_claim_sources` or groups-as-reference **without** a concrete `groups` array fails closed in `ValidateAccessToken` + `ExtractGroups` (`CheckIncompleteGroupOverage`) — membership never invented; no Graph expansion (OAUTH-010 residual). Hybrid tokens with a full `groups` array keep the current path. |
 
 There is **one** JWT validation stack: `ValidateAccessToken`. Callers must not invent a second parser for production decisions.
 
@@ -104,7 +104,7 @@ There is **one** JWT validation stack: `ValidateAccessToken`. Callers must not i
 | Live Jenkins `jwt-auth-filter` (or proxy) version pin, fallthrough, route coverage | **OAUTH-005 / OAUTH-009** |
 | Live Entra end-to-end browser + bearer whoAmI principal | **OAUTH-005** lab |
 | RFC 7662 introspection for opaque tokens | Deferred |
-| Durable JWKS cache / outage TTL policy beyond fail-closed fetch | OAUTH-009 residual |
+| Multi-pod / under-load JWKS HA beyond process-local `RefreshingJWKS` (HOST-001 TTL + stale-if-error + optional max-stale + optional same-host `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` lite) | OAUTH-009 / HOST-001 residual (multi-pod external) |
 | Continuous mid-serve JWT re-validation on every refresh | Optional hardening residual |
 
 ---

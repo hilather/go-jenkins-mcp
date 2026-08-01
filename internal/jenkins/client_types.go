@@ -95,8 +95,14 @@ func (t TimeMS) MarshalJSON() ([]byte, error) {
 
 // GetJobs bounds (legacy flat list; prefer jenkins_list_jobs for discovery).
 const (
-	defaultGetJobsLimit = 50
-	maxGetJobsLimit     = 200
+	// DefaultGetJobsLimit is the default page size for jenkins_get_jobs.
+	DefaultGetJobsLimit = 50
+	// MaxGetJobsLimit is the hard upper bound for get_jobs pagination limit.
+	MaxGetJobsLimit = 200
+
+	// Unexported aliases kept for package-local call sites / tests.
+	defaultGetJobsLimit = DefaultGetJobsLimit
+	maxGetJobsLimit     = MaxGetJobsLimit
 )
 
 // GetJobsToolArgs are the tool arguments for jenkins_get_jobs.
@@ -340,24 +346,33 @@ type BuildParameter struct {
 	Description  string   `json:"description"`
 	DefaultValue any      `json:"defaultValue,omitempty"`
 	Choices      []string `json:"choices,omitempty"` // For choice parameters
+	// Required is residual honesty (MUT-015): only true when Jenkins exposes a
+	// required flag on the definition. Most definitions leave this false.
+	Required bool `json:"required,omitempty"`
 }
 
 // Build represents a Jenkins build
 type Build struct {
-	Number            int               `json:"number"`
-	URL               string            `json:"url"`
-	Building          bool              `json:"building"`
-	Result            string            `json:"result"`            // SUCCESS, FAILURE, UNSTABLE, ABORTED, null if building
-	Timestamp         TimeMS            `json:"timestamp"`         // RFC3339 timestamp
-	Duration          DurationMS        `json:"duration"`          // Human-readable in output, parses from ms
-	EstimatedDuration DurationMS        `json:"estimatedDuration"` // Human-readable in output, parses from ms
-	DisplayName       string            `json:"displayName"`
-	Parameters        map[string]string `json:"parameters,omitempty"` // Build parameters (name -> value)
+	Number            int        `json:"number"`
+	URL               string     `json:"url"`
+	Building          bool       `json:"building"`
+	Result            string     `json:"result"`            // SUCCESS, FAILURE, UNSTABLE, ABORTED, null if building
+	Timestamp         TimeMS     `json:"timestamp"`         // RFC3339 timestamp
+	Duration          DurationMS `json:"duration"`          // Human-readable in output, parses from ms
+	EstimatedDuration DurationMS `json:"estimatedDuration"` // Human-readable in output, parses from ms
+	DisplayName       string     `json:"displayName"`
+	// KeepLog is Jenkins keep-forever flag (MUT-014). JSON field keepLog.
+	KeepLog    bool              `json:"keepLog,omitempty"`
+	Parameters map[string]string `json:"parameters,omitempty"` // Build parameters (name -> value)
 }
 
 // QueuedBuild represents a queued Jenkins build item
 type QueuedBuild struct {
-	JobName     string `json:"jobName"`
+	// JobName is the best full-name path available for matching (prefer task.fullName,
+	// else FullNameFromJobURL(task.url); never rely on short task.name alone for folders).
+	JobName string `json:"jobName"`
+	// TaskName is the raw short task.name from Jenkins (may be ambiguous across folders).
+	TaskName    string `json:"taskName,omitempty"`
 	URL         string `json:"url"`
 	QueueID     int    `json:"queueId"`
 	Why         string `json:"why"`
@@ -365,4 +380,103 @@ type QueuedBuild struct {
 	Stuck       bool   `json:"stuck"`
 	Buildable   bool   `json:"buildable"`
 	Parameters  string `json:"parameters,omitempty"`
+}
+
+// InterruptBuildToolArgs are args for jenkins_interrupt_build (MUT-010).
+type InterruptBuildToolArgs struct {
+	JobName           string `json:"job_name" jsonschema:"Name/path of the Jenkins job (supports folders)"`
+	BuildNumber       int    `json:"build_number" jsonschema:"Build number to interrupt"`
+	Mode              string `json:"mode" jsonschema:"Interrupt mode: stop, term, or kill"`
+	ConfirmationToken string `json:"confirmation_token,omitempty" jsonschema:"MUT-001: token from prior preview to execute once"`
+}
+
+// InterruptBuildToolResponse is the execute result for interrupt.
+type InterruptBuildToolResponse struct {
+	JobName     string `json:"jobName"`
+	BuildNumber int    `json:"buildNumber"`
+	Mode        string `json:"mode"`
+	Interrupted bool   `json:"interrupted"`
+}
+
+// RebuildBuildToolArgs are args for jenkins_rebuild_build (MUT-011).
+type RebuildBuildToolArgs struct {
+	JobName           string `json:"job_name" jsonschema:"Name/path of the Jenkins job"`
+	BuildNumber       int    `json:"build_number" jsonschema:"Source build number whose parameters will be reused"`
+	ConfirmationToken string `json:"confirmation_token,omitempty" jsonschema:"MUT-001: token from prior preview to execute once"`
+}
+
+// ReplayPipelineToolArgs are args for jenkins_replay_pipeline (MUT-012).
+type ReplayPipelineToolArgs struct {
+	JobName           string `json:"job_name" jsonschema:"Name/path of the Pipeline job"`
+	BuildNumber       int    `json:"build_number" jsonschema:"Source Pipeline build number to replay"`
+	ConfirmationToken string `json:"confirmation_token,omitempty" jsonschema:"MUT-001: token from prior preview to execute once"`
+}
+
+// ReplayPipelineToolResponse is the execute result for replay.
+type ReplayPipelineToolResponse struct {
+	JobName     string `json:"jobName"`
+	SourceBuild int    `json:"sourceBuild"`
+	Status      string `json:"status"`
+}
+
+// SetJobBuildableToolArgs are args for jenkins_set_job_buildable (MUT-013).
+type SetJobBuildableToolArgs struct {
+	JobName           string `json:"job_name" jsonschema:"Name/path of the Jenkins job"`
+	Buildable         bool   `json:"buildable" jsonschema:"true to enable (buildable), false to disable"`
+	ConfirmationToken string `json:"confirmation_token,omitempty" jsonschema:"MUT-001: token from prior preview to execute once"`
+}
+
+// SetJobBuildableToolResponse is the execute result for enable/disable.
+type SetJobBuildableToolResponse struct {
+	JobName   string `json:"jobName"`
+	Buildable bool   `json:"buildable"`
+	Status    string `json:"status"`
+}
+
+// SetBuildKeepForeverToolArgs are args for jenkins_set_build_keep_forever (MUT-014).
+type SetBuildKeepForeverToolArgs struct {
+	JobName           string `json:"job_name" jsonschema:"Name/path of the Jenkins job"`
+	BuildNumber       int    `json:"build_number" jsonschema:"Build number"`
+	KeepForever       bool   `json:"keep_forever" jsonschema:"Desired keep-forever state"`
+	ConfirmationToken string `json:"confirmation_token,omitempty" jsonschema:"MUT-001: token from prior preview to execute once"`
+}
+
+// SetBuildKeepForeverToolResponse is the execute result for keep-forever.
+type SetBuildKeepForeverToolResponse struct {
+	JobName     string `json:"jobName"`
+	BuildNumber int    `json:"buildNumber"`
+	KeepForever bool   `json:"keepForever"`
+	Status      string `json:"status"`
+}
+
+// SetBuildDescriptionToolArgs are args for jenkins_set_build_description (MUT-014).
+type SetBuildDescriptionToolArgs struct {
+	JobName           string `json:"job_name" jsonschema:"Name/path of the Jenkins job"`
+	BuildNumber       int    `json:"build_number" jsonschema:"Build number"`
+	Description       string `json:"description" jsonschema:"New build description (max 4096 chars; no secrets)"`
+	ConfirmationToken string `json:"confirmation_token,omitempty" jsonschema:"MUT-001: token from prior preview to execute once"`
+}
+
+// SetBuildDescriptionToolResponse is the execute result for description update.
+type SetBuildDescriptionToolResponse struct {
+	JobName     string `json:"jobName"`
+	BuildNumber int    `json:"buildNumber"`
+	Status      string `json:"status"`
+	Length      int    `json:"length"`
+}
+
+// CancelQueueItemsForJobToolArgs are args for jenkins_cancel_queue_items_for_job (MUT-016).
+type CancelQueueItemsForJobToolArgs struct {
+	JobName           string `json:"job_name" jsonschema:"Full job name; only waiting items for this job are cancelled"`
+	StuckOnly         bool   `json:"stuck_only,omitempty" jsonschema:"When true, only cancel items with stuck=true"`
+	ConfirmationToken string `json:"confirmation_token,omitempty" jsonschema:"MUT-001: token from prior preview to execute once"`
+}
+
+// CancelQueueItemsForJobToolResponse is the execute result for bulk queue cancel.
+type CancelQueueItemsForJobToolResponse struct {
+	JobName   string `json:"jobName"`
+	Cancelled []int  `json:"cancelled"`
+	Failed    []int  `json:"failed,omitempty"`
+	Status    string `json:"status"`
+	Cap       int    `json:"cap"`
 }

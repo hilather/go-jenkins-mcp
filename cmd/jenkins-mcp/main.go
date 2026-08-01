@@ -194,7 +194,7 @@ Usage:
   jenkins-mcp login --profile <id> [--user USER] [--method api-token|oidc] [--oidc]
   jenkins-mcp logout --profile <id>
   jenkins-mcp status --profile <id>
-  jenkins-mcp doctor --profile <id> [--offline] [--bundle|--bundle-preview]
+  jenkins-mcp doctor --profile <id> [--offline] [--json] [--bundle|--bundle-preview]
   jenkins-mcp support-bundle --profile <id> [--preview] [--offline]
   jenkins-mcp cache status --profile <id>
   jenkins-mcp cache verify --profile <id> [--full] [--sample N]
@@ -219,6 +219,15 @@ Usage:
   jenkins-mcp redact validate-patterns --file PATH [--json]
   jenkins-mcp pilot-check --profile <id> [--offline] [--sample N]
   jenkins-mcp gateway qualify --offline
+  jenkins-mcp gateway residual-status
+  jenkins-mcp gateway consent-residual
+  jenkins-mcp gateway consent-purge [--all --confirm=CLEAR_ALL | --session-id ID] [--path PATH]
+  jenkins-mcp gateway consent-expire   # alias of consent-purge
+  jenkins-mcp gateway subject-invalidate (--subject-key KEY | --tenant T --subject-id S [--profile P])
+  jenkins-mcp gateway vault put|set (--subject KEY | --tenant T --subject-id S [--profile P]) --user U [--token-env VAR] [--vault-path PATH]
+  jenkins-mcp gateway vault delete|revoke (--subject KEY | --tenant T --subject-id S [--profile P]) [--vault-path PATH]
+  jenkins-mcp gateway vault list [--vault-path PATH]
+  jenkins-mcp gateway vault status|exists (--subject KEY | --tenant T --subject-id S [--profile P]) [--vault-path PATH]
   jenkins-mcp policy verify --file PATH [--keys PATH] [--json]
   jenkins-mcp policy show-effective --profile <id> [--json]
   jenkins-mcp policy sign --file OVERLAY.json --key KEY.pem --key-id ID --out BUNDLE.json  # dev-only
@@ -230,6 +239,7 @@ Usage:
   jenkins-mcp serve --profile <id> [--http ADDR] [--http-token-env=VAR | --http-token-file=PATH]
   jenkins-mcp serve --profile <id> [--http ADDR] [--http-require-token]
   jenkins-mcp serve --profile <id> [--http ADDR] [--http-max-body-bytes N]
+  jenkins-mcp serve --profile <id> [--http ADDR] [--http-path-prefix=/mcp]
   jenkins-mcp serve --profile <id> [--enable-adapter=ID]... [--adapter-allowlist PATH]
   jenkins-mcp serve --profile <id> [--ca-bundle PATH] [--proxy URL]
   jenkins-mcp serve --profile <id> [--identity-reverify-ttl=30s]
@@ -273,16 +283,28 @@ JENKINS_MCP_HTTP_DENY_ANONYMOUS=1 (alias; same RequireToken path). Non-local
 bind always requires a token, --http-allowed-origin, --http-allowed-host, and a
 per-request subject (RequireSubject). Gateway mode and --http-require-subject /
 JENKINS_MCP_HTTP_REQUIRE_SUBJECT reject non-health requests without subject.
-Lab-only subject header X-Jenkins-MCP-Lab-Subject when JENKINS_MCP_LAB_IDENTITY=1
+Lab-only subject header X-Jenkins-MCP-Lab-Subject (optional Groups: X-Jenkins-MCP-Lab-Groups) when JENKINS_MCP_LAB_IDENTITY=1
 (fail closed otherwise; not default). Production JWT subject path (HOST-001):
 JENKINS_MCP_HTTP_JWKS_URL + JENKINS_MCP_HTTP_JWT_ISSUER +
 JENKINS_MCP_HTTP_JWT_AUDIENCE (secret-free); optional JENKINS_MCP_HTTP_JWT_REQUIRED=1
-implies require-subject. Shared transport secret is never treated as subject.
+implies require-subject. JWKS refreshes on TTL (default 5m;
+JENKINS_MCP_HTTP_JWKS_REFRESH_TTL, min 30s max 1h) with stale-if-error.
+Optional JENKINS_MCP_HTTP_JWKS_MAX_STALE (Go duration; empty/0 = unlimited;
+min 1m max 24h) fails closed after last good JWKS age exceeds the bound.
+Optional JENKINS_MCP_HTTP_JWKS_CACHE_PATH same-host multi-process public JWKS
+snapshot (flock+0600; residual-status shared_jwks_file bool only — path never
+returned). Multi-pod external JWKS residual.
+Shared transport secret is never treated as subject.
 Request body cap defaults to
 4 MiB; raise with --http-max-body-bytes / JENKINS_MCP_HTTP_MAX_BODY_BYTES
-(absolute fail-closed 16 MiB). Residual:
-mid-session subject rebind / JWKS rotation under load; prefer stdio for pilot
-(ADR 0002).
+(absolute fail-closed 16 MiB). Optional reverse-proxy path prefix:
+--http-path-prefix / JENKINS_MCP_HTTP_PATH_PREFIX (e.g. /mcp; must start with
+/; no // or ..; flag wins). When set, MCP Streamable routes are under the
+prefix only (stripped before the SDK); /healthz and /readyz stay at root and
+also at {prefix}/healthz|{prefix}/readyz. Mid-session subject change on the same
+Mcp-Session-Id fails closed (HOST-001). Residual: multi-pod external JWKS HA;
+live Entra under load; live path-prefix origin pin matrix; prefer stdio for
+pilot (ADR 0002).
 
 TLS/proxy (NET-004): profile may set caBundlePath, proxyURL, noProxy, clientCertFile,
 clientKeyFile (paths only — never private keys in profile JSON). CLI --ca-bundle /
@@ -861,6 +883,8 @@ func runServe(args []string) error {
 	httpRequireSubject := fs.Bool("http-require-subject", false, "Fail closed if HTTP requests lack trusted subject identity (also --gateway, JENKINS_MCP_HTTP_REQUIRE_SUBJECT=1; always on with --http-allow-non-local; transport secret alone is not identity)")
 	// Wave 44 Track C: Streamable HTTP request body cap (absolute fail-closed 16 MiB).
 	httpMaxBodyBytesFlag := fs.String("http-max-body-bytes", "", "Streamable HTTP request body cap in bytes (empty/0=default 4MiB; env JENKINS_MCP_HTTP_MAX_BODY_BYTES fallback; flag wins; max 16MiB absolute fail-closed)")
+	// HOST-002: reverse-proxy path prefix for Streamable HTTP MCP routes.
+	httpPathPrefixFlag := fs.String("http-path-prefix", "", "Optional Streamable HTTP path prefix for reverse-proxy mounts (e.g. /mcp; empty=root; env JENKINS_MCP_HTTP_PATH_PREFIX fallback; flag wins; must start with /; no // or ..; MCP only under prefix; /healthz|/readyz at root and {prefix})")
 	var httpAllowedOrigins multiString
 	fs.Var(&httpAllowedOrigins, "http-allowed-origin", "Exact Origin allow-list entry for non-GET when using --http (repeatable; required with --http-allow-non-local)")
 	var httpAllowedHosts multiString
@@ -948,7 +972,7 @@ func runServe(args []string) error {
 		"adapter-otel-export-backend": true, "adapter-otel-export-base-url": true,
 		"enable-adapter": true, "http-allowed-origin": true, "http-allowed-host": true,
 		"http-token-env": true, "http-token-file": true,
-		"http-max-body-bytes": true,
+		"http-max-body-bytes": true, "http-path-prefix": true,
 	})); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
@@ -1058,17 +1082,20 @@ func runServe(args []string) error {
 		log.Printf("Gateway mode enabled provider_configured=%v ready=%v mode=%s",
 			st.Configured, st.Ready, st.Mode)
 		if !st.Ready {
-			// Mode C / AgentCore: Live=false until TokenFetcher wire (GWY-001 residual).
-			// Local keyring/OIDC session remains the Jenkins HTTP path; Obtain stays
-			// fail-closed (capability_missing) so no shared SA is ever substituted.
-			log.Printf("Gateway credential obtain is not live (capability_missing until AgentCore pin); Jenkins HTTP uses local session")
+			// Mode C / AgentCore default: Live=false until opt-in Live wire
+			// (JENKINS_MCP_GATEWAY_LIVE=1 + token endpoint → HTTPTokenFetcher).
+			// Local keyring/OIDC session remains residual Jenkins HTTP path only
+			// when Obtain is not Ready; Obtain stays fail-closed so no shared SA.
+			log.Printf("Gateway credential obtain is not Ready (configure Mode A/B vault Live or Mode C JENKINS_MCP_GATEWAY_LIVE); Jenkins HTTP uses local session residual")
 		} else if st.Mode == gateway.ModeAPITokenVault {
 			// HOST-009 + HOST-003: Mode A Ready → per-request Obtain AuthProvider
 			// (Basic personal token; never shared SA / ambient keyring fallthrough).
-			log.Printf("Gateway mode A (api_token_vault) Obtain Ready; Jenkins HTTP will use per-request vault credentials")
+			log.Printf("Gateway mode A (api_token_vault) Obtain Ready; Jenkins HTTP will use per-request vault credentials only")
+		} else if st.Mode == gateway.ModeJWTRSBearer {
+			log.Printf("Gateway mode B (jwt_rs_bearer) Obtain Ready; Jenkins HTTP will use per-request JWT vault Bearer credentials only")
 		} else {
-			// Mode B/C Ready (mock/live Fetcher): Obtain → Bearer AuthProvider.
-			log.Printf("Gateway Obtain Ready mode=%s; Jenkins HTTP will use per-request Obtain credentials", st.Mode)
+			// Mode C Ready (HTTPTokenFetcher Live opt-in or test Fetcher): Obtain → Bearer.
+			log.Printf("Gateway Obtain Ready mode=%s; Jenkins HTTP will use per-request Obtain credentials only", st.Mode)
 		}
 	}
 
@@ -1180,11 +1207,11 @@ func runServe(args []string) error {
 	}
 	// Wave 52 Track A / MUT-001: mutation confirm cooldown (after other caps).
 	// empty/0/"0s" → default 5s; min 1s; absolute max 5m fail closed; cannot disable via 0.
+	// SetConfirmCooldown is deferred until after TokenTTL resolve + ordering ensure.
 	mutationConfirmCooldown, err := mutation.ResolveConfirmCooldown(*mutationConfirmCooldownFlag, os.Getenv(mutation.EnvConfirmCooldown))
 	if err != nil {
 		return err
 	}
-	mutation.SetConfirmCooldown(mutationConfirmCooldown)
 	// Wave 52 Track C / MUT-001: Preview rate (default 30; absolute 300; 0 → default).
 	// Set process live before tool registration so NewManager(Config{…0…}) picks it up.
 	mutationMaxPreviews, err := mutation.ResolveMaxPreviewsPerMinute(*mutationMaxPreviewsPerMinuteFlag, os.Getenv(mutation.EnvMaxPreviewsPerMinute))
@@ -1197,6 +1224,13 @@ func runServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	// MUT-001 residual fix: confirm cooldown must be strictly < token TTL so
+	// cooldown cannot exhaust (or equal) the confirmation window. Fail closed
+	// after both resolve, before Set* (same shape as EnsureMaxBackoffAtLeastInitial).
+	if err := mutation.EnsureConfirmCooldownLessThanTokenTTL(mutationConfirmCooldown, mutationTokenTTL); err != nil {
+		return err
+	}
+	mutation.SetConfirmCooldown(mutationConfirmCooldown)
 	mutation.SetTokenTTL(mutationTokenTTL)
 	rcfg := jenkins.DefaultResilienceConfig()
 	rcfg.MaxJSONBodyBytes = maxJSONBodyBytes
@@ -1223,27 +1257,69 @@ func runServe(args []string) error {
 	}
 
 	// Mid-serve credentials (HOST-003):
-	//   gateway + Ready → Obtain AuthProvider (Mode A Basic / B+C Bearer); never keyring fallthrough
-	//   gateway + !Ready → residual local session (Mode C AgentCore stub) via OIDC Live or static
+	//   gateway + Ready → Obtain AuthProvider only (Mode A Basic / C Bearer);
+	//     clear static local session; whoAmI re-verify via Obtain; never keyring fallthrough
+	//   gateway + Ready + MULTI_USER → AuthProviderCtx dynamic Obtain (per-request Caller)
+	//   gateway + !Ready → residual local session (Mode C default Live=false / Mode B residual)
 	//   non-gateway → OIDC LiveSessionSource refresh; api_token leaves provider nil
 	var subject policy.Subject
 	var gatewayObtainWired bool
+	gatewayMultiUser := useGateway && gateway.MultiUserEnabled(os.Getenv)
 	if useGateway {
+		// PrincipalCache hygiene + optional same-host FilePrincipalCache (HOST-008 lite).
+		// Empty MAX/TTL → unlimited / no expiry. Empty PRINCIPAL_CACHE_PATH → memory.
+		// Path set → install FilePrincipalCache as process store (CLI subject-invalidate
+		// can Delete on the same path). Fail closed on invalid env/path.
+		// Multi-pod shared principal map remains residual.
+		if pcErr := gateway.ConfigureProcessPrincipalCacheFromEnviron(os.Getenv); pcErr != nil {
+			return pcErr
+		}
+		pcMax, pcTTL, _ := gateway.PrincipalCacheConfigFromEnviron(os.Getenv)
+		pcFile := gateway.PrincipalCachePathConfiguredFromEnviron(os.Getenv)
+		if pcMax > 0 || pcTTL > 0 || pcFile {
+			// Secret-free operator log (counts/durations/bool only; never path value or principals/tokens).
+			log.Printf("principal_cache max_entries=%d ttl=%s shared_principal_cache_file=%v (multi-pod residual)",
+				pcMax, pcTTL, pcFile)
+		}
 		gwSubject, err := bindGatewaySubject(profileID, principal.ID)
 		if err != nil {
 			return err
 		}
 		subject = gwSubject
-		log.Printf("Gateway policy subject profile=%s external=%s jenkins=%s tenant_set=%v workload_set=%v verified=%v",
+		log.Printf("Gateway policy subject profile=%s external=%s jenkins=%s tenant_set=%v workload_set=%v verified=%v multi_user=%v",
 			subject.ProfileID, subject.ExternalSubject, subject.JenkinsUserID,
-			subject.Tenant != "", subject.WorkloadID != "", subject.Verified)
+			subject.Tenant != "", subject.WorkloadID != "", subject.Verified, gatewayMultiUser)
 		if gatewayObtainReady(gatewayProv) {
 			caller := gateway.CallerFromBoundSubject(subject)
-			attachGatewayObtainAuthProvider(client, gatewayProv, caller)
+			if gatewayMultiUser {
+				// Per-request Obtain requires Caller in context (no default fallthrough).
+				attachGatewayObtainAuthProviderDynamic(client, gatewayProv, caller, true)
+			} else {
+				// Single-subject foundation: capture caller at attach; tool args cannot rebind.
+				attachGatewayObtainAuthProvider(client, gatewayProv, caller)
+			}
+			// Refuse residual local session path once Ready path is selected.
+			clearGatewayLocalSessionCredentials(client)
+			// Session-start whoAmI: multi-user AuthProviderCtx needs Caller on ctx.
+			whoCtx := context.Background()
+			if gatewayMultiUser {
+				whoCtx = gateway.ContextWithCaller(whoCtx, caller)
+			}
+			obtainWho, werr := verifyGatewayObtainWhoAmI(whoCtx, client, subject.JenkinsUserID)
+			if werr != nil {
+				return werr
+			}
 			gatewayObtainWired = true
-			log.Printf("Gateway Jenkins AuthProvider: Obtain mode=%s (no keyring fallthrough)", gatewayProv.Mode())
+			if gatewayMultiUser {
+				log.Printf("Gateway Jenkins AuthProviderCtx: multi-user Obtain mode=%s default_principal=%s (no keyring fallthrough; no subject pin)",
+					gatewayProv.Mode(), obtainWho.ID)
+			} else {
+				log.Printf("Gateway Jenkins AuthProvider: Obtain mode=%s principal=%s (no keyring fallthrough)",
+					gatewayProv.Mode(), obtainWho.ID)
+			}
 		} else {
-			// Mode C residual: Obtain not Ready; keep local keyring/OIDC path.
+			// Mode C residual (Live=false) / Mode B residual: Obtain not Ready;
+			// keep local keyring/OIDC path only while Ready remains false.
 			attachLiveAuthProvider(client, oidcSess.Live)
 			log.Printf("Gateway Obtain not Ready; Jenkins AuthProvider uses local session residual")
 		}
@@ -1288,13 +1364,23 @@ func runServe(args []string) error {
 	}
 	// Wave 25: DynamicForce so force_read_only hot-applies on Reloadable OnSuccess.
 	// Without an overlay, leave Force nil (no enterprise force source).
+	// HOST-006: concrete rate limiter for OnSuccess LowerRate (filled under --gateway).
+	// Memory SubjectRateLimiter default; optional FileSubjectRateLimiter when
+	// JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH is set (HOST-008 same-host lite).
+	// MGR-002: fleetColl filled after metrics init; OnSuccess applies ForceOff.
 	var dynForce *policy.DynamicForce
 	var enterpriseForce policy.EnterpriseForce
+	var fleetColl *fleet.Collector
+	var liveSubjectRate interface {
+		LowerRate(perMin, burst int) bool
+		RatePerMinute() int
+		Burst() int
+	}
 	if polRes.Overlay != nil {
 		dynForce = policy.NewDynamicForceFromOverlay(polRes.Overlay)
 		enterpriseForce = dynForce
-		log.Printf("Enterprise policy loaded force_read_only=%v mode=%s deny_tools=%d deny_job_prefixes=%d deny_node_names=%d deny_view_names=%d deny_artifact_paths=%d deny_branch_names=%d signature_state=%s",
-			polRes.Overlay.ForceReadOnly, polRes.Overlay.NormalizeMode(),
+		log.Printf("Enterprise policy loaded force_read_only=%v fleet_telemetry_force_off=%v mode=%s deny_tools=%d deny_job_prefixes=%d deny_node_names=%d deny_view_names=%d deny_artifact_paths=%d deny_branch_names=%d signature_state=%s",
+			polRes.Overlay.ForceReadOnly, polRes.Overlay.FleetTelemetryForceOff, polRes.Overlay.NormalizeMode(),
 			len(polRes.Overlay.DenyTools), len(polRes.Overlay.DenyJobPrefixes),
 			len(polRes.Overlay.DenyNodeNames), len(polRes.Overlay.DenyViewNames),
 			len(polRes.Overlay.DenyArtifactPaths), len(polRes.Overlay.DenyBranchNames),
@@ -1427,14 +1513,22 @@ func runServe(args []string) error {
 			Path: polRes.Path,
 			OnSuccess: func(info policy.ReloadInfo) {
 				// Counts + bundle_seq only — never signature bytes or key material.
-				log.Printf("Enterprise policy reloaded deny_tools=%d deny_job_prefixes=%d deny_node_names=%d deny_view_names=%d deny_artifact_paths=%d deny_branch_names=%d bundle_seq=%d signature_state=%s mode=%s force_read_only=%v max_result_bytes=%d",
+				log.Printf("Enterprise policy reloaded deny_tools=%d deny_job_prefixes=%d deny_node_names=%d deny_view_names=%d deny_artifact_paths=%d deny_branch_names=%d bundle_seq=%d signature_state=%s mode=%s force_read_only=%v fleet_telemetry_force_off=%v max_result_bytes=%d max_tools_per_minute=%d max_tools_burst=%d",
 					info.DenyToolsCount, info.DenyJobPrefixesCount,
 					info.DenyNodeNamesCount, info.DenyViewNamesCount, info.DenyArtifactPathsCount,
 					info.DenyBranchNamesCount,
-					info.BundleSeq, info.SignatureState, info.Mode, info.ForceReadOnly, info.MaxResultBytes)
+					info.BundleSeq, info.SignatureState, info.Mode, info.ForceReadOnly,
+					info.FleetTelemetryForceOff, info.MaxResultBytes,
+					info.MaxToolsPerMinute, info.MaxToolsBurst)
 				// Wave 25: hot-apply force_read_only into the live gate Force.
 				if dynForce != nil {
 					dynForce.Set(info.ForceReadOnly, true)
+				}
+				// MGR-002: hot-apply fleet_telemetry_force_off (env cannot re-enable while true).
+				// When collector is nil (force-off at bootstrap or env off), pin is already
+				// effective for this process until restart creates a collector.
+				if fleetColl != nil {
+					fleetColl.SetForceOff(info.FleetTelemetryForceOff)
 				}
 				// Wave 31/37: set live hard max within serve-bootstrap ceiling.
 				// MaxResultBytes==0 (overlay omitted field) keeps last live value.
@@ -1443,6 +1537,16 @@ func runServe(args []string) error {
 					if liveHardMax.SetWithinCeiling(info.MaxResultBytes) {
 						log.Printf("Enterprise policy set result hard max to %d bytes (requested=%d ceiling=%d)",
 							liveHardMax.Get(), info.MaxResultBytes, liveHardMax.Ceiling())
+					}
+				}
+				// HOST-006: overlay max_tools_per_minute / max_tools_burst may only
+				// LowerRate (never raise). 0 = field omitted → no change. liveSubjectRate
+				// is nil without --gateway or when rate disabled (explicit 0).
+				if liveSubjectRate != nil && (info.MaxToolsPerMinute > 0 || info.MaxToolsBurst > 0) {
+					if liveSubjectRate.LowerRate(info.MaxToolsPerMinute, info.MaxToolsBurst) {
+						log.Printf("Enterprise policy lowered subject rate rate_per_minute=%d burst=%d (requested_rate=%d requested_burst=%d)",
+							liveSubjectRate.RatePerMinute(), liveSubjectRate.Burst(),
+							info.MaxToolsPerMinute, info.MaxToolsBurst)
 					}
 				}
 			},
@@ -1569,6 +1673,7 @@ func runServe(args []string) error {
 
 	// MGR-002: privacy-preserving fleet health telemetry (disabled by default).
 	// Network/export failures never fail serve. Enable with JENKINS_MCP_TELEMETRY=1.
+	// Enterprise overlay fleet_telemetry_force_off wins over env (fail closed).
 	if paths, perr := config.Resolve(); perr == nil {
 		authMeth := ""
 		profileID := ""
@@ -1579,6 +1684,10 @@ func runServe(args []string) error {
 		if usedLegacy {
 			authMeth = fleet.AuthMethodLegacy
 		}
+		forceOff := false
+		if polRes.Overlay != nil {
+			forceOff = polRes.Overlay.FleetTelemetryForceOff
+		}
 		if coll, cerr := fleet.NewCollector(fleet.CollectorConfig{
 			Paths:      paths,
 			Metrics:    metrics,
@@ -1586,12 +1695,16 @@ func runServe(args []string) error {
 			ProfileID:  profileID,
 			AuthMethod: authMeth,
 			ReadOnly:   gate.Effective(),
+			ForceOff:   forceOff,
 		}); cerr != nil {
 			// Collector construction must never fail serve.
 			log.Printf("fleet telemetry: init skipped")
 		} else if coll != nil {
+			fleetColl = coll
 			coll.Start(serveCtx)
-			log.Printf("fleet telemetry enabled (local queue; export URL %v)", fleet.ExportURLFromEnv() != "")
+			log.Printf("fleet telemetry enabled (local queue; export URL %v; force_off=%v)", fleet.ExportURLFromEnv() != "", forceOff)
+		} else if forceOff {
+			log.Printf("fleet telemetry force-off from enterprise policy overlay (env cannot re-enable)")
 		}
 	}
 
@@ -1859,27 +1972,185 @@ func runServe(args []string) error {
 			})
 		}
 	}
+	// HOST-004 / HOST-006: process-level subject key + concurrent/rate limiters when
+	// gateway mode is on. Multi-user: SubjectKeyFromContext derives key from
+	// gateway.Caller on tool ctx (same as Obtain). Empty key skips limiters.
+	// Multi-user policy.Subject rebind: SubjectFromContext from AfterIdentity.
+	// MutationBindingFromContext binds confirm tokens to ExternalSubject+tenant.
+	var serveSubjectKey string
+	var serveSubjectLimiter tools.SubjectSlotLimiter
+	var serveSubjectRateLimiter tools.SubjectRateLimiter
+	var serveSubjectKeyFromCtx func(ctx context.Context) string
+	var serveSubjectFromCtx func(ctx context.Context) (policy.Subject, bool)
+	var serveMutationBindingFromCtx func(ctx context.Context) (mutation.Binding, bool)
+	if useGateway {
+		serveSubjectKey = gateway.SubjectKey(gateway.CallerFromBoundSubject(subject))
+		if serveSubjectKey != "" {
+			perSubj, procMax, lerr := gateway.ResolveSubjectLimiterCaps(
+				os.Getenv(gateway.EnvSubjectMaxConcurrent),
+				os.Getenv(gateway.EnvSubjectProcessMaxConcurrent),
+			)
+			if lerr != nil {
+				return lerr
+			}
+			// Optional MaxSubjects map hygiene (HOST-006 residual lite): empty → unlimited.
+			// Process-local only — multi-pod shared concurrency residual.
+			limMaxSubjects, limMaxSubjErr := gateway.SubjectLimiterMaxSubjectsFromEnviron(os.Getenv)
+			if limMaxSubjErr != nil {
+				return limMaxSubjErr
+			}
+			subjLim := gateway.NewSubjectLimiter(perSubj, procMax)
+			if limMaxSubjects > 0 {
+				subjLim.SetMaxSubjects(limMaxSubjects)
+			}
+			serveSubjectLimiter = subjLim
+			if limMaxSubjects > 0 {
+				log.Printf("HOST-006 subject limiter: max_per_subject=%d process_max=%d max_subjects=%d multi_user=%v",
+					perSubj, procMax, limMaxSubjects, gatewayMultiUser)
+			} else {
+				log.Printf("HOST-006 subject limiter: max_per_subject=%d process_max=%d multi_user=%v",
+					perSubj, procMax, gatewayMultiUser)
+			}
+			// Token-bucket rate: empty env → defaults (30/min, burst 10); explicit
+			// 0 disables (residual opt-out). Process ceilings use package defaults.
+			rateRPM, rateBurst, rerr := gateway.ResolveSubjectRateCaps(
+				os.Getenv(gateway.EnvSubjectRatePerMinute),
+				os.Getenv(gateway.EnvSubjectRateBurst),
+			)
+			if rerr != nil {
+				return rerr
+			}
+			if rateRPM > 0 {
+				// Optional same-host multi-process subject rate share (HOST-008 lite).
+				// Empty path → process-local SubjectRateLimiter. Path set → FileSubjectRateLimiter
+				// (flock + secret-free JSON). Multi-pod shared rate still residual.
+				// Optional MaxSubjects hygiene (HOST-008 residual lite): empty → unlimited.
+				maxSubjects, maxSubjErr := gateway.SubjectRateMaxSubjectsFromEnviron(os.Getenv)
+				if maxSubjErr != nil {
+					return maxSubjErr
+				}
+				ratePath := strings.TrimSpace(os.Getenv(gateway.EnvGatewaySubjectRatePath))
+				var rateLim interface {
+					Allow(subjectKey string) error
+					LowerRate(perMin, burst int) bool
+					RatePerMinute() int
+					Burst() int
+				}
+				if ratePath != "" {
+					fileLim, ferr := gateway.NewFileSubjectRateLimiter(
+						ratePath, rateRPM, rateBurst, 0, 0, // process caps → package defaults
+					)
+					if ferr != nil {
+						return ferr
+					}
+					if maxSubjects > 0 {
+						fileLim.SetMaxSubjects(maxSubjects)
+					}
+					rateLim = fileLim
+					if maxSubjects > 0 {
+						log.Printf("HOST-006 subject rate limiter: file-backed same-host lite (shared_subject_rate_file=true; multi-pod residual) rate_per_minute=%d burst=%d max_subjects=%d multi_user=%v",
+							fileLim.RatePerMinute(), fileLim.Burst(), maxSubjects, gatewayMultiUser)
+					} else {
+						log.Printf("HOST-006 subject rate limiter: file-backed same-host lite (shared_subject_rate_file=true; multi-pod residual) rate_per_minute=%d burst=%d multi_user=%v",
+							fileLim.RatePerMinute(), fileLim.Burst(), gatewayMultiUser)
+					}
+				} else {
+					memLim := gateway.NewSubjectRateLimiter(
+						rateRPM, rateBurst, 0, 0, // process caps → package defaults
+					)
+					if maxSubjects > 0 {
+						memLim.SetMaxSubjects(maxSubjects)
+					}
+					rateLim = memLim
+					if maxSubjects > 0 {
+						log.Printf("HOST-006 subject rate limiter: rate_per_minute=%d burst=%d max_subjects=%d multi_user=%v",
+							memLim.RatePerMinute(), memLim.Burst(), maxSubjects, gatewayMultiUser)
+					} else {
+						log.Printf("HOST-006 subject rate limiter: rate_per_minute=%d burst=%d multi_user=%v",
+							memLim.RatePerMinute(), memLim.Burst(), gatewayMultiUser)
+					}
+				}
+				// HOST-006: overlay may only lower bootstrap rate (never raise).
+				// Empty/omitted overlay fields leave env bootstrap unchanged.
+				if polRes.Overlay != nil {
+					ovRPM, ovRPMOk := polRes.Overlay.EffectiveMaxToolsPerMinute()
+					ovBurst, ovBurstOk := polRes.Overlay.EffectiveMaxToolsBurst()
+					if ovRPMOk || ovBurstOk {
+						reqRPM, reqBurst := 0, 0
+						if ovRPMOk {
+							reqRPM = ovRPM
+						}
+						if ovBurstOk {
+							reqBurst = ovBurst
+						}
+						if rateLim.LowerRate(reqRPM, reqBurst) {
+							log.Printf("HOST-006 subject rate lowered by overlay rate_per_minute=%d burst=%d (bootstrap_rate=%d bootstrap_burst=%d)",
+								rateLim.RatePerMinute(), rateLim.Burst(), rateRPM, rateBurst)
+						}
+					}
+				}
+				liveSubjectRate = rateLim
+				serveSubjectRateLimiter = rateLim
+			} else {
+				log.Printf("HOST-006 subject rate limiter: disabled (rate_per_minute=0 residual)")
+			}
+		}
+		if gatewayMultiUser {
+			serveSubjectKeyFromCtx = func(ctx context.Context) string {
+				if c, ok := gateway.CallerFromContext(ctx); ok && c.Valid() {
+					return gateway.SubjectKey(c)
+				}
+				return ""
+			}
+			// Adapter: tools imports policy only (FND-004 — no tools→gateway).
+			// Prefer PrincipalCache (Obtain/Mode A vault username) for JenkinsUserID
+			// when set, else HTTP/lab PolicySubject claim — closes Obtain→RBAC residual.
+			serveSubjectFromCtx = policySubjectFromGatewayCtx
+			// Mutation confirm isolation: prefer PolicySubject (JenkinsPrincipal→
+			// PrincipalID) when Valid; else Caller + PrincipalCache (Obtain/Mode A
+			// vault username) when present, else process principal.
+			// AuthProviderCtx cannot write onto request context; Binding uses the
+			// process-local principal cache. Policy RBAC SubjectFromContext prefers
+			// the same cache after Obtain (vault username wins over HTTP claim).
+			processPrincipal := strings.TrimSpace(subject.JenkinsUserID)
+			serveMutationBindingFromCtx = func(ctx context.Context) (mutation.Binding, bool) {
+				return mutationBindingFromGatewayCtx(ctx, processPrincipal)
+			}
+		}
+	}
+	// MUT-017: wire overlay mutation allowlists into tool registration.
+	var serveMutationPolicy *policy.MutationPolicy
+	if polRes.Overlay != nil {
+		serveMutationPolicy = policy.MutationPolicyFromOverlay(polRes.Overlay)
+	}
 	tools.Register(server, client, &tools.RegisterOptions{
-		Gate:                    gate,
-		Budgets:                 budgets,
-		LiveHardMax:             liveHardMax,
-		Policy:                  evaluator,
-		Subject:                 subject,
-		AuthGate:                authGate,
-		Audit:                   auditSink,
-		Metrics:                 metrics,
-		Logger:                  serveLogger,
-		ProfileID:               string(subject.ProfileID),
-		PrincipalID:             subject.JenkinsUserID,
-		LogSearch:               logSearch,
-		Logs:                    logAccess,
-		Meta:                    storeMeta, // durable survey compact cache when profile data dir open
-		EnableTraceRefs:         enableTraceRefs,
-		TraceExporter:           traceExporter,
-		ExternalLogs:            externalLogs,
-		EnableChangeCorrelation: enableChangeCorrelation,
-		WorkItemLookup:          workItemLookup,
-		Doctor:                  doctorFn,
+		Gate:                       gate,
+		Budgets:                    budgets,
+		LiveHardMax:                liveHardMax,
+		Policy:                     evaluator,
+		Subject:                    subject,
+		SubjectFromContext:         serveSubjectFromCtx,
+		AuthGate:                   authGate,
+		Audit:                      auditSink,
+		Metrics:                    metrics,
+		Logger:                     serveLogger,
+		ProfileID:                  string(subject.ProfileID),
+		PrincipalID:                subject.JenkinsUserID,
+		LogSearch:                  logSearch,
+		Logs:                       logAccess,
+		Meta:                       storeMeta, // durable survey compact cache when profile data dir open
+		EnableTraceRefs:            enableTraceRefs,
+		TraceExporter:              traceExporter,
+		ExternalLogs:               externalLogs,
+		EnableChangeCorrelation:    enableChangeCorrelation,
+		WorkItemLookup:             workItemLookup,
+		Doctor:                     doctorFn,
+		SubjectKey:                 serveSubjectKey,
+		SubjectKeyFromContext:      serveSubjectKeyFromCtx,
+		SubjectLimiter:             serveSubjectLimiter,
+		SubjectRateLimiter:         serveSubjectRateLimiter,
+		MutationBindingFromContext: serveMutationBindingFromCtx,
+		MutationPolicy:             serveMutationPolicy,
 	})
 	if *httpAddr != "" {
 		cfg := mcpserver.DefaultHTTPConfig()
@@ -1902,28 +2173,104 @@ func runServe(args []string) error {
 			return err
 		}
 		cfg.MaxBodyBytes = maxBody
+		// HOST-002: reverse-proxy path prefix (flag wins over env; fail closed on invalid).
+		pathPrefix, err := mcpserver.ResolveHTTPPathPrefix(*httpPathPrefixFlag, os.Getenv(mcpserver.EnvHTTPPathPrefix))
+		if err != nil {
+			return err
+		}
+		cfg.PathPrefix = pathPrefix
 		token, err := loadHTTPServeToken(*httpTokenEnv, *httpTokenFile)
 		if err != nil {
 			return err
 		}
 		cfg.BearerToken = token
-		var jwks *auth.JWKS
+		// HOST-001: refreshable JWKS source (initial fetch fail-closed; TTL refresh + stale-if-error).
+		var jwksSource auth.JWKSSource
 		if jwtEnv.Configured() {
-			// Fetch once at serve start (fail closed). Mid-session JWKS rebind residual.
-			jwks, err = fetchHTTPJWKS(serveCtx, nil, jwtEnv)
-			if err != nil {
-				return err
+			refreshTTL, ttlErr := parseHTTPJWKSRefreshTTL(os.Getenv)
+			if ttlErr != nil {
+				return ttlErr
+			}
+			maxStale, staleErr := parseHTTPJWKSMaxStale(os.Getenv)
+			if staleErr != nil {
+				return staleErr
+			}
+			cachePath, cacheErr := auth.JWKSCachePathFromEnviron(os.Getenv)
+			if cacheErr != nil {
+				return cacheErr
+			}
+			src, srcErr := newHTTPJWKSSource(serveCtx, nil, jwtEnv, refreshTTL, maxStale, cachePath)
+			if srcErr != nil {
+				return srcErr
+			}
+			jwksSource = src
+			if src != nil {
+				// Secret-free: durations + booleans only (never JWKS URL credentials, keys, or cache path).
+				log.Printf("HTTP JWT JWKS source ready refresh_ttl=%s max_stale=%s uri_host_set=%v shared_jwks_file=%v (stale-if-error; multi-pod external JWKS residual)",
+					src.TTL(), formatJWKSMaxStaleLog(src.MaxStaleAge()), strings.TrimSpace(jwtEnv.JWKSURL) != "", src.CachePathConfigured())
 			}
 		}
-		cfg.IdentityResolver = newHTTPIdentityResolver(cfg.LabIdentity, token, jwks, auth.AccessTokenParams{
+		cfg.IdentityResolver = newHTTPIdentityResolver(cfg.LabIdentity, token, jwksSource, auth.AccessTokenParams{
 			Issuer:   jwtEnv.Issuer,
 			Audience: jwtEnv.Audience,
 		})
-		// Never log token values — only required/configured bools and body cap.
-		log.Printf("http serve token policy: http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v http_jwt_configured=%v http_jwt_required=%v max_body_bytes=%d",
+		// HOST-005: /readyz reports gateway Obtain Ready when --gateway is on.
+		// Non-gateway HTTP leaves ReadyCheck nil (process-up only; residual).
+		if useGateway {
+			// Fail closed at start: gateway HTTP needs a trusted subject source
+			// (lab header path or JWKS). RequireSubject alone with nil resolver
+			// would only 401 every request while /readyz may still look ready.
+			if cfg.IdentityResolver == nil && !cfg.LabIdentity {
+				return apperr.New(apperr.CodeInvalidArgument,
+					"gateway --http requires JENKINS_MCP_LAB_IDENTITY=1 and/or JENKINS_MCP_HTTP_JWKS_URL+ISSUER+AUDIENCE (no trusted subject source)")
+			}
+			if gatewayMultiUser && gatewayObtainWired {
+				// Multi-user Ready: no ExpectedExternalSubject pin; inject Caller
+				// (Obtain) + policy.Subject (RBAC) from trusted RequestIdentity.
+				// Never tool args. Verified only when lab/JWT verified path.
+				defaultCaller := gateway.CallerFromBoundSubject(subject)
+				processSubject := subject
+				pid := subject.ProfileID
+				cfg.AfterIdentity = func(ctx context.Context, id mcpserver.RequestIdentity) context.Context {
+					var groups []string
+					if len(id.Groups) > 0 {
+						groups = append([]string(nil), id.Groups...)
+					}
+					in := gateway.HTTPInbound{
+						ExternalSubject:  id.ExternalSubject,
+						Tenant:           id.Tenant,
+						WorkloadID:       id.WorkloadID,
+						JenkinsPrincipal: id.JenkinsPrincipal,
+						Groups:           groups,
+						Source:           string(id.Source),
+						Verified:         id.Verified,
+					}
+					c := gateway.MergeCallerDefaults(gateway.CallerFromHTTPInbound(in, pid), defaultCaller)
+					// policy.Subject for deny-only RBAC rebind (same trust path).
+					// Groups from JWT/lab only; bounded; never elevate deny-only/RO.
+					ps := gateway.PolicySubjectFromHTTPInbound(in, pid, processSubject)
+					return gateway.ContextWithCallerAndPolicySubject(ctx, c, ps)
+				}
+			} else if !gatewayMultiUser {
+				// Single-process foundation: pin HTTP ExternalSubject to process-bound
+				// gateway subject so multi-lab/JWT callers cannot share one Obtain caller.
+				if ext := strings.TrimSpace(subject.ExternalSubject); ext != "" {
+					cfg.ExpectedExternalSubject = ext
+				}
+			}
+			// multi-user + !Ready: residual local session; no pin and no Caller inject
+			// (Obtain not wired — avoid implying per-request vault credentials).
+			prov := gatewayProv
+			cfg.ReadyCheck = func() bool {
+				return gatewayObtainReady(prov)
+			}
+		}
+		// Never log token values — only required/configured bools, body cap, path prefix.
+		log.Printf("http serve token policy: http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v http_jwt_configured=%v http_jwt_required=%v max_body_bytes=%d path_prefix=%q gateway_ready_probe=%v expected_subject_pin=%v multi_user=%v",
 			mcpserver.HTTPTokenRequired(cfg), cfg.BearerToken != "",
 			mcpserver.HTTPSubjectRequired(cfg), cfg.LabIdentity,
-			jwtEnv.Configured(), jwtEnv.Required, cfg.MaxBodyBytes)
+			jwtEnv.Configured(), jwtEnv.Required, cfg.MaxBodyBytes, cfg.PathPrefix, useGateway,
+			cfg.ExpectedExternalSubject != "", gatewayMultiUser)
 		if err := mcpserver.RunHTTP(serveCtx, server, cfg); err != nil {
 			return err
 		}
@@ -1948,6 +2295,10 @@ func runServe(args []string) error {
 	if strings.TrimSpace(*httpMaxBodyBytesFlag) != "" {
 		return apperr.New(apperr.CodeInvalidArgument,
 			"--http-max-body-bytes require --http")
+	}
+	if strings.TrimSpace(*httpPathPrefixFlag) != "" || strings.TrimSpace(os.Getenv(mcpserver.EnvHTTPPathPrefix)) != "" {
+		return apperr.New(apperr.CodeInvalidArgument,
+			"--http-path-prefix / JENKINS_MCP_HTTP_PATH_PREFIX require --http")
 	}
 	if *useStdio {
 		log.Printf("Starting MCP server over stdio")
@@ -2074,9 +2425,12 @@ func reorderFlagArgs(args []string, valueFlags map[string]bool) []string {
 // (HOST-009 Mode A api_token_vault or Mode C AgentCore; Mode B residual).
 //
 // Mode A: Live vault provider (per-subject Obtain → Basic AuthProvider, HOST-003).
-// Mode C: AgentCore provider with Live=false until TokenFetcher wire; when not
-// Ready, serve keeps local keyring/OIDC Jenkins HTTP residual. Never falls back
-// to a shared SA. When Ready, attachGatewayObtainAuthProvider wires Obtain.
+// Mode C: AgentCore provider; default Live=false / Fetcher=nil. Opt-in Live wire:
+// JENKINS_MCP_GATEWAY_LIVE=1 + JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT →
+// HTTPTokenFetcher + Live=true (GWY-001 foundation; real Entra residual).
+// When not Ready, serve keeps local keyring/OIDC Jenkins HTTP residual.
+// Never falls back to a shared SA. When Ready, attachGatewayObtainAuthProvider
+// wires Obtain only (no keyring fallthrough).
 func requireGatewayProvider(jenkinsBaseURL string) (gateway.CredentialProvider, error) {
 	return gateway.CredentialProviderFromEnviron(jenkinsBaseURL, nil)
 }

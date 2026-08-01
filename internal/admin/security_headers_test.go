@@ -65,7 +65,8 @@ func TestSecurityHeaders_CSPAndNosniffOnRootAndHealth(t *testing.T) {
 	if !strings.HasPrefix(ct, "application/json") {
 		t.Fatalf("health Content-Type=%q want application/json", ct)
 	}
-	var health map[string]string
+	// HOST-007: health may include enabledModes []string; use flexible decode.
+	var health map[string]any
 	if err := json.Unmarshal(rr.Body.Bytes(), &health); err != nil {
 		t.Fatal(err)
 	}

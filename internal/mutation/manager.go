@@ -18,9 +18,16 @@ import (
 type Action string
 
 const (
-	ActionStartJob    Action = "start_job"
-	ActionStopBuild   Action = "stop_build"
-	ActionCancelQueue Action = "cancel_queue"
+	ActionStartJob               Action = "start_job"
+	ActionStopBuild              Action = "stop_build"
+	ActionCancelQueue            Action = "cancel_queue"
+	ActionInterruptBuild         Action = "interrupt_build"
+	ActionRebuildBuild           Action = "rebuild_build"
+	ActionReplayPipeline         Action = "replay_pipeline"
+	ActionSetJobBuildable        Action = "set_job_buildable"
+	ActionSetBuildKeepForever    Action = "set_build_keep_forever"
+	ActionSetBuildDescription    Action = "set_build_description"
+	ActionCancelQueueItemsForJob Action = "cancel_queue_items_for_job"
 )
 
 // DefaultTokenTTL is the confirmation window (MUT-001: expire quickly).
@@ -33,11 +40,12 @@ const DefaultTokenTTL = 2 * time.Minute
 const DefaultMaxPreviewsPerMinute = 30
 
 // DefaultConfirmCooldown is the minimum wait after a successful Confirm before
-// another Confirm for the same (profile, action, targetHash) is allowed when
+// another Confirm for the same (binding, action, targetHash) is allowed when
 // Config.ConfirmCooldown is 0 and no process live ConfirmCooldown() is set
-// (MUT-001 cooldown). Operator resolve path: empty/0/"0s" → default; cannot
-// disable via 0 (see ResolveConfirmCooldown / MinConfirmCooldown /
-// AbsoluteMaxConfirmCooldown).
+// (MUT-001 cooldown). Binding includes profile+principal+external+tenant so
+// multi-user cooldowns do not cross subjects. Operator resolve path:
+// empty/0/"0s" → default; cannot disable via 0 (see ResolveConfirmCooldown /
+// MinConfirmCooldown / AbsoluteMaxConfirmCooldown).
 const DefaultConfirmCooldown = 5 * time.Second
 
 // Audit event types (AUD-001 privacy-preserving).
@@ -70,9 +78,15 @@ type Intent struct {
 	ToolName      string
 	JobName       string
 	BuildNumber   int
-	QueueID       int            // cancel_queue only
-	Parameters    map[string]any // nil for stop/cancel
+	QueueID       int            // cancel_queue single-item
+	Parameters    map[string]any // nil for stop/cancel; rebuild may carry redacted params
 	EndpointClass string
+	// Mode is action-specific (interrupt: stop|term|kill; set_job_buildable: enable|disable).
+	Mode string
+	// Extra is non-secret bind material (description text, keep true/false, bulk queue id list).
+	Extra string
+	// QueueIDs is for bulk cancel (sorted unique positive ids); bound via Extra + Mode.
+	QueueIDs []int
 	// CurrentState is optional state shown in preview (e.g. "building", "queued").
 	CurrentState string
 }
@@ -85,6 +99,8 @@ type PreviewResult struct {
 	JobName           string         `json:"jobName,omitempty"`
 	BuildNumber       int            `json:"buildNumber,omitempty"`
 	QueueID           int            `json:"queueId,omitempty"`
+	QueueIDs          []int          `json:"queueIds,omitempty"`
+	Mode              string         `json:"mode,omitempty"`
 	Parameters        map[string]any `json:"parameters,omitempty"` // redacted
 	EndpointClass     string         `json:"endpointClass"`
 	ConfirmationToken string         `json:"confirmationToken"`
@@ -103,15 +119,89 @@ type BoundIntent struct {
 	RequestID  string
 }
 
+// Binding is the non-secret identity fingerprint bound into confirmation tokens
+// (MUT-001 / HOST-006 multi-user). Tokens must not replay across distinct
+// bindings. Fields are labels only — never tokens or secrets.
+//
+// Stdio / single-user: ProfileID + PrincipalID (Jenkins user). Gateway multi-user:
+// also ExternalSubject (IdP sub) and Tenant so two principals sharing a process
+// Manager cannot confirm each other's preview tokens.
+type Binding struct {
+	ProfileID       string
+	PrincipalID     string // Jenkins principal label (non-secret)
+	ExternalSubject string // validated IdP sub when multi-user; empty for API-token
+	Tenant          string // IdP tenant when multi-user; empty for API-token / stdio
+}
+
+// Equal reports whether two bindings are identical for confirm-token matching.
+func (b Binding) Equal(o Binding) bool {
+	return b.ProfileID == o.ProfileID &&
+		b.PrincipalID == o.PrincipalID &&
+		b.ExternalSubject == o.ExternalSubject &&
+		b.Tenant == o.Tenant
+}
+
+// normalizeBinding trims binding label fields.
+func normalizeBinding(b Binding) Binding {
+	return Binding{
+		ProfileID:       strings.TrimSpace(b.ProfileID),
+		PrincipalID:     strings.TrimSpace(b.PrincipalID),
+		ExternalSubject: strings.TrimSpace(b.ExternalSubject),
+		Tenant:          strings.TrimSpace(b.Tenant),
+	}
+}
+
+// bindingKey is a stable map/cooldown key for a binding (includes external+tenant).
+func (b Binding) bindingKey() string {
+	return b.ProfileID + "\x00" + b.PrincipalID + "\x00" + b.ExternalSubject + "\x00" + b.Tenant
+}
+
+// subjectKey returns tenant|external|profile for multi-user audit correlation
+// when ExternalSubject is set; empty for stdio / API-token residual.
+// Same shape as gateway.SubjectKeyParts (never PrincipalID, tokens, or vault bytes).
+func (b Binding) subjectKey() string {
+	ext := strings.TrimSpace(b.ExternalSubject)
+	if ext == "" {
+		return ""
+	}
+	return strings.Join([]string{
+		strings.TrimSpace(b.Tenant),
+		ext,
+		strings.TrimSpace(b.ProfileID),
+	}, "|")
+}
+
+// auditSubjectFields returns ExternalSubject + SubjectKeyHash for audit events
+// from Binding. SubjectKeyHash is audit.HashOpaque(tenant|external|profile)
+// when ExternalSubject is set; both empty for single-user residual.
+// Never returns raw subject keys, tokens, or vault material.
+func (b Binding) auditSubjectFields() (externalSubject, subjectKeyHash string) {
+	externalSubject = strings.TrimSpace(b.ExternalSubject)
+	if sk := b.subjectKey(); sk != "" {
+		subjectKeyHash = audit.HashOpaque(sk)
+	}
+	return externalSubject, subjectKeyHash
+}
+
 // Config configures a Manager.
 type Config struct {
 	// Gate is the POL-001 read-only kill switch. Nil ⇒ fail-closed read-only.
 	Gate *policy.ReadOnlyGate
 	// Audit is optional (AUD-001).
 	Audit audit.Sink
-	// ProfileID / PrincipalID bind tokens (non-secret).
+	// ProfileID / PrincipalID bind tokens (non-secret). Process-default binding
+	// when BindingFromContext is unset or returns ok=false.
 	ProfileID   string
 	PrincipalID string
+	// ExternalSubject / Tenant extend the confirm-token fingerprint for multi-user
+	// gateway (IdP sub + tenant). Empty for stdio / API-token single-user.
+	ExternalSubject string
+	Tenant          string
+	// BindingFromContext optionally supplies a per-request binding (multi-user
+	// gateway: CallerFromContext → Binding). When set and ok=true, Preview/
+	// Confirm/audit use that binding instead of Config process defaults.
+	// Never derived from tool arguments. Nil ⇒ always Config defaults.
+	BindingFromContext func(ctx context.Context) (Binding, bool)
 	// TTL for confirmation tokens. 0 or negative ⇒ process live TokenTTL()
 	// when positive (serve SetTokenTTL after Resolve), else DefaultTokenTTL.
 	// Operator ResolveTokenTTL never yields 0/disable (0 → default).
@@ -122,7 +212,7 @@ type Config struct {
 	// operator ResolveMaxPreviewsPerMinute never yields unlimited).
 	MaxPreviewsPerMinute int
 	// ConfirmCooldown is the minimum time after a successful Confirm before
-	// another Confirm for the same (profile, action, targetHash) may succeed.
+	// another Confirm for the same (binding, action, targetHash) may succeed.
 	// 0 ⇒ process live ConfirmCooldown() when positive (serve SetConfirmCooldown
 	// after Resolve), else DefaultConfirmCooldown; negative ⇒ off (library/test
 	// escape hatch — operator ResolveConfirmCooldown cannot set 0/disable).
@@ -132,16 +222,17 @@ type Config struct {
 }
 
 // Manager is the process-local preview/confirm gate (MUT-001).
-// Safe for concurrent use.
+// Safe for concurrent use. Multi-user: one shared Manager + BindingFromContext
+// so Alice preview tokens cannot be confirmed by Bob.
 type Manager struct {
-	gate              *policy.ReadOnlyGate
-	audit             audit.Sink
-	profileID         string
-	principalID       string
-	ttl               time.Duration
-	maxPreviewsPerMin int           // negative ⇒ unlimited
-	confirmCooldown   time.Duration // ≤0 ⇒ off
-	now               func() time.Time
+	gate               *policy.ReadOnlyGate
+	audit              audit.Sink
+	defaultBinding     Binding
+	bindingFromContext func(ctx context.Context) (Binding, bool)
+	ttl                time.Duration
+	maxPreviewsPerMin  int           // negative ⇒ unlimited
+	confirmCooldown    time.Duration // ≤0 ⇒ off
+	now                func() time.Time
 
 	mu           sync.Mutex
 	tokens       map[string]*tokenRecord
@@ -151,15 +242,17 @@ type Manager struct {
 
 type tokenRecord struct {
 	id         string
-	profileID  string
-	principal  string
+	binding    Binding
 	action     Action
 	toolName   string
 	jobName    string
 	buildNum   int
 	queueID    int
+	queueIDs   []int
 	params     map[string]any
 	endpoint   string
+	mode       string
+	extra      string
 	targetHash string
 	expiresAt  time.Time
 	used       bool
@@ -221,17 +314,36 @@ func NewManager(cfg Config) *Manager {
 		gate = policy.NewDefaultReadOnlyGate()
 	}
 	return &Manager{
-		gate:              gate,
-		audit:             cfg.Audit,
-		profileID:         strings.TrimSpace(cfg.ProfileID),
-		principalID:       strings.TrimSpace(cfg.PrincipalID),
-		ttl:               ttl,
-		maxPreviewsPerMin: maxPrev,
-		confirmCooldown:   cooldown,
-		now:               now,
-		tokens:            make(map[string]*tokenRecord),
-		cooldowns:         make(map[string]time.Time),
+		gate:  gate,
+		audit: cfg.Audit,
+		defaultBinding: normalizeBinding(Binding{
+			ProfileID:       cfg.ProfileID,
+			PrincipalID:     cfg.PrincipalID,
+			ExternalSubject: cfg.ExternalSubject,
+			Tenant:          cfg.Tenant,
+		}),
+		bindingFromContext: cfg.BindingFromContext,
+		ttl:                ttl,
+		maxPreviewsPerMin:  maxPrev,
+		confirmCooldown:    cooldown,
+		now:                now,
+		tokens:             make(map[string]*tokenRecord),
+		cooldowns:          make(map[string]time.Time),
 	}
+}
+
+// effectiveBinding returns the per-request binding when BindingFromContext is
+// set and ok, else the Manager process-default binding (HOST-006 multi-user).
+func (m *Manager) effectiveBinding(ctx context.Context) Binding {
+	if m == nil {
+		return Binding{}
+	}
+	if m.bindingFromContext != nil && ctx != nil {
+		if b, ok := m.bindingFromContext(ctx); ok {
+			return normalizeBinding(b)
+		}
+	}
+	return m.defaultBinding
 }
 
 // Preview validates the intent, creates a short-lived confirmation token, and
@@ -256,27 +368,31 @@ func (m *Manager) Preview(ctx context.Context, intent Intent) (*PreviewResult, e
 		return nil, err
 	}
 	paramFP := ParamFingerprint(norm.Parameters)
-	th := TargetHash(norm.Action, norm.JobName, norm.BuildNumber, norm.QueueID, paramFP)
+	th := TargetHash(norm.Action, norm.JobName, norm.BuildNumber, norm.QueueID, paramFP, norm.Mode, norm.Extra)
 	if err := m.reservePreview(start); err != nil {
 		m.emitDeny(ctx, tool, string(norm.Action), ReasonPreviewRateLimited, th, start)
 		return nil, err
 	}
-	tok, exp, err := m.issueToken(norm, th, start)
+	bind := m.effectiveBinding(ctx)
+	tok, exp, err := m.issueToken(norm, th, start, bind)
 	if err != nil {
 		m.emitDeny(ctx, tool, string(norm.Action), ReasonInvalidIntent, th, start)
 		return nil, err
 	}
+	extSub, skHash := bind.auditSubjectFields()
 	m.emit(ctx, audit.Event{
-		Time:        start,
-		Type:        TypePreview,
-		ProfileID:   m.profileID,
-		PrincipalID: m.principalID,
-		Tool:        tool,
-		Action:      string(norm.Action),
-		Decision:    audit.DecisionAllow,
-		ReasonCode:  ReasonPreviewOK,
-		TargetHash:  th,
-		Duration:    m.now().Sub(start),
+		Time:            start,
+		Type:            TypePreview,
+		ProfileID:       bind.ProfileID,
+		PrincipalID:     bind.PrincipalID,
+		ExternalSubject: extSub,
+		SubjectKeyHash:  skHash,
+		Tool:            tool,
+		Action:          string(norm.Action),
+		Decision:        audit.DecisionAllow,
+		ReasonCode:      ReasonPreviewOK,
+		TargetHash:      th,
+		Duration:        m.now().Sub(start),
 	})
 	secs := int(m.ttl.Seconds())
 	if secs < 1 {
@@ -289,6 +405,8 @@ func (m *Manager) Preview(ctx context.Context, intent Intent) (*PreviewResult, e
 		JobName:           norm.JobName,
 		BuildNumber:       norm.BuildNumber,
 		QueueID:           norm.QueueID,
+		QueueIDs:          append([]int(nil), norm.QueueIDs...),
+		Mode:              norm.Mode,
 		Parameters:        RedactParams(norm.Parameters),
 		EndpointClass:     norm.EndpointClass,
 		ConfirmationToken: tok,
@@ -329,7 +447,8 @@ func (m *Manager) Confirm(ctx context.Context, token string, expected Intent) (*
 		return nil, err
 	}
 	paramFP := ParamFingerprint(norm.Parameters)
-	wantHash := TargetHash(norm.Action, norm.JobName, norm.BuildNumber, norm.QueueID, paramFP)
+	wantHash := TargetHash(norm.Action, norm.JobName, norm.BuildNumber, norm.QueueID, paramFP, norm.Mode, norm.Extra)
+	bind := m.effectiveBinding(ctx)
 
 	m.mu.Lock()
 	rec, ok := m.tokens[token]
@@ -351,7 +470,10 @@ func (m *Manager) Confirm(ctx context.Context, token string, expected Intent) (*
 		m.emitDeny(ctx, tool, string(norm.Action), ReasonTokenExpired, rec.targetHash, start)
 		return nil, apperr.New(apperr.CodePolicyDenial, "confirmation token has expired; request a new preview")
 	}
-	if rec.profileID != m.profileID || rec.principal != m.principalID {
+	// HOST-006: compare stored token binding to effective request subject
+	// (BindingFromContext when multi-user; else process defaults). Prevents
+	// Alice preview tokens from being confirmed by Bob on a shared Manager.
+	if !rec.binding.Equal(bind) {
 		m.mu.Unlock()
 		m.emitDeny(ctx, tool, string(norm.Action), ReasonBindingMismatch, rec.targetHash, start)
 		return nil, apperr.New(apperr.CodePolicyDenial, "confirmation token is not bound to this profile/subject")
@@ -361,9 +483,9 @@ func (m *Manager) Confirm(ctx context.Context, token string, expected Intent) (*
 		m.emitDeny(ctx, tool, string(norm.Action), ReasonTargetMismatch, rec.targetHash, start)
 		return nil, apperr.New(apperr.CodePolicyDenial, "confirmation token does not match the requested target/parameters")
 	}
-	// MUT-001: cooldown after successful confirm for same (profile, action, targetHash).
+	// MUT-001: cooldown after successful confirm for same (binding, action, targetHash).
 	// Checked before single-use consume so a denied confirm leaves the token usable.
-	cdKey := m.cooldownKey(norm.Action, wantHash)
+	cdKey := cooldownKey(bind, norm.Action, wantHash)
 	if m.confirmCooldown > 0 {
 		if until, ok := m.cooldowns[cdKey]; ok && start.Before(until) {
 			m.mu.Unlock()
@@ -382,8 +504,11 @@ func (m *Manager) Confirm(ctx context.Context, token string, expected Intent) (*
 			JobName:       rec.jobName,
 			BuildNumber:   rec.buildNum,
 			QueueID:       rec.queueID,
+			QueueIDs:      append([]int(nil), rec.queueIDs...),
 			Parameters:    params,
 			EndpointClass: rec.endpoint,
+			Mode:          rec.mode,
+			Extra:         rec.extra,
 		},
 		TokenID:    rec.id,
 		TargetHash: rec.targetHash,
@@ -397,18 +522,21 @@ func (m *Manager) Confirm(ctx context.Context, token string, expected Intent) (*
 	}
 	m.mu.Unlock()
 
+	extSub, skHash := bind.auditSubjectFields()
 	m.emit(ctx, audit.Event{
-		Time:        start,
-		Type:        TypeConfirm,
-		ProfileID:   m.profileID,
-		PrincipalID: m.principalID,
-		Tool:        tool,
-		Action:      string(bound.Action),
-		Decision:    audit.DecisionAllow,
-		ReasonCode:  ReasonConfirmOK,
-		TargetHash:  bound.TargetHash,
-		RequestID:   bound.RequestID,
-		Duration:    m.now().Sub(start),
+		Time:            start,
+		Type:            TypeConfirm,
+		ProfileID:       bind.ProfileID,
+		PrincipalID:     bind.PrincipalID,
+		ExternalSubject: extSub,
+		SubjectKeyHash:  skHash,
+		Tool:            tool,
+		Action:          string(bound.Action),
+		Decision:        audit.DecisionAllow,
+		ReasonCode:      ReasonConfirmOK,
+		TargetHash:      bound.TargetHash,
+		RequestID:       bound.RequestID,
+		Duration:        m.now().Sub(start),
 	})
 	return bound, nil
 }
@@ -418,16 +546,20 @@ func (m *Manager) EmitExecuteFail(ctx context.Context, tool, action, reason, tar
 	if m == nil {
 		return
 	}
+	bind := m.effectiveBinding(ctx)
+	extSub, skHash := bind.auditSubjectFields()
 	m.emit(ctx, audit.Event{
-		Time:        m.now(),
-		Type:        TypeDeny,
-		ProfileID:   m.profileID,
-		PrincipalID: m.principalID,
-		Tool:        tool,
-		Action:      action,
-		Decision:    audit.DecisionFail,
-		ReasonCode:  reason,
-		TargetHash:  targetHash,
+		Time:            m.now(),
+		Type:            TypeDeny,
+		ProfileID:       bind.ProfileID,
+		PrincipalID:     bind.PrincipalID,
+		ExternalSubject: extSub,
+		SubjectKeyHash:  skHash,
+		Tool:            tool,
+		Action:          action,
+		Decision:        audit.DecisionFail,
+		ReasonCode:      reason,
+		TargetHash:      targetHash,
 	})
 }
 
@@ -436,17 +568,21 @@ func (m *Manager) EmitExecuteOK(ctx context.Context, tool, action, targetHash, r
 	if m == nil {
 		return
 	}
+	bind := m.effectiveBinding(ctx)
+	extSub, skHash := bind.auditSubjectFields()
 	m.emit(ctx, audit.Event{
-		Time:        m.now(),
-		Type:        audit.TypeToolSuccess,
-		ProfileID:   m.profileID,
-		PrincipalID: m.principalID,
-		Tool:        tool,
-		Action:      action,
-		Decision:    audit.DecisionSuccess,
-		ReasonCode:  "execute_ok",
-		TargetHash:  targetHash,
-		RequestID:   requestID,
+		Time:            m.now(),
+		Type:            audit.TypeToolSuccess,
+		ProfileID:       bind.ProfileID,
+		PrincipalID:     bind.PrincipalID,
+		ExternalSubject: extSub,
+		SubjectKeyHash:  skHash,
+		Tool:            tool,
+		Action:          action,
+		Decision:        audit.DecisionSuccess,
+		ReasonCode:      "execute_ok",
+		TargetHash:      targetHash,
+		RequestID:       requestID,
 	})
 }
 
@@ -474,12 +610,13 @@ func (m *Manager) reservePreview(now time.Time) error {
 	return nil
 }
 
-func (m *Manager) cooldownKey(action Action, targetHash string) string {
-	// Include profile so a shared process store cannot cross profile boundaries.
-	return m.profileID + "\x00" + string(action) + "\x00" + targetHash
+func cooldownKey(bind Binding, action Action, targetHash string) string {
+	// Full binding (profile+principal+external+tenant) so multi-user cooldown
+	// and token isolation cannot cross subjects on a shared Manager.
+	return bind.bindingKey() + "\x00" + string(action) + "\x00" + targetHash
 }
 
-func (m *Manager) issueToken(norm Intent, targetHash string, now time.Time) (token string, exp time.Time, err error) {
+func (m *Manager) issueToken(norm Intent, targetHash string, now time.Time, bind Binding) (token string, exp time.Time, err error) {
 	raw := make([]byte, 24)
 	if _, err := rand.Read(raw); err != nil {
 		return "", time.Time{}, apperr.Wrap(apperr.CodeInternal, "failed to mint confirmation token", err)
@@ -489,15 +626,17 @@ func (m *Manager) issueToken(norm Intent, targetHash string, now time.Time) (tok
 	id := token[:16]
 	rec := &tokenRecord{
 		id:         id,
-		profileID:  m.profileID,
-		principal:  m.principalID,
+		binding:    bind,
 		action:     norm.Action,
 		toolName:   norm.ToolName,
 		jobName:    norm.JobName,
 		buildNum:   norm.BuildNumber,
 		queueID:    norm.QueueID,
+		queueIDs:   append([]int(nil), norm.QueueIDs...),
 		params:     cloneParams(norm.Parameters),
 		endpoint:   norm.EndpointClass,
+		mode:       norm.Mode,
+		extra:      norm.Extra,
 		targetHash: targetHash,
 		expiresAt:  exp,
 	}
@@ -536,17 +675,21 @@ func (m *Manager) purgeCooldownsLocked(now time.Time) {
 }
 
 func (m *Manager) emitDeny(ctx context.Context, tool, action, reason, targetHash string, start time.Time) {
+	bind := m.effectiveBinding(ctx)
+	extSub, skHash := bind.auditSubjectFields()
 	m.emit(ctx, audit.Event{
-		Time:        start,
-		Type:        TypeDeny,
-		ProfileID:   m.profileID,
-		PrincipalID: m.principalID,
-		Tool:        tool,
-		Action:      action,
-		Decision:    audit.DecisionDeny,
-		ReasonCode:  reason,
-		TargetHash:  targetHash,
-		Duration:    m.now().Sub(start),
+		Time:            start,
+		Type:            TypeDeny,
+		ProfileID:       bind.ProfileID,
+		PrincipalID:     bind.PrincipalID,
+		ExternalSubject: extSub,
+		SubjectKeyHash:  skHash,
+		Tool:            tool,
+		Action:          action,
+		Decision:        audit.DecisionDeny,
+		ReasonCode:      reason,
+		TargetHash:      targetHash,
+		Duration:        m.now().Sub(start),
 	})
 }
 
@@ -573,6 +716,9 @@ func normalizeIntent(in Intent) (Intent, error) {
 	endpoint := strings.TrimSpace(in.EndpointClass)
 	queueID := in.QueueID
 	buildNum := in.BuildNumber
+	mode := strings.ToLower(strings.TrimSpace(in.Mode))
+	extra := strings.TrimSpace(in.Extra)
+	queueIDs := normalizeQueueIDs(in.QueueIDs)
 	switch action {
 	case ActionStartJob:
 		if job == "" {
@@ -587,6 +733,7 @@ func normalizeIntent(in Intent) (Intent, error) {
 		if queueID != 0 {
 			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_id is not valid for start_job")
 		}
+		mode, extra = "", ""
 	case ActionStopBuild:
 		if job == "" {
 			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
@@ -603,6 +750,7 @@ func normalizeIntent(in Intent) (Intent, error) {
 		if queueID != 0 {
 			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_id is not valid for stop_build")
 		}
+		mode, extra = "", ""
 	case ActionCancelQueue:
 		if queueID <= 0 {
 			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_id must be positive for cancel_queue")
@@ -616,7 +764,148 @@ func normalizeIntent(in Intent) (Intent, error) {
 		if len(params) > 0 {
 			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "parameters are not valid for cancel_queue")
 		}
-		// JobName is optional display context from GetQueueItem; not required for binding.
+		mode, extra = "", ""
+	case ActionInterruptBuild:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		if buildNum <= 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number must be positive for interrupt_build")
+		}
+		switch mode {
+		case "stop", "term", "kill":
+		default:
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "mode must be stop, term, or kill for interrupt_build")
+		}
+		if endpoint == "" {
+			switch mode {
+			case "term":
+				endpoint = EndpointTerm
+			case "kill":
+				endpoint = EndpointKill
+			default:
+				endpoint = EndpointStop
+			}
+		}
+		if len(params) > 0 || queueID != 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "parameters/queue_id are not valid for interrupt_build")
+		}
+		extra = ""
+	case ActionRebuildBuild:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		if buildNum <= 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number (source build) must be positive for rebuild_build")
+		}
+		if endpoint == "" {
+			endpoint = EndpointRebuild
+		}
+		if queueID != 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_id is not valid for rebuild_build")
+		}
+		mode = ""
+		// Extra may hold source-build note; parameters are the rebuilt params.
+	case ActionReplayPipeline:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		if buildNum <= 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number must be positive for replay_pipeline")
+		}
+		// mode must be empty or "same" — script edit is never default and not accepted.
+		if mode != "" && mode != "same" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "pipeline replay script-edit is not enabled; mode must be empty or same")
+		}
+		mode = "same"
+		if endpoint == "" {
+			endpoint = EndpointReplay
+		}
+		if len(params) > 0 || queueID != 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "parameters/queue_id are not valid for replay_pipeline")
+		}
+		extra = ""
+	case ActionSetJobBuildable:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		switch mode {
+		case "enable", "disable":
+		default:
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "mode must be enable or disable for set_job_buildable")
+		}
+		if endpoint == "" {
+			if mode == "enable" {
+				endpoint = EndpointEnable
+			} else {
+				endpoint = EndpointDisable
+			}
+		}
+		if buildNum != 0 || queueID != 0 || len(params) > 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number/queue_id/parameters are not valid for set_job_buildable")
+		}
+		extra = ""
+	case ActionSetBuildKeepForever:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		if buildNum <= 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number must be positive for set_build_keep_forever")
+		}
+		switch mode {
+		case "true", "false":
+		default:
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "mode must be true or false for set_build_keep_forever")
+		}
+		if endpoint == "" {
+			endpoint = EndpointToggleKeepForever
+		}
+		if queueID != 0 || len(params) > 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_id/parameters are not valid for set_build_keep_forever")
+		}
+		extra = mode
+	case ActionSetBuildDescription:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		if buildNum <= 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number must be positive for set_build_description")
+		}
+		if extra == "" && strings.TrimSpace(in.Extra) == "" {
+			// Allow empty description (clear); bind empty string.
+			extra = ""
+		}
+		if len(extra) > MaxBuildDescriptionLen {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, fmt.Sprintf("description exceeds max length %d", MaxBuildDescriptionLen))
+		}
+		if endpoint == "" {
+			endpoint = EndpointSubmitDescription
+		}
+		if queueID != 0 || len(params) > 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_id/parameters are not valid for set_build_description")
+		}
+		mode = ""
+	case ActionCancelQueueItemsForJob:
+		if job == "" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "job_name is required")
+		}
+		if len(queueIDs) == 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "queue_ids must be non-empty for cancel_queue_items_for_job")
+		}
+		if len(queueIDs) > MaxBulkQueueCancel {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, fmt.Sprintf("queue_ids exceeds cap %d", MaxBulkQueueCancel))
+		}
+		// Stickiness filter is optional mode: "" | "stuck".
+		if mode != "" && mode != "stuck" {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "mode must be empty or stuck for cancel_queue_items_for_job")
+		}
+		if endpoint == "" {
+			endpoint = EndpointCancelItemBulk
+		}
+		if buildNum != 0 || queueID != 0 || len(params) > 0 {
+			return Intent{}, apperr.New(apperr.CodeInvalidArgument, "build_number/queue_id/parameters are not valid for cancel_queue_items_for_job")
+		}
+		extra = formatQueueIDsExtra(queueIDs)
 	default:
 		return Intent{}, apperr.New(apperr.CodeInvalidArgument, fmt.Sprintf("unknown mutation action %q", action))
 	}
@@ -630,10 +919,54 @@ func normalizeIntent(in Intent) (Intent, error) {
 		JobName:       job,
 		BuildNumber:   buildNum,
 		QueueID:       queueID,
+		QueueIDs:      queueIDs,
 		Parameters:    params,
 		EndpointClass: endpoint,
+		Mode:          mode,
+		Extra:         extra,
 		CurrentState:  strings.TrimSpace(in.CurrentState),
 	}, nil
+}
+
+// MaxBuildDescriptionLen is the hard cap for set_build_description (MUT-014).
+const MaxBuildDescriptionLen = 4096
+
+// MaxBulkQueueCancel is the hard cap for bulk queue cancel (MUT-016).
+const MaxBulkQueueCancel = 20
+
+func normalizeQueueIDs(in []int) []int {
+	if len(in) == 0 {
+		return nil
+	}
+	seen := make(map[int]struct{}, len(in))
+	out := make([]int, 0, len(in))
+	for _, id := range in {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	// Sort for stable Extra / fingerprint.
+	for i := 0; i < len(out); i++ {
+		for j := i + 1; j < len(out); j++ {
+			if out[j] < out[i] {
+				out[i], out[j] = out[j], out[i]
+			}
+		}
+	}
+	return out
+}
+
+func formatQueueIDsExtra(ids []int) string {
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = fmt.Sprintf("%d", id)
+	}
+	return strings.Join(parts, ",")
 }
 
 func toolForAction(a Action) string {
@@ -644,6 +977,20 @@ func toolForAction(a Action) string {
 		return policy.ToolStopBuild
 	case ActionCancelQueue:
 		return policy.ToolCancelQueueItem
+	case ActionInterruptBuild:
+		return policy.ToolInterruptBuild
+	case ActionRebuildBuild:
+		return policy.ToolRebuildBuild
+	case ActionReplayPipeline:
+		return policy.ToolReplayPipeline
+	case ActionSetJobBuildable:
+		return policy.ToolSetJobBuildable
+	case ActionSetBuildKeepForever:
+		return policy.ToolSetBuildKeepForever
+	case ActionSetBuildDescription:
+		return policy.ToolSetBuildDescription
+	case ActionCancelQueueItemsForJob:
+		return policy.ToolCancelQueueItemsForJob
 	default:
 		return string(a)
 	}

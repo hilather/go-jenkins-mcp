@@ -78,6 +78,7 @@ func TestSecuritySelfCheck_OfflineCanaries(t *testing.T) {
 		"fleet_telemetry_force_off_residual",
 		"update_lkg_residual",
 		"mutation_confirm_cooldown_residual",
+		"gateway_residual_status_honesty",
 		"origin_tls_posture",
 		"jenkins_origin_pin_residual",
 		"report_canary_leak",
@@ -377,7 +378,7 @@ func TestSecuritySelfCheck_OfflineCanaries(t *testing.T) {
 			t.Fatalf("resilience message must mention GET/HEAD: %s", jr.Message)
 		}
 	}
-	// Wave 46 Track C / MGR-002: fleet ForceOff lite + signed-policy pin residual honesty.
+	// Wave 46 Track C / MGR-002: fleet ForceOff + overlay fleet_telemetry_force_off pin.
 	if ft, ok := names["fleet_telemetry_force_off_residual"]; !ok {
 		t.Fatal("missing fleet_telemetry_force_off_residual")
 	} else if ft.Status != diagnostics.SelfCheckOK {
@@ -389,14 +390,18 @@ func TestSecuritySelfCheck_OfflineCanaries(t *testing.T) {
 		if ft.Details["force_off_disables"] != true {
 			t.Fatalf("force_off_disables: %+v", ft.Details)
 		}
-		if ft.Details["policy_overlay_pin"] != false {
-			t.Fatalf("policy_overlay_pin must be false (residual): %+v", ft.Details)
+		// Overlay pin is wired (MGR-002 ForceOff from overlay lite).
+		if ft.Details["policy_overlay_pin"] != true {
+			t.Fatalf("policy_overlay_pin must be true (overlay field wired): %+v", ft.Details)
 		}
 		if ft.Details["env_enable_path_present"] != true {
 			t.Fatalf("env_enable_path_present: %+v", ft.Details)
 		}
 		if ft.Details["collector_force_off_nil"] != true || ft.Details["effective_enabled_force_off"] != true {
 			t.Fatalf("fleet force-off proof details: %+v", ft.Details)
+		}
+		if ft.Details["explain_surfaces_force_off"] != true {
+			t.Fatalf("explain_surfaces_force_off: %+v", ft.Details)
 		}
 		// Bool details only (secret-free).
 		for k, v := range ft.Details {
@@ -411,8 +416,12 @@ func TestSecuritySelfCheck_OfflineCanaries(t *testing.T) {
 		if !strings.Contains(msgLower, "forceoff") && !strings.Contains(msgLower, "force off") {
 			t.Fatalf("fleet force-off message must note ForceOff: %s", ft.Message)
 		}
-		if !strings.Contains(msgLower, "residual") || !strings.Contains(msgLower, "policy") {
-			t.Fatalf("fleet force-off message must note signed-policy residual: %s", ft.Message)
+		// HSM / multi-sig residual honesty remains; overlay pin is no longer residual.
+		if !strings.Contains(msgLower, "residual") {
+			t.Fatalf("fleet force-off message must note residual (HSM/multi-sig): %s", ft.Message)
+		}
+		if !strings.Contains(msgLower, "overlay") && !strings.Contains(msgLower, "fleet_telemetry_force_off") {
+			t.Fatalf("fleet force-off message must note overlay pin: %s", ft.Message)
 		}
 	}
 	// Wave 47 Track C / UPD-001: LKG residual honesty offline (metadata only, not auto-install).
@@ -504,6 +513,85 @@ func TestSecuritySelfCheck_OfflineCanaries(t *testing.T) {
 		}
 		if !strings.Contains(msgLower, "residual") {
 			t.Fatalf("mutation cooldown message must note residual honesty: %s", mc.Message)
+		}
+	}
+	// GWY-003 residual lite: BuildGatewayResidualStatus honesty (same spirit as
+	// qualify gateway_residual_status_offline_honesty). Pure offline; not live GO.
+	if gr, ok := names["gateway_residual_status_honesty"]; !ok {
+		t.Fatal("missing gateway_residual_status_honesty")
+	} else if gr.Status != diagnostics.SelfCheckOK && gr.Status != diagnostics.SelfCheckWarn {
+		// Warn only when multi_user env is set (host-dependent); still honesty ok.
+		t.Fatalf("gateway_residual_status_honesty: %+v", gr)
+	} else {
+		if gr.Control != "GWY-003" {
+			t.Fatalf("gateway residual control: %s", gr.Control)
+		}
+		if gr.Details["residual_ids_present"] != true {
+			t.Fatalf("residual_ids_present: %+v", gr.Details)
+		}
+		if gr.Details["ha_multi_replica"] != false {
+			t.Fatalf("ha_multi_replica must be false: %+v", gr.Details)
+		}
+		if gr.Details["live_mode_pins_false"] != true {
+			t.Fatalf("live_mode_pins_false: %+v", gr.Details)
+		}
+		if gr.Details["oauth009_offline"] != true {
+			t.Fatalf("oauth009_offline: %+v", gr.Details)
+		}
+		if gr.Details["shared_subject_rate_file_default_false"] != true ||
+			gr.Details["shared_principal_cache_file_default_false"] != true ||
+			gr.Details["shared_jwks_file_default_false"] != true ||
+			gr.Details["shared_token_cache_file_default_false"] != true ||
+			gr.Details["shared_api_token_vault_file_default_false"] != true ||
+			gr.Details["shared_jwt_vault_file_default_false"] != true {
+			t.Fatalf("shared_*_file default false: %+v", gr.Details)
+		}
+		if gr.Details["secret_free"] != true {
+			t.Fatalf("secret_free: %+v", gr.Details)
+		}
+		if gr.Details["residual_live_go"] != false {
+			t.Fatalf("residual_live_go must be false: %+v", gr.Details)
+		}
+		if gr.Details["multi_pod_vault_residual"] != true {
+			t.Fatalf("multi_pod_vault_residual: %+v", gr.Details)
+		}
+		if n, ok := asInt(gr.Details["residual_id_count"]); !ok || n < 6 {
+			t.Fatalf("residual_id_count want >=6: %+v", gr.Details["residual_id_count"])
+		}
+		// Bool/int details only (secret-free).
+		for k, v := range gr.Details {
+			switch v.(type) {
+			case int, int64, float64, bool:
+				// ok
+			default:
+				t.Fatalf("gateway residual detail %s type %T not int/bool: %v", k, v, v)
+			}
+		}
+		msgLower := strings.ToLower(gr.Message)
+		if !strings.Contains(msgLower, "gwy-003") {
+			t.Fatalf("gateway residual message must note GWY-003: %s", gr.Message)
+		}
+		if !strings.Contains(msgLower, "residual") {
+			t.Fatalf("gateway residual message must note residual honesty: %s", gr.Message)
+		}
+		if !strings.Contains(msgLower, "not live") && !strings.Contains(msgLower, "offline residual") {
+			t.Fatalf("gateway residual message must not claim live GO: %s", gr.Message)
+		}
+		// Secret canaries must never appear in message/details.
+		for _, bad := range []string{
+			"QA005_SELFCHECK_CANARY",
+			"GWY003_SELFCHECK_RESIDUAL_CANARY",
+			"access_token=",
+			"refresh_token=",
+			"client_secret=",
+			"Bearer ",
+		} {
+			if strings.Contains(gr.Message, bad) {
+				t.Fatalf("gateway residual message leaked %q: %s", bad, gr.Message)
+			}
+			if b, _ := json.Marshal(gr.Details); strings.Contains(string(b), bad) {
+				t.Fatalf("gateway residual details leaked %q: %s", bad, b)
+			}
 		}
 	}
 	// Wave 50 Track C / NET-001: pure offline origin pin (NormalizeBaseURL+SameOrigin).
@@ -867,6 +955,9 @@ func TestSecuritySelfCheck_TextFormat(t *testing.T) {
 	if !strings.Contains(out, "mutation_confirm_cooldown_residual") {
 		t.Fatal("text must list mutation_confirm_cooldown_residual")
 	}
+	if !strings.Contains(out, "gateway_residual_status_honesty") {
+		t.Fatal("text must list gateway_residual_status_honesty")
+	}
 	if !strings.Contains(out, "jenkins_origin_pin_residual") {
 		t.Fatal("text must list jenkins_origin_pin_residual")
 	}
@@ -905,5 +996,184 @@ func TestSecuritySelfCheck_ReportCanaryNeverInOutput(t *testing.T) {
 	diagnostics.FormatSelfCheckText(&buf, rep)
 	if strings.Contains(buf.String(), "QA005_SELFCHECK_CANARY") {
 		t.Fatal("Regression: canary plant leaked into report text")
+	}
+}
+
+// GWY-003 residual lite: multi_user env elevates gateway_residual_status_honesty
+// to warn without claiming live multi-user GO. Core residual honesty still holds.
+// Regression: secret canaries never appear in residual honesty item.
+func TestSecuritySelfCheck_GatewayResidualStatusHonesty_MultiUserWarn(t *testing.T) {
+	t.Parallel()
+	const canary = "GWY003_SELFCHECK_RESIDUAL_CANARY_token_must_never_appear_a7c1"
+	getenv := func(k string) string {
+		// Multi-user residual warn path.
+		if k == "JENKINS_MCP_GATEWAY_MULTI_USER" {
+			return "1"
+		}
+		// Plant secret-shaped values for unrelated keys — must never appear.
+		if strings.Contains(strings.ToLower(k), "token") ||
+			strings.Contains(strings.ToLower(k), "secret") ||
+			strings.Contains(strings.ToLower(k), "password") {
+			return canary
+		}
+		return canary // default unknown keys also canary (should not dump)
+	}
+	rep, err := diagnostics.RunSecuritySelfCheck(context.Background(), diagnostics.SelfCheckOptions{
+		SkipSupportBundleCanary: true,
+		Getenv:                  getenv,
+		PolicyResult: &policy.LoadResult{
+			Present:        false,
+			SignatureState: policy.SigStateAbsent,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gr diagnostics.SelfCheckItem
+	for _, it := range rep.Items {
+		if it.Name == "gateway_residual_status_honesty" {
+			gr = it
+			break
+		}
+		if strings.Contains(it.Message, canary) || strings.Contains(it.Message, "QA005_SELFCHECK_CANARY") {
+			t.Fatalf("canary leak in %s: %s", it.Name, it.Message)
+		}
+	}
+	if gr.Name == "" {
+		t.Fatal("gateway_residual_status_honesty missing")
+	}
+	if gr.Status != diagnostics.SelfCheckWarn {
+		t.Fatalf("multi_user env want warn: %+v", gr)
+	}
+	if gr.Control != "GWY-003" {
+		t.Fatalf("control %s", gr.Control)
+	}
+	if gr.Details["multi_user_env_set"] != true {
+		t.Fatalf("multi_user_env_set: %+v", gr.Details)
+	}
+	if gr.Details["residual_live_go"] != false {
+		t.Fatalf("must not claim live GO: %+v", gr.Details)
+	}
+	if gr.Details["ha_multi_replica"] != false {
+		t.Fatalf("ha_multi_replica must stay false: %+v", gr.Details)
+	}
+	if gr.Details["live_mode_pins_false"] != true {
+		t.Fatalf("live pins: %+v", gr.Details)
+	}
+	if !strings.Contains(strings.ToLower(gr.Message), "multi_user") &&
+		!strings.Contains(strings.ToLower(gr.Message), "multi-user") {
+		t.Fatalf("warn message must note multi_user residual: %s", gr.Message)
+	}
+	if !strings.Contains(strings.ToLower(gr.Message), "not live") {
+		t.Fatalf("warn message must not claim live GO: %s", gr.Message)
+	}
+	// Full report JSON must never contain planted residual canary.
+	blob, err := json.Marshal(rep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(blob), canary) {
+		t.Fatal("Regression: residual self-check canary leaked into report")
+	}
+	if strings.Contains(string(blob), "access_token=") ||
+		strings.Contains(string(blob), "client_secret=") {
+		t.Fatal("Regression: secret markers in residual honesty report")
+	}
+}
+
+// Empty getenv: residual honesty OK (no multi_user warn).
+func TestSecuritySelfCheck_GatewayResidualStatusHonesty_DefaultOK(t *testing.T) {
+	t.Parallel()
+	rep, err := diagnostics.RunSecuritySelfCheck(context.Background(), diagnostics.SelfCheckOptions{
+		SkipSupportBundleCanary: true,
+		Getenv:                  func(string) string { return "" },
+		PolicyResult: &policy.LoadResult{
+			Present:        false,
+			SignatureState: policy.SigStateAbsent,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gr diagnostics.SelfCheckItem
+	for _, it := range rep.Items {
+		if it.Name == "gateway_residual_status_honesty" {
+			gr = it
+			break
+		}
+	}
+	if gr.Name == "" {
+		t.Fatal("gateway_residual_status_honesty missing")
+	}
+	if gr.Status != diagnostics.SelfCheckOK {
+		t.Fatalf("empty getenv want ok: %+v", gr)
+	}
+	if gr.Details["multi_user_env_set"] != false {
+		t.Fatalf("multi_user_env_set want false: %+v", gr.Details)
+	}
+	if gr.Details["residual_ids_present"] != true || gr.Details["secret_free"] != true {
+		t.Fatalf("honesty details: %+v", gr.Details)
+	}
+}
+
+// OAUTH-009: Mode B env elevates rs_qualification warn with honest residual.
+func TestSecuritySelfCheck_ModeB_RSResidual(t *testing.T) {
+	t.Parallel()
+	getenv := func(k string) string {
+		if k == "JENKINS_MCP_GATEWAY_CREDENTIAL_MODE" {
+			return "jwt_rs_bearer"
+		}
+		return ""
+	}
+	rep, err := diagnostics.RunSecuritySelfCheck(context.Background(), diagnostics.SelfCheckOptions{
+		SkipSupportBundleCanary: true,
+		Getenv:                  getenv,
+		PolicyResult: &policy.LoadResult{
+			Present:        true,
+			SignatureState: policy.SigStateUnverifiedPilot,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rs diagnostics.SelfCheckItem
+	for _, it := range rep.Items {
+		if it.Name == "rs_qualification" {
+			rs = it
+			break
+		}
+	}
+	if rs.Name == "" {
+		t.Fatal("rs_qualification missing")
+	}
+	if rs.Status != diagnostics.SelfCheckWarn {
+		t.Fatalf("Mode B rs_qualification want warn: %+v", rs)
+	}
+	if rs.Control != "OAUTH-009" {
+		t.Fatalf("control %s", rs.Control)
+	}
+	if rs.Details["gateway_mode_b_enabled"] != true {
+		t.Fatalf("gateway_mode_b_enabled: %+v", rs.Details)
+	}
+	if rs.Details["mode_b_live_rs_qualified"] != false {
+		t.Fatalf("must not claim live qualified: %+v", rs.Details)
+	}
+	if rs.Details["live_lab_still_required"] != true {
+		t.Fatalf("live_lab_still_required: %+v", rs.Details)
+	}
+	if rs.Details["id_jwt_never_api_credential"] != true {
+		t.Fatalf("id_jwt note: %+v", rs.Details)
+	}
+	if rs.Details["residual_id"] != "oauth009_offline" {
+		t.Fatalf("Mode B residual_id want oauth009_offline: %+v", rs.Details)
+	}
+	if rs.Details["oauth009_offline"] != true {
+		t.Fatalf("oauth009_offline flag: %+v", rs.Details)
+	}
+	if !strings.Contains(rs.Message, "Mode B") && !strings.Contains(rs.Message, "jwt_rs_bearer") {
+		t.Fatalf("message: %s", rs.Message)
+	}
+	if !strings.Contains(rs.Message, "oauth009_offline") && !strings.Contains(rs.Message, "OAUTH-009") {
+		t.Fatalf("message must link residual_id oauth009_offline: %s", rs.Message)
 	}
 }

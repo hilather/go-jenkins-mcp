@@ -82,7 +82,13 @@ npm run build     # primary v1 CI smoke: typecheck + production bundle
 | Profile id | query `?profile=corp` or `localStorage` key `jenkins-mcp.admin.profile` | Default `corp` |
 | Admin token | `localStorage` key `jenkins-mcp.admin.token` | Sent as `Authorization: Bearer` when set |
 
-**Residual:** token-in-localStorage is pilot-only UX (ADR 0014). Layout shows process role from `GET /admin/v1/me` (UI-003) and a token field (value never logged). The SPA has **no Jenkins credential fields**.
+**Residual / quarantine:** token-in-`localStorage` is **pilot-only** UX (ADR 0014,
+HOST-007). **Do not** treat it as production multi-host admin authn — prefer
+httpOnly cookie + CSRF or reverse-proxy mTLS/OIDC residual before non-pilot
+deploy. Layout shows process role from `GET /admin/v1/me` (UI-003) and a token
+field (value never logged). The SPA has **no Jenkins credential fields** and
+never displays vault tokens / raw subjects. Multi-user MCP readiness is **not**
+signaled by SPA state (no `JENKINS_MCP_GATEWAY_MULTI_USER` pin).
 
 Example (browser console, loopback only):
 
@@ -107,7 +113,9 @@ localStorage.setItem("jenkins-mcp.admin.profile", "corp");
 
 - **Profiles:** list + detail (no secrets; `hasCredential` boolean only), offline security self-check, support-bundle preview/create when `/me` has `cache_destructive`.
 - **Cache:** quota/usage (`available:false` residual when store missing), non-destructive eviction plan for all roles, destructive evict only when role is operator — double-confirm modal (type `EVICT` twice); server also requires exact `confirm: "EVICT"`.
+- **Overview consent purge (HOST-007 Mode C):** `purge_expired` / `delete_session` as usual; destructive **clear_all** requires typing `CLEAR_ALL` (server also requires exact `confirm: "CLEAR_ALL"`; CLI `--all --confirm=CLEAR_ALL`).
 - **Doctor:** run button + offline toggle (online needs admin shared secret on the BFF).
+- **Doctor:** run button + offline toggle (online needs admin shared secret on the BFF). When the report includes `gateway_residual_status`, a residual card (`shared_subject_rate_file` / `shared_principal_cache_file` / `shared_jwks_file` / `shared_token_cache_file` / `shared_api_token_vault_file` / `shared_jwt_vault_file`, principal count honesty, live-pin-blockers pointer) appears after Overall — HOST-007 lite; does not drive overall; never tokens; path values never shown.
 - **Residuals:** pin list UI, full cache repair/verify from SPA (use CLI); policy apply (UI-004).
 
 ### Metrics page (UI-005)
@@ -120,7 +128,7 @@ localStorage.setItem("jenkins-mcp.admin.profile", "corp");
 
 ### Audit page (UI-006)
 
-- Filters: event **type** (text), **limit** (10/50/100/200), optional **before** (`datetime-local` and/or RFC3339 text). Wired to `fetchAudit` query params; react-query key includes filters.
+- Filters: event **type** (text), **limit** (10/50/100/200), optional **before** (`datetime-local` and/or RFC3339 text), optional **externalSubject** (BFF query `external_subject`, case-sensitive exact match). Wired to `fetchAudit` query params; react-query key includes filters. Client exact filter remains residual for older BFF.
 - **Detail drawer** for a selected row — only schema fields present on the event (no invented secret fields; secret-shaped extra keys filtered client-side as defense-in-depth).
 - **Load older** uses the last loaded event `time` as exclusive `before` cursor when the page is truncated; accumulates loaded events for export.
 - **Export loaded JSON** — client-side download of currently loaded events only (not the full JSONL file).

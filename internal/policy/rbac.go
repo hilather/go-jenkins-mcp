@@ -139,8 +139,14 @@ type Document struct {
 	DenyBranchNames []string
 	// MaxResultBytes optionally lowers result hard max (0 = unset).
 	MaxResultBytes int
+	// MaxToolsPerMinute optionally lowers per-subject tool rate (0 = unset; HOST-006).
+	MaxToolsPerMinute int
+	// MaxToolsBurst optionally lowers per-subject burst (0 = unset; HOST-006).
+	MaxToolsBurst int
 	// ForceReadOnly mirrors overlay force_read_only for status.
 	ForceReadOnly bool
+	// FleetTelemetryForceOff mirrors overlay fleet_telemetry_force_off (MGR-002).
+	FleetTelemetryForceOff bool
 	// Version is the source overlay version (0 if synthetic).
 	Version int
 	// RequireVerifiedSubject when true denies subjects with Verified=false.
@@ -156,18 +162,25 @@ func DocumentFromOverlay(o *Overlay) Document {
 		return Document{Mode: ModePilot}
 	}
 	doc := Document{
-		Mode:              o.NormalizeMode(),
-		DenyTools:         o.DenyToolSet(),
-		DenyJobPrefixes:   o.DenyJobPrefixList(),
-		DenyNodeNames:     o.DenyNodeNameList(),
-		DenyViewNames:     o.DenyViewNameList(),
-		DenyArtifactPaths: o.DenyArtifactPathList(),
-		DenyBranchNames:   o.DenyBranchNameList(),
-		ForceReadOnly:     o.ForceReadOnly,
-		Version:           o.Version,
+		Mode:                   o.NormalizeMode(),
+		DenyTools:              o.DenyToolSet(),
+		DenyJobPrefixes:        o.DenyJobPrefixList(),
+		DenyNodeNames:          o.DenyNodeNameList(),
+		DenyViewNames:          o.DenyViewNameList(),
+		DenyArtifactPaths:      o.DenyArtifactPathList(),
+		DenyBranchNames:        o.DenyBranchNameList(),
+		ForceReadOnly:          o.ForceReadOnly,
+		FleetTelemetryForceOff: o.FleetTelemetryForceOff,
+		Version:                o.Version,
 	}
 	if n, ok := o.EffectiveMaxResultBytes(); ok {
 		doc.MaxResultBytes = n
+	}
+	if n, ok := o.EffectiveMaxToolsPerMinute(); ok {
+		doc.MaxToolsPerMinute = n
+	}
+	if n, ok := o.EffectiveMaxToolsBurst(); ok {
+		doc.MaxToolsBurst = n
 	}
 	return doc
 }
@@ -580,10 +593,17 @@ var knownSeedTools = map[string]struct{}{
 	"jenkins_get_pipeline_stages":    {},
 	"jenkins_get_capabilities":       {},
 
-	ToolStartJob:        {},
-	ToolStopBuild:       {},
-	ToolCancelQueueItem: {},
-	StoreReadAction:     {},
+	ToolStartJob:               {},
+	ToolStopBuild:              {},
+	ToolCancelQueueItem:        {},
+	ToolInterruptBuild:         {},
+	ToolRebuildBuild:           {},
+	ToolReplayPipeline:         {},
+	ToolSetJobBuildable:        {},
+	ToolSetBuildKeepForever:    {},
+	ToolSetBuildDescription:    {},
+	ToolCancelQueueItemsForJob: {},
+	StoreReadAction:            {},
 }
 
 // IsKnownSeedTool reports whether name is in the pilot seed tool inventory.

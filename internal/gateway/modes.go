@@ -24,7 +24,9 @@ const (
 
 	// ModeJWTRSBearer is HOST-011 Mode B: Jenkins resource-server Bearer JWT
 	// (jwt-auth-filter / proxy RS). Distinct from AgentCore AS modes.
-	// Live acquire remains HOST-010 residual; HTTPAuth shape is Bearer.
+	// Offline: JWTRSBearerProvider + JWTVault (HOST-010). Live IdP /
+	// jwt-auth-filter production pin remains OAUTH-009 residual.
+	// HTTPAuth shape is Bearer (never Basic; never ID token as API credential).
 	ModeJWTRSBearer Mode = "jwt_rs_bearer"
 )
 

@@ -34,6 +34,11 @@ const AbsoluteMaxBodyBytes int64 = 16 << 20 // 16 MiB
 // AbsoluteMaxBodyBytes fail closed at serve start.
 const EnvHTTPMaxBodyBytes = "JENKINS_MCP_HTTP_MAX_BODY_BYTES"
 
+// EnvHTTPPathPrefix is the serve env for the optional Streamable HTTP path
+// prefix (HOST-002 reverse-proxy). CLI --http-path-prefix overrides when set.
+// Empty → no prefix (MCP served at root path space as today).
+const EnvHTTPPathPrefix = "JENKINS_MCP_HTTP_PATH_PREFIX"
+
 // HeaderJenkinsMCPToken is an alternate client header for the optional shared
 // secret (exact match). Prefer Authorization: Bearer when both are usable.
 const HeaderJenkinsMCPToken = "X-Jenkins-MCP-Token"
@@ -62,12 +67,28 @@ const HeaderJenkinsMCPToken = "X-Jenkins-MCP-Token"
 //     non-health request must establish RequestIdentity from a trusted source
 //     (lab header when LabIdentity, or IdentityResolver e.g. JWT). Shared secret
 //     alone never satisfies subject requirements (HOST-001).
+//   - When RequireSubject is on, Mcp-Session-Id (when present) is bound to the
+//     first request's IdentityFingerprint; mid-session subject change → 401.
+//   - PathPrefix (HOST-002): optional reverse-proxy mount path (e.g. "/mcp").
+//     When set, MCP Streamable endpoints are served only under that prefix
+//     (prefix stripped before the SDK handler). /healthz and /readyz remain
+//     at root and are also available at {prefix}/healthz and {prefix}/readyz.
+//     Origin/Host/body/token/subject checks are unchanged after strip.
+//   - TrustedProxy (HOST-002 residual): default false. When false (always
+//     today), X-Forwarded-Host / X-Forwarded-Prefix / X-Forwarded-For /
+//     X-Forwarded-Proto are never used for Host, Origin, or path-prefix auth
+//     decisions — only the direct Host header, Origin header, and URL path
+//     (plus configured PathPrefix) apply. Auto-trust of client-supplied
+//     forwarded headers is fail-closed. TrustedProxy=true is reserved and
+//     currently a no-op residual (still ignores X-Forwarded-*).
 //
 // Residual: empty BearerToken on loopback without RequireToken still leaves the
 // socket open to any local process (KD-008 pilot residual, non-gateway only).
 // Production multi-user JWT/OIDC validation is partial (lab header + resolver
-// hook foundation; full JWKS pin residual HOST-001 / HOST-014). Prefer stdio
-// for pilot (ADR 0002).
+// hook foundation; continuous JWKS rotation under load residual HOST-001 /
+// HOST-014). Live edge reverse-proxy origin pin matrix remains residual
+// (HOST-002 / NET-001); offline path-prefix + origin pin fixtures ship here.
+// Prefer stdio for pilot (ADR 0002).
 type HTTPConfig struct {
 	// Addr is the listen address (e.g. "127.0.0.1:8765", "localhost:0").
 	Addr string
@@ -85,10 +106,32 @@ type HTTPConfig struct {
 	// Operator path: ResolveHTTPMaxBodyBytes → positive value ≤ AbsoluteMaxBodyBytes.
 	MaxBodyBytes int64
 
+	// PathPrefix is an optional URL path prefix for Streamable HTTP MCP routes
+	// (HOST-002 reverse-proxy). Empty (default) serves MCP in the root path
+	// space as today. When set (e.g. "/mcp"), only requests under that prefix
+	// reach the MCP handler; the prefix is stripped before the SDK. Health
+	// endpoints stay at root and also at {prefix}/healthz|{prefix}/readyz.
+	// Wire as --http-path-prefix / JENKINS_MCP_HTTP_PATH_PREFIX. Validated:
+	// must start with "/", no "//", no ".." segments; trailing slash normalized.
+	// PathPrefix is taken only from this config — never from X-Forwarded-Prefix
+	// (TrustedProxy residual; fail closed by default).
+	PathPrefix string
+
+	// TrustedProxy is a residual flag for future reverse-proxy trust of
+	// X-Forwarded-* headers (HOST-002). Default false: Host/Origin/path auth
+	// decisions ignore X-Forwarded-Host, X-Forwarded-Prefix, X-Forwarded-For,
+	// and X-Forwarded-Proto entirely. When false (default), operators must
+	// configure the edge to forward the real Host and Origin (and app PathPrefix)
+	// rather than relying on client-controlled forwarded headers.
+	// TrustedProxy=true is reserved and currently does not enable trust
+	// (still ignores X-Forwarded-* — fail closed residual; do not auto-trust).
+	TrustedProxy bool
+
 	// AllowedOrigins, when non-empty, is an exact-match allow list for the
 	// Origin header on non-GET requests. When empty (default), only loopback
 	// origins (http(s)://localhost, 127.0.0.1, ::1) and missing Origin are
 	// accepted on non-GET. Required non-empty when AllowNonLocal.
+	// Never derived from X-Forwarded-* (TrustedProxy residual).
 	AllowedOrigins []string
 
 	// AllowedHosts is an exact-match allow list for the Host header hostname
@@ -96,6 +139,8 @@ type HTTPConfig struct {
 	// AllowNonLocal is true for DNS-rebinding defense on non-loopback binds.
 	// Wire as --http-allowed-host (repeatable). Required non-empty when
 	// AllowNonLocal; ignored for loopback-only mode (Host must still be loopback).
+	// Compared against the direct Host header only — not X-Forwarded-Host
+	// (TrustedProxy residual; default false = ignore forwarded host).
 	AllowedHosts []string
 
 	// BearerToken, when non-empty, requires every request (including GET SSE)
@@ -130,12 +175,44 @@ type HTTPConfig struct {
 	// resolver returns empty. Never log resolver inputs (tokens).
 	IdentityResolver IdentityResolver
 
+	// ReadyCheck optionally reports whether gateway Obtain (or equivalent) is
+	// Ready for multi-user traffic (HOST-005). Used only by GET/HEAD /readyz
+	// (and {prefix}/readyz when PathPrefix is set). When nil, /readyz returns
+	// process-up {"status":"ok"} without gateway_ready (residual: provider
+	// probe not wired). When set and false → 503
+	// {"status":"not_ready","gateway_ready":false}. Must be secret-free.
+	ReadyCheck ReadyCheck
+
+	// ExpectedExternalSubject, when non-empty, requires every authenticated
+	// RequestIdentity.ExternalSubject to match exactly (HOST-001 / HOST-003).
+	// Used by single-process gateway foundation: HTTP lab/JWT subjects must
+	// equal the process-bound gateway subject so multi-subject HTTP cannot
+	// share one Obtain caller. Empty = no pin (stdio pilot / multi-user mode).
+	// Never log this value in errors. Compared trimmed exact match.
+	// When JENKINS_MCP_GATEWAY_MULTI_USER=1, serve leaves this empty and injects
+	// per-request Caller via AfterIdentity instead.
+	ExpectedExternalSubject string
+
+	// AfterIdentity optionally enriches the request context after a trusted
+	// RequestIdentity is established (HOST multi-user: inject gateway.Caller
+	// for Obtain and policy.Subject for deny-only RBAC rebind).
+	// Called only when id.Present(), after ContextWithIdentity. Must never log
+	// secrets. Nil = no-op (identity still stored via IdentityFromContext).
+	// Tool-layer multi-user is session-scoped: Connect(req.Context()) at session
+	// create preserves AfterIdentity Values for tool handlers (go-sdk v1.1.0).
+	// serve wires SubjectFromContext = PolicySubjectFromContext.
+	AfterIdentity func(ctx context.Context, id RequestIdentity) context.Context
+
 	// Logger receives start/stop messages. Default: log.Default().
 	Logger *log.Logger
 
 	// ShutdownTimeout bounds graceful shutdown after ctx cancel. Default 5s.
 	ShutdownTimeout time.Duration
 }
+
+// ReadyCheck reports process readiness for /readyz (HOST-005). Must not
+// return secrets, inventory, subjects, or token material — only a bool.
+type ReadyCheck func() bool
 
 // DefaultHTTPConfig returns safe defaults (loopback-only, 4 MiB body).
 func DefaultHTTPConfig() HTTPConfig {
@@ -194,11 +271,112 @@ func parseHTTPMaxBodyBytesValue(raw, source string) (int64, error) {
 	return v, nil
 }
 
+// ResolveHTTPPathPrefix resolves the optional Streamable HTTP path prefix
+// (HOST-002). Precedence: flagVal wins over envVal; empty at both → no prefix.
+// Invalid values fail closed (never clamp/silently rewrite beyond trailing-slash
+// normalization). See ValidateHTTPPathPrefix for rules.
+func ResolveHTTPPathPrefix(flagVal, envVal string) (string, error) {
+	raw := strings.TrimSpace(flagVal)
+	source := "flag --http-path-prefix"
+	if raw == "" {
+		raw = strings.TrimSpace(envVal)
+		source = "env " + EnvHTTPPathPrefix
+	}
+	if raw == "" {
+		return "", nil
+	}
+	norm, err := ValidateHTTPPathPrefix(raw)
+	if err != nil {
+		return "", apperr.New(apperr.CodeInvalidArgument,
+			"invalid http path prefix from "+source+": "+err.Error())
+	}
+	return norm, nil
+}
+
+// ValidateHTTPPathPrefix fails closed on unsafe reverse-proxy path prefixes
+// (HOST-002). Empty / whitespace → no prefix (""). Bare "/" is treated as no
+// prefix. Rules when non-empty after trim:
+//   - must start with "/"
+//   - must not contain "//"
+//   - must not contain ".." path segments (or a lone "..")
+//   - must not contain backslash or control characters
+//   - trailing slash is stripped (except when result would be empty → no prefix)
+//
+// Normalized form is returned (leading slash, no trailing slash).
+func ValidateHTTPPathPrefix(raw string) (string, error) {
+	p := strings.TrimSpace(raw)
+	if p == "" || p == "/" {
+		return "", nil
+	}
+	if !strings.HasPrefix(p, "/") {
+		return "", fmt.Errorf("must start with '/'")
+	}
+	if strings.Contains(p, "//") {
+		return "", fmt.Errorf("must not contain '//'")
+	}
+	if strings.Contains(p, "\\") {
+		return "", fmt.Errorf("must not contain backslash")
+	}
+	for _, r := range p {
+		if r < 0x20 || r == 0x7f {
+			return "", fmt.Errorf("must not contain control characters")
+		}
+	}
+	// Strip a single trailing slash for stable prefix matching.
+	for strings.HasSuffix(p, "/") && p != "/" {
+		p = strings.TrimSuffix(p, "/")
+	}
+	if p == "" || p == "/" {
+		return "", nil
+	}
+	// Reject "." / ".." path segments (and empty after split on accidental //).
+	parts := strings.Split(p, "/")
+	// First part is empty because p starts with "/".
+	for i, seg := range parts {
+		if i == 0 {
+			continue
+		}
+		if seg == "" {
+			return "", fmt.Errorf("must not contain empty path segments")
+		}
+		if seg == "." || seg == ".." {
+			return "", fmt.Errorf("must not contain '.' or '..' path segments")
+		}
+	}
+	return p, nil
+}
+
+// stripHTTPPathPrefix reports whether path is under prefix and returns the
+// residual path for the MCP handler. When prefix is empty, path is returned
+// unchanged. path == prefix → "/"; path == prefix+"/foo" → "/foo".
+// Non-boundary matches (e.g. prefix "/mcp" vs path "/mcpfoo") do not match.
+func stripHTTPPathPrefix(path, prefix string) (stripped string, ok bool) {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		if path == "" {
+			return "/", true
+		}
+		return path, true
+	}
+	if path == prefix {
+		return "/", true
+	}
+	if strings.HasPrefix(path, prefix+"/") {
+		rest := path[len(prefix):]
+		if rest == "" {
+			return "/", true
+		}
+		return rest, true
+	}
+	return "", false
+}
+
 // ValidateHTTPConfig fails closed on unsafe HTTP serve configuration.
 // AllowNonLocal requires non-empty AllowedOrigins and AllowedHosts so browser
 // Origin and Host are never "any host" by default (Wave 16 / Wave 35), and
 // always requires a non-empty BearerToken (non-loopback without a shared secret
 // is too open). RequireToken (CLI/env) forces the same secret check on loopback.
+// PathPrefix is validated (HOST-002).
 func ValidateHTTPConfig(cfg HTTPConfig) error {
 	if err := ValidateListenAddr(cfg.Addr, cfg.AllowNonLocal); err != nil {
 		return err
@@ -291,27 +469,70 @@ func NewHTTPHandler(server *mcp.Server, cfg HTTPConfig) (http.Handler, error) {
 	if server == nil {
 		return nil, apperr.New(apperr.CodeInternal, "mcp server is nil")
 	}
+	inner := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
+		return server
+	}, nil)
+	return NewHTTPProtectHandler(inner, cfg)
+}
+
+// NewHTTPProtectHandler applies the Streamable HTTP protect layer (shared-secret
+// transport gate, RequireSubject / LabIdentity / IdentityResolver, mid-session
+// fingerprint bind, AfterIdentity context enrichment, Host/Origin/body caps)
+// around an arbitrary inner handler.
+//
+// Production: NewHTTPHandler uses the MCP SDK Streamable HTTP handler as inner.
+// Multi-user contract tests may pass a mock that asserts IdentityFromContext /
+// gateway.CallerFromContext on r.Context() after AfterIdentity (HOST-001).
+//
+// Does not start a listener. Enforces the same validateHTTPHandlerPolicy rules
+// as NewHTTPHandler (no listen address required).
+//
+// tools/call multi-user e2e (multi_user_tools_call_test.go) proves session-scoped
+// Connect(req.Context()) Values reach tool handlers under NewHTTPHandler; this
+// API still proves protect→next-hop context flow with a mock inner.
+func NewHTTPProtectHandler(inner http.Handler, cfg HTTPConfig) (http.Handler, error) {
+	if inner == nil {
+		return nil, apperr.New(apperr.CodeInternal, "http protect inner handler is nil")
+	}
 	if err := validateHTTPHandlerPolicy(cfg); err != nil {
 		return nil, err
+	}
+	// Normalize PathPrefix (empty / bare "/" → none). Policy already validated.
+	pathPrefix, err := ValidateHTTPPathPrefix(cfg.PathPrefix)
+	if err != nil {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "invalid http path prefix: "+err.Error())
 	}
 	maxBody := cfg.MaxBodyBytes
 	if maxBody == 0 {
 		maxBody = DefaultMaxBodyBytes
 	}
-	inner := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
-		return server
-	}, nil)
-	return &protectHandler{
-		inner:            inner,
-		maxBody:          maxBody,
-		allowNonLocal:    cfg.AllowNonLocal,
-		allowedOrigins:   append([]string(nil), cfg.AllowedOrigins...),
-		allowedHosts:     append([]string(nil), cfg.AllowedHosts...),
-		bearerToken:      cfg.BearerToken,
-		requireSubject:   HTTPSubjectRequired(cfg),
-		labIdentity:      cfg.LabIdentity,
-		identityResolver: cfg.IdentityResolver,
-	}, nil
+	requireSubject := HTTPSubjectRequired(cfg)
+	h := &protectHandler{
+		inner:      inner,
+		maxBody:    maxBody,
+		pathPrefix: pathPrefix,
+		// HOST-002: store flag for residual clarity; Host/Origin/path never
+		// read X-Forwarded-* while trustedProxy is false (default) or while
+		// true remains unimplemented (fail closed — do not auto-trust).
+		trustedProxy:            cfg.TrustedProxy,
+		allowNonLocal:           cfg.AllowNonLocal,
+		allowedOrigins:          append([]string(nil), cfg.AllowedOrigins...),
+		allowedHosts:            append([]string(nil), cfg.AllowedHosts...),
+		bearerToken:             cfg.BearerToken,
+		requireSubject:          requireSubject,
+		labIdentity:             cfg.LabIdentity,
+		identityResolver:        cfg.IdentityResolver,
+		readyCheck:              cfg.ReadyCheck,
+		expectedExternalSubject: strings.TrimSpace(cfg.ExpectedExternalSubject),
+		afterIdentity:           cfg.AfterIdentity,
+	}
+	// HOST-001: session→fingerprint table only when subject is required
+	// (gateway / non-local / --http-require-subject). Pilot loopback without
+	// require-subject skips mid-session bind (KD-008 residual).
+	if requireSubject {
+		h.sessionBind = newSessionIdentityTable(DefaultMaxSessionIdentityBinds)
+	}
+	return h, nil
 }
 
 // validateHTTPHandlerPolicy is ValidateHTTPConfig without listen-address checks
@@ -324,6 +545,9 @@ func validateHTTPHandlerPolicy(cfg HTTPConfig) error {
 		return apperr.New(apperr.CodeInvalidArgument,
 			"http MaxBodyBytes exceeds absolute max "+strconv.FormatInt(AbsoluteMaxBodyBytes, 10)+" bytes (fail closed)")
 	}
+	if _, err := ValidateHTTPPathPrefix(cfg.PathPrefix); err != nil {
+		return apperr.New(apperr.CodeInvalidArgument, "invalid http path prefix: "+err.Error())
+	}
 	if cfg.AllowNonLocal {
 		if len(cfg.AllowedOrigins) == 0 {
 			return apperr.New(apperr.CodeInvalidArgument,
@@ -334,6 +558,11 @@ func validateHTTPHandlerPolicy(cfg HTTPConfig) error {
 			if o == "" {
 				return apperr.New(apperr.CodeInvalidArgument,
 					fmt.Sprintf("http allowed origin #%d is empty", i+1))
+			}
+			// HOST-002: never accept CORS-style wildcards (exact-match only).
+			if o == "*" || strings.Contains(o, "*") {
+				return apperr.New(apperr.CodeInvalidArgument,
+					fmt.Sprintf("http allowed origin %q must not use wildcards (exact-match only; no CORS *)", o))
 			}
 			if u, err := url.Parse(o); err != nil || u.Scheme == "" || u.Host == "" {
 				return apperr.New(apperr.CodeInvalidArgument,
@@ -426,8 +655,9 @@ func RunHTTP(ctx context.Context, server *mcp.Server, cfg HTTPConfig) error {
 	errCh := make(chan error, 1)
 	go func() {
 		// Never log BearerToken or access-token values — only bools.
-		logger.Printf("Starting MCP HTTP server on %s (loopback_enforced=%v max_body=%d http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v)",
-			ln.Addr().String(), !cfg.AllowNonLocal, effectiveMaxBody(cfg),
+		pathPrefix, _ := ValidateHTTPPathPrefix(cfg.PathPrefix)
+		logger.Printf("Starting MCP HTTP server on %s (loopback_enforced=%v max_body=%d path_prefix=%q http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v)",
+			ln.Addr().String(), !cfg.AllowNonLocal, effectiveMaxBody(cfg), pathPrefix,
 			HTTPTokenRequired(cfg), cfg.BearerToken != "",
 			HTTPSubjectRequired(cfg), cfg.LabIdentity)
 		errCh <- srv.Serve(ln)
@@ -459,10 +689,19 @@ func effectiveMaxBody(cfg HTTPConfig) int64 {
 }
 
 // protectHandler applies optional shared-secret, subject identity, body size,
-// Host, and Origin checks around the SDK handler (HOST-001 + KD-008).
+// Host, Origin, and path-prefix checks around the SDK handler
+// (HOST-001 + HOST-002 + KD-008).
+//
+// HOST-002 TrustedProxy residual: X-Forwarded-Host / X-Forwarded-Prefix /
+// X-Forwarded-For / X-Forwarded-Proto are never consulted for auth or path
+// decisions while trustedProxy is false (default) or true-but-unimplemented.
 type protectHandler struct {
-	inner            http.Handler
-	maxBody          int64
+	inner      http.Handler
+	maxBody    int64
+	pathPrefix string // normalized; empty = no prefix (MCP at root path space)
+	// trustedProxy residual: when false (default), ignore X-Forwarded-* for
+	// Host/Origin/path. When true, still ignored until residual lands.
+	trustedProxy     bool
 	allowNonLocal    bool
 	allowedOrigins   []string
 	allowedHosts     []string
@@ -470,6 +709,15 @@ type protectHandler struct {
 	requireSubject   bool
 	labIdentity      bool
 	identityResolver IdentityResolver
+	// sessionBind is non-nil when requireSubject: maps Mcp-Session-Id to
+	// IdentityFingerprint (mid-session subject swap → 401).
+	sessionBind *sessionIdentityTable
+	readyCheck  ReadyCheck
+	// expectedExternalSubject pins HTTP identity to process-bound subject
+	// (gateway single-caller foundation). Empty = no pin (multi-user).
+	expectedExternalSubject string
+	// afterIdentity optional context enrichment after trusted identity (multi-user).
+	afterIdentity func(ctx context.Context, id RequestIdentity) context.Context
 }
 
 func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -479,10 +727,22 @@ func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Secret-free health/ready: no shared secret, no subject, no tool inventory.
-	// Exact path only (HOST-001 / HOST-002 residual for broader probe matrix).
-	if isHealthPath(r.URL.Path) && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
-		writeHealthOK(w)
+	// Exact path only at root, and at {prefix}/healthz|{prefix}/readyz when a
+	// path prefix is configured (HOST-001 / HOST-002 / HOST-005).
+	if h.tryHealth(w, r) {
 		return
+	}
+
+	// HOST-002: when PathPrefix is set, MCP routes live only under that prefix.
+	// Strip before Origin/Host/token/SDK so handlers see root-relative paths.
+	// Non-prefix non-health paths → 404 (do not fall through to SDK at "/").
+	if h.pathPrefix != "" {
+		stripped, ok := stripHTTPPathPrefix(r.URL.Path, h.pathPrefix)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		r = cloneRequestWithPath(r, stripped)
 	}
 
 	// Optional shared-secret gate (KD-008 lite / transport only). Fail closed
@@ -511,19 +771,54 @@ func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			unauthorizedIdentity(w)
 			return
 		}
+		// Single-process gateway pin: HTTP subject must match bound Obtain caller.
+		// Fail closed on mismatch so multi-lab/JWT subjects cannot share one vault entry.
+		if reqID.Present() && h.expectedExternalSubject != "" {
+			if strings.TrimSpace(reqID.ExternalSubject) != h.expectedExternalSubject {
+				unauthorizedIdentity(w)
+				return
+			}
+		}
+		// Mid-session subject rebind: when RequireSubject and Mcp-Session-Id is
+		// present, first Present identity establishes fingerprint; mismatch → 401.
+		// Health paths never reach here. No session id (initialize) skips bind.
+		if h.requireSubject && reqID.Present() && h.sessionBind != nil {
+			sid := strings.TrimSpace(r.Header.Get(HeaderMCPSessionID))
+			if sid != "" {
+				if err := h.sessionBind.BindOrCheck(sid, IdentityFingerprint(reqID)); err != nil {
+					unauthorizedIdentity(w)
+					return
+				}
+			}
+		}
 		if reqID.Present() {
-			r = r.WithContext(ContextWithIdentity(r.Context(), reqID))
+			ctx := ContextWithIdentity(r.Context(), reqID)
+			if h.afterIdentity != nil {
+				if next := h.afterIdentity(ctx, reqID); next != nil {
+					ctx = next
+				}
+			}
+			r = r.WithContext(ctx)
 		}
 	}
 
+	// HOST-002 TrustedProxy residual: even when the flag is true, do not
+	// promote X-Forwarded-Host / X-Forwarded-Prefix into auth decisions.
+	// Default false is the only shipped behavior; true is reserved and
+	// fail-closed (no auto-trust of client-controlled forwarded headers).
+	// Reference the field so residual config is retained on the handler.
+	_ = h.trustedProxy
+
 	// Host check: when loopback-only, reject Host headers that point off-box
 	// (DNS rebinding). When AllowNonLocal, Host hostname must match AllowedHosts.
+	// Uses direct Host only — never X-Forwarded-Host.
 	if err := checkRequestHost(r, h.allowNonLocal, h.allowedHosts); err != nil {
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 
 	// Origin check for non-GET (POST/DELETE carry session/mutation semantics).
+	// Uses Origin header only — never X-Forwarded-*.
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		if err := checkOrigin(r, h.allowedOrigins, h.allowNonLocal); err != nil {
 			http.Error(w, err.Error(), http.StatusForbidden)
@@ -544,6 +839,64 @@ func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.inner.ServeHTTP(w, r)
+}
+
+// tryHealth handles secret-free GET/HEAD /healthz and /readyz at root, and
+// under PathPrefix when configured. Returns true when the request was handled.
+func (h *protectHandler) tryHealth(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	path := ""
+	if r.URL != nil {
+		path = r.URL.Path
+	}
+	// Root health always available (probe-friendly even when MCP is mounted
+	// under a reverse-proxy path prefix).
+	if isHealthPath(path) {
+		if path == ReadyzPath {
+			writeReadyz(w, h.readyCheck)
+			return true
+		}
+		writeHealthOK(w)
+		return true
+	}
+	// Prefixed health: {prefix}/healthz and {prefix}/readyz (HOST-002).
+	if h.pathPrefix != "" {
+		stripped, ok := stripHTTPPathPrefix(path, h.pathPrefix)
+		if ok && isHealthPath(stripped) {
+			if stripped == ReadyzPath {
+				writeReadyz(w, h.readyCheck)
+				return true
+			}
+			writeHealthOK(w)
+			return true
+		}
+	}
+	return false
+}
+
+// cloneRequestWithPath returns a shallow clone of r with URL.Path set to path.
+// Host, headers, body, and context are preserved. Used after path-prefix strip
+// so the SDK and protect checks see root-relative paths.
+func cloneRequestWithPath(r *http.Request, path string) *http.Request {
+	if r == nil {
+		return r
+	}
+	if path == "" {
+		path = "/"
+	}
+	r2 := r.Clone(r.Context())
+	if r2.URL == nil {
+		r2.URL = &url.URL{Path: path}
+		return r2
+	}
+	u := *r2.URL
+	u.Path = path
+	// RawPath is a hint for escaped forms; clear so Path is authoritative.
+	u.RawPath = ""
+	r2.URL = &u
+	return r2
 }
 
 // requestHasValidToken reports whether r presents the shared secret via
@@ -583,6 +936,10 @@ func bearerFromAuthorization(h string) string {
 }
 
 func checkRequestHost(r *http.Request, allowNonLocal bool, allowedHosts []string) error {
+	// HOST-002 TrustedProxy residual: use only the direct Host header (or
+	// URL.Host fallback). Never substitute X-Forwarded-Host / Forwarded —
+	// client-controlled forwarded hosts must not pass DNS-rebinding checks.
+	// TrustedProxy=true does not change this until residual trust lands.
 	host := r.Host
 	if host == "" && r.URL != nil {
 		host = r.URL.Host
@@ -643,6 +1000,9 @@ func hostInAllowList(hostname string, allowed []string) bool {
 }
 
 func checkOrigin(r *http.Request, allowed []string, allowNonLocal bool) error {
+	// HOST-002 TrustedProxy residual: exact-match the Origin header only.
+	// Never derive allowed origin from X-Forwarded-Host / X-Forwarded-Proto
+	// (client-controlled; fail closed). PathPrefix does not affect Origin.
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
 	if origin == "" {
 		// Non-browser clients (curl, MCP SDK) often omit Origin — allow.

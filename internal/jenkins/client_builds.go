@@ -12,7 +12,7 @@ import (
 
 // getBuildDetails fetches detailed information about a specific build URL.
 func (opts *Client) GetBuildDetails(ctx context.Context, buildURL string) (*Build, error) {
-	apiURL := strings.TrimRight(buildURL, "/") + "/api/json?tree=number,url,building,result,timestamp,duration,estimatedDuration,displayName,actions[_class,parameters[name,value]]"
+	apiURL := strings.TrimRight(buildURL, "/") + "/api/json?tree=number,url,building,result,timestamp,duration,estimatedDuration,displayName,keepLog,actions[_class,parameters[name,value]]"
 	resp, err := opts.CallJenkins(ctx, opts.Client, http.MethodGet, apiURL, nil, nil)
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func (opts *Client) GetBuildDetails(ctx context.Context, buildURL string) (*Buil
 // getBuildDetailsByJob fetches detailed information about a specific build by job path and build number.
 func (opts *Client) GetBuildDetailsByJob(ctx context.Context, jobName string, buildNumber int) (*Build, error) {
 	jobPath := BuildJobPath(jobName)
-	apiPath := fmt.Sprintf("%s/%d/api/json?tree=number,url,building,result,timestamp,duration,estimatedDuration,displayName,actions[_class,parameters[name,value]]", jobPath, buildNumber)
+	apiPath := fmt.Sprintf("%s/%d/api/json?tree=number,url,building,result,timestamp,duration,estimatedDuration,displayName,keepLog,actions[_class,parameters[name,value]]", jobPath, buildNumber)
 	resp, err := opts.CallJenkins(ctx, opts.Client, http.MethodGet, apiPath, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
@@ -148,7 +148,8 @@ func (opts *Client) GetRunningBuilds(ctx context.Context) ([]RunningBuild, error
 // getQueuedBuilds fetches queued builds from Jenkins queue API
 func (opts *Client) GetQueuedBuilds(ctx context.Context) ([]QueuedBuild, error) {
 	client := opts.Client
-	resp, err := opts.CallJenkins(ctx, client, http.MethodGet, "/queue/api/json?tree=items[id,task[name,url],why,inQueueSince,stuck,buildable,params]", nil, nil)
+	// fullName preferred when present; url is required for folder-safe matching (MUT-016).
+	resp, err := opts.CallJenkins(ctx, client, http.MethodGet, "/queue/api/json?tree=items[id,task[name,url,fullName],why,inQueueSince,stuck,buildable,params]", nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -162,8 +163,9 @@ func (opts *Client) GetQueuedBuilds(ctx context.Context) ([]QueuedBuild, error) 
 		Items []struct {
 			ID   int `json:"id"`
 			Task struct {
-				Name string `json:"name"`
-				URL  string `json:"url"`
+				Name     string `json:"name"`
+				URL      string `json:"url"`
+				FullName string `json:"fullName"`
 			} `json:"task"`
 			Why          string `json:"why"`
 			InQueueSince int64  `json:"inQueueSince"`
@@ -178,8 +180,22 @@ func (opts *Client) GetQueuedBuilds(ctx context.Context) ([]QueuedBuild, error) 
 
 	queued := make([]QueuedBuild, 0, len(queueResp.Items))
 	for _, it := range queueResp.Items {
+		// Prefer fullName; else derive folder/job path from task URL; never use short
+		// name alone for JobName when URL yields a multi-segment path.
+		full := strings.TrimSpace(it.Task.FullName)
+		if full == "" {
+			full = FullNameFromJobURL(it.Task.URL)
+		}
+		// Normalize Jenkins UI separators if any.
+		full = strings.ReplaceAll(full, " » ", "/")
+		if full == "" {
+			// Ambiguous: short name only, no usable URL path — leave JobName empty
+			// so folder-scoped cancel fails closed (does not match).
+			full = ""
+		}
 		qb := QueuedBuild{
-			JobName:     it.Task.Name,
+			JobName:     full,
+			TaskName:    strings.TrimSpace(it.Task.Name),
 			URL:         it.Task.URL,
 			QueueID:     it.ID,
 			Why:         it.Why,

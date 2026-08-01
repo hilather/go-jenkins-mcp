@@ -290,7 +290,7 @@ func runMirrorLogs(ctx context.Context, client *jenkins.Client, st regState, acq
 				seedOK = false
 				discoveryNotes = append(discoveryNotes,
 					"related discovery skipped: primary denied by MCP policy")
-			} else if err := policy.CheckStoreRead(ctx, st.policy, st.subject, seed.Job); err != nil {
+			} else if err := policy.CheckStoreRead(ctx, st.policy, effectiveSubject(st, ctx), seed.Job); err != nil {
 				seedOK = false
 				discoveryNotes = append(discoveryNotes,
 					"related discovery skipped: primary denied by store policy")
@@ -352,7 +352,7 @@ func runMirrorLogs(ctx context.Context, client *jenkins.Client, st regState, acq
 			continue
 		}
 		// POL-004: CheckStoreRead before serving/writing via mirror path.
-		if err := policy.CheckStoreRead(ctx, st.policy, st.subject, r.Job); err != nil {
+		if err := policy.CheckStoreRead(ctx, st.policy, effectiveSubject(st, ctx), r.Job); err != nil {
 			code := string(apperr.CodeOf(err))
 			if code == "" {
 				code = string(apperr.CodePolicyDenial)
@@ -446,7 +446,7 @@ func evaluateMirrorLogJobPolicy(ctx context.Context, st regState, job string, bu
 		target.BuildNumber = build
 	}
 	d := st.policy.Evaluate(
-		st.subject,
+		effectiveSubject(st, ctx),
 		policy.Action{ToolName: ToolMirrorLogs, Class: policy.EffectRead},
 		target,
 	)

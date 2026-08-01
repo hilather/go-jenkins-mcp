@@ -12,6 +12,10 @@ export const PREFERRED_METRIC_KEYS = [
   "mcp_tool_ok",
   "mcp_tool_error",
   "mcp_tool_deny",
+  // HOST-006 / OBS residual lite — process-local subject rate/slot CodeQuota
+  // (never subject keys as series labels).
+  "mcp_subject_rate_quota",
+  "mcp_subject_slot_quota",
   "http_requests",
   "http_errors",
   "http_bytes_in",

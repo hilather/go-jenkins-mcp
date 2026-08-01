@@ -49,10 +49,13 @@ func TestRedactionCanary_NoSecretsInEvent(t *testing.T) {
 		Type:        audit.TypeLoginFail,
 		ProfileID:   "corp",
 		PrincipalID: "alice",
-		Tool:        "jenkins_get_build_logs",
-		Action:      "login",
-		Decision:    audit.DecisionFail,
-		ReasonCode:  "auth_failed",
+		// Multi-user correlation fields: never store tokens/vault material.
+		ExternalSubject: "Bearer " + canary,
+		SubjectKeyHash:  "tid|" + canary + "|corp",
+		Tool:            "jenkins_get_build_logs",
+		Action:          "login",
+		Decision:        audit.DecisionFail,
+		ReasonCode:      "auth_failed",
 		// Misconfigured caller might try to put a token in RequestID / PrincipalID.
 		RequestID: "Bearer " + canary,
 	})
@@ -80,6 +83,82 @@ func TestRedactionCanary_NoSecretsInEvent(t *testing.T) {
 		if strings.Contains(body, `"`+banned+`"`) {
 			t.Fatalf("unexpected content field %q in %s", banned, body)
 		}
+	}
+	// Raw subject key (tenant|subject|profile) must never appear; only opaque hash.
+	if strings.Contains(body, "tid|") || strings.Contains(evs[0].SubjectKeyHash, "|") {
+		t.Fatalf("raw subject key leaked: %s", body)
+	}
+}
+
+func TestExternalSubjectClipped(t *testing.T) {
+	t.Parallel()
+	// maxIDLen = 128 runes; oversize ExternalSubject must be clipped (not full store).
+	long := strings.Repeat("x", 200)
+	m := &audit.Memory{}
+	if err := m.Emit(context.Background(), audit.Event{
+		Type:            audit.TypeToolDeny,
+		ExternalSubject: long,
+		Decision:        audit.DecisionDeny,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got := m.Events()[0].ExternalSubject
+	if got == long {
+		t.Fatal("ExternalSubject must be length-capped")
+	}
+	if n := len([]rune(got)); n > 128 {
+		t.Fatalf("ExternalSubject rune len=%d want <=128", n)
+	}
+	if got == "" {
+		t.Fatal("expected non-empty clipped ExternalSubject")
+	}
+}
+
+func TestSubjectKeyHashStableAndOpaque(t *testing.T) {
+	t.Parallel()
+	const sk = "tenant-a|alice-sub|corp"
+	want := audit.HashOpaque(sk)
+	if want == "" || strings.Contains(want, "|") || strings.Contains(want, "alice") {
+		t.Fatalf("HashOpaque not opaque: %q", want)
+	}
+	m := &audit.Memory{}
+	ctx := context.Background()
+	// Preferred path: caller already hashed.
+	if err := m.Emit(ctx, audit.Event{
+		Type:           audit.TypeToolDeny,
+		SubjectKeyHash: want,
+		Decision:       audit.DecisionDeny,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Misconfigured path: raw subject key → re-hashed to same HashOpaque value.
+	if err := m.Emit(ctx, audit.Event{
+		Type:           audit.TypeToolDeny,
+		SubjectKeyHash: sk,
+		Decision:       audit.DecisionDeny,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	evs := m.Events()
+	if len(evs) != 2 {
+		t.Fatalf("len=%d", len(evs))
+	}
+	if evs[0].SubjectKeyHash != want {
+		t.Fatalf("pre-hashed preserved: got %q want %q", evs[0].SubjectKeyHash, want)
+	}
+	if evs[1].SubjectKeyHash != want {
+		t.Fatalf("raw key re-hash stable: got %q want %q", evs[1].SubjectKeyHash, want)
+	}
+	// Second emit of same pre-hash is stable.
+	if err := m.Emit(ctx, audit.Event{
+		Type:           audit.TypeToolDeny,
+		SubjectKeyHash: want,
+		Decision:       audit.DecisionDeny,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if m.Events()[2].SubjectKeyHash != want {
+		t.Fatal("SubjectKeyHash not stable across emits")
 	}
 }
 

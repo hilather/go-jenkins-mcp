@@ -5,5 +5,9 @@
 // Authorization headers. Prefer tool names, decision codes, hashed targets,
 // and byte/duration counters over free-form payloads.
 //
+// Multi-user correlation foundation: optional ExternalSubject (IdP label) and
+// SubjectKeyHash (HashOpaque of tenant|subject|profile). Never store raw
+// subject keys or vault material. Multi-pod audit aggregation remains residual.
+//
 // Audit emit failures are best-effort and never authorize mutations.
 package audit

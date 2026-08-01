@@ -138,7 +138,8 @@ JWT-shaped access tokens; **opaque** tokens skip JWT parse and bind via whoAmI.
 |-----|--------|
 | Claim matrix + residuals | [auth/oauth-003-claim-validation.md](auth/oauth-003-claim-validation.md) |
 | Groups caps (OAUTH-006 light) | `MaxStoredGroups=64`, `MaxGroupNameBytes=256` |
-| Still residual | Live jwt-auth-filter lab / bearer RS pin — **OAUTH-005 / OAUTH-009** (offline classifier `Done*` Wave 33; production pin still residual) |
+| Entra group overage (OAUTH-006 foundation Done\*) | `_claim_names`/`_claim_sources` or groups-as-ref without full `groups` array → fail closed (`CheckIncompleteGroupOverage`); hybrid concrete groups OK; no Graph expansion (OAUTH-010 residual) |
+| Still residual | Live jwt-auth-filter lab / bearer RS pin — **OAUTH-005 / OAUTH-009** (offline classifier `Done*` Wave 33; production pin still residual); Graph group expansion — **OAUTH-010** |
 
 ### Wave 15 cross-process session invalidation (landed)
 

@@ -24,8 +24,17 @@ const (
 	// EnvPolicyRequiredVar when truthy (1/true/yes/on) fails closed if the
 	// resolved policy file is missing. Invalid/unreadable present files always
 	// fail closed regardless of this flag. Also rejects unsigned overlays when
-	// set (production-style enforcement even without trusted keys staging).
+	// set (production-style enforcement even without trusted keys staging —
+	// RequiringSignatureVerifier field-presence check only).
 	EnvPolicyRequiredVar = "JENKINS_MCP_POLICY_REQUIRED"
+
+	// EnvRequireSignedPolicyVar when truthy (1/true/yes/on) requires a
+	// cryptographically signed policy bundle with trusted public keys
+	// (Ed25519). Stronger than POLICY_REQUIRED: fails closed if no trusted
+	// keys are configured (staging stub is not accepted). Intended for
+	// enterprise gateway hosts / force-off pin (MGR-001 residual lite).
+	// Alias intent: refuse unsigned force-off residual paths at serve load.
+	EnvRequireSignedPolicyVar = "JENKINS_MCP_REQUIRE_SIGNED_POLICY"
 )
 
 // PolicyMode controls default-allow vs default-deny for tools (POL-002).
@@ -56,7 +65,10 @@ const (
 //	  "deny_view_names": ["secret-view"],
 //	  "deny_artifact_paths": ["secrets/**", "*.pem"],
 //	  "deny_branch_names": ["release/*", "main"],
-//	  "max_result_bytes": 65536
+//	  "max_result_bytes": 65536,
+//	  "max_tools_per_minute": 15,
+//	  "max_tools_burst": 5,
+//	  "fleet_telemetry_force_off": true
 //	}
 type Overlay struct {
 	// Version is the schema version (required; must equal CurrentOverlayVersion).
@@ -66,12 +78,29 @@ type Overlay struct {
 	// or weaker CLI flags (wired into ReadOnlyGate via EnterpriseForce).
 	ForceReadOnly bool `json:"force_read_only"`
 
+	// FleetTelemetryForceOff when true forces fleet health telemetry off for this
+	// process regardless of JENKINS_MCP_TELEMETRY (MGR-002). Fail-closed lower-only
+	// pin: never elevates enablement. Env cannot re-enable while true; clearing to
+	// false on hot-reload re-allows env enable for a live collector that was
+	// force-off'd mid-session. Secret-free boolean only.
+	FleetTelemetryForceOff bool `json:"fleet_telemetry_force_off"`
+
 	// Mode is "pilot" (default) or "strict". Unknown values fail closed at load.
 	Mode PolicyMode `json:"mode,omitempty"`
 
 	// DenyTools is an optional explicit deny list of MCP tool names.
 	// Matching is exact on the registered tool name (case-sensitive).
 	DenyTools []string `json:"deny_tools,omitempty"`
+
+	// AllowMutationTools (MUT-017): when non-empty and mutations are enabled,
+	// only these mutation tools register. Empty = all classified mutations.
+	AllowMutationTools []string `json:"allow_mutation_tools,omitempty"`
+	// AllowInterruptModes (MUT-017): when non-empty, only these interrupt modes
+	// (stop|term|kill) are allowed for jenkins_interrupt_build.
+	AllowInterruptModes []string `json:"allow_interrupt_modes,omitempty"`
+	// AllowMutationJobPrefixes (MUT-017): when non-empty, mutation targets must
+	// match at least one job full-name prefix.
+	AllowMutationJobPrefixes []string `json:"allow_mutation_job_prefixes,omitempty"`
 
 	// DenyJobPrefixes is an optional list of job full names / folder patterns
 	// denied at call time when tool args include job_name (POL-004 lite).
@@ -117,6 +146,15 @@ type Overlay struct {
 	// MaxResultBytes when set is an upper bound that can only lower the
 	// process hard max (never raise server limits). nil means no overlay cap.
 	MaxResultBytes *int `json:"max_result_bytes,omitempty"`
+
+	// MaxToolsPerMinute when set is an upper bound that can only lower the
+	// serve-bootstrap per-subject tool rate (HOST-006; gateway.SubjectRateLimiter.LowerRate).
+	// Never raises rate. nil / omitted means no overlay rate cap (env/bootstrap unchanged).
+	MaxToolsPerMinute *int `json:"max_tools_per_minute,omitempty"`
+
+	// MaxToolsBurst when set can only lower per-subject token-bucket burst
+	// (HOST-006 LowerRate). nil / omitted means no overlay burst cap.
+	MaxToolsBurst *int `json:"max_tools_burst,omitempty"`
 
 	// Signature is a legacy stub field on plain overlays (CFG-002 pilot).
 	// Signed production bundles use BundleEnvelope.Signature instead; this
@@ -318,6 +356,16 @@ func (o *Overlay) Validate() error {
 			return apperr.New(apperr.CodeInvalidArgument, "max_result_bytes must be positive when set")
 		}
 	}
+	if o.MaxToolsPerMinute != nil {
+		if *o.MaxToolsPerMinute <= 0 {
+			return apperr.New(apperr.CodeInvalidArgument, "max_tools_per_minute must be positive when set")
+		}
+	}
+	if o.MaxToolsBurst != nil {
+		if *o.MaxToolsBurst <= 0 {
+			return apperr.New(apperr.CodeInvalidArgument, "max_tools_burst must be positive when set")
+		}
+	}
 	return nil
 }
 
@@ -445,6 +493,7 @@ func LoadOverlay(opts LoadOptions) (LoadResult, error) {
 // DefaultVerifierFromEnviron builds the production/pilot verifier for LoadFromEnviron.
 //
 //	trusted keys present → Ed25519SignatureVerifier (RequireSigned=true)
+//	REQUIRE_SIGNED_POLICY without keys → error (fail closed; no staging stub)
 //	POLICY_REQUIRED without keys → RequiringSignatureVerifier (staging)
 //	else → NopSignatureVerifier (pilot)
 func DefaultVerifierFromEnviron(opts LoadOptions) (SignatureVerifier, error) {
@@ -456,7 +505,16 @@ func DefaultVerifierFromEnviron(opts LoadOptions) (SignatureVerifier, error) {
 			return nil, err
 		}
 	}
-	required := opts.Required || policyRequiredFromEnv()
+	requireSigned := requireSignedPolicyFromEnv()
+	required := opts.Required || policyRequiredFromEnv() || requireSigned
+	if requireSigned && keys.Len() == 0 {
+		// MGR-001 residual lite: enterprise gateway hosts must pin real Ed25519
+		// verification — field-presence staging is not force-off safe.
+		return nil, apperr.New(apperr.CodePolicyDenial,
+			"JENKINS_MCP_REQUIRE_SIGNED_POLICY=1 requires trusted public keys "+
+				"(set JENKINS_MCP_POLICY_TRUSTED_KEYS or policy/trusted_keys/); "+
+				"unsigned pilot overlays and staging stub signatures are rejected")
+	}
 	if keys.Len() > 0 {
 		var cache *LastGoodCache
 		if !opts.SkipLastGood {
@@ -486,8 +544,9 @@ func DefaultVerifierFromEnviron(opts LoadOptions) (SignatureVerifier, error) {
 // When trusted public keys are present, Ed25519 verification is enforced and
 // unsigned plain overlays are rejected. When no keys are configured, pilot
 // NopSignatureVerifier is used (signature_state=unverified_pilot).
+// JENKINS_MCP_REQUIRE_SIGNED_POLICY=1 fails closed without trusted keys.
 func LoadFromEnviron() (LoadResult, error) {
-	opts := LoadOptions{Required: policyRequiredFromEnv()}
+	opts := LoadOptions{Required: policyRequiredFromEnv() || requireSignedPolicyFromEnv()}
 	v, err := DefaultVerifierFromEnviron(opts)
 	if err != nil {
 		return LoadResult{}, err
@@ -498,6 +557,10 @@ func LoadFromEnviron() (LoadResult, error) {
 
 func policyRequiredFromEnv() bool {
 	return ParseEnvReadOnly(os.Getenv(EnvPolicyRequiredVar)) // same truthy parser
+}
+
+func requireSignedPolicyFromEnv() bool {
+	return ParseEnvReadOnly(os.Getenv(EnvRequireSignedPolicyVar))
 }
 
 // sanitizePath returns a base-only path for model-visible errors when possible.
@@ -516,6 +579,24 @@ func (o *Overlay) EffectiveMaxResultBytes() (int, bool) {
 		return 0, false
 	}
 	return *o.MaxResultBytes, true
+}
+
+// EffectiveMaxToolsPerMinute returns the overlay per-subject tools/min cap when
+// set and positive (HOST-006; serve applies via SubjectRateLimiter.LowerRate only).
+func (o *Overlay) EffectiveMaxToolsPerMinute() (int, bool) {
+	if o == nil || o.MaxToolsPerMinute == nil || *o.MaxToolsPerMinute <= 0 {
+		return 0, false
+	}
+	return *o.MaxToolsPerMinute, true
+}
+
+// EffectiveMaxToolsBurst returns the overlay per-subject burst cap when set and
+// positive (HOST-006 LowerRate only).
+func (o *Overlay) EffectiveMaxToolsBurst() (int, bool) {
+	if o == nil || o.MaxToolsBurst == nil || *o.MaxToolsBurst <= 0 {
+		return 0, false
+	}
+	return *o.MaxToolsBurst, true
 }
 
 // DenyToolSet returns a set of denied tool names for O(1) lookup.
@@ -590,6 +671,7 @@ func (r LoadResult) StatusMap() map[string]any {
 	if r.Overlay != nil {
 		m["policy_version"] = r.Overlay.Version
 		m["force_read_only"] = r.Overlay.ForceReadOnly
+		m["fleet_telemetry_force_off"] = r.Overlay.FleetTelemetryForceOff
 		m["mode"] = string(r.Overlay.NormalizeMode())
 		m["deny_tools_count"] = len(r.Overlay.DenyTools)
 		m["deny_job_prefixes_count"] = len(r.Overlay.DenyJobPrefixes)
@@ -599,6 +681,12 @@ func (r LoadResult) StatusMap() map[string]any {
 		m["deny_branch_names_count"] = len(r.Overlay.DenyBranchNames)
 		if n, ok := r.Overlay.EffectiveMaxResultBytes(); ok {
 			m["max_result_bytes"] = n
+		}
+		if n, ok := r.Overlay.EffectiveMaxToolsPerMinute(); ok {
+			m["max_tools_per_minute"] = n
+		}
+		if n, ok := r.Overlay.EffectiveMaxToolsBurst(); ok {
+			m["max_tools_burst"] = n
 		}
 	}
 	if r.BundleSeq > 0 {
@@ -616,24 +704,27 @@ func (r LoadResult) StatusMap() map[string]any {
 // EffectivePolicyExplain is a secret-free explanation of loaded policy for CLI
 // show-effective (MGR-001). Never includes signature bytes or key material.
 type EffectivePolicyExplain struct {
-	ProfileID         string         `json:"profile_id,omitempty"`
-	PolicyPresent     bool           `json:"policy_present"`
-	PolicyPathBase    string         `json:"policy_path_base,omitempty"`
-	SignatureState    string         `json:"signature_state"`
-	ForceReadOnly     bool           `json:"force_read_only"`
-	Mode              string         `json:"mode,omitempty"`
-	DenyTools         []string       `json:"deny_tools,omitempty"`
-	DenyJobPrefixes   []string       `json:"deny_job_prefixes,omitempty"`
-	DenyNodeNames     []string       `json:"deny_node_names,omitempty"`
-	DenyViewNames     []string       `json:"deny_view_names,omitempty"`
-	DenyArtifactPaths []string       `json:"deny_artifact_paths,omitempty"`
-	DenyBranchNames   []string       `json:"deny_branch_names,omitempty"`
-	MaxResultBytes    *int           `json:"max_result_bytes,omitempty"`
-	BundleSeq         int64          `json:"bundle_seq,omitempty"`
-	KeyID             string         `json:"key_id,omitempty"`
-	ContentHash       string         `json:"content_hash,omitempty"`
-	ReadOnly          map[string]any `json:"read_only,omitempty"`
-	Notes             []string       `json:"notes,omitempty"`
+	ProfileID              string         `json:"profile_id,omitempty"`
+	PolicyPresent          bool           `json:"policy_present"`
+	PolicyPathBase         string         `json:"policy_path_base,omitempty"`
+	SignatureState         string         `json:"signature_state"`
+	ForceReadOnly          bool           `json:"force_read_only"`
+	FleetTelemetryForceOff bool           `json:"fleet_telemetry_force_off"`
+	Mode                   string         `json:"mode,omitempty"`
+	DenyTools              []string       `json:"deny_tools,omitempty"`
+	DenyJobPrefixes        []string       `json:"deny_job_prefixes,omitempty"`
+	DenyNodeNames          []string       `json:"deny_node_names,omitempty"`
+	DenyViewNames          []string       `json:"deny_view_names,omitempty"`
+	DenyArtifactPaths      []string       `json:"deny_artifact_paths,omitempty"`
+	DenyBranchNames        []string       `json:"deny_branch_names,omitempty"`
+	MaxResultBytes         *int           `json:"max_result_bytes,omitempty"`
+	MaxToolsPerMinute      *int           `json:"max_tools_per_minute,omitempty"`
+	MaxToolsBurst          *int           `json:"max_tools_burst,omitempty"`
+	BundleSeq              int64          `json:"bundle_seq,omitempty"`
+	KeyID                  string         `json:"key_id,omitempty"`
+	ContentHash            string         `json:"content_hash,omitempty"`
+	ReadOnly               map[string]any `json:"read_only,omitempty"`
+	Notes                  []string       `json:"notes,omitempty"`
 }
 
 // ExplainEffective builds EffectivePolicyExplain from a load result + RO gate inputs.
@@ -649,6 +740,7 @@ func ExplainEffective(profileID string, res LoadResult, ro Inputs) EffectivePoli
 	}
 	if res.Overlay != nil {
 		ex.ForceReadOnly = res.Overlay.ForceReadOnly
+		ex.FleetTelemetryForceOff = res.Overlay.FleetTelemetryForceOff
 		ex.Mode = string(res.Overlay.NormalizeMode())
 		if len(res.Overlay.DenyTools) > 0 {
 			ex.DenyTools = append([]string(nil), res.Overlay.DenyTools...)
@@ -670,6 +762,12 @@ func ExplainEffective(profileID string, res LoadResult, ro Inputs) EffectivePoli
 		}
 		if n, ok := res.Overlay.EffectiveMaxResultBytes(); ok {
 			ex.MaxResultBytes = &n
+		}
+		if n, ok := res.Overlay.EffectiveMaxToolsPerMinute(); ok {
+			ex.MaxToolsPerMinute = &n
+		}
+		if n, ok := res.Overlay.EffectiveMaxToolsBurst(); ok {
+			ex.MaxToolsBurst = &n
 		}
 	}
 	st := ComputeEffectiveReadOnly(ro)

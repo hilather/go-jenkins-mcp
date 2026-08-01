@@ -1,9 +1,10 @@
 # jwt-auth-filter qualification (OAUTH-009)
 
-**Status:** Offline classifier matrix `Done*` (Wave 33 expand); **live Jenkins lab residual** for production pin  
-**Related:** [oauth-capability-matrix.md](oauth-capability-matrix.md), [auth-architecture.md](../auth-architecture.md), architecture §6.8  
-**Code:** `internal/auth/rs_qualification.go` (+ `rs_fallthrough.go`, `rs_jwks_contract.go`, `rs_inventory.go`, `rs_prm.go`); `go test ./internal/auth -run 'RS|Fallthrough|JWKSOutage|RequiredMCP|ProtectedResource|Classify|OfflineFallthrough'`  
-**CLI:** `jenkins-mcp oauth probe-rs --profile <id> [--offline]` · doctor check `rs_auth` · `jenkins-mcp security self-check` item `rs_qualification`
+**Status:** Offline classifier + Bearer claim matrix `Done*` (Wave 33 + OAUTH-009 expand); **live Jenkins / Entra / jwt-auth-filter lab residual** for production pin — **do not claim live Entra Done**  
+**Related:** [oauth-capability-matrix.md](oauth-capability-matrix.md), [auth-architecture.md](../auth-architecture.md), [../gateway/qualification.md](../gateway/qualification.md) (GWY-003), **[../gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md)** (consolidated live production GO residual), architecture §6.8  
+**Code:** `internal/auth/rs_qualification.go` (+ `rs_fallthrough.go`, `rs_jwks_contract.go`, `rs_inventory.go`, `rs_prm.go`); `internal/gateway/oauth009_offline_test.go`; `internal/gateway/qualify` case `oauth009_offline_bearer_matrix`  
+**Tests:** `go test ./internal/auth ./internal/gateway ./internal/gateway/qualify -count=1` · `-run 'OAUTH009|Fallthrough|RS|OfflineFallthrough|ModeB'`  
+**CLI:** `jenkins-mcp oauth probe-rs --profile <id> [--offline]` · doctor check `rs_auth` · `jenkins-mcp security self-check` item `rs_qualification` · `jenkins-mcp gateway qualify --offline` (GWY-003)
 
 This document qualifies **Jenkins as a bearer JWT resource server (RS)** for the
 MCP. Stock Jenkins is **not** a three-legged OAuth authorization server
@@ -12,10 +13,19 @@ in-tree option is the
 [`jwt-auth-filter`](https://plugins.jenkins.io/jwt-auth-filter/) plugin (or an
 approved reverse-proxy JWT RS, or a hardened fork).
 
-> **Go/no-go residual:** Offline contracts, classifier fixtures, and operator
-> probes are shippable now (`Done*` for the offline classifier). Production
-> **go** still requires live lab evidence (plugin/Jenkins LTS pins, JCasC,
-> security review) — see §8. Offline `Done*` never closes live pin.
+> **Go/no-go residual:** Offline contracts, classifier fixtures, claim
+> fail-closed matrix, and operator probes are shippable now (`Done*` for the
+> offline path). Production **go** still requires live lab evidence
+> (plugin/Jenkins LTS pins, JCasC, security review) — see §8. Offline `Done*`
+> **never** closes live Entra / jwt-auth-filter pin.
+>
+> **HOST-010 / Mode B note:** Gateway Mode B offline path (`JWTRSBearerProvider`
+> + `JWTVault` under `internal/gateway`) can Obtain → Bearer for lab tokens
+> keyed by subject. That is **not** a live jwt-auth-filter production pin.
+> Access tokens only (**never** ID tokens as Jenkins API credentials). Doctor /
+> self-check elevate **warn** when Mode B is enabled (`jwt_rs_bearer`) and set
+> `mode_b_live_rs_qualified=false`. See [../gateway/README.md](../gateway/README.md)
+> Mode B and GWY-003 [qualification.md](../gateway/qualification.md).
 
 ### Offline-automated vs live-lab residual (matrix)
 
@@ -24,11 +34,36 @@ approved reverse-proxy JWT RS, or a hardened fork).
 | Fallthrough deny (status + WWW-Authenticate + body class) | `Done*` — `ClassifyFallthroughProbe`, `OfflineFallthroughFixtures`, simulated RS | Re-prove on real plugin / all §3 paths |
 | Empty body / HTML error page / Bearer WWW-Authenticate | `Done*` Wave 33 fixture rows | Real Stapler/proxy pages may differ |
 | Invalid-bearer success as authenticated | `Done*` fail closed (`FallthroughDetected`) | Must re-prove on controller |
+| **Invalid Bearer never succeeds as Basic/anonymous** | `Done*` — OAuth-required route fixtures on `RequiredMCPRoutes` + mock RS classifier matrix (`TestOAUTH009_InvalidBearerMustNotSucceedAsBasicOrAnonymous`, `TestMockRS_OAuthRequiredRouteFallthroughMatrix`); Basic+authn and anonymous 2xx fixture rows | Must re-prove on controller (live Entra **not** Done) |
+| **Wrong `aud` / `exp` / `iss` on Jenkins-shaped paths** | `Done*` — `ValidateAccessToken` + simulated JWT RS on `RequiredMCPRoutes` (`TestOAUTH009_OfflineBearerClaimMatrix_*`) | Re-prove on controller with real filter + Entra-issued tokens |
+| **ID token never as API credential** | `Done*` — MCP validator + Mode B `JWTVault` Put reject + qualify `mode_b_jwt_vault_bearer` | Live RS must not treat `token_use=id_token` as API principal |
+| **Mode B Obtain never Basic fallthrough** | `Done*` — HOST-011 / `oauth009_offline_bearer_matrix` / `TestOAUTH009_ModeB_*` (Obtain+Basic never mixed table) | Production mode switch ops evidence |
 | Route inventory (unique IDs, `progressive_text` OutsideAPIGlob) | **Yes** — `ValidateRequiredMCPRoutesInventory` | JCasC path includes on controller |
 | JWKS outage fail-closed (MCP client) | **Yes** — `EvaluateJWKSOutage*`, nil/empty JWKS + `FetchJWKS` errors | Jenkins RS cache TTL / rotation under load |
 | Multi-issuer / `alg=none` | **Yes** — `ValidateAccessToken` | RS plugin must match |
 | RFC 9728 protected resource metadata | **Parser + edge validation** (fixture JSON; no live fetch) | Controller publication + discovery path |
-| Plugin/LTS version pins, go/no-go sign-off | No | **Required** before production `oidc_bearer` |
+| Mock OIDC + mock RS Docker lab | Opt-in `make live-oauth-*` (HOST-012…014); `-tags=live_oauth` mock-rs health | **Not** production Entra / jwt-auth-filter |
+| Plugin/LTS version pins, go/no-go sign-off | No | **Required** before production `oidc_bearer` / Mode B live |
+
+### Offline Bearer claim matrix (Jenkins-shaped paths)
+
+Contract tests (no network) that fail closed for OAuth-required MCP routes:
+
+| Case ID | Token / request shape | Expected offline outcome |
+|---------|----------------------|--------------------------|
+| `wrong_aud` | Signed JWT, `aud` ≠ Jenkins audience (e.g. Graph) | `ValidateAccessToken` fail; simulated RS **401** on every `RequiredMCPRoutes` example path |
+| `wrong_iss` | Signed JWT, foreign `iss` | Same — fail closed |
+| `expired` | Signed JWT, `exp` in the past | Same — fail closed |
+| `id_token` | `token_use=id_token` (or ID-token shape) | Rejected as **API credential** (MCP + Mode B vault) |
+| `garbage` / empty Bearer | Non-JWT / empty | Simulated RS **401**; classifier `Denied` |
+| `invalid_bearer_plus_session` | Invalid Bearer + `JSESSIONID` | Still **401** (no session fallthrough) |
+| `mode_b_empty_vault` | Mode B Obtain, empty JWT vault, Mode A vault co-resident | Obtain error; **no** Basic / Mode A token |
+| `mode_b_hit` | Mode B vault hit | `HTTPAuth` scheme **Bearer** only (never Basic) |
+| `invalid_bearer_basic_alone_oauth_required` | Invalid Bearer **or** Basic alone on OAuth-required routes | Simulated/mock RS **401**; classifier `Denied` (no Basic/anon success) |
+| `unqualified_basic_fallthrough` | Anti-pattern: invalid Bearer → 200 authenticated Basic principal | Classifier `FallthroughDetected` (probe fail) |
+
+Live residual checklist for the **same** rows is in §4 / §8 — re-prove with
+real plugin version pins before production go. **Do not claim live Entra Done.**
 
 ---
 
@@ -64,10 +99,13 @@ ClassifyFallthroughProbe(status, WWW-Authenticate, body class)
 Body classes: `whoami_authenticated`, `whoami_anonymous`, `error_json`,
 `html_login`, `html_error`, `empty`, `unknown` (`ClassifyResponseBodyClass`).
 
-Offline fixture table (Wave 33): `auth.OfflineFallthroughFixtures()` and
-`FormatFallthroughClassifierMatrix()` (printed by `oauth probe-rs --offline`).
-Doctor / self-check / support-bundle expose `fallthrough_fixture_count`,
-`classifier_matrix_done_star=true`, `live_lab_still_required=true` (secret-free).
+Offline fixture table (Wave 33 + OAUTH-009 Basic/anon expand):
+`auth.OfflineFallthroughFixtures()` and `FormatFallthroughClassifierMatrix()`
+(printed by `oauth probe-rs --offline`). Includes Basic+authenticated 2xx fail,
+anonymous 2xx fail, and 401 status-wins rows. Doctor / self-check / support-bundle
+expose `fallthrough_fixture_count`, `classifier_matrix_done_star=true`,
+`live_lab_still_required=true` (secret-free). Mode B elevates **warn** with
+`residual_id=oauth009_offline`.
 
 ---
 
@@ -255,15 +293,39 @@ controller. API token pilot remains supported (`api_token`).
 |---------|----------|
 | `jenkins-mcp oauth probe-rs --profile <id> --offline` | Print matrix, **classifier fixture table**, routes, threats, offline_automated, residuals (no network; secret-free) |
 | `jenkins-mcp oauth probe-rs --profile <id>` | Offline report + when possible bearer whoAmI and invalid-bearer sample probes (WWW-Authenticate + body class) |
-| `jenkins-mcp doctor --profile <id> [--offline]` | Check `rs_auth`: inventory_ok, jwks_outage_acceptable, `classifier_matrix_done_star`, `live_lab_still_required`, offline_automated |
-| `jenkins-mcp security self-check [--json] [--profile <id>]` | Item `rs_qualification` (OAUTH-009): residual summary without secrets; warn on `oidc_bearer` |
+| `jenkins-mcp doctor --profile <id> [--offline]` | Check `rs_auth`: inventory_ok, jwks_outage_acceptable, `classifier_matrix_done_star`, `live_lab_still_required`, offline_automated; **warn** when gateway Mode B enabled |
+| `jenkins-mcp security self-check [--json] [--profile <id>]` | Item `rs_qualification` (OAUTH-009): residual summary without secrets; warn on `oidc_bearer` **or** Mode B (`jwt_rs_bearer`) |
+| `jenkins-mcp gateway qualify --offline` | GWY-003 suite including `oauth009_offline_bearer_matrix` + Mode A/B/C (not live Entra) |
 | `jenkins-mcp oauth validate-profile` | OIDC profile + discovery (OAUTH-001); not a full RS lab |
 
 All of the above remain **offline-friendly** (`--offline` / no network for self-check).
 
+### Mode B residual honesty (doctor / self-check)
+
+When `JENKINS_MCP_GATEWAY_CREDENTIAL_MODE=jwt_rs_bearer` (or Mode B in
+`JENKINS_MCP_GATEWAY_ENABLED_MODES`):
+
+| Field / surface | Offline value | Meaning |
+|-----------------|---------------|---------|
+| `gateway_mode_b_enabled` | `true` | Mode B primary or enabled |
+| `mode_b_live_rs_qualified` | **`false` always offline** | Never claim live pin |
+| `residual_id` | **`oauth009_offline`** | REL lite / pilot checklist residual id link |
+| `oauth009_offline` | **`true`** | Same residual id as boolean flag (doctor `rs_auth` + self-check `rs_qualification`) |
+| `gateway_mode_matrix_residual` | HOST-010 / OAUTH-009 residual string | Operator-visible residual |
+| `id_jwt_never_api_credential` | `true` | Contract reminder (ID JWT never API cred; key avoids scrubbed `token` substring) |
+| `live_lab_still_required` | `true` | Production pin open |
+| status | **warn** (unless contracts broken → fail) | Honest residual elevation |
+
+Offline JWT vault **Ready** does **not** clear these residuals. Doctor
+`gateway_status` also sets `oauth009_offline_only=true` (unified residual honesty).
+
 ---
 
 ## 8. Residuals (explicit)
+
+**Consolidated operator runbook** (version/JCasC/routes/evidence + residual-smoke
+honesty + Mode C / multi-pod neighbors):
+[../gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) §2 (OAUTH-009).
 
 ### Live lab (not offline-automated) — still required for production pin
 
@@ -295,9 +357,65 @@ All of the above remain **offline-friendly** (`--offline` / no network for self-
 - [x] Online probe path uses body class + WWW-Authenticate (not whoAmI flags alone)  
 - [x] Secret-free matrix fields on doctor / self-check / support-bundle (`live_lab_still_required=true`)  
 
+**OAUTH-009 expand (offline foundations — still not live Entra Done)**
+
+- [x] Wrong `aud` / `exp` / `iss` + ID-token reject on Jenkins-shaped `RequiredMCPRoutes` (`TestOAUTH009_OfflineBearerClaimMatrix_*`)  
+- [x] Mode B Obtain never falls through to Basic (`TestOAUTH009_ModeB_*` Obtain+Basic never-mixed table, qualify `oauth009_offline_bearer_matrix`)  
+- [x] Doctor `rs_auth` + self-check `rs_qualification` **warn** when Mode B enabled (`mode_b_live_rs_qualified=false`; `residual_id=oauth009_offline`)  
+- [x] Invalid Bearer never succeeds as Basic/anonymous on OAuth-required route fixtures (`TestOAUTH009_InvalidBearerMustNotSucceedAsBasicOrAnonymous`)  
+- [x] Mock RS classifier matrix + OfflineFallthroughFixtures Basic/anon rows (`internal/authlab` `TestMockRS_*`)  
+- [x] Expanded fixture rows: `200_whoami_authenticated_basic_www`, anonymous Bearer remnant, 401 status-wins  
+- [x] Cross-links: oauth-lab + `make live-oauth-*` + `-tags=live_oauth` mock-rs health + GWY-003 qualify residuals  
+
 Offline **contract tests do not replace** live lab. Do not mark architecture
 acceptance criteria complete until live-lab §8 items have evidence.
+**Do not claim live Entra / jwt-auth-filter Done** from this offline expand.
 
-## Docker lab residual (HOST-013 / HOST-014)
+## 9. Offline qualification vs live residual (OAUTH-009 honesty)
 
-Disposable Compose for jwt RS + mock IdP is backlog **HOST-013** / **HOST-014** (umbrella **HOST-012**). See `docs/roadmap/server-team-hosted.md`. Live production Entra remains residual.
+| Path | What it proves | What it does **not** prove |
+|------|----------------|----------------------------|
+| **Default `make test` / pure-Go** | Classifier fixtures, wrong aud/exp/iss, ID-token reject, Mode B no Basic fallthrough, JWKS outage, route inventory | Real Jenkins plugin behavior under load |
+| **`jenkins-mcp oauth probe-rs --offline`** | Secret-free matrix + fixture table operators can archive | Plugin version pin / JCasC go |
+| **`jenkins-mcp gateway qualify --offline` (GWY-003)** | Modes A/B/C Obtain matrix + `oauth009_offline_bearer_matrix` | Live AgentCore / Entra / jwt-auth-filter pin |
+| **Docker mock lab (`make live-oauth-*`)** | Mock OIDC mint + mock RS fail-closed + mock token peer (HOST-012…015) | Real `jwt-auth-filter` plugin, real Entra |
+| **Live Jenkins + plugin / proxy + Entra** | Production-shaped RS pin | — (**required** for OAUTH-009 go; still open) |
+
+### Mock lab + GWY-003 cross-links (HOST-012…015)
+
+| Task | Lab surface | Makefile / command |
+|------|-------------|--------------------|
+| HOST-012 umbrella | `testdata/oauth-lab/` | `make live-oauth-up` / `live-oauth-test` / `live-oauth-down` |
+| HOST-014 mock OIDC IdP | `mock-oidc` :18081 | discovery, JWKS, token mint scenarios |
+| HOST-013 mock JWT RS | `mock-rs` :18082 | Bearer whoAmI; **no** Basic/session fallthrough; wrong aud/exp/iss → 401 |
+| HOST-015 mock token / 3LO peer | `mock-token` :18083 | HTTPTokenFetcher-shaped JSON; wrong-aud / consent fixtures |
+| GWY-003 offline qualify | `internal/gateway/qualify` | `jenkins-mcp gateway qualify --offline` · `go test ./internal/gateway/qualify` |
+| HOST-011 Mode B offline | `internal/gateway` JWT vault | package `TestHOST011_*` / `TestOAUTH009_ModeB_*` |
+
+```bash
+# Opt-in only — never part of default make test / make ci
+export PATH="$HOME/.local/go/bin:$PATH"
+make live-oauth-test          # up + smoke + down -v
+go test -count=1 ./internal/authlab/...   # offline mock contracts without Docker
+go test -count=1 ./internal/auth/ ./internal/gateway/ ./internal/gateway/qualify/
+jenkins-mcp oauth probe-rs --profile corp --offline
+jenkins-mcp gateway qualify --offline
+jenkins-mcp doctor --profile corp --offline   # rs_auth residual; Mode B → warn
+jenkins-mcp security self-check --json        # rs_qualification residual
+```
+
+Lab README: [`../../testdata/oauth-lab/README.md`](../../testdata/oauth-lab/README.md).  
+GWY-003: [`../gateway/qualification.md`](../gateway/qualification.md).  
+Roadmap: [`../roadmap/server-team-hosted.md`](../roadmap/server-team-hosted.md).
+
+**Residuals that remain open after offline + mock lab:**
+
+- [ ] Real Jenkins LTS + `jwt-auth-filter` (or approved proxy) version pin in §2  
+- [ ] Security-approved JCasC and written production go/no-go  
+- [ ] Live invalid-bearer fallthrough on all `RequiredMCPRoutes` (wrong aud/exp/iss re-prove)  
+- [ ] Live Entra issuer/JWKS/audience (not lab mock keys) — **not claimed Done**  
+- [ ] Production AgentCore / OAUTH-010 pin (separate from this RS doc)  
+- [ ] Gateway Mode B production pin after live RS go (offline vault ≠ live)
+
+Offline `Done*` and mock-lab green **never** close the live RS production pin.
+Do **not** mark OAUTH-009 acceptance criteria complete without live evidence.

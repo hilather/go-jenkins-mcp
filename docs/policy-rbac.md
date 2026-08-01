@@ -29,7 +29,8 @@ Versioned, secret-free JSON loaded at `serve` time.
 | Default plain | `$XDG_CONFIG_HOME/jenkins-mcp/policy/overlay.json` |
 | Default signed | `…/policy/overlay.bundle.json` (preferred when present) |
 | Trusted keys | `…/policy/trusted_keys/` or `JENKINS_MCP_POLICY_TRUSTED_KEYS` |
-| Required mode | `JENKINS_MCP_POLICY_REQUIRED=true` fails closed if file missing / unsigned (staging) |
+| Required mode | `JENKINS_MCP_POLICY_REQUIRED=true` fails closed if file missing / unsigned (staging field-presence) |
+| Require signed (enterprise) | `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` requires trusted keys + Ed25519 envelope (gateway pin; staging stub not accepted) |
 
 ### Schema (version 1) — plain overlay body
 
@@ -44,7 +45,10 @@ Versioned, secret-free JSON loaded at `serve` time.
   "deny_view_names": ["secret-view", "hr/**"],
   "deny_artifact_paths": ["secrets/**", "*.pem"],
   "deny_branch_names": ["release/*"],
-  "max_result_bytes": 65536
+  "max_result_bytes": 65536,
+  "max_tools_per_minute": 15,
+  "max_tools_burst": 5,
+  "fleet_telemetry_force_off": true
 }
 ```
 
@@ -52,6 +56,7 @@ Versioned, secret-free JSON loaded at `serve` time.
 |-------|---------|
 | `version` | Must be `1` |
 | `force_read_only` | When true, cannot be defeated by `--allow-mutations`, profile, or weaker flags |
+| `fleet_telemetry_force_off` | When true, forces fleet health telemetry **off** regardless of `JENKINS_MCP_TELEMETRY` (MGR-002). Fail closed / lower-only: env cannot re-enable while pin is true. Serve applies on load + hot-reload (`Collector.SetForceOff`). Admin pilot apply cannot clear a true pin. See [fleet-telemetry.md](security/fleet-telemetry.md). |
 | `mode` | `pilot` (default) or `strict` |
 | `deny_tools` | Exact MCP tool names to deny |
 | `deny_job_prefixes` | Job full names / folder patterns denied at **call time** when args include `job_name` or seed `name`. See [Job pattern language](#job-pattern-language-deny_job_prefixes-pol-002-wave-26). Empty / overly broad entries fail load. **Wave 37/39:** also omits matching rows from `jenkins_list_jobs` (collect+filter+repaginate when patterns live; `policy_filtered` / `policy_omitted_count`). |
@@ -60,6 +65,8 @@ Versioned, secret-free JSON loaded at `serve` time.
 | `deny_artifact_paths` | Relative artifact path patterns denied at **call time** when args include `path` / `Path` or `artifact_path` / `ArtifactPath` (Wave 36; e.g. `jenkins_get_artifact_text`). Same pattern language as jobs. **Wave 37:** page-level omit from `jenkins_list_artifacts` under `max_artifacts`. **Wave 40 Done*:** hard-cap fetch when patterns live, filter, re-slice to caller `max_artifacts` (denied paths do not steal page slots). **Wave 39:** also omit denied paths from `jenkins_compare_builds` artifact diffs. **Wave 41 Done*:** compare/diagnose artifact cache (`getCachedArtifactList`) fetches via `listArtifactsWithPolicyFilter`, fingerprints cache keys with sorted `ArtifactPolicyFingerprintMaterial`, and always post-filters live patterns on return (denied paths never surface on hit or miss). |
 | `deny_branch_names` | Branch name patterns denied at **call time** when args include `branch_name` / `BranchName` or seed `branch` / `Branch` (Wave 37). **Wave 38–39:** when `BranchName` is empty and `job_name` / `JobName` is a **multi-segment** path (≥2 `/`-separated segments after normalize), matches `BranchDenyCandidates`: **leaf**, intermediate segments from index 1 (not the first folder alone), multi-segment path **suffixes**, and full JobName — so `team/mb/release/1.2` is denied by `release/*`, exact `release`, or leaf `1.2`. **Single-segment** JobName alone (e.g. root freestyle `main`) does **not** apply branch deny via candidates. Slashy `BranchName` (e.g. `release/1.2`) also matches its leaf and path candidates. Same pattern language as jobs. **Wave 37/39 list privacy:** also omits matching `kind=branch`/`matrix_child` rows from `jenkins_list_jobs` via collect+filter+repaginate (`ApplyJobPolicyFilters` on Name/FullName; not page-level only). Kind gate: folders named like a branch are not hidden by branch deny. |
 | `max_result_bytes` | Optional result hard-max bound; mid-serve raise/lower ≤ serve-bootstrap ceiling (Wave 31); never elevates Jenkins rights |
+| `max_tools_per_minute` | Optional per-subject tools/min cap (HOST-006); serve applies via `SubjectRateLimiter.LowerRate` **lower only** under `--gateway` (never raises bootstrap env rate; omitted = no change) |
+| `max_tools_burst` | Optional per-subject token-bucket burst cap (HOST-006 LowerRate; lower only; omitted = no change) |
 | `signature` | Legacy stub on plain files only; production uses signed **envelopes** |
 
 ### Fail-closed rules
@@ -253,8 +260,10 @@ is wrapped in `policy.ReloadableDenyOnly`:
 | **Trigger** | On each `Evaluate`, cheap path mtime/size `Stat` after a **min interval of 5s** (not a background ticker). `Reload()` forces a load (tests / future ops). |
 | **What reloads (Wave 24/35/36)** | `deny_tools`, `deny_job_prefixes`, `deny_node_names`, `deny_view_names`, `deny_artifact_paths`, `mode` (pilot/strict), document used at **dispatch**, store PEP, and **ListTools** (Wave 28 live filter) |
 | **What hot-applies (Wave 25/31)** | `force_read_only` → `DynamicForce.Set`; `max_result_bytes` → `LiveHardMax.SetWithinCeiling` (raise or lower **within serve-bootstrap ceiling**; never above ceiling) |
+| **What hot-applies (HOST-006)** | `max_tools_per_minute` / `max_tools_burst` → `gateway.SubjectRateLimiter.LowerRate` (**lower only**; omitted/0 keeps last live; raise needs restart with higher env bootstrap; no-op when rate limiter not wired) |
+| **What hot-applies (MGR-002)** | `fleet_telemetry_force_off` → `fleet.Collector.SetForceOff` (env cannot re-enable while true; bootstrap force-off with no collector still needs restart to enable after clear) |
 | **Fail closed** | Corrupt JSON, signature fail, downgrade, I/O error → **keep last-good** and log (no secrets). File deleted mid-session → keep last-good (do not silently open access). Never loaded → deny (`no_evaluator`). |
-| **Logging** | Success: `deny_tools` count, `deny_job_prefixes` count, `deny_node_names` count, `deny_view_names` count, `deny_artifact_paths` count, `bundle_seq`, `signature_state`, `mode`, `force_read_only`, `max_result_bytes`. Never signature bytes or key material. |
+| **Logging** | Success: `deny_tools` count, `deny_job_prefixes` count, `deny_node_names` count, `deny_view_names` count, `deny_artifact_paths` count, `bundle_seq`, `signature_state`, `mode`, `force_read_only`, `fleet_telemetry_force_off`, `max_result_bytes`, `max_tools_per_minute`, `max_tools_burst`. Never signature bytes or key material. |
 | **Signed bundles** | Reload re-runs full Ed25519 + last-good anti-rollback path via `LoadFromEnviron`. |
 
 ### Residuals (require process restart)
@@ -267,6 +276,7 @@ is wrapped in `policy.ReloadableDenyOnly`:
 | ~~ListTools AuthGate fail-closed~~ | **Wave 29 done*** — `InstallListToolsPolicyFilter` consults `AuthGate` once per `tools/list`; Check fail → empty Tools (no name leak). Nil gate unchanged; OK + deny_tools still filters as Wave 28. *Sticky revoke stays empty; non-sticky recover re-lists. |
 | ~~Mutation tools omitted at RO register (allow-mutations + force clear)~~ | **Wave 30 done*** — with `--allow-mutations` / `AllowMutations`, mutations **register** even under Effective RO; ListTools + `DenyMutation` hide/deny while force (or other RO) is on; force clear re-lists without restart. *Residual: without allow-mutations (pilot default RO) mutations stay unregistered for the process lifetime (no surprise write tools). |
 | ~~Raise `max_result_bytes` after a prior lower~~ | **Wave 31 done*** — `SetWithinCeiling` can raise back up to serve-bootstrap ceiling; above ceiling still restart. |
+| Raise subject rate above serve-bootstrap env | **HOST-006 Done\* lower-only** — `LowerRate` never raises; restart with higher `JENKINS_MCP_SUBJECT_RATE_*` to raise bootstrap. Process rate ceilings not overlay-tunable. Admin SPA Policy editor can lower overlay `max_tools_*` (policy_admin). |
 | ~~**L1 search historical hits**~~ | **Wave 33 done*** — single-generation `jenkins_search_logs` re-checks `deny_job_prefixes` **and** `CheckStoreRead` on the resolved job before any frame scan; mid-session tighten denies on next call. *Not multi-job fan-in (search is one generation). |
 
 ## Example overlay (read-only fleet, deny log tools + secret jobs)
@@ -303,7 +313,7 @@ Cursor config remains secret-free; point the process at the overlay with env:
 
 | Item | Task |
 |------|------|
-| Signed policy bundles (Ed25519 envelope) | **MGR-001 done (MVP + multi-sig lite)** — full threshold crypto / gateway push residual |
+| Signed policy bundles (Ed25519 envelope) | **MGR-001 done (MVP + multi-sig lite + REQUIRE_SIGNED pin)** — full threshold crypto / gateway push / HSM residual |
 | Verified Jenkins principal (`Verified=true`) | **AUTH-004 done*** — serve-time whoAmI bind + mid-serve re-verify + Wave 28 audit + **Wave 29** ListTools AuthGate empty-list; residual: TTL window until next re-verify |
 | ListTools AuthGate session death | **Wave 29 done*** — discovery empty when `AuthGate.Check` fails; CallTool already fail-closed |
 | Multi-layer PEPs (handler target, network classifier, store) | **POL-004 lite done** — call-time job `Target` + `deny_job_prefixes`; network/store PEPs earlier. Residual: richer ACL language; adapter-specific PEPs beyond shared middleware |

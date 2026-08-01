@@ -10,15 +10,21 @@ import (
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 )
 
-// Opaque list page tokens (MCP-001 residual).
+// Opaque list page tokens (MCP-001 residual / HOST-004 multi-tenant isolation).
 //
 // Format (v1): base64url(no pad) of a small binary payload:
 //
 //	magic "JM1\x00" | uint32 offset | uint32 limit | 8-byte filter fingerprint
 //
-// Tokens are intentionally opaque to models. They are NOT a multi-tenant
-// security boundary (stdio pilot trust model): opacity + version + filter
-// fingerprint only. Never put secrets or credentials into tokens.
+// Tokens are intentionally opaque to models. They are not an authentication
+// boundary by themselves: opacity + version + filter fingerprint only. Never
+// put secrets or credentials into tokens.
+//
+// Multi-tenant (HOST-004): bind the caller's subjectKey into the filter
+// fingerprint via BindSubjectToPageFilter / *WithSubject helpers so user B
+// cannot continue user A's page_token. Empty subjectKey leaves the fingerprint
+// unchanged (stdio single-user pilot). Gateway mode should always pass a
+// non-empty subjectKey (gateway.SubjectKey = tenant|subject|profile).
 //
 // When both page_token and offset/limit are provided, page_token wins.
 // Invalid or tampered non-empty tokens fail closed as invalid_argument.
@@ -194,4 +200,59 @@ func FormatFilterBool(v bool) string {
 // FormatFilterInt is a stable string for filter fingerprints.
 func FormatFilterInt(v int) string {
 	return fmt.Sprintf("%d", v)
+}
+
+// BindSubjectToPageFilter mixes subjectKey into a list filter fingerprint so
+// continuation tokens fail closed across subjects (HOST-004).
+//
+// Empty / whitespace subjectKey leaves base unchanged (stdio single-user pilot).
+// Non-empty subjectKey should be a stable non-secret identity key such as
+// gateway.SubjectKey(caller) = "tenant|subject|profile" — never tokens or
+// credentials. The raw subjectKey is hashed into the fingerprint and never
+// appears in the opaque page_token bytes as cleartext.
+func BindSubjectToPageFilter(base [pageTokenFPBytes]byte, subjectKey string) [pageTokenFPBytes]byte {
+	subjectKey = strings.TrimSpace(subjectKey)
+	if subjectKey == "" {
+		return base
+	}
+	h := sha256.New()
+	_, _ = h.Write(base[:])
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte("host004-subject"))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(subjectKey))
+	sum := h.Sum(nil)
+	var out [pageTokenFPBytes]byte
+	copy(out[:], sum[:pageTokenFPBytes])
+	return out
+}
+
+// EncodePageTokenWithSubject is EncodePageToken with subject isolation (HOST-004).
+// Prefer this (or bind the fingerprint first) in multi-tenant gateway mode.
+func EncodePageTokenWithSubject(offset, limit int, filterFP [pageTokenFPBytes]byte, subjectKey string) string {
+	return EncodePageToken(offset, limit, BindSubjectToPageFilter(filterFP, subjectKey))
+}
+
+// ResolveListPaginationWithSubject is ResolveListPagination with subject-bound
+// filter matching (HOST-004). A page_token minted for subject A is rejected
+// when resolved under subject B (filter fingerprint mismatch → invalid_argument).
+func ResolveListPaginationWithSubject(
+	pageToken string,
+	offset, limit, defaultLimit, maxLimit int,
+	filterFP [pageTokenFPBytes]byte,
+	subjectKey string,
+) (resOffset, resLimit int, err error) {
+	return ResolveListPagination(pageToken, offset, limit, defaultLimit, maxLimit,
+		BindSubjectToPageFilter(filterFP, subjectKey))
+}
+
+// NextPageTokenIfMoreWithSubject is NextPageTokenIfMore with subject isolation
+// (HOST-004). The returned token is only valid under the same subjectKey.
+func NextPageTokenIfMoreWithSubject(
+	offset, limit, returned, total int,
+	filterFP [pageTokenFPBytes]byte,
+	subjectKey string,
+) string {
+	return NextPageTokenIfMore(offset, limit, returned, total,
+		BindSubjectToPageFilter(filterFP, subjectKey))
 }

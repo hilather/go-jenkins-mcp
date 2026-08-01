@@ -212,6 +212,14 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("GET /admin/v1/me", s.handleMe)
 	// HOST-011 / HOST-009: secret-free gateway vault + mode matrix status (read-only).
 	mux.HandleFunc("GET /admin/v1/gateway/vault", s.handleGatewayVault)
+	// HOST-007: unified gateway residual-status (same secret-free map as CLI).
+	mux.HandleFunc("GET /admin/v1/gateway/residual-status", s.handleGatewayResidualStatus)
+	// HOST-007: force re-auth residual lite (mirrors CLI gateway subject-invalidate).
+	// Requires gateway_ops (operator|policy_admin). Never tokens.
+	mux.HandleFunc("POST /admin/v1/gateway/subject-invalidate", s.handleGatewaySubjectInvalidate)
+	// HOST-007: Mode C progressive consent metadata purge residual lite
+	// (mirrors CLI gateway consent-purge / consent-expire). gateway_ops; never tokens.
+	mux.HandleFunc("POST /admin/v1/gateway/consent-purge", s.handleGatewayConsentPurge)
 	mux.HandleFunc("GET /admin/v1/metrics", s.handleMetrics)
 	// UI-007: profiles / cache / support-bundle / security self-check
 	mux.HandleFunc("GET /admin/v1/profiles", s.handleProfilesList)

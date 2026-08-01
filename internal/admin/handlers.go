@@ -4,14 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
 	"github.com/simonfxr/go-jenkins-mcp/internal/config"
 	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
+	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
 	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
 	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
@@ -19,11 +22,100 @@ import (
 )
 
 // healthResponse is GET /admin/v1/health.
+// enabledModes is a secret-free HOST-011 listing (mode ids only; no tokens).
+// multiUserEnabled / credentialMode / haMultiReplica / gatewayReady /
+// sessionAffinityRecommended / multiPodVaultResidual / kubernetesEnvDetected /
+// rateEnabled / ratePerMinute / rateBurst / sharedSubjectRateFile /
+// sharedPrincipalCacheFile / sharedJwksFile / sharedTokenCacheFile /
+// progressiveConsent* are secret-free gateway residual posture (HOST-006 /
+// HOST-007 / HOST-008 / OAUTH-010); never tokens, subjects, or file path values.
+// progressiveConsentMetadata*/Browser*/Residual reuse gateway.ProgressiveConsentResidual
+// (static only). progressiveConsentFileBacked/SameHostReload use
+// gateway.ConsentStorePathConfiguredFromEnviron (path never returned; never opens file).
 type healthResponse struct {
-	Status  string `json:"status"`
-	Version string `json:"version"`
-	Commit  string `json:"commit"`
-	UIBuild string `json:"uiBuild"`
+	Status       string   `json:"status"`
+	Version      string   `json:"version"`
+	Commit       string   `json:"commit"`
+	UIBuild      string   `json:"uiBuild"`
+	EnabledModes []string `json:"enabledModes,omitempty"`
+	// CredentialMode is the primary HOST-011 mode id from env (empty if invalid).
+	CredentialMode string `json:"credentialMode,omitempty"`
+	// MultiUserEnabled is true when JENKINS_MCP_GATEWAY_MULTI_USER is truthy.
+	// Not a production multi-user GO pin — foundation residual only.
+	MultiUserEnabled bool `json:"multiUserEnabled"`
+	// GatewayReady is always false on the admin BFF (separate process from MCP
+	// serve; Ready lives on serve GET /readyz). Honest residual.
+	GatewayReady bool `json:"gatewayReady"`
+	// HAMultiReplica is always false (HOST-008 Tier A single-replica default).
+	HAMultiReplica bool `json:"haMultiReplica"`
+	// SessionAffinityRecommended is true when multi-user env is set (HOST-008
+	// sticky Service scaffold honesty). Not multi-replica Done — kustomize
+	// sessionAffinity alone is packaging residual.
+	SessionAffinityRecommended bool `json:"sessionAffinityRecommended"`
+	// MultiPodVaultResidual is always true (HOST-008 multi-pod durable vault residual).
+	// Not multi-replica Done — doctor gateway_status multi_pod_vault_residual parity.
+	MultiPodVaultResidual bool `json:"multiPodVaultResidual"`
+	// KubernetesEnvDetected is true when KUBERNETES_SERVICE_HOST is set (in-cluster residual).
+	KubernetesEnvDetected bool `json:"kubernetesEnvDetected"`
+	// RateEnabled is true when subject rate env would enable HOST-006 limiting
+	// (empty JENKINS_MCP_SUBJECT_RATE_PER_MINUTE = default on; 0 = disabled).
+	// Process-local residual only — not multi-replica shared rate (HOST-008).
+	RateEnabled bool `json:"rateEnabled"`
+	// RatePerMinute is the resolved bootstrap tools/min (package default or env).
+	// 0 when rate is disabled or env parse fails closed. Never tokens.
+	RatePerMinute int `json:"ratePerMinute"`
+	// RateBurst is the resolved bootstrap burst capacity (default or env).
+	// 0 when rate is disabled (burst ignored when rate off). Never tokens.
+	RateBurst int `json:"rateBurst"`
+	// SharedSubjectRateFile is true when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH is
+	// non-empty (HOST-008 same-host FileSubjectRateLimiter lite). Not multi-pod HA.
+	// Path value is never returned (bool only; secret-free).
+	SharedSubjectRateFile bool `json:"sharedSubjectRateFile"`
+	// SharedPrincipalCacheFile is true when JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH
+	// is non-empty (HOST-008 same-host FilePrincipalCache lite). Not multi-pod HA.
+	// Path value is never returned (bool only; secret-free; never tokens).
+	SharedPrincipalCacheFile bool `json:"sharedPrincipalCacheFile"`
+	// SharedJwksFile is true when JENKINS_MCP_HTTP_JWKS_CACHE_PATH is non-empty
+	// (HOST-001 / HOST-008 same-host public JWKS snapshot lite). Not multi-pod
+	// external JWKS HA. Path value is never returned (bool only; public keys only).
+	SharedJwksFile bool `json:"sharedJwksFile"`
+	// SharedTokenCacheFile is true when JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH is
+	// non-empty (HOST-008 same-host FileTokenCache lite). Not multi-pod Redis/HA.
+	// Path value is never returned (bool only; secret-free). Residual never opens
+	// the cache file — never tokens.
+	SharedTokenCacheFile bool `json:"sharedTokenCacheFile"`
+	// ProgressiveConsentFileBacked is true when JENKINS_MCP_CONSENT_STORE_PATH is
+	// non-empty (HOST-007 / OAUTH-010 same-host consent metadata file lite).
+	// Not multi-pod HA. Path value is never returned. Residual never opens the
+	// consent file (no session inventory). CamelCase parity with residual-status
+	// progressive_consent.file_backed via gateway.ConsentStorePathConfiguredFromEnviron.
+	ProgressiveConsentFileBacked bool `json:"progressiveConsentFileBacked"`
+	// ProgressiveConsentSameHostReload is true only when file-backed (reload-
+	// before-persist flock lite). Same condition as residual-status
+	// progressive_consent.same_host_reload_before_persist. Not multi-pod HA.
+	// Path never returned; residual never opens the consent file.
+	ProgressiveConsentSameHostReload bool `json:"progressiveConsentSameHostReload"`
+	// ProgressiveConsentStoresTokens is always false (consent metadata store
+	// never holds tokens). CamelCase honesty parity with residual-status
+	// progressive_consent.stores_tokens.
+	ProgressiveConsentStoresTokens bool `json:"progressiveConsentStoresTokens"`
+	// ProgressiveConsentMultiReplicaShared is always false (not multi-pod shared
+	// consent store). CamelCase honesty parity with residual-status
+	// progressive_consent.multi_replica_shared.
+	ProgressiveConsentMultiReplicaShared bool `json:"progressiveConsentMultiReplicaShared"`
+	// ProgressiveConsentMetadataDoneStar is always true (ConsentRequired →
+	// authorization_url + session_id only path Done*; OAUTH-010 / GWY-001).
+	// Static residual from gateway.NewProgressiveConsentResidual — never tokens.
+	ProgressiveConsentMetadataDoneStar bool `json:"progressiveConsentMetadataDoneStar"`
+	// ProgressiveConsentBrowser3loAutomated is always false until browser 3LO
+	// is automated (GWY-003 residual). Static residual only.
+	ProgressiveConsentBrowser3loAutomated bool `json:"progressiveConsentBrowser3loAutomated"`
+	// ProgressiveConsentResidual is the secret-free residual note when Mode C
+	// (agentcore_3lo_obo) is enabled in the mode matrix. Omitted otherwise.
+	// Never includes authorization_url query strings, tokens, or client secrets.
+	ProgressiveConsentResidual string `json:"progressiveConsentResidual,omitempty"`
+	// Residual notes multi-user / HA / rate / k8s honesty when relevant (secret-free).
+	Residual string `json:"residual,omitempty"`
 }
 
 // versionResponse is GET /admin/v1/version (subset of jenkins-mcp version --json).
@@ -61,12 +153,120 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusMethodNotAllowed, "invalid_argument", "method not allowed")
 		return
 	}
+	// HOST-007 / HOST-008: secret-free enabled modes + gateway residual posture.
+	// Full vault inventory remains on GET /admin/v1/gateway/vault (hash-only subjects).
+	// Never tokens, vault bytes, Authorization headers, or raw subjects.
+	modes := healthEnabledModes()
+	mode := string(gateway.CredentialModeFromEnviron(os.Getenv))
+	if !gateway.CredentialMode(mode).Valid() {
+		mode = ""
+	}
+	multiUser := gateway.MultiUserEnabled(os.Getenv)
+	rateEnabled, ratePerMinute, rateBurst := gateway.SubjectRateConfigFromEnviron(os.Getenv)
+	sharedSubjectRateFile := gateway.SubjectRatePathConfiguredFromEnviron(os.Getenv)
+	sharedPrincipalCacheFile := gateway.PrincipalCachePathConfiguredFromEnviron(os.Getenv)
+	sharedJwksFile := auth.JWKSCachePathConfiguredFromEnviron(os.Getenv)
+	sharedTokenCacheFile := gateway.TokenCachePathConfiguredFromEnviron(os.Getenv)
+	// HOST-007 progressive consent store path residual (same helper residual-status uses).
+	// Never open consent file; never return path value.
+	progressiveConsentFileBacked := gateway.ConsentStorePathConfiguredFromEnviron(os.Getenv)
+	mp := diagnostics.MultiPodResidualFromEnviron(os.Getenv)
+	// HOST-006 residual honesty: default process-local rate; optional same-host
+	// file share when path set; multi-pod shared rate still residual (HOST-008).
+	// HOST-007 parity: shared*File bools only — never path values (HOST-008 lite).
+	// sharedTokenCacheFile never opens the token cache file.
+	// progressiveConsent* never opens the consent store file.
+	residual := "subject rate default process-local (HOST-006); optional same-host FileSubjectRateLimiter when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set (HOST-008 lite); multi-pod shared rate residual; multiPodVaultResidual=true; never tokens"
+	if sharedSubjectRateFile {
+		residual = "sharedSubjectRateFile=true (same-host file rate lite only — not multi-pod HA); " + residual
+	}
+	if sharedPrincipalCacheFile {
+		residual = "sharedPrincipalCacheFile=true (same-host FilePrincipalCache lite only — not multi-pod HA); " + residual
+	}
+	if sharedJwksFile {
+		residual = "sharedJwksFile=true (same-host public JWKS file lite only — not multi-pod external JWKS HA); " + residual
+	}
+	if sharedTokenCacheFile {
+		residual = "sharedTokenCacheFile=true (same-host FileTokenCache lite only — not multi-pod Redis/HA); " + residual
+	}
+	if progressiveConsentFileBacked {
+		residual = "progressiveConsentFileBacked=true (same-host consent store lite only — not multi-pod HA; path never shown; residual never opens consent file); " + residual
+	}
+	if multiUser {
+		// Secret-free honesty only (SPA reads residual; no SPA rebuild required for this string).
+		// multi_user_offline + host008_single_replica residual ids: release-evidence --offline.
+		residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO; haMultiReplica always false / HOST-008 single-replica; sessionAffinityRecommended=true scaffold only — multi-replica residual; no tokens in health); " + residual
+	}
+	if mp.KubernetesEnvDetected {
+		// In-cluster residual: sticky / shared vault / rate / Obtain cache still residual (HOST-008).
+		// Secret-free; never embed vault paths or tokens.
+		residual = "kubernetes env detected (KUBERNETES_SERVICE_HOST): multi-pod residual checklist — sticky sessions or shared session store; durable shared vault (not emptyDir); shared subject rate; shared Obtain/token cache; haMultiReplica=false (HOST-008 / deployment.md §9); " + residual
+	}
+	// OAUTH-010 / GWY-001: progressive consent residual (static; never live Obtain
+	// or authorization_url with query secrets). Bools always present; residual
+	// note only when Mode C is enabled (same honesty as doctor gateway_status).
+	pc := gateway.NewProgressiveConsentResidual()
+	pcResidual := ""
+	if healthModeCEnabled() {
+		pcResidual = pc.ResidualNote
+	}
 	writeJSON(w, http.StatusOK, healthResponse{
-		Status:  "ok",
-		Version: s.cfg.Version,
-		Commit:  s.cfg.Commit,
-		UIBuild: s.cfg.UIBuild,
+		Status:                                "ok",
+		Version:                               s.cfg.Version,
+		Commit:                                s.cfg.Commit,
+		UIBuild:                               s.cfg.UIBuild,
+		EnabledModes:                          modes,
+		CredentialMode:                        mode,
+		MultiUserEnabled:                      multiUser,
+		GatewayReady:                          false, // admin BFF ≠ MCP serve Ready probe
+		HAMultiReplica:                        false, // HOST-008 Tier A default
+		SessionAffinityRecommended:            multiUser,
+		MultiPodVaultResidual:                 true, // HOST-008 multi-pod vault residual honesty
+		KubernetesEnvDetected:                 mp.KubernetesEnvDetected,
+		RateEnabled:                           rateEnabled,
+		RatePerMinute:                         ratePerMinute,
+		RateBurst:                             rateBurst,
+		SharedSubjectRateFile:                 sharedSubjectRateFile,
+		SharedPrincipalCacheFile:              sharedPrincipalCacheFile,
+		SharedJwksFile:                        sharedJwksFile,
+		SharedTokenCacheFile:                  sharedTokenCacheFile,
+		ProgressiveConsentFileBacked:          progressiveConsentFileBacked,
+		ProgressiveConsentSameHostReload:      progressiveConsentFileBacked, // same as residual-status
+		ProgressiveConsentStoresTokens:        false,                        // always; never tokens
+		ProgressiveConsentMultiReplicaShared:  false,                        // not multi-pod HA
+		ProgressiveConsentMetadataDoneStar:    pc.MetadataPathDoneStar,
+		ProgressiveConsentBrowser3loAutomated: pc.Browser3LOAutomated,
+		ProgressiveConsentResidual:            pcResidual,
+		Residual:                              residual,
 	})
+}
+
+// healthEnabledModes returns HOST-011 enabled credential mode ids from env
+// (secret-free). Invalid config → empty slice (operators use /gateway/vault residual).
+func healthEnabledModes() []string {
+	mx, err := gateway.ModeMatrixFromEnviron(os.Getenv)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(mx.Enabled))
+	for _, m := range mx.Enabled {
+		out = append(out, m.String())
+	}
+	return out
+}
+
+// healthModeCEnabled reports whether agentcore_3lo_obo (Mode C) is in the
+// HOST-011 enabled set (or primary when matrix is invalid). Secret-free bool only.
+func healthModeCEnabled() bool {
+	if mx, err := gateway.ModeMatrixFromEnviron(os.Getenv); err == nil {
+		for _, m := range mx.Enabled {
+			if m == gateway.CredentialModeAgentCore {
+				return true
+			}
+		}
+		return false
+	}
+	return gateway.CredentialModeFromEnviron(os.Getenv) == gateway.CredentialModeAgentCore
 }
 
 // handleMe returns the process role and permissions (UI-003).
@@ -198,7 +398,8 @@ func (s *server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	aq := AuditQuery{
-		Type: q.Get("type"),
+		Type:            q.Get("type"),
+		ExternalSubject: q.Get("external_subject"),
 	}
 	if lim := strings.TrimSpace(q.Get("limit")); lim != "" {
 		n, err := strconv.Atoi(lim)
@@ -221,6 +422,8 @@ func (s *server) handleAudit(w http.ResponseWriter, r *http.Request) {
 		t = t.UTC()
 		aq.Before = &t
 	}
+	// external_subject: optional exact-match IdP subject label (not a token).
+	// Oversize is clipped in AuditQuery.Normalize to MaxExternalSubjectFilterLen.
 
 	// Prefer profile.DataDir when the profile exists; missing profile still
 	// allows reading default XDG audit path (empty events if no file).

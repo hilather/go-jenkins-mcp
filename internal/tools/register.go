@@ -24,6 +24,27 @@ type AuthGate interface {
 	Check() error
 }
 
+// SubjectSlotLimiter is HOST-006 per-subject concurrent tool/preview slots under
+// a process ceiling. Implemented by *gateway.SubjectLimiter; the interface lives
+// here so tools does not import gateway (FND-004 depgraph).
+//
+// Hold acquires one slot and returns a release func suitable for defer.
+// On acquire error, release is a no-op and err is non-nil (CodeQuota /
+// CodeInvalidArgument). Nil limiter ⇒ no concurrent subject budget.
+type SubjectSlotLimiter interface {
+	Hold(subjectKey string) (release func(), err error)
+}
+
+// SubjectRateLimiter is HOST-006 per-subject token-bucket tool dispatch rate
+// under an optional process ceiling. Implemented by *gateway.SubjectRateLimiter;
+// the interface lives here so tools does not import gateway (FND-004).
+//
+// Allow consumes one token for subjectKey. Deny → CodeQuota (or
+// CodeInvalidArgument for empty/invalid key). Nil limiter ⇒ no rate budget.
+type SubjectRateLimiter interface {
+	Allow(subjectKey string) error
+}
+
 // RegisterOptions configures POL-001 read-only gating, MCP-001 budgets, and
 // optional deny-only MCP RBAC (POL-002/003).
 // Nil options (or Register with nil opts) use pilot defaults: read-only true,
@@ -52,7 +73,16 @@ type RegisterOptions struct {
 	// Subject is the trusted identity for Policy evaluation (POL-003).
 	// Must be built from verified/provisional process identity, never tool args.
 	// Empty subject causes Policy to deny when Policy is non-nil.
+	// Multi-user: process default; per-request rebind via SubjectFromContext.
 	Subject policy.Subject
+	// SubjectFromContext optionally derives policy.Subject per tool/list request
+	// (multi-user: cmd policySubjectFromGatewayCtx — PrincipalCache after Obtain
+	// preferred over HTTP/lab PolicySubject claim; tools never imports gateway).
+	// When nil or returns ok=false, Subject process default is used.
+	// When ok=true, the returned subject is used even if !Valid (fail closed at
+	// Evaluate — never elevates to process default for a partial identity).
+	// Never tool args. tools does not import gateway (FND-004); cmd wires the adapter.
+	SubjectFromContext func(ctx context.Context) (policy.Subject, bool)
 	// AuthGate is optional session continuity (revocation / refresh fail / logout /
 	// AUTH-004 mid-serve whoAmI re-verify). When set, Check() runs before every
 	// tool handler (fail closed) and before tools/list filtering (Wave 29: empty
@@ -89,8 +119,17 @@ type RegisterOptions struct {
 	ProfileID   string
 	PrincipalID string
 	// Mutations is the MUT-001 preview/confirm gate. When nil and mutations are
-	// registered, handlers create a default manager bound to Gate/Audit/identity.
+	// registered, handlers create a default manager bound to Gate/Audit/identity
+	// (including ExternalSubject/Tenant from Subject and MutationBindingFromContext).
 	Mutations *mutation.Manager
+	// MutationPolicy is optional MUT-017 allowlisting (tools/jobs/interrupt modes).
+	// Nil or empty fields mean no extra restriction beyond RO / deny_tools.
+	MutationPolicy *policy.MutationPolicy
+	// MutationBindingFromContext optionally supplies per-request mutation confirm
+	// binding (multi-user: gateway.CallerFromContext → mutation.Binding). When
+	// nil, the Manager uses process ProfileID/PrincipalID/Subject external+tenant.
+	// Never tool args. Wired into NewManager when Mutations is nil.
+	MutationBindingFromContext func(ctx context.Context) (mutation.Binding, bool)
 	// DiagCache is the PERF-003 shared fetch cache for diagnose/compare/graph.
 	// Nil ⇒ a new per-Register cache (process-scoped for a single MCP serve).
 	DiagCache *FetchCache
@@ -120,6 +159,27 @@ type RegisterOptions struct {
 	// WorkItemLookup is optional work-items adapter stub (refs only; no network).
 	// Used only when EnableChangeCorrelation is true.
 	WorkItemLookup WorkItemLookuper
+	// SubjectKey is the non-secret multi-tenant namespace key
+	// (tenant|subject|profile) for HOST-004 page_token binding and HOST-006
+	// SubjectLimiter. Serve sets this from gateway.SubjectKey(CallerFromBoundSubject)
+	// when --gateway is on. Empty ⇒ stdio pilot residual: skip limiter and leave
+	// page tokens unbound (jenkins.BindSubjectToPageFilter is a no-op on empty).
+	// Never derived from tool args.
+	SubjectKey string
+	// SubjectKeyFromContext optionally derives SubjectKey per tool request
+	// (multi-user: gateway.SubjectKey(CallerFromContext)). When nil or returns
+	// empty, SubjectKey process default is used. Never tool args.
+	SubjectKeyFromContext func(ctx context.Context) string
+	// SubjectLimiter is optional HOST-006 concurrent slot budget. When set and
+	// SubjectKey is non-empty, addTool Holds a slot around handler dispatch
+	// (fail closed CodeQuota). Empty SubjectKey skips the limiter (stdio pilot).
+	// Wire *gateway.SubjectLimiter from cmd; tools only sees this interface.
+	SubjectLimiter SubjectSlotLimiter
+	// SubjectRateLimiter is optional HOST-006 token-bucket rate budget. When set
+	// and SubjectKey is non-empty, addTool calls Allow before Hold (fail closed
+	// CodeQuota). Empty SubjectKey skips. Wire *gateway.SubjectRateLimiter from
+	// cmd when ratePerMinute > 0 (0 = disabled residual).
+	SubjectRateLimiter SubjectRateLimiter
 }
 
 // regState is the effective configuration for one Register call.
@@ -149,6 +209,8 @@ type regState struct {
 	diagnose    DiagnoseHelpers
 	doctor      DoctorFunc
 	mutations   *mutation.Manager
+	// mutationPolicy is optional MUT-017 allowlist (tools/jobs/interrupt modes).
+	mutationPolicy *policy.MutationPolicy
 
 	// PERF-003
 	fetchCache *FetchCache
@@ -156,6 +218,42 @@ type regState struct {
 
 	// Profile Meta for durable survey compact cache (schema v7); optional.
 	meta *store.Meta
+
+	// HOST-004 / HOST-006: process-bound subject key + optional concurrent/rate limiters.
+	subjectKey            string
+	subjectKeyFromContext func(ctx context.Context) string
+	subjectLimiter        SubjectSlotLimiter
+	subjectRateLimiter    SubjectRateLimiter
+
+	// Multi-user: per-request policy.Subject from trusted context (gateway wire).
+	subjectFromContext func(ctx context.Context) (policy.Subject, bool)
+	// MUT-001 multi-user: optional per-request confirm-token binding.
+	mutationBindingFromContext func(ctx context.Context) (mutation.Binding, bool)
+}
+
+// effectiveSubjectKey returns per-request SubjectKey when SubjectKeyFromContext
+// is set and returns a non-empty value; else process SubjectKey.
+func effectiveSubjectKey(st regState, ctx context.Context) string {
+	if st.subjectKeyFromContext != nil && ctx != nil {
+		if k := strings.TrimSpace(st.subjectKeyFromContext(ctx)); k != "" {
+			return k
+		}
+	}
+	return strings.TrimSpace(st.subjectKey)
+}
+
+// effectiveSubject returns per-request policy.Subject when SubjectFromContext
+// is set and returns ok=true; else process-bound st.subject.
+// When ok=true the subject is used even if !Valid so multi-user partial
+// identities fail closed at Evaluate instead of elevating to process default.
+// Never reads tool arguments.
+func effectiveSubject(st regState, ctx context.Context) policy.Subject {
+	if st.subjectFromContext != nil && ctx != nil {
+		if s, ok := st.subjectFromContext(ctx); ok {
+			return s
+		}
+	}
+	return st.subject
 }
 
 func resolveRegisterOptions(opts *RegisterOptions) regState {
@@ -194,26 +292,51 @@ func resolveRegisterOptions(opts *RegisterOptions) regState {
 	st.profileID = opts.ProfileID
 	st.principalID = opts.PrincipalID
 	st.mutations = opts.Mutations
+	st.mutationPolicy = opts.MutationPolicy
 	if opts.DiagCache != nil {
 		st.fetchCache = opts.DiagCache
 	}
 	st.diagBudget = opts.DiagOpBudgets
 	st.meta = opts.Meta
+	st.subjectKey = strings.TrimSpace(opts.SubjectKey)
+	st.subjectKeyFromContext = opts.SubjectKeyFromContext
+	st.subjectLimiter = opts.SubjectLimiter
+	st.subjectRateLimiter = opts.SubjectRateLimiter
+	st.subjectFromContext = opts.SubjectFromContext
+	st.mutationBindingFromContext = opts.MutationBindingFromContext
 	// MUT-001: process-scoped manager so preview tokens survive until confirm.
 	// Create once when mutations may register and caller did not inject one.
 	// Wave 30: also create under AllowMutations opt-in while Effective RO so
 	// force-clear can use the same manager once ListTools re-exposes tools.
 	// Rate/cooldown zeros → production defaults (process live after serve
 	// Resolve+Set when positive, else 30 previews/min and 5s confirm cooldown).
+	// Binding includes ExternalSubject/Tenant from Subject + optional multi-user
+	// BindingFromContext so confirm tokens cannot replay across subjects.
 	if st.mutations == nil && st.gate != nil && st.gate.ShouldRegisterMutations() {
-		st.mutations = mutation.NewManager(mutation.Config{
-			Gate:        st.gate,
-			Audit:       st.audit,
-			ProfileID:   st.profileID,
-			PrincipalID: st.principalID,
-		})
+		st.mutations = newMutationManager(st)
 	}
 	return st
+}
+
+// newMutationManager builds the process-scoped MUT-001 gate from regState identity.
+func newMutationManager(st regState) *mutation.Manager {
+	profileID := strings.TrimSpace(st.profileID)
+	if profileID == "" {
+		profileID = strings.TrimSpace(string(st.subject.ProfileID))
+	}
+	principalID := strings.TrimSpace(st.principalID)
+	if principalID == "" {
+		principalID = strings.TrimSpace(st.subject.JenkinsUserID)
+	}
+	return mutation.NewManager(mutation.Config{
+		Gate:               st.gate,
+		Audit:              st.audit,
+		ProfileID:          profileID,
+		PrincipalID:        principalID,
+		ExternalSubject:    strings.TrimSpace(st.subject.ExternalSubject),
+		Tenant:             strings.TrimSpace(st.subject.Tenant),
+		BindingFromContext: st.mutationBindingFromContext,
+	})
 }
 
 // effectiveBudget returns budgets for EnforceBudget, applying LiveHardMax when set.
@@ -263,7 +386,8 @@ func Register(s *mcp.Server, client *jenkins.Client, opts *RegisterOptions) {
 		Description: "Get paginated list of root Jenkins jobs with status (offset/limit or opaque page_token; prefer jenkins_list_jobs for folders)"},
 		func(ctx context.Context, req *mcp.CallToolRequest, args jenkins.GetJobsToolArgs) (*mcp.CallToolResult, jenkins.GetJobsToolResponse, error) {
 			// MCP-001: opaque page_token + offset/limit; EnforceBudget still caps full response size.
-			res, err := client.GetJobs(ctx, args)
+			// HOST-004: subject-bound page tokens when SubjectKey is set at serve.
+			res, err := getJobsWithSubject(ctx, client, st, args)
 			if err != nil {
 				return nil, jenkins.GetJobsToolResponse{}, mapToolErr(err)
 			}
@@ -462,6 +586,36 @@ func Register(s *mcp.Server, client *jenkins.Client, opts *RegisterOptions) {
 		Description: "Preview or cancel a Jenkins queue item (MUT-003). Without confirmation_token returns a short-lived preview token; with a valid token cancels once via /queue/cancelItem. Missing/already-left/already-cancelled items return a clear error (not success). Pilot only when --allow-mutations and not forced RO."},
 		cancelQueueItemHandler(client, st))
 
+	// Power-user mutations (MUT-010…016): still require --allow-mutations and no stronger RO.
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolInterruptBuild,
+		Description: "Preview or interrupt a running build (MUT-010). mode=stop|term|kill. Without confirmation_token returns preview token; finished builds refused. Opt-in only."},
+		interruptBuildHandler(client, st))
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolRebuildBuild,
+		Description: "Preview or rebuild a job using parameters from a prior build (MUT-011). Secret-typed params cannot be replayed via the model path. Opt-in only."},
+		rebuildBuildHandler(client, st))
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolReplayPipeline,
+		Description: "Preview or replay a Pipeline build with the same definition (MUT-012). Script-edit is not enabled. Opt-in only."},
+		replayPipelineHandler(client, st))
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolSetJobBuildable,
+		Description: "Preview or enable/disable a job (MUT-013). buildable=true enables; false disables. Opt-in only."},
+		setJobBuildableHandler(client, st))
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolSetBuildKeepForever,
+		Description: "Preview or toggle keep-forever on a build (MUT-014). Opt-in only."},
+		setBuildKeepForeverHandler(client, st))
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolSetBuildDescription,
+		Description: "Preview or set a build description (MUT-014, max 4096 chars). Opt-in only."},
+		setBuildDescriptionHandler(client, st))
+	addMutationTool(s, st, &mcp.Tool{
+		Name:        policy.ToolCancelQueueItemsForJob,
+		Description: "Preview or cancel waiting queue items for one job (MUT-016, cap 20). Optional stuck_only. Opt-in only."},
+		cancelQueueItemsForJobHandler(client, st))
+
 	addReadTool(s, st, &mcp.Tool{
 		Name:        "jenkins_wait_for_running_build",
 		Description: "Wait for a running Jenkins build to complete or timeout"},
@@ -512,12 +666,17 @@ func addReadTool[In, Out any](s *mcp.Server, st regState, t *mcp.Tool, h func(co
 // Effective RO), so force_read_only clear can re-list without restart.
 // Handlers always re-check DenyMutation so dispatch fails closed under RO.
 // deny_tools does not skip registration (ListTools filter + dispatch handle it).
-// Nil gate ⇒ fail-closed omit (default RO; no surprise mutations).
+// MUT-017: MutationPolicy.AllowTools (when non-empty) further restricts which
+// mutation tools register. Nil gate ⇒ fail-closed omit (default RO).
 func addMutationTool[In, Out any](s *mcp.Server, st regState, t *mcp.Tool, h func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, Out, error)) {
 	if st.gate == nil || !st.gate.ShouldRegisterMutations() {
 		// POL-001: omit when no write opt-in and Effective RO (or nil gate).
 		// Without AllowMutations, force clear cannot invent unregistered tools.
 		emitToolDeny(context.Background(), st, t.Name, string(policy.EffectMutate), "read_only", time.Now())
+		return
+	}
+	if !policy.MutationToolAllowed(st.mutationPolicy, t.Name) {
+		emitToolDeny(context.Background(), st, t.Name, string(policy.EffectMutate), "mutation_allowlist", time.Now())
 		return
 	}
 	addTool(s, st, t, policy.EffectMutate, h)
@@ -594,6 +753,45 @@ func addTool[In, Out any](
 				return nil, nil, mapped
 			}
 		}
+		// HOST-006: per-subject rate + concurrent tool budgets (gateway multi-tenant).
+		// Empty SubjectKey skips both (stdio pilot residual). Rate Allow runs before
+		// concurrent Hold so a rate deny does not occupy a slot. Fail closed as
+		// CodeQuota (error path, same family as MCP budget quota — not policy deny).
+		// Multi-user: prefer SubjectKeyFromContext (Caller on ctx) over process key.
+		if sk := effectiveSubjectKey(st, ctx); sk != "" {
+			if st.subjectRateLimiter != nil {
+				if err := st.subjectRateLimiter.Allow(sk); err != nil {
+					mapped := mapToolErr(err)
+					// OBS residual lite: process-local rate-quota counter (no subject labels).
+					if st.metrics != nil {
+						st.metrics.Inc(telemetry.MetricMCPSubjectRateQuota, 1)
+					}
+					emitToolError(ctx, st, t.Name, string(effect), toolErrorReason(mapped), start)
+					logToolError(st, "tool_dispatch_error", mapped,
+						"tool", t.Name, "effect", string(effect), "phase", "subject_rate_limiter",
+						"duration_ms", durationMS(start),
+					)
+					return nil, nil, mapped
+				}
+			}
+			if st.subjectLimiter != nil {
+				release, err := st.subjectLimiter.Hold(sk)
+				if err != nil {
+					mapped := mapToolErr(err)
+					// OBS residual lite: process-local slot-quota counter (no subject labels).
+					if st.metrics != nil {
+						st.metrics.Inc(telemetry.MetricMCPSubjectSlotQuota, 1)
+					}
+					emitToolError(ctx, st, t.Name, string(effect), toolErrorReason(mapped), start)
+					logToolError(st, "tool_dispatch_error", mapped,
+						"tool", t.Name, "effect", string(effect), "phase", "subject_limiter",
+						"duration_ms", durationMS(start),
+					)
+					return nil, nil, mapped
+				}
+				defer release()
+			}
+		}
 		// POL-001: mutation re-check at dispatch.
 		if effect == policy.EffectMutate {
 			if err := st.gate.DenyMutation(t.Name); err != nil {
@@ -602,13 +800,15 @@ func addTool[In, Out any](
 			}
 		}
 		// POL-002/003/004: deny-only RBAC re-check at dispatch (defense in depth).
-		// Subject is process-bound; tool arguments never choose the subject.
+		// Multi-user: effectiveSubject from trusted context; else process Subject.
+		// Tool arguments never choose the subject (GWY-002).
 		// Job-scoped Target is populated from args (job_name / build_number) so
 		// deny_job_prefixes apply before the handler; ListTools discovery uses
 		// empty Target (see InstallListToolsPolicyFilter / listToolsAllows).
 		if st.policy != nil {
 			target := policyTargetFromArgs(args)
-			d := st.policy.Evaluate(st.subject, policy.Action{ToolName: t.Name, Class: effect}, target)
+			subj := effectiveSubject(st, ctx)
+			d := st.policy.Evaluate(subj, policy.Action{ToolName: t.Name, Class: effect}, target)
 			if err := d.Err(); err != nil {
 				reason := d.ReasonCode
 				if reason == "" {
@@ -620,10 +820,8 @@ func addTool[In, Out any](
 		}
 		res, out, err := h(ctx, req, args)
 		if err != nil {
-			if st.metrics != nil {
-				st.metrics.Inc(telemetry.MetricMCPToolError, 1)
-			}
 			mapped := mapToolErr(err)
+			emitToolError(ctx, st, t.Name, string(effect), toolErrorReason(mapped), start)
 			logToolError(st, "tool_dispatch_error", mapped,
 				"tool", t.Name, "effect", string(effect), "phase", "handler",
 				"duration_ms", durationMS(start),
@@ -632,19 +830,15 @@ func addTool[In, Out any](
 		}
 		enforced, _, berr := EnforceBudgetOrError(out, st.effectiveBudget(), st.strict)
 		if berr != nil {
-			if st.metrics != nil {
-				st.metrics.Inc(telemetry.MetricMCPToolError, 1)
-			}
 			mapped := mapToolErr(berr)
+			emitToolError(ctx, st, t.Name, string(effect), toolErrorReason(mapped), start)
 			logToolError(st, "tool_dispatch_error", mapped,
 				"tool", t.Name, "effect", string(effect), "phase", "budget",
 				"duration_ms", durationMS(start),
 			)
 			return nil, nil, mapped
 		}
-		if st.metrics != nil {
-			st.metrics.Inc(telemetry.MetricMCPToolOK, 1)
-		}
+		emitToolOK(ctx, st, t.Name, string(effect), start)
 		logToolDebug(st, "tool_dispatch_ok",
 			"tool", t.Name,
 			"effect", string(effect),

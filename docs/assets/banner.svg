@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="480" viewBox="0 0 1280 480" role="img" aria-label="go-jenkins-mcp">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#09090b"/>
+      <stop offset="55%" stop-color="#0f1115"/>
+      <stop offset="100%" stop-color="#12151b"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8fa3b8"/>
+      <stop offset="100%" stop-color="#d4d8e0"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity="0.04" stroke-width="1"/>
+    </pattern>
+    <radialGradient id="glow" cx="78%" cy="42%" r="42%">
+      <stop offset="0%" stop-color="#8fa3b8" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#8fa3b8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1280" height="480" fill="url(#bg)"/>
+  <rect width="1280" height="480" fill="url(#grid)"/>
+  <rect width="1280" height="480" fill="url(#glow)"/>
+
+  <!-- left accent bar -->
+  <rect x="0" y="0" width="6" height="480" fill="url(#steel)"/>
+
+  <!-- brand mark -->
+  <g transform="translate(88 118)">
+    <rect x="0" y="0" width="72" height="72" rx="16" fill="#141418" stroke="#2a2d35" stroke-width="2"/>
+    <path d="M18 24h36M18 36h22M18 48h30" stroke="#d4d8e0" stroke-width="3.2" stroke-linecap="round"/>
+    <circle cx="52" cy="36" r="5" fill="#8fa3b8"/>
+  </g>
+
+  <text x="88" y="240" fill="#f4f4f5" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="54" font-weight="650" letter-spacing="-1.4">go-jenkins-mcp</text>
+  <text x="88" y="292" fill="#a1a1aa" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="26" font-weight="450">Enterprise Jenkins for AI agents — without leaking your fleet.</text>
+
+  <!-- chips -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#d4d8e0">
+    <rect x="88" y="334" width="168" height="36" rx="10" fill="#141418" stroke="#2a2d35"/>
+    <text x="108" y="357">local-first stdio</text>
+
+    <rect x="272" y="334" width="176" height="36" rx="10" fill="#141418" stroke="#2a2d35"/>
+    <text x="292" y="357">read-only default</text>
+
+    <rect x="464" y="334" width="156" height="36" rx="10" fill="#141418" stroke="#2a2d35"/>
+    <text x="484" y="357">keyring secrets</text>
+
+    <rect x="636" y="334" width="148" height="36" rx="10" fill="#141418" stroke="#2a2d35"/>
+    <text x="656" y="357">signed policy</text>
+  </g>
+
+  <!-- terminal card -->
+  <g transform="translate(820 92)">
+    <rect width="380" height="296" rx="18" fill="#111114" stroke="#2a2d35" stroke-width="1.5"/>
+    <circle cx="28" cy="28" r="5" fill="#c17a74"/>
+    <circle cx="48" cy="28" r="5" fill="#b59a6a"/>
+    <circle cx="68" cy="28" r="5" fill="#6f9e86"/>
+    <text x="96" y="33" fill="#71717a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">session · diagnose_build</text>
+    <text x="28" y="78" fill="#8fa3b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">$</text>
+    <text x="48" y="78" fill="#f4f4f5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">jenkins-mcp login --profile corp</text>
+    <text x="28" y="108" fill="#71717a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">token stored · Secret Service</text>
+    <text x="28" y="148" fill="#8fa3b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">$</text>
+    <text x="48" y="148" fill="#f4f4f5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">jenkins-mcp serve --read-only</text>
+    <text x="28" y="178" fill="#71717a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">stdio MCP · force_read_only</text>
+    <text x="28" y="218" fill="#d4d8e0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">jenkins_diagnose_build</text>
+    <text x="28" y="248" fill="#6f9e86" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">FAILURE · stage Compile</text>
+    <text x="28" y="278" fill="#a1a1aa" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">3 high findings · secrets redacted</text>
+  </g>
+</svg>

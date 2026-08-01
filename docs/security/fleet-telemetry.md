@@ -28,10 +28,17 @@ parameters.
 |---------|---------|--------|
 | `JENKINS_MCP_TELEMETRY` | **unset / off** | Truthy (`1`/`true`/`yes`/`on`) enables local snapshot + queue |
 | `JENKINS_MCP_TELEMETRY_URL` | empty | Optional **HTTPS** POST endpoint; empty ⇒ **local queue only** (no network) |
-| Signed enterprise force-off | **residual** | In-process `CollectorConfig.ForceOff` / `EffectiveEnabled(true)` lite exists offline; **signed-policy overlay pin** is residual (see §7). Self-check: `fleet_telemetry_force_off_residual` |
+| Overlay `fleet_telemetry_force_off` | **false** | When **true**, forces telemetry **off** regardless of env (MGR-002). Fail closed: env cannot re-enable while pin is true. Serve applies on load and hot-reload (`Collector.SetForceOff`). Admin pilot apply cannot clear a true pin (monotonic). Self-check: `fleet_telemetry_force_off_residual` (`policy_overlay_pin=true`) |
 
 When disabled, no installation id is required for status, no export runs, and
 serve does not start a collector.
+
+When `fleet_telemetry_force_off` is true at serve bootstrap, the collector is
+not started even if `JENKINS_MCP_TELEMETRY=1`. When a live collector exists and
+reload sets force-off true, snapshots/export stop immediately. Clearing the pin
+to false on reload re-allows env enable for a **live** collector; if force-off
+was true at bootstrap (collector never started), **process restart** is required
+to enable after clearing the pin.
 
 When enabled **without** `JENKINS_MCP_TELEMETRY_URL`, `telemetry status` reports
 a residual note: **local queue only (no network export)**.
@@ -65,6 +72,9 @@ Unknown top-level keys are **rejected** at validate time (fail closed).
 ### Allowlisted counters
 
 `tool_calls`, `mcp_tool_ok`, `mcp_tool_error`, `mcp_tool_deny`,
+`mcp_subject_rate_quota`, `mcp_subject_slot_quota` (HOST-006 / OBS residual lite;
+process-local subject rate/slot CodeQuota denials — **never** subject keys as
+labels),
 `jenkins_http_requests_total`, `jenkins_http_errors_total`,
 `jenkins_http_wire_bytes_total`, `jenkins_http_decoded_bytes_total`,
 `jenkins_circuit_open_events_total`,
@@ -143,21 +153,24 @@ jenkins-mcp telemetry show [--json]
 
 Residual notes include:
 
-- enterprise force-off via signed overlay (MVP env-only enable)
+- enterprise `fleet_telemetry_force_off` overlay pin is **wired** (env cannot re-enable while true)
 - central analytics requires operator privacy review
 - when enabled without export URL: **local queue only**
+- HSM / true multi-sig t-of-n policy residual unchanged
 
 ---
 
 ## 7. Residuals
 
 - [x] In-process ForceOff lite (`CollectorConfig.ForceOff`, `EffectiveEnabled(true)`) — offline self-check `fleet_telemetry_force_off_residual` (Wave 46)
-- [ ] Enterprise **signed-policy** force-off / force-on pin (overlay field wiring `ForceOff` from policy) — residual; Details `policy_overlay_pin=false`
+- [x] Enterprise overlay `fleet_telemetry_force_off` pin (serve load + hot-reload `SetForceOff`; show-effective / admin surfaces) — Details `policy_overlay_pin=true` (**lite**; not full production multi-sig/HSM claim)
 - [ ] Formal privacy board sign-off of this schema before broad production enablement
 - [ ] Optional queue AEAD / OS keyring-bound keys
 - [ ] Per-tool cardinality-safe histograms (not free-text tool args)
 - [ ] SIEM / remote retention SLA mapping
+- [ ] HSM / true multi-sig t-of-n signed-bundle residual (MGR-001; separate from ForceOff pin)
 - [ ] **Do not claim central analytics production-ready** without the above
+- [ ] **Do not claim full MGR-002 production pin** (privacy board + formal enterprise distribution remain residual)
 
 ---
 
@@ -179,7 +192,7 @@ Offline security self-check (QA-005 / MGR-002):
 | Item | Proves |
 |------|--------|
 | `telemetry_default_off` | Ambient env not truthy (default off); warns if enabled |
-| `fleet_telemetry_force_off_residual` | Pure ForceOff lite: `EffectiveEnabled(true)` false; collector with `ForceOff` nil even when `Enabled=true`; `policy_overlay_pin=false` residual honesty |
+| `fleet_telemetry_force_off_residual` | ForceOff + overlay pin: `EffectiveEnabled(true)` false; collector with `ForceOff` nil even when `Enabled=true`; overlay `fleet_telemetry_force_off` + ExplainEffective; `policy_overlay_pin=true` |
 
 ---
 
@@ -190,3 +203,4 @@ Offline security self-check (QA-005 / MGR-002):
 | 2026-08 | MGR-002 MVP: schema v1, local queue, optional HTTPS export, CLI |
 | 2026-08 | Wave 20 polish: read_only, field caps, https-only/no-redirect/body caps, stronger canaries |
 | 2026-08 | Wave 46: offline self-check `fleet_telemetry_force_off_residual` (ForceOff lite; signed-policy pin residual) |
+| 2026-08 | MGR-002 ForceOff overlay lite: `fleet_telemetry_force_off` field, serve wire + hot-reload, show-effective/admin; `policy_overlay_pin=true` |

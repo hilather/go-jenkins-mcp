@@ -57,12 +57,100 @@ type GroupExtractResult struct {
 	SourceClaims []string
 }
 
+// IncompleteGroupOverageMessage is the non-secret fail-closed reason when Entra
+// group overage markers appear without a concrete groups claim array.
+// Membership is never invented (Microsoft Graph expansion remains residual).
+const IncompleteGroupOverageMessage = "entra group overage without full groups claim; membership not invented"
+
+// CheckIncompleteGroupOverage fails closed when the JWT claim map has Entra-style
+// group overage markers (_claim_names.groups, groups-as-reference-object) without
+// a concrete groups string list. Hybrid tokens that still embed a full groups
+// array are accepted (markers ignored for membership). Never invents membership
+// and never calls Microsoft Graph (OAUTH-006 / OAUTH-010 residual).
+//
+// Used by ExtractGroups and ValidateAccessToken so gateway bind /
+// PolicySubjectFromHTTPInbound / multi-user JWT subject paths fail closed
+// under RequireVerified rather than binding empty groups.
+func CheckIncompleteGroupOverage(claims map[string]any) error {
+	if claims == nil {
+		return nil
+	}
+	if !hasGroupOverageMarkers(claims) {
+		return nil
+	}
+	if hasConcreteGroupsArray(claims) {
+		// Hybrid: concrete groups present — keep current path (no Graph).
+		return nil
+	}
+	return apperr.New(apperr.CodeAuthentication, IncompleteGroupOverageMessage)
+}
+
+// hasGroupOverageMarkers reports Entra distributed-claim / overage indicators
+// for directory group membership (not app-role lists alone).
+func hasGroupOverageMarkers(claims map[string]any) bool {
+	if claims == nil {
+		return false
+	}
+	// Top-level _claim_names.groups → full groups omitted; Graph endpoint in _claim_sources.
+	if hasClaimNamesGroupKey(claims["_claim_names"]) {
+		return true
+	}
+	// groups claim itself is a reference object (src / endpoint / _claim_sources).
+	if raw, ok := claims["groups"]; ok && raw != nil && isOverageReference(raw) {
+		return true
+	}
+	// _claim_sources present with no concrete groups and groups key absent is only
+	// treated as group overage when _claim_names already pointed at groups (above)
+	// or groups is a reference object. Bare _claim_sources for other claims is ignored.
+	return false
+}
+
+// hasClaimNamesGroupKey reports whether _claim_names maps the groups claim to a source id.
+func hasClaimNamesGroupKey(v any) bool {
+	switch m := v.(type) {
+	case map[string]any:
+		if _, ok := m["groups"]; ok {
+			return true
+		}
+	case map[string]string:
+		if _, ok := m["groups"]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// hasConcreteGroupsArray reports whether claims["groups"] is a string list
+// (possibly empty). Map/object overage shapes are not concrete membership.
+func hasConcreteGroupsArray(claims map[string]any) bool {
+	if claims == nil {
+		return false
+	}
+	raw, ok := claims["groups"]
+	if !ok || raw == nil {
+		return false
+	}
+	if isOverageReference(raw) {
+		return false
+	}
+	_, err := coerceStringList(raw)
+	return err == nil
+}
+
 // ExtractGroups reads group/role claims from a decoded JWT claim map.
-// Supports string, []string, and []any of strings. Nested Entra "overage"
-// reference objects are ignored (do not invent membership) and leave ResidualNote.
+// Supports string, []string, and []any of strings.
+//
+// Entra group overage without a full groups array fails closed (never invents
+// membership; no Graph expansion). When a concrete groups array is present,
+// overage markers are ignored for membership extraction. Non-groups claim
+// keys that are overage reference objects are skipped with ResidualNote.
 func ExtractGroups(claims map[string]any, cfg GroupClaimConfig) (GroupExtractResult, error) {
 	if claims == nil {
 		return GroupExtractResult{}, nil
+	}
+	// OAUTH-006: Entra overage-only → fail closed (gateway RequireVerified path).
+	if err := CheckIncompleteGroupOverage(claims); err != nil {
+		return GroupExtractResult{}, err
 	}
 	names := cfg.ClaimNames
 	if len(names) == 0 {
@@ -88,6 +176,8 @@ func ExtractGroups(claims map[string]any, cfg GroupClaimConfig) (GroupExtractRes
 			continue
 		}
 		// Entra group overage: claim may be a reference object, not a list.
+		// Incomplete groups overage already failed above; remaining refs are
+		// non-groups claim keys (or hybrid residual) — do not invent membership.
 		if isOverageReference(raw) {
 			overageRefs = append(overageRefs, name)
 			continue
@@ -131,11 +221,20 @@ func ExtractGroups(claims map[string]any, cfg GroupClaimConfig) (GroupExtractRes
 			res.ResidualNote = note
 		}
 	}
+	// Hybrid residual: overage markers present but concrete groups used.
+	if hasGroupOverageMarkers(claims) && hasConcreteGroupsArray(claims) {
+		note := "group_overage_hybrid: _claim_names/_claim_sources or ref ignored; concrete groups claim used (no graph expansion)"
+		if res.ResidualNote != "" {
+			res.ResidualNote = res.ResidualNote + "; " + note
+		} else {
+			res.ResidualNote = note
+		}
+	}
 	return res, nil
 }
 
 // isOverageReference detects Entra-style group overage payload shapes that are
-// not concrete group id lists (e.g. map with _claim_sources / src).
+// not concrete group id lists (e.g. map with _claim_sources / src / endpoint).
 func isOverageReference(v any) bool {
 	m, ok := v.(map[string]any)
 	if !ok {

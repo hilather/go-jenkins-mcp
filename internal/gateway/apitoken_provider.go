@@ -23,7 +23,8 @@ type CredentialMode string
 const (
 	// CredentialModeAPITokenVault is mode A (HOST-009).
 	CredentialModeAPITokenVault CredentialMode = "api_token_vault"
-	// CredentialModeJWTRSBearer is mode B residual (HOST-010).
+	// CredentialModeJWTRSBearer is mode B (HOST-010): per-subject Bearer JWT vault.
+	// Live jwt-auth-filter / IdP pin remains OAUTH-009 residual.
 	CredentialModeJWTRSBearer CredentialMode = "jwt_rs_bearer"
 	// CredentialModeAgentCore is mode C (AgentCore 3LO/OBO; GWY-001).
 	CredentialModeAgentCore CredentialMode = "agentcore_3lo_obo"
@@ -44,6 +45,10 @@ const EnvGatewayEnabledModes = "JENKINS_MCP_GATEWAY_ENABLED_MODES"
 // EnvGatewayVaultPath is the optional file path for FileAPITokenVault (mode A lab).
 // Default convention is documented in docs/gateway/README.md (XDG data).
 const EnvGatewayVaultPath = "JENKINS_MCP_GATEWAY_VAULT_PATH"
+
+// EnvGatewayJWTVaultPath is the optional file path for FileJWTVault (mode B lab).
+// Default convention: $XDG_DATA_HOME/jenkins-mcp/gateway/jwt_vault.json
+const EnvGatewayJWTVaultPath = "JENKINS_MCP_GATEWAY_JWT_VAULT_PATH"
 
 // AllCredentialModes returns the stable HOST-011 mode enum (A, B, C).
 func AllCredentialModes() []CredentialMode {
@@ -165,6 +170,10 @@ type APITokenVaultProvider struct {
 	Vault APITokenVault
 	// Live enables Obtain. When false, always not_configured (cache/vault ignored).
 	Live bool
+	// Principals is the optional companion PrincipalCache cleared on Invalidate
+	// (GWY-002 / HOST-003 force re-auth residual lite). When nil, Invalidate
+	// uses ProcessPrincipalCache. Does not delete durable vault entries.
+	Principals PrincipalStore
 }
 
 // NewAPITokenVaultProvider constructs a fail-closed Mode A provider (Live=false).
@@ -242,13 +251,22 @@ func (p *APITokenVaultProvider) Obtain(ctx context.Context, caller Caller) (Cred
 }
 
 // Invalidate implements CredentialProvider.
-// Mode A has no short-lived token cache; delete is operator-driven via vault Delete.
-// Invalidate is a no-op success (does not delete durable vault entry).
+// Mode A has no short-lived token cache; durable vault delete is operator-driven
+// via vault Delete. Invalidate clears the companion PrincipalCache entry so the
+// next Binding/policy path re-Obtains (force re-auth residual lite) — never the
+// durable vault token.
 func (p *APITokenVaultProvider) Invalidate(ctx context.Context, caller Caller) error {
 	if err := ctx.Err(); err != nil {
 		return apperr.Wrap(apperr.CodeCancelled, "gateway invalidate cancelled", err)
 	}
-	_ = caller
+	if p == nil {
+		return nil
+	}
+	principals := p.Principals
+	if principals == nil {
+		principals = ProcessPrincipalCache()
+	}
+	_ = InvalidateSubjectLocal(caller, principals, nil)
 	return nil
 }
 
@@ -350,12 +368,15 @@ func HTTPAuthFromCredential(cred Credential) (HTTPAuth, error) {
 	}, nil
 }
 
-// residualJWTRSProvider is the HOST-011 Mode B residual CredentialProvider.
-// Obtain always fails closed with capability_missing / not_configured and a
-// clear residual message — never silent AgentCore fallthrough (HOST-010).
+// residualJWTRSProvider is a Mode B fail-closed stub used when operators want
+// an explicit not_configured surface without a vault (tests / disabled path).
+// Prefer JWTRSBearerProvider + JWTVault for HOST-010 offline Obtain.
+// Live jwt-auth-filter production pin remains OAUTH-009 residual either way.
 type residualJWTRSProvider struct{}
 
-// NewResidualJWTRSProvider returns the Mode B residual fail-closed provider.
+// NewResidualJWTRSProvider returns a Mode B residual fail-closed provider
+// (no vault). CredentialProviderFromEnviron wires the vault path instead;
+// this helper remains for explicit residual / disabled-mode tests.
 func NewResidualJWTRSProvider() CredentialProvider {
 	return residualJWTRSProvider{}
 }
@@ -392,7 +413,7 @@ func (residualJWTRSProvider) Status(ctx context.Context) ProviderStatus {
 		ASConfigured:     false,
 		Ready:            false,
 		ErrorCode:        string(apperr.CodeCapabilityMissing),
-		ErrorMessageSafe: "jwt_rs_bearer residual (HOST-010); live IdP JWT RS not wired",
+		ErrorMessageSafe: "jwt_rs_bearer residual (HOST-010); live IdP JWT RS not wired (OAUTH-009)",
 	}
 }
 

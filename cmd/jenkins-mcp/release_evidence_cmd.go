@@ -41,10 +41,15 @@ type releaseEvidence struct {
 	SecuritySelfCheck *securitySelfCheckSnap `json:"security_self_check,omitempty"`
 	UpdateLKG         *updateLKGSnap         `json:"update_lkg,omitempty"`
 	GatewayQualify    *gatewayQualifySnap    `json:"gateway_qualify,omitempty"`
-	Doctor            *doctorSnap            `json:"doctor,omitempty"`
-	CacheStatus       *cacheSnap             `json:"cache_status,omitempty"`
-	Checks            []releaseCheck         `json:"checks"`
-	Notes             []string               `json:"notes,omitempty"`
+	// GatewayResidualStatus is the unified secret-free map from
+	// diagnostics.BuildGatewayResidualStatus (same as CLI `gateway residual-status`
+	// and doctor Report.gateway_residual_status). Offline honesty embed so evidence
+	// packs need no second CLI; informational only — not live multi-user / Entra GO.
+	GatewayResidualStatus map[string]any `json:"gateway_residual_status,omitempty"`
+	Doctor                *doctorSnap    `json:"doctor,omitempty"`
+	CacheStatus           *cacheSnap     `json:"cache_status,omitempty"`
+	Checks                []releaseCheck `json:"checks"`
+	Notes                 []string       `json:"notes,omitempty"`
 	// Residual is structured known residuals (never claim production GO from lite alone).
 	Residual []releaseResidual `json:"residual"`
 }
@@ -120,6 +125,9 @@ type releaseEvidenceOptions struct {
 	GoModContent string
 	// Paths optional XDG paths; when nil, config.Resolve is used.
 	Paths *config.Paths
+	// Getenv optional; when nil, BuildGatewayResidualStatus uses os.Getenv.
+	// Tests inject a closed getenv to prove residual embed honesty without process env.
+	Getenv func(string) string
 	// Version/Commit/BuildTime override package ldflags vars when non-empty (tests set via package vars).
 }
 
@@ -141,6 +149,42 @@ func knownReleaseResiduals() []releaseResidual {
 			ID:      "live_entra",
 			GateIDs: []string{"REL-002.compat.auth", "REL-002.sec.oauth"},
 			Message: "Live Entra / jwt-auth-filter / AgentCore Obtain network qualification remains residual",
+		},
+		{
+			// REL-001/002 honesty: offline gateway qualify is not live mode A/B/C GO.
+			ID:      "gateway_modes_live",
+			GateIDs: []string{"REL-002.compat.modes", "REL-002.compat.gateway", "REL-002.compat.auth"},
+			Message: "Live multi-user gateway modes A/B/C remain residual unless operator mode matrix records live pilot cohorts; offline gateway qualify + unit contracts are foundation only (see docs/pilot/checklist.md §0)",
+		},
+		{
+			// Multi-user Obtain foundation offline; not production multi-user GO.
+			ID:      "multi_user_offline",
+			GateIDs: []string{"REL-002.compat.modes", "REL-002.compat.gateway"},
+			Message: "Done*: JENKINS_MCP_GATEWAY_MULTI_USER opt-in + doctor/admin secret-free residual fields offline; not production multi-user GO or multi-replica HA (see docs/pilot/checklist.md §0, deploy/gateway/.env.example)",
+		},
+		{
+			// OAUTH-009 offline Bearer matrix / qualify case; live Entra pin open.
+			ID:      "oauth009_offline",
+			GateIDs: []string{"REL-002.compat.auth", "REL-002.sec.oauth", "REL-002.compat.modes"},
+			Message: "Done*: oauth009_offline_bearer_matrix + Mode B offline vault foundation; live Entra/jwt-auth-filter production pin residual (OAUTH-009; docs/auth/jwt-auth-filter-qualification.md)",
+		},
+		{
+			// OAUTH-010 offline Mode C prototype matrix; live Entra 3LO/OBO + AgentCore pin open.
+			ID:      "oauth010_offline",
+			GateIDs: []string{"REL-002.compat.auth", "REL-002.sec.oauth", "REL-002.compat.modes", "REL-002.compat.gateway"},
+			Message: "Done*: oauth010_mode_c_offline_matrix + Mode C offline Live=false/mock Fetcher foundation; live Entra 3LO/OBO + AgentCore Identity vault production pin residual (OAUTH-010 / GWY-003; docs/auth/oauth-capability-matrix.md §4) — offline only, not live Entra Done",
+		},
+		{
+			// Progressive consent metadata path Done*; browser 3LO not automated (OAUTH-010 / GWY-001).
+			ID:      "progressive_consent_offline",
+			GateIDs: []string{"REL-002.compat.auth", "REL-002.sec.oauth", "REL-002.compat.modes", "REL-002.compat.gateway"},
+			Message: "Done*: progressive consent metadata path (authorization_url + session_id only; qualify progressive_consent_residual); process-local consent metadata store Done* (optional file; never tokens; same-host reload-before-persist flock lite; not multi-replica); browser 3LO not automated; multi-pod consent correlation residual (OAUTH-010 / GWY-001 / HOST-008) — offline only, not live consent UX GO",
+		},
+		{
+			// HOST-008 Tier A single-replica honesty (scaffold replicas:1).
+			ID:      "host008_single_replica",
+			GateIDs: []string{"REL-002.compat.gateway", "REL-002.ops.doctor"},
+			Message: "HOST-008 Tier A: single-replica default (deploy/gateway kustomize replicas:1; doctor/admin ha_multi_replica=false); Service sessionAffinity ClientIP Done* scaffold (residual runtime); session_affinity_recommended when multi_user; file vault flock + optional FileTokenCache + optional FilePrincipalCache (JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH) + optional FileSubjectRateLimiter (JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH) multi-process Done* lite (same host/shared FS only — multi-pod needs shared FS/external vault/rate/cache/principal); multi-replica HA residual until multi-pod durable vault + multi-pod shared rate/cache",
 		},
 		{
 			// Done* inventory: offline binary smoke exists (Wave 25 make + Wave 26 optional CI job).
@@ -249,8 +293,13 @@ func buildReleaseEvidence(ctx context.Context, opts releaseEvidenceOptions) (*re
 		Notes: []string{
 			"REL-002 lite offline evidence only — not production sign-off",
 			"Map check.gate_id and residual.gate_ids to docs/release/gates.md",
+			"gateway_residual_status embeds CLI gateway residual-status map (offline honesty; not live GO)",
 		},
 	}
+
+	// Unified residual-status map (same as gateway residual-status CLI / doctor embed).
+	// Always present on offline lite packs — no second CLI required.
+	ev.GatewayResidualStatus = diagnostics.BuildGatewayResidualStatus(opts.Getenv)
 
 	// --- Always-on offline checks ---
 	appendVersionChecks(ev)
@@ -758,6 +807,52 @@ func scrubReleaseEvidence(ev *releaseEvidence) {
 	if ev.MCPSDK != nil {
 		ev.MCPSDK.Version = redact.Secrets(ev.MCPSDK.Version)
 		ev.MCPSDK.Source = redact.Secrets(ev.MCPSDK.Source)
+	}
+	// Defense-in-depth: residual-status map is already secret-free from builder;
+	// walk string values anyway (never dump Authorization / private keys).
+	if len(ev.GatewayResidualStatus) > 0 {
+		ev.GatewayResidualStatus = scrubResidualStatusMap(ev.GatewayResidualStatus)
+	}
+}
+
+// scrubResidualStatusMap redacts string leaves in the gateway residual-status embed.
+// Drops secret-shaped keys; never elevates residual honesty to live GO.
+// Uses diagnostics.LooksSecretKey so residual honesty bools like
+// shared_token_cache_file are preserved (not dropped by naive "token" substring).
+func scrubResidualStatusMap(in map[string]any) map[string]any {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		if diagnostics.LooksSecretKey(k) {
+			continue
+		}
+		out[k] = scrubResidualStatusValue(v)
+	}
+	return out
+}
+
+func scrubResidualStatusValue(v any) any {
+	switch t := v.(type) {
+	case string:
+		return redact.Secrets(t)
+	case map[string]any:
+		return scrubResidualStatusMap(t)
+	case []any:
+		out := make([]any, len(t))
+		for i := range t {
+			out[i] = scrubResidualStatusValue(t[i])
+		}
+		return out
+	case []string:
+		out := make([]string, len(t))
+		for i := range t {
+			out[i] = redact.Secrets(t[i])
+		}
+		return out
+	default:
+		return v
 	}
 }
 

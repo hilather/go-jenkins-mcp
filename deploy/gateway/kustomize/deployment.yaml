@@ -1,5 +1,24 @@
-# GWY-004 MVP scaffold — per-user / isolated gateway Deployment stub.
+# GWY-004 / HOST-005 scaffold — per-user / isolated gateway Deployment stub.
 # Platforms: Linux nodes only (Rocky/Ubuntu workers). Windows nodes unsupported.
+#
+# Hardening notes:
+#   - replicas: 1 (HOST-008 Tier A default; multi-replica HA is a non-goal until
+#     durable shared vault + sticky sessions + audit aggregation exist — see
+#     docs/gateway/deployment.md §9). Do not claim multi-replica Done from this
+#     scaffold.
+#   - When an operator scales replicas > 1 they MUST also provide:
+#       1) Service sessionAffinity (ClientIP scaffold in service.yaml) OR a
+#          shared session store
+#       2) Shared vault path on multi-pod storage (flock is multi-process same
+#          host / shared FS only — emptyDir is NOT multi-pod safe)
+#       3) External / shared rate + Obtain cache residual (process-local today)
+#       4) Audit aggregation (per-pod files are incomplete forensics)
+#     Affinity + flock alone ≠ multi-replica Done.
+#   - non-root, read-only root FS, drop ALL caps
+#   - resource requests/limits (pilot envelope)
+#   - HTTP probes on /healthz and /readyz (secret-free; no inventory)
+#   - env placeholders are non-secret only — inject real values via external
+#     Secret managers that never place token/client-secret values in git
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,6 +26,15 @@ metadata:
   labels:
     app.kubernetes.io/name: jenkins-mcp-gateway
 spec:
+  # HOST-008 Tier A: single-replica default — keep replicas: 1.
+  # Do NOT raise replicas until the multi-replica checklist is complete
+  # (docs/gateway/deployment.md §9):
+  #   - sticky sessions (Service sessionAffinity scaffold) OR shared session store
+  #   - multi-pod durable shared vault (not emptyDir; flock = same-host lite only)
+  #   - no memory-only Obtain/token cache as sole store
+  #   - external/shared subject rate residual closed
+  #   - audit aggregation
+  # HA is an explicit non-goal until that vault + residuals exist.
   replicas: 1
   selector:
     matchLabels:
@@ -36,15 +64,17 @@ spec:
             - --read-only
             - --http
             # Loopback default matches mcpserver validator. All-interfaces + mesh
-            # requires --http-allow-non-local and --http-allowed-origin (residual).
+            # requires --http-allow-non-local, --http-allowed-host, and
+            # --http-allowed-origin (exact-match; no CORS wildcard) — residual.
             - 127.0.0.1:8081
           ports:
             - name: mcp-http
               containerPort: 8081
               protocol: TCP
           env:
-            # Non-secret only — inject real values via external Secret managers
-            # that never place token/client-secret values in git.
+            # Non-secret only — never put API tokens / client secrets here.
+            # Lab multi-user / JWKS / path-prefix / signed-policy / subject rate
+            # flags: see deploy/gateway/.env.example (optional ConfigMap overlay).
             - name: JENKINS_MCP_GATEWAY_MODE
               value: "1"
             - name: JENKINS_MCP_READ_ONLY
@@ -63,6 +93,19 @@ spec:
               value: "replace-tenant"
             - name: JENKINS_MCP_GATEWAY_WORKLOAD
               value: "replace-workload"
+            # Optional lab flags (empty = defaults). Never secrets.
+            # - name: JENKINS_MCP_GATEWAY_MULTI_USER
+            #   value: "1"
+            # - name: JENKINS_MCP_SUBJECT_MAX_CONCURRENT
+            #   value: "8"
+            # - name: JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT
+            #   value: "64"
+            # - name: JENKINS_MCP_HTTP_PATH_PREFIX
+            #   value: "/mcp"
+            # - name: JENKINS_MCP_HTTP_JWKS_MAX_STALE
+            #   value: "1h"
+            # - name: JENKINS_MCP_REQUIRE_SIGNED_POLICY
+            #   value: "1"
             - name: XDG_CONFIG_HOME
               value: /home/nonroot/.config
             - name: XDG_DATA_HOME
@@ -75,6 +118,7 @@ spec:
             capabilities:
               drop: ["ALL"]
           resources:
+            # HOST-005 pilot envelope (tune per site).
             requests:
               cpu: 100m
               memory: 128Mi
@@ -90,8 +134,26 @@ spec:
               mountPath: /home/nonroot/.cache/jenkins-mcp
             - name: tmp
               mountPath: /tmp
-          # Residual: real readiness when live AgentCore + HTTP health exist.
-          # readinessProbe / livenessProbe intentionally omitted in scaffold.
+          # HOST-005: secret-free probes (no tool inventory).
+          # /healthz = liveness; /readyz returns 503 when gateway_ready=false.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: mcp-http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: mcp-http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
       volumes:
         - name: config
           emptyDir: {}

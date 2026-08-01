@@ -10,6 +10,28 @@ export type AuditLimit = (typeof AUDIT_LIMIT_OPTIONS)[number];
 
 export const DEFAULT_AUDIT_LIMIT: AuditLimit = 50;
 
+/**
+ * Stable audit `type` values for the list filter dropdown.
+ * Matches internal/audit + mutation Manager emit types (exact BFF type= filter).
+ * Note: optional success audit is `tool_success` (JENKINS_MCP_AUDIT_TOOL_OK), not metrics `tool_ok`.
+ */
+export const AUDIT_TYPE_OPTIONS = [
+  { value: "", label: "(all types)" },
+  { value: "tool_deny", label: "tool_deny" },
+  { value: "tool_error", label: "tool_error" },
+  { value: "tool_success", label: "tool_success (opt-in tool_ok audit)" },
+  { value: "mutation_preview", label: "mutation_preview" },
+  { value: "mutation_confirm", label: "mutation_confirm" },
+  { value: "mutation_deny", label: "mutation_deny" },
+  { value: "login_success", label: "login_success" },
+  { value: "login_fail", label: "login_fail" },
+  { value: "serve_start", label: "serve_start" },
+  { value: "auth_fail", label: "auth_fail" },
+] as const;
+
+/** Default max runes shown for subjectKeyHash / externalSubject in the table. */
+export const AUDIT_SUBJECT_CELL_MAX = 16;
+
 /** Build query string params for GET .../audit (no leading ?). */
 export function buildAuditQueryString(query: AuditQuery = {}): string {
   const params = new URLSearchParams();
@@ -23,7 +45,46 @@ export function buildAuditQueryString(query: AuditQuery = {}): string {
   if (query.before?.trim()) {
     params.set("before", query.before.trim());
   }
+  // BFF: exact match on ExternalSubject (case-sensitive). Query param snake_case.
+  if (query.externalSubject?.trim()) {
+    params.set("external_subject", query.externalSubject.trim());
+  }
   return params.toString();
+}
+
+/**
+ * Display helper for optional audit table cells: empty → em dash; otherwise
+ * truncate long labels (subjectKeyHash is already ~16 hex; externalSubject may be longer).
+ * Never invents values — passes through opaque hashes / IdP labels as stored.
+ */
+export function formatAuditSubjectCell(
+  value: string | undefined | null,
+  maxLen: number = AUDIT_SUBJECT_CELL_MAX,
+): string {
+  const v = (value ?? "").trim();
+  if (!v) {
+    return "—";
+  }
+  if (maxLen <= 0 || v.length <= maxLen) {
+    return v;
+  }
+  return `${v.slice(0, maxLen)}…`;
+}
+
+/**
+ * Client-side exact match on loaded events by externalSubject (case-sensitive).
+ * Primary filter is BFF `external_subject` (server-side across rotated merge).
+ * This residual page-local filter helps older BFFs that ignore the query param.
+ */
+export function filterEventsByExternalSubject(
+  events: AuditEvent[],
+  externalSubject: string | undefined | null,
+): AuditEvent[] {
+  const needle = (externalSubject ?? "").trim();
+  if (!needle) {
+    return events;
+  }
+  return events.filter((e) => (e.externalSubject ?? "") === needle);
 }
 
 /** Normalize limit to allowed page sizes (API max 200). */
@@ -66,7 +127,11 @@ export function datetimeLocalToRfc3339(localValue: string): string | undefined {
   return d.toISOString();
 }
 
-/** Scrubbed export of loaded audit events (schema fields only as present). */
+/**
+ * Scrubbed export of loaded audit events (schema fields only as present).
+ * Multi-user correlation fields (`externalSubject`, `subjectKeyHash`) are included
+ * when present on events — never raw tokens or subject keys.
+ */
 export function buildAuditExportPayload(
   profileId: string,
   events: AuditEvent[],
@@ -76,13 +141,14 @@ export function buildAuditExportPayload(
   return {
     exportedAt,
     source: "GET /admin/v1/profiles/{id}/audit",
-    note: "privacy-preserving audit fields only; client-side page export, size-capped to loaded events",
+    note: "privacy-preserving audit fields only; client-side page export, size-capped to loaded events; external_subject is BFF exact-match filter (SPA client filter residual for older BFF)",
     profileId,
     truncated: meta.truncated,
     filters: {
       limit: meta.filters.limit ?? null,
       type: meta.filters.type ?? null,
       before: meta.filters.before ?? null,
+      externalSubject: meta.filters.externalSubject?.trim() || null,
     },
     eventCount: events.length,
     events,
@@ -96,6 +162,8 @@ export const AUDIT_EVENT_FIELD_ORDER = [
   "schemaVersion",
   "profileId",
   "principalId",
+  "externalSubject",
+  "subjectKeyHash",
   "tool",
   "action",
   "decision",

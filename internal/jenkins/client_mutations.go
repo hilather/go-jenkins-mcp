@@ -237,3 +237,187 @@ func (opts *Client) CancelQueueItem(ctx context.Context, queueID int) (*CancelQu
 		Message: fmt.Sprintf("queue item #%d cancel requested", queueID),
 	}, nil
 }
+
+// InterruptBuild POSTs /stop, /term, or /kill for a running build (MUT-010).
+// mode must be stop|term|kill. POST is never auto-retried.
+func (opts *Client) InterruptBuild(ctx context.Context, jobName string, buildNumber int, mode string) (*InterruptBuildToolResponse, error) {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	switch mode {
+	case "stop", "term", "kill":
+	default:
+		return nil, fmt.Errorf("mode must be stop, term, or kill")
+	}
+	jobPath := BuildJobPath(jobName)
+	apiPath := fmt.Sprintf("%s/%d/%s", jobPath, buildNumber, mode)
+	headers := map[string]string{}
+	if f, c, ok, _ := opts.GetCrumb(ctx); ok {
+		headers[f] = c
+	}
+	resp, err := opts.CallJenkins(ctx, opts.Client, http.MethodPost, apiPath, nil, headers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to interrupt build: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("job '%s' build #%d not found", jobName, buildNumber)
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("jenkins api returned status %d: %s", resp.StatusCode, strings.TrimSpace(readLimitedErrBody(resp.Body)))
+	}
+	return &InterruptBuildToolResponse{
+		JobName:     jobName,
+		BuildNumber: buildNumber,
+		Mode:        mode,
+		Interrupted: true,
+	}, nil
+}
+
+// RebuildBuild re-triggers a job using parameters from a prior build (MUT-011).
+// Uses buildWithParameters with the provided params (caller loads from source build).
+// Never auto-retries POST.
+func (opts *Client) RebuildBuild(ctx context.Context, jobName string, sourceBuild int, params map[string]any) (*StartJobToolResponse, error) {
+	// Rebuild is enqueue with fixed params; sourceBuild is audit/preview context only at client.
+	_ = sourceBuild
+	return opts.StartJob(ctx, jobName, params)
+}
+
+// ReplayPipeline requests Pipeline replay without script edit (MUT-012).
+// POSTs …/<n>/replay/rebuild (common Pipeline plugin path). Fail closed if controller rejects.
+func (opts *Client) ReplayPipeline(ctx context.Context, jobName string, buildNumber int) (*ReplayPipelineToolResponse, error) {
+	jobPath := BuildJobPath(jobName)
+	// Jenkins Pipeline: POST /job/…/<n>/replay/run or /replay — try /replay/rebuild first.
+	apiPath := fmt.Sprintf("%s/%d/replay/rebuild", jobPath, buildNumber)
+	headers := map[string]string{"Content-Type": "application/x-www-form-urlencoded"}
+	if f, c, ok, _ := opts.GetCrumb(ctx); ok {
+		headers[f] = c
+	}
+	// Empty form: same-definition replay (no Jenkinsfile body).
+	body := strings.NewReader("")
+	resp, err := opts.CallJenkins(ctx, opts.Client, http.MethodPost, apiPath, body, headers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to replay pipeline: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		// Fallback path used by some Pipeline versions.
+		apiPath = fmt.Sprintf("%s/%d/replay", jobPath, buildNumber)
+		resp2, err2 := opts.CallJenkins(ctx, opts.Client, http.MethodPost, apiPath, strings.NewReader(""), headers)
+		if err2 != nil {
+			return nil, fmt.Errorf("failed to replay pipeline: %w", err2)
+		}
+		defer resp2.Body.Close()
+		if resp2.StatusCode == http.StatusNotFound {
+			return nil, fmt.Errorf("pipeline replay not available for job '%s' build #%d (capability missing)", jobName, buildNumber)
+		}
+		if resp2.StatusCode >= 400 {
+			return nil, fmt.Errorf("jenkins api returned status %d: %s", resp2.StatusCode, strings.TrimSpace(readLimitedErrBody(resp2.Body)))
+		}
+		return &ReplayPipelineToolResponse{JobName: jobName, SourceBuild: buildNumber, Status: "replay_requested"}, nil
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("jenkins api returned status %d: %s", resp.StatusCode, strings.TrimSpace(readLimitedErrBody(resp.Body)))
+	}
+	return &ReplayPipelineToolResponse{JobName: jobName, SourceBuild: buildNumber, Status: "replay_requested"}, nil
+}
+
+// SetJobBuildable enables or disables a job (MUT-013). mode enable|disable.
+func (opts *Client) SetJobBuildable(ctx context.Context, jobName string, enable bool) (*SetJobBuildableToolResponse, error) {
+	jobPath := BuildJobPath(jobName)
+	action := "disable"
+	if enable {
+		action = "enable"
+	}
+	apiPath := jobPath + "/" + action
+	headers := map[string]string{}
+	if f, c, ok, _ := opts.GetCrumb(ctx); ok {
+		headers[f] = c
+	}
+	resp, err := opts.CallJenkins(ctx, opts.Client, http.MethodPost, apiPath, nil, headers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to %s job: %w", action, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("job '%s' not found", jobName)
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("jenkins api returned status %d: %s", resp.StatusCode, strings.TrimSpace(readLimitedErrBody(resp.Body)))
+	}
+	return &SetJobBuildableToolResponse{JobName: jobName, Buildable: enable, Status: action + "d"}, nil
+}
+
+// SetBuildKeepForever sets keep-forever on a build to wantKeep (MUT-014).
+// Fetches current keepLog first: no-op when already matching (no POST); otherwise
+// POSTs toggleLogKeepForever once. Reports the resulting KeepForever state
+// (never claims wantKeep if toggle would flip away from it).
+// POST is never auto-retried.
+func (opts *Client) SetBuildKeepForever(ctx context.Context, jobName string, buildNumber int, wantKeep bool) (*SetBuildKeepForeverToolResponse, error) {
+	cur, err := opts.GetBuildDetailsByJob(ctx, jobName, buildNumber)
+	if err != nil {
+		return nil, err
+	}
+	if cur == nil {
+		return nil, fmt.Errorf("job '%s' build #%d not found", jobName, buildNumber)
+	}
+	if cur.KeepLog == wantKeep {
+		return &SetBuildKeepForeverToolResponse{
+			JobName:     jobName,
+			BuildNumber: buildNumber,
+			KeepForever: cur.KeepLog,
+			Status:      "unchanged",
+		}, nil
+	}
+	jobPath := BuildJobPath(jobName)
+	apiPath := fmt.Sprintf("%s/%d/toggleLogKeepForever", jobPath, buildNumber)
+	headers := map[string]string{}
+	if f, c, ok, _ := opts.GetCrumb(ctx); ok {
+		headers[f] = c
+	}
+	resp, err := opts.CallJenkins(ctx, opts.Client, http.MethodPost, apiPath, nil, headers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to toggle keep forever: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("job '%s' build #%d not found", jobName, buildNumber)
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("jenkins api returned status %d: %s", resp.StatusCode, strings.TrimSpace(readLimitedErrBody(resp.Body)))
+	}
+	// Toggle flips keepLog; after success the desired state is wantKeep.
+	return &SetBuildKeepForeverToolResponse{
+		JobName:     jobName,
+		BuildNumber: buildNumber,
+		KeepForever: wantKeep,
+		Status:      "toggled",
+	}, nil
+}
+
+// SetBuildDescription sets a build description (MUT-014). Length-capped by caller.
+func (opts *Client) SetBuildDescription(ctx context.Context, jobName string, buildNumber int, description string) (*SetBuildDescriptionToolResponse, error) {
+	jobPath := BuildJobPath(jobName)
+	apiPath := fmt.Sprintf("%s/%d/submitDescription", jobPath, buildNumber)
+	form := url.Values{}
+	form.Set("description", description)
+	headers := map[string]string{"Content-Type": "application/x-www-form-urlencoded"}
+	if f, c, ok, _ := opts.GetCrumb(ctx); ok {
+		headers[f] = c
+	}
+	resp, err := opts.CallJenkins(ctx, opts.Client, http.MethodPost, apiPath, strings.NewReader(form.Encode()), headers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set build description: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("job '%s' build #%d not found", jobName, buildNumber)
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("jenkins api returned status %d: %s", resp.StatusCode, strings.TrimSpace(readLimitedErrBody(resp.Body)))
+	}
+	return &SetBuildDescriptionToolResponse{
+		JobName:     jobName,
+		BuildNumber: buildNumber,
+		Status:      "updated",
+		Length:      len(description),
+	}, nil
+}

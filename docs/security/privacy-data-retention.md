@@ -132,6 +132,7 @@ go test ./internal/diagnostics/ ./internal/audit/ -count=1 -run 'Privacy|Canary'
 | security_self_check (offline QA-005) | cache encryption keys |
 | release_evidence_lite (version/runtime only) | full REL-002 gate pack claims |
 | rs_qualification_summary (offline OAUTH-009 matrix) | live jwt-auth-filter lab secrets |
+| gateway-residual-status.json (always; BuildGatewayResidualStatus) | tokens/subjects; never live GO claims |
 
 ---
 

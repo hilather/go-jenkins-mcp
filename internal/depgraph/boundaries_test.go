@@ -225,9 +225,11 @@ func TestDependencyDirection(t *testing.T) {
 		// Wave 28: IdentityReverifyGate optional audit sink (privacy-preserving).
 		"internal/auth": {"internal/contracts", "internal/keyring", "internal/apperr", "internal/profile", "internal/jenkins", "internal/audit"},
 		// GWY-001/002: AgentCore credential provider + identity → policy.Subject.
-		"internal/gateway": {"internal/apperr", "internal/contracts", "internal/policy", "internal/auth"},
+		// HOST-007 subject-invalidate residual: optional privacy-preserving audit emit.
+		"internal/gateway": {"internal/apperr", "internal/contracts", "internal/policy", "internal/auth", "internal/audit"},
 		// GWY-003 lite: offline security/performance qualification harness.
-		"internal/gateway/qualify": {"internal/gateway", "internal/apperr", "internal/contracts", "internal/auth"},
+		// Residual-status offline honesty embeds diagnostics.BuildGatewayResidualStatus.
+		"internal/gateway/qualify": {"internal/gateway", "internal/apperr", "internal/contracts", "internal/auth", "internal/diagnostics"},
 		// INT-001: optional adapters; no Jenkins client by default.
 		// INT-003: may use net/http for optional HTTPS JSON backend (stdlib only + apperr).
 		"internal/adapter": {"internal/apperr"},
@@ -252,7 +254,8 @@ func TestDependencyDirection(t *testing.T) {
 		// Wave 46 MGR-002: fleet_telemetry_force_off_residual canary (fleet ForceOff pure offline).
 		// Wave 47 UPD-001: update_lkg_residual offline residual honesty canary (update package).
 		// Wave 48 MUT-001: mutation_confirm_cooldown_residual offline canary (mutation Manager + audit.Memory).
-		"internal/diagnostics": {"internal/apperr", "internal/redact", "internal/telemetry", "internal/telemetry/fleet", "internal/store", "internal/auth", "internal/profile", "internal/policy", "internal/config", "internal/keyring", "internal/jenkins", "internal/archive", "internal/mcpserver", "internal/update", "internal/adapter", "internal/mutation", "internal/audit"},
+		// HOST-008: gateway env posture (multi_user / credential_mode / ha residual) for doctor.
+		"internal/diagnostics": {"internal/apperr", "internal/redact", "internal/telemetry", "internal/telemetry/fleet", "internal/store", "internal/auth", "internal/profile", "internal/policy", "internal/config", "internal/keyring", "internal/jenkins", "internal/archive", "internal/mcpserver", "internal/update", "internal/adapter", "internal/mutation", "internal/audit", "internal/gateway"},
 		"internal/audit":       {"internal/redact"},
 		"internal/telemetry":   {"internal/redact"},
 		// MGR-002: fleet health export schema, local queue, optional HTTPS exporter.
