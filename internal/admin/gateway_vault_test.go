@@ -167,6 +167,102 @@ func TestHealth_RateKnobsFromEnv(t *testing.T) {
 	}
 }
 
+// OAUTH-010 / GWY-001: progressive consent residual on health (static, secret-free).
+// Bools always present; residual note when Mode C enabled. Never authorization_url
+// with secrets or tokens in admin JSON.
+func TestHealth_ProgressiveConsentResidual_ModeC(t *testing.T) {
+	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAgentCore))
+	t.Setenv(gateway.EnvGatewayEnabledModes, "")
+	t.Setenv(gateway.EnvGatewayMultiUser, "")
+	t.Setenv(gateway.EnvGatewayVaultPath, filepath.Join(t.TempDir(), "unused.json"))
+	// Plant canaries that must never appear in health JSON (static residual only).
+	const canaryToken = "pc-health-canary-access-token-NEVER"
+	const canaryAuthURL = "https://login.example/oauth2/v2.0/authorize?client_secret=s3cret&code=xyz"
+	t.Setenv("JENKINS_MCP_FAKE_TOKEN", canaryToken)
+	t.Setenv("JENKINS_MCP_FAKE_AUTHORIZATION_URL", canaryAuthURL)
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleViewer
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/admin/v1/health", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	raw := rr.Body.String()
+	for _, bad := range []string{canaryToken, canaryAuthURL, "client_secret=", "access_token=", vaultCanaryToken} {
+		if strings.Contains(raw, bad) {
+			t.Fatalf("Regression: canary/marker %q leaked in health progressive consent: %s", bad, raw)
+		}
+	}
+	var m map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["progressiveConsentMetadataDoneStar"] != true {
+		t.Fatalf("progressiveConsentMetadataDoneStar want true got %v", m["progressiveConsentMetadataDoneStar"])
+	}
+	if m["progressiveConsentBrowser3loAutomated"] != false {
+		t.Fatalf("progressiveConsentBrowser3loAutomated want false got %v", m["progressiveConsentBrowser3loAutomated"])
+	}
+	note, _ := m["progressiveConsentResidual"].(string)
+	if note == "" {
+		t.Fatal("Mode C health must include progressiveConsentResidual note")
+	}
+	want := gateway.NewProgressiveConsentResidual()
+	if note != want.ResidualNote {
+		t.Fatalf("residual note mismatch:\n got %q\nwant %q", note, want.ResidualNote)
+	}
+	if !strings.Contains(note, "OAUTH-010") || !strings.Contains(note, "not automated") {
+		t.Fatalf("note honesty: %q", note)
+	}
+	// Must not embed a live authorize URL (field names in prose are ok; query secrets are not).
+	if strings.Contains(note, "https://") || strings.Contains(note, "?") {
+		t.Fatalf("residual note must not embed URL/query: %q", note)
+	}
+}
+
+// When Mode C is not enabled, progressive consent bools remain static; residual note omitted.
+func TestHealth_ProgressiveConsentResidual_ModeA_NoNote(t *testing.T) {
+	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAPITokenVault))
+	t.Setenv(gateway.EnvGatewayEnabledModes, "api_token_vault")
+	t.Setenv(gateway.EnvGatewayMultiUser, "")
+	t.Setenv(gateway.EnvGatewayVaultPath, filepath.Join(t.TempDir(), "unused.json"))
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleViewer
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/admin/v1/health", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	var m map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["progressiveConsentMetadataDoneStar"] != true {
+		t.Fatalf("metadata Done* always true: %v", m["progressiveConsentMetadataDoneStar"])
+	}
+	if m["progressiveConsentBrowser3loAutomated"] != false {
+		t.Fatalf("browser 3lo always false: %v", m["progressiveConsentBrowser3loAutomated"])
+	}
+	if _, ok := m["progressiveConsentResidual"]; ok {
+		t.Fatalf("Mode A must omit progressiveConsentResidual, got %v", m["progressiveConsentResidual"])
+	}
+	if strings.Contains(rr.Body.String(), vaultCanaryToken) {
+		t.Fatal("canary in Mode A progressive health")
+	}
+}
+
 // HOST-008 residual: multi_user env surfaces residual note without tokens.
 func TestHealth_MultiUserResidualNote(t *testing.T) {
 	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAgentCore))

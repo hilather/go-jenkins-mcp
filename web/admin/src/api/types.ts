@@ -34,6 +34,20 @@ export interface HealthResponse {
   ratePerMinute?: number;
   /** Resolved bootstrap burst; 0 when rate disabled. Never tokens. */
   rateBurst?: number;
+  /**
+   * OAUTH-010 / GWY-001: ConsentRequired → authorization_url + session_id only
+   * path Done* (always true). Static residual; never tokens or authorize query.
+   */
+  progressiveConsentMetadataDoneStar?: boolean;
+  /**
+   * Browser 3LO automation residual — always false until GWY-003. Static only.
+   */
+  progressiveConsentBrowser3loAutomated?: boolean;
+  /**
+   * Secret-free residual note when Mode C (agentcore_3lo_obo) is enabled.
+   * Never authorization_url with secrets, tokens, or client secrets.
+   */
+  progressiveConsentResidual?: string;
   /** Multi-user / HA / rate honesty note when relevant (never tokens). */
   residual?: string;
 }

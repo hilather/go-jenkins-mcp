@@ -24,8 +24,9 @@ import (
 // enabledModes is a secret-free HOST-011 listing (mode ids only; no tokens).
 // multiUserEnabled / credentialMode / haMultiReplica / gatewayReady /
 // sessionAffinityRecommended / multiPodVaultResidual / kubernetesEnvDetected /
-// rateEnabled / ratePerMinute / rateBurst are secret-free gateway residual
-// posture (HOST-006 / HOST-008); never tokens or subjects.
+// rateEnabled / ratePerMinute / rateBurst / progressiveConsent* are secret-free
+// gateway residual posture (HOST-006 / HOST-008 / OAUTH-010); never tokens or subjects.
+// progressiveConsent* reuses gateway.ProgressiveConsentResidual (static only).
 type healthResponse struct {
 	Status       string   `json:"status"`
 	Version      string   `json:"version"`
@@ -61,6 +62,17 @@ type healthResponse struct {
 	// RateBurst is the resolved bootstrap burst capacity (default or env).
 	// 0 when rate is disabled (burst ignored when rate off). Never tokens.
 	RateBurst int `json:"rateBurst"`
+	// ProgressiveConsentMetadataDoneStar is always true (ConsentRequired →
+	// authorization_url + session_id only path Done*; OAUTH-010 / GWY-001).
+	// Static residual from gateway.NewProgressiveConsentResidual — never tokens.
+	ProgressiveConsentMetadataDoneStar bool `json:"progressiveConsentMetadataDoneStar"`
+	// ProgressiveConsentBrowser3loAutomated is always false until browser 3LO
+	// is automated (GWY-003 residual). Static residual only.
+	ProgressiveConsentBrowser3loAutomated bool `json:"progressiveConsentBrowser3loAutomated"`
+	// ProgressiveConsentResidual is the secret-free residual note when Mode C
+	// (agentcore_3lo_obo) is enabled in the mode matrix. Omitted otherwise.
+	// Never includes authorization_url query strings, tokens, or client secrets.
+	ProgressiveConsentResidual string `json:"progressiveConsentResidual,omitempty"`
 	// Residual notes multi-user / HA / rate / k8s honesty when relevant (secret-free).
 	Residual string `json:"residual,omitempty"`
 }
@@ -123,23 +135,34 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		// Secret-free; never embed vault paths or tokens.
 		residual = "kubernetes env detected (KUBERNETES_SERVICE_HOST): multi-pod residual checklist — sticky sessions or shared session store; durable shared vault (not emptyDir); shared subject rate; shared Obtain/token cache; haMultiReplica=false (HOST-008 / deployment.md §9); " + residual
 	}
+	// OAUTH-010 / GWY-001: progressive consent residual (static; never live Obtain
+	// or authorization_url with query secrets). Bools always present; residual
+	// note only when Mode C is enabled (same honesty as doctor gateway_status).
+	pc := gateway.NewProgressiveConsentResidual()
+	pcResidual := ""
+	if healthModeCEnabled() {
+		pcResidual = pc.ResidualNote
+	}
 	writeJSON(w, http.StatusOK, healthResponse{
-		Status:                     "ok",
-		Version:                    s.cfg.Version,
-		Commit:                     s.cfg.Commit,
-		UIBuild:                    s.cfg.UIBuild,
-		EnabledModes:               modes,
-		CredentialMode:             mode,
-		MultiUserEnabled:           multiUser,
-		GatewayReady:               false, // admin BFF ≠ MCP serve Ready probe
-		HAMultiReplica:             false, // HOST-008 Tier A default
-		SessionAffinityRecommended: multiUser,
-		MultiPodVaultResidual:      true, // HOST-008 multi-pod vault residual honesty
-		KubernetesEnvDetected:      mp.KubernetesEnvDetected,
-		RateEnabled:                rateEnabled,
-		RatePerMinute:              ratePerMinute,
-		RateBurst:                  rateBurst,
-		Residual:                   residual,
+		Status:                                "ok",
+		Version:                               s.cfg.Version,
+		Commit:                                s.cfg.Commit,
+		UIBuild:                               s.cfg.UIBuild,
+		EnabledModes:                          modes,
+		CredentialMode:                        mode,
+		MultiUserEnabled:                      multiUser,
+		GatewayReady:                          false, // admin BFF ≠ MCP serve Ready probe
+		HAMultiReplica:                        false, // HOST-008 Tier A default
+		SessionAffinityRecommended:            multiUser,
+		MultiPodVaultResidual:                 true, // HOST-008 multi-pod vault residual honesty
+		KubernetesEnvDetected:                 mp.KubernetesEnvDetected,
+		RateEnabled:                           rateEnabled,
+		RatePerMinute:                         ratePerMinute,
+		RateBurst:                             rateBurst,
+		ProgressiveConsentMetadataDoneStar:    pc.MetadataPathDoneStar,
+		ProgressiveConsentBrowser3loAutomated: pc.Browser3LOAutomated,
+		ProgressiveConsentResidual:            pcResidual,
+		Residual:                              residual,
 	})
 }
 
@@ -155,6 +178,20 @@ func healthEnabledModes() []string {
 		out = append(out, m.String())
 	}
 	return out
+}
+
+// healthModeCEnabled reports whether agentcore_3lo_obo (Mode C) is in the
+// HOST-011 enabled set (or primary when matrix is invalid). Secret-free bool only.
+func healthModeCEnabled() bool {
+	if mx, err := gateway.ModeMatrixFromEnviron(os.Getenv); err == nil {
+		for _, m := range mx.Enabled {
+			if m == gateway.CredentialModeAgentCore {
+				return true
+			}
+		}
+		return false
+	}
+	return gateway.CredentialModeFromEnviron(os.Getenv) == gateway.CredentialModeAgentCore
 }
 
 // handleMe returns the process role and permissions (UI-003).

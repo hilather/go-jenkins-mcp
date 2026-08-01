@@ -101,7 +101,23 @@ Current process authentication state and console role. **Never includes the toke
   "rateEnabled": true,
   "ratePerMinute": 30,
   "rateBurst": 10,
+  "progressiveConsentMetadataDoneStar": true,
+  "progressiveConsentBrowser3loAutomated": false,
   "residual": "subject rate knobs are process-local (HOST-006); multi-replica shared rate residual (HOST-008); multiPodVaultResidual=true (multi-pod vault residual); never tokens"
+}
+```
+
+When Mode C (`agentcore_3lo_obo`) is enabled in the HOST-011 mode matrix, health
+also includes a secret-free progressive-consent residual note (example primary
+Mode C):
+
+```json
+{
+  "credentialMode": "agentcore_3lo_obo",
+  "enabledModes": ["agentcore_3lo_obo"],
+  "progressiveConsentMetadataDoneStar": true,
+  "progressiveConsentBrowser3loAutomated": false,
+  "progressiveConsentResidual": "Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; durable consent session store / multi-replica correlation residual"
 }
 ```
 
@@ -120,7 +136,10 @@ Current process authentication state and console role. **Never includes the toke
 | `rateEnabled` | **HOST-006 / HOST-008 residual:** `true` when subject rate env would enable process-local limiting (empty `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` → default on; explicit `0` → false). **Not** multi-replica shared rate. Never tokens. |
 | `ratePerMinute` | **HOST-006 residual knob:** resolved bootstrap tools/min via `gateway.SubjectRateConfigFromEnviron` (package default **30**; **0** when disabled). Process-local only. Never tokens. |
 | `rateBurst` | **HOST-006 residual knob:** resolved bootstrap burst (package default **10**; **0** when rate off). Process-local only. Never tokens. |
-| `residual` | Secret-free honesty note (never tokens). Process-local subject-rate residual + HOST-008 multi-replica / multi-pod vault residual; multi-user env notes foundation + sticky scaffold; k8s env notes multi-pod checklist (not HA Done). |
+| `progressiveConsentMetadataDoneStar` | **OAUTH-010 / GWY-001 residual:** always **`true`**. ConsentRequired metadata path Done*. Static residual only — never embeds authorize URLs or secrets. |
+| `progressiveConsentBrowser3loAutomated` | **OAUTH-010 residual:** always **`false`** until browser 3LO is automated (GWY-003). |
+| `progressiveConsentResidual` | **OAUTH-010 residual note** when Mode C enabled. Omitted otherwise. Never tokens or authorize URL secrets. |
+| `residual` | Secret-free honesty note (never tokens). Process-local rate + HOST-008 multi-pod residual; multi-user/k8s notes as applicable. |
 
 ## GET /admin/v1/gateway/vault
 
