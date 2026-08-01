@@ -174,6 +174,10 @@ func RunDoctor(ctx context.Context, opts DoctorOptions) (Report, error) {
 	for i := range rep.Checks {
 		rep.Checks[i] = SanitizeCheck(rep.Checks[i])
 	}
+	// Unified residual snapshot (OPS doctor residual-status embed): same map as
+	// `gateway residual-status`. Informational only — does not affect Overall.
+	// Live mode_*_qualified flags stay false; points at live-pin-blockers.md.
+	rep.GatewayResidualStatus = sanitizeResidualStatusMap(BuildGatewayResidualStatus(opts.Getenv))
 	rep.Overall = OverallStatus(rep.Checks)
 	return rep, nil
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -20,6 +21,7 @@ func runDoctor(args []string) error {
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	offline := fs.Bool("offline", false, "Skip network identity verify (whoAmI)")
+	asJSON := fs.Bool("json", false, "Emit doctor report as JSON (includes gateway_residual_status)")
 	bundle := fs.Bool("bundle", false, "Write a privacy-scrubbed support bundle under XDG cache (OPS-001)")
 	previewBundle := fs.Bool("bundle-preview", false, "List support-bundle categories without writing a zip")
 	// Mirror serve RO inputs so doctor mutations check matches process posture (Wave 32).
@@ -63,7 +65,15 @@ func runDoctor(args []string) error {
 	if err != nil {
 		return err
 	}
-	diagnostics.FormatReportText(os.Stdout, rep)
+	if *asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(rep); err != nil {
+			return apperr.Wrap(apperr.CodeInternal, "encode doctor JSON", err)
+		}
+	} else {
+		diagnostics.FormatReportText(os.Stdout, rep)
+	}
 
 	if *bundle || *previewBundle {
 		if err := writeSupportBundle(p, &paths, &rep, docOpts, *previewBundle); err != nil {

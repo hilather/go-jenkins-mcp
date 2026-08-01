@@ -290,7 +290,8 @@ Raise Deployment `replicas` > 1 **only** when every row is met with org-owned de
 make residual-smoke
 # alias:
 make gateway-residual-smoke
-# optional doctor residual fields when a profile exists:
+# optional doctor gateway_residual_status embed when a profile exists
+# (doctor requires --profile; PROFILE empty → doctor step skipped):
 make residual-smoke PROFILE=corp
 
 # Underlying pieces:
@@ -298,8 +299,10 @@ jenkins-mcp gateway qualify --offline
 jenkins-mcp release-evidence --offline
 jenkins-mcp gateway residual-status   # required Wave 8 honesty (ha_multi_replica=false, oauth009_offline, residual_ids)
 jenkins-mcp gateway consent-residual  # optional progressive consent residual snapshot
+jenkins-mcp doctor --profile <id> --offline --json  # optional: gateway_residual_status nest (same map)
 # script: scripts/gateway-residual-smoke.sh → dist/residual-smoke/<ts>/
-#   (gateway-qualify.json, release-evidence.json, gateway-residual-status.json, …)
+#   (gateway-qualify.json, release-evidence.json, gateway-residual-status.json,
+#    doctor-offline.json when PROFILE set, …)
 # residual-status canaries (residual lite): shared_subject_rate_file=false by default;
 #   with JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set → true (path never dumped);
 #   shared_principal_cache_file=false by default;
@@ -350,6 +353,7 @@ live pin complete without lab evidence.
 | Surface | Fields / behavior | Honesty |
 |---------|-------------------|---------|
 | `jenkins-mcp doctor --offline` / online | `rs_auth`: `live_lab_still_required=true`, `classifier_matrix_done_star`, Mode B → **warn** | Offline matrix ≠ live pin |
+| Doctor `gateway_residual_status` (JSON / text) | Same map as `gateway residual-status` via `BuildGatewayResidualStatus` under stable key `gateway_residual_status` | **Informational embed** — operators need not run a second CLI; does not drive overall fail; live `mode_*_qualified` stay false; never tokens; residual-smoke with `PROFILE=` asserts via `--json` |
 | Mode B enabled | `mode_b_live_rs_qualified=false`, `residual_id=oauth009_offline`, `oauth009_offline=true` | JWT vault Ready does **not** clear |
 | Mode C enabled | `mode_c_live_agentcore_qualified=false`, progressive_consent residual notes | Live opt-in wire ≠ AgentCore pin |
 | `gateway_status` | `ha_multi_replica=false`, `oauth009_offline_only`, `mode_*_live_*_qualified=false`, `session_affinity_recommended`, `gateway_ready` | Env/parse + Ready honesty |
@@ -364,6 +368,7 @@ live pin complete without lab evidence.
 
 ```bash
 jenkins-mcp doctor --profile <id> --offline
+jenkins-mcp doctor --profile <id> --offline --json   # includes gateway_residual_status
 jenkins-mcp security self-check --json --profile <id>
 jenkins-mcp oauth probe-rs --profile <id> --offline
 jenkins-mcp gateway qualify --offline

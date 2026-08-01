@@ -17,19 +17,21 @@
 #      - optional: principal_cache_entries Len when file has entries (secret-free count only)
 #      - principal_cache_process_note: principal_cache_entries is this-process / file Len only
 #   5. Optional: gateway consent-residual when subcommand exists (progressive consent residual)
-#   6. Optional: doctor --offline residual fields when PROFILE= is set
+#   6. Optional: doctor --offline --json gateway_residual_status when PROFILE= is set
+#      (doctor requires --profile; when PROFILE empty, doctor residual is skipped —
+#       doctor offline does not run without a profile)
 #
 # Usage:
 #   scripts/gateway-residual-smoke.sh
 #   BIN=bin/jenkins-mcp scripts/gateway-residual-smoke.sh
-#   PROFILE=corp scripts/gateway-residual-smoke.sh   # also doctor residual fields
+#   PROFILE=corp scripts/gateway-residual-smoke.sh   # also doctor residual embed
 #   make residual-smoke
 #   make gateway-residual-smoke   # alias
 #
 # Environment:
 #   BIN              — path to jenkins-mcp (else bin/jenkins-mcp, PATH, or go build)
 #   OUT_DIR          — artifact dir (default: dist/residual-smoke/<UTC-ts>)
-#   PROFILE          — optional; enables doctor --offline residual field checks
+#   PROFILE          — optional; enables doctor --offline --json gateway_residual_status checks
 #   SKIP_BUILD=1     — do not auto-build if binary missing
 #   SKIP_QUALIFY=1   — skip gateway qualify (still check release-evidence residuals)
 #   SKIP_RESIDUAL_STATUS=1 — skip residual-status (not recommended; Wave 8 honesty)
@@ -795,45 +797,133 @@ PY
   fi
 fi
 
-# --- 5) optional doctor --offline residual fields ---
+# --- 5) optional doctor --offline residual embed (requires PROFILE; doctor needs --profile) ---
+# Doctor offline does not run without a profile — skip when PROFILE empty.
 if [[ -n "$PROFILE" ]]; then
-  echo "== doctor --offline residual fields (PROFILE=$PROFILE) =="
-  DOCTOR_OUT="$OUT_DIR/doctor-offline.txt"
+  echo "== doctor --offline --json gateway_residual_status (PROFILE=$PROFILE) =="
+  DOCTOR_JSON="$OUT_DIR/doctor-offline.json"
+  DOCTOR_TXT="$OUT_DIR/doctor-offline.txt"
   set +e
-  "$MCP_BIN" doctor --profile "$PROFILE" --offline >"$DOCTOR_OUT" 2>"$OUT_DIR/doctor-offline.stderr"
+  "$MCP_BIN" doctor --profile "$PROFILE" --offline --json >"$DOCTOR_JSON" 2>"$OUT_DIR/doctor-offline.stderr"
   drc=$?
   set -e
-  # Doctor may exit non-zero for unrelated profile issues; residual field asserts are best-effort honesty.
+  # Doctor may exit non-zero for unrelated profile issues (e.g. missing keyring);
+  # residual embed asserts still run when JSON is parseable.
   if [[ $drc -ne 0 ]]; then
-    echo "  [warn] doctor exit $drc (still scanning residual honesty fields if present)"
+    echo "  [warn] doctor exit $drc (still scanning gateway_residual_status if present)"
   else
-    pass "doctor --offline exit 0"
+    pass "doctor --offline --json exit 0"
   fi
-  assert_secret_free "$DOCTOR_OUT" "doctor-offline.txt" || true
-  if [[ -f "$DOCTOR_OUT" ]]; then
-    # Text doctor output includes gateway_status message with ha_multi_replica=false.
-    if grep -q 'ha_multi_replica=false' "$DOCTOR_OUT" || grep -q 'ha_multi_replica' "$DOCTOR_OUT"; then
-      if grep -q 'ha_multi_replica=false' "$DOCTOR_OUT"; then
-        pass "doctor surfaces ha_multi_replica=false (host008 single-replica honesty)"
+  assert_secret_free "$DOCTOR_JSON" "doctor-offline.json" || true
+  # Also capture text form for greppable residual section (non-fatal).
+  set +e
+  "$MCP_BIN" doctor --profile "$PROFILE" --offline >"$DOCTOR_TXT" 2>/dev/null
+  set -e
+  assert_secret_free "$DOCTOR_TXT" "doctor-offline.txt" || true
+
+  if [[ -f "$DOCTOR_JSON" ]] && command -v python3 >/dev/null 2>&1; then
+    export GRS_DOCTOR_JSON="$DOCTOR_JSON"
+    export GRS_REQUIRED_STATUS_IDS
+    GRS_REQUIRED_STATUS_IDS="$(IFS=,; echo "${REQUIRED_RESIDUAL_STATUS_IDS[*]}")"
+    if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["GRS_DOCTOR_JSON"]
+required = [x.strip() for x in os.environ.get("GRS_REQUIRED_STATUS_IDS", "").split(",") if x.strip()]
+try:
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+except Exception as e:
+    print(f"FAIL: doctor JSON unparseable: {e}", file=sys.stderr)
+    sys.exit(1)
+
+errors = []
+grs = data.get("gateway_residual_status")
+if not isinstance(grs, dict):
+    errors.append("gateway_residual_status missing or not object (OPS doctor residual embed)")
+    grs = {}
+
+# Same honesty contract as gateway residual-status (nested under doctor JSON).
+if grs.get("residual_id") != "oauth009_offline":
+    errors.append(f"gateway_residual_status.residual_id={grs.get('residual_id')!r} want oauth009_offline")
+if grs.get("oauth009_offline") is not True:
+    errors.append(f"gateway_residual_status.oauth009_offline={grs.get('oauth009_offline')!r} want true")
+if grs.get("ha_multi_replica") is not False:
+    errors.append(f"gateway_residual_status.ha_multi_replica={grs.get('ha_multi_replica')!r} want false")
+if grs.get("gateway_ready") is True:
+    errors.append("gateway_residual_status.gateway_ready=true (Ready only on serve /readyz)")
+if grs.get("multi_pod_vault_residual") is not True:
+    errors.append(f"gateway_residual_status.multi_pod_vault_residual={grs.get('multi_pod_vault_residual')!r} want true")
+
+ids = grs.get("residual_ids") or []
+if not isinstance(ids, list):
+    errors.append("gateway_residual_status.residual_ids is not a list")
+    ids = []
+id_set = {str(x) for x in ids}
+for rid in required:
+    if rid not in id_set:
+        errors.append(f"gateway_residual_status.residual_ids missing {rid!r}")
+
+for k in (
+    "mode_a_live_obtain_qualified",
+    "mode_b_live_rs_qualified",
+    "mode_c_live_agentcore_qualified",
+):
+    if grs.get(k) is True:
+        errors.append(f"gateway_residual_status.{k}=true (live pin must stay residual)")
+
+blob = json.dumps(data).lower()
+if "production go complete" in blob:
+    errors.append("doctor JSON overclaims production GO complete")
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in blob:
+        errors.append(f"secret-shaped material {needle!r} in doctor JSON")
+doc = str(grs.get("doc") or "") + " " + str(grs.get("residual_note") or "")
+if grs and "live-pin-blockers" not in doc:
+    errors.append("gateway_residual_status missing live-pin-blockers.md pointer")
+
+if errors:
+    print("FAIL: doctor gateway_residual_status honesty:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print(
+    "PASS: doctor --offline --json gateway_residual_status honesty "
+    f"(oauth009_offline + ha_multi_replica=false + residual_ids={len(required)})"
+)
+sys.exit(0)
+PY
+    then
+      :
+    else
+      fail=1
+    fi
+  elif [[ -f "$DOCTOR_JSON" ]]; then
+    if grep -q 'gateway_residual_status' "$DOCTOR_JSON" \
+      && grep -q 'oauth009_offline' "$DOCTOR_JSON" \
+      && grep -q 'ha_multi_replica' "$DOCTOR_JSON"; then
+      pass "doctor JSON greppable gateway_residual_status honesty (no python3)"
+    else
+      fail_msg "doctor JSON missing gateway_residual_status honesty markers (install python3)"
+    fi
+  else
+    fail_msg "doctor-offline.json missing"
+  fi
+
+  # Text form residual section (best-effort; older binaries may omit).
+  if [[ -f "$DOCTOR_TXT" ]]; then
+    if grep -q 'gateway_residual_status' "$DOCTOR_TXT" || grep -q 'ha_multi_replica' "$DOCTOR_TXT"; then
+      if grep -q 'ha_multi_replica=true' "$DOCTOR_TXT" && ! grep -q 'ha_multi_replica=false\|ha_multi_replica: false' "$DOCTOR_TXT"; then
+        fail_msg "doctor text claims ha_multi_replica=true (HOST-008 residual violated)"
       else
-        # If true appears, that would be dishonest for Tier A.
-        if grep -q 'ha_multi_replica=true' "$DOCTOR_OUT"; then
-          fail_msg "doctor claims ha_multi_replica=true (HOST-008 single-replica residual violated)"
-        else
-          pass "doctor mentions ha_multi_replica"
-        fi
+        pass "doctor text surfaces residual / ha_multi_replica honesty"
       fi
     else
-      echo "  [warn] doctor output missing ha_multi_replica field (older binary or check skipped)"
-    fi
-    if grep -qiE 'oauth009|mode_matrix_residual|gateway_ready=false|multi_user' "$DOCTOR_OUT"; then
-      pass "doctor surfaces multi-user / oauth009 / gateway residual markers"
-    else
-      echo "  [warn] doctor output missing multi-user/oauth residual markers (non-fatal)"
+      echo "  [warn] doctor text missing residual markers (non-fatal when JSON path passed)"
     fi
   fi
 else
-  echo "  [skip] doctor residual fields (PROFILE not set)"
+  echo "  [skip] doctor residual embed (PROFILE not set; doctor requires --profile)"
 fi
 
 # --- summary ---

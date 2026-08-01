@@ -155,15 +155,19 @@ must not treat as live multi-user / Entra / multi-replica GO:
 make residual-smoke
 # alias:
 make gateway-residual-smoke
-# optional doctor residual fields when a profile exists:
+# optional doctor gateway_residual_status embed when a profile exists
+# (doctor requires --profile; PROFILE empty → doctor step skipped):
 make residual-smoke PROFILE=corp
 ```
 
-Runs `gateway qualify --offline` and `release-evidence --offline`, asserts
+Runs `gateway qualify --offline`, `release-evidence --offline`, and
+`gateway residual-status`, asserts
 `multi_user_offline` · `oauth009_offline` · `oauth010_offline` ·
 `progressive_consent_offline` · `host008_single_replica` · `gateway_modes_live`
 (**offline only** — not live Entra / AgentCore / multi-replica GO), and writes
-artifacts under `dist/residual-smoke/<ts>/`.
+artifacts under `dist/residual-smoke/<ts>/`. With `PROFILE=`, also runs
+`doctor --offline --json` and asserts nested `gateway_residual_status` honesty
+(same map as residual-status; never live GO).
 **Not** part of default `make test` / `make ci`. See [release gates](../release/gates.md),
 [checklist §0](checklist.md), and [live-pin-blockers.md](../gateway/live-pin-blockers.md)
 (what residual-smoke proves vs live pin checklists for OAUTH-009 / OAUTH-010 / HOST-008).
@@ -172,7 +176,7 @@ artifacts under `dist/residual-smoke/<ts>/`.
 
 | Command | Use in pilot |
 |---------|----------------|
-| `jenkins-mcp doctor --profile <id> [--offline]` | Local + optional whoAmI; never prints secrets |
+| `jenkins-mcp doctor --profile <id> [--offline] [--json]` | Local + optional whoAmI; `gateway_residual_status` embed (same residual-status map); never prints secrets |
 | `jenkins-mcp security self-check [--json] [--profile <id>]` | Secret-free posture (RO, policy residual, RS residual) |
 | `jenkins-mcp pilot-check --profile <id> [--offline]` | Combines doctor + cache status + sample verify → exit non-zero on fail + evidence JSON |
 | `jenkins-mcp cache status --profile <id>` | L1 data-dir / schema summary |

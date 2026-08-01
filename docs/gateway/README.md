@@ -146,8 +146,8 @@ jenkins-mcp gateway consent-residual   # progressive consent residual + last con
 jenkins-mcp gateway consent-purge      # purge TTL-expired metadata (or --session-id / --all); secret-free counts
 jenkins-mcp gateway subject-invalidate --subject-key tenant|sub|profile   # force re-auth residual lite (GWY-002/HOST-003)
 jenkins-mcp gateway qualify --offline  # includes progressive_consent_residual case + residual note
-jenkins-mcp doctor --offline           # gateway_status progressive_consent_* fields when Mode C
-make residual-smoke                    # exercises residual-status honesty canaries (opt-in offline)
+jenkins-mcp doctor --profile <id> --offline [--json]  # gateway_status + gateway_residual_status embed (same map as residual-status; never live GO)
+make residual-smoke                    # exercises residual-status honesty canaries (opt-in offline; PROFILE= also asserts doctor embed)
 ```
 
 ### Force re-auth residual lite (GWY-002 / HOST-003 subject invalidate)
