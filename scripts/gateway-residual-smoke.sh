@@ -22,6 +22,8 @@
 #      - shared_token_cache_file false by default; true when JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH set (path never dumped)
 #      - optional: principal_cache_entries Len when file has entries (secret-free count only)
 #      - principal_cache_process_note: principal_cache_entries is this-process / file Len only
+#      - subject_limiter_max_subjects omit/absent by default; ==N when
+#        JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS=N (path never involved; HOST-006 residual lite)
 #   5. Optional: gateway consent-residual when subcommand exists (progressive consent residual)
 #   6. Optional: doctor --offline --json gateway_residual_status when PROFILE= is set
 #      (doctor requires --profile; when PROFILE empty, doctor residual is skipped —
@@ -654,6 +656,14 @@ if stcf is True:
     errors.append("shared_token_cache_file=true without TOKEN_CACHE_PATH (default must be false)")
 elif stcf is not False and stcf is not None:
     errors.append(f"shared_token_cache_file={stcf!r} want false|absent")
+# HOST-006 residual lite: subject_limiter_max_subjects omit when env unset (unlimited).
+# Path never involved — integer hygiene residual only.
+slms = data.get("subject_limiter_max_subjects")
+if slms is not None and slms is not False and slms != 0 and slms != "":
+    errors.append(
+        f"subject_limiter_max_subjects={slms!r} want absent|falsey when "
+        "JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS unset (default unlimited)"
+    )
 
 # principal_cache_entries is this-process count only (CLI/admin ≠ remote serve).
 pc_note = str(data.get("principal_cache_process_note") or "")
@@ -690,6 +700,7 @@ print(
     "progressive_consent + shared_subject_rate_file=false default + "
     "shared_principal_cache_file=false default + shared_jwks_file=false default + "
     "shared_token_cache_file=false default + principal_cache process note)"
+    "subject_limiter_max_subjects omit default + principal_cache process note)"
 )
 sys.exit(0)
 PY
@@ -965,6 +976,40 @@ if marker in blob:
 if seed and seed in blob:
     errors.append("token cache file contents leaked into residual-status JSON")
 # secret-shaped canaries
+      # Optional subtest: SUBJECT_LIMITER_MAX_SUBJECTS set → subject_limiter_max_subjects==N
+      # (HOST-006 residual lite). Path never involved; omit when unset (default unlimited).
+      echo "== gateway residual-status (SUBJECT_LIMITER_MAX_SUBJECTS canary) =="
+      LIMITER_MAX_CANARY=64
+      RESIDUAL_STATUS_LIM_JSON="$OUT_DIR/gateway-residual-status-limiter-max.json"
+      env JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS="$LIMITER_MAX_CANARY" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_LIM_JSON" 2>"$OUT_DIR/gateway-residual-status-limiter-max.stderr"
+      lrc=$?
+      if [[ $lrc -ne 0 ]]; then
+        fail_msg "gateway residual-status with SUBJECT_LIMITER_MAX_SUBJECTS exit $lrc"
+        if [[ -s "$OUT_DIR/gateway-residual-status-limiter-max.stderr" ]]; then
+          head -n 20 "$OUT_DIR/gateway-residual-status-limiter-max.stderr" >&2 || true
+        assert_secret_free "$RESIDUAL_STATUS_LIM_JSON" "gateway-residual-status-limiter-max.json" || true
+        export GRS_LIM_JSON="$RESIDUAL_STATUS_LIM_JSON"
+        export GRS_LIM_WANT="$LIMITER_MAX_CANARY"
+
+path = os.environ["GRS_LIM_JSON"]
+want = int(os.environ["GRS_LIM_WANT"])
+got = data.get("subject_limiter_max_subjects")
+try:
+    n = int(got)
+except (TypeError, ValueError):
+        f"subject_limiter_max_subjects={got!r} want int {want} when "
+        "JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS set"
+else:
+    if n != want:
+        errors.append(f"subject_limiter_max_subjects={n} want {want}")
+# Path residual fields must not flip solely because limiter max is set.
+if data.get("shared_subject_rate_file") is True:
+    errors.append("shared_subject_rate_file must stay false without SUBJECT_RATE_PATH")
+if data.get("shared_principal_cache_file") is True:
+    errors.append("shared_principal_cache_file must stay false without PRINCIPAL_CACHE_PATH")
+if data.get("shared_jwks_file") is True:
+    errors.append("shared_jwks_file must stay false without JWKS_CACHE_PATH")
 low = blob.lower()
 for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
     if needle in low:
@@ -975,6 +1020,11 @@ if errors:
         print(f"  - {e}", file=sys.stderr)
     sys.exit(1)
 print("PASS: residual-status shared_token_cache_file=true when path set (path not dumped)")
+    print("FAIL: residual-status SUBJECT_LIMITER_MAX_SUBJECTS canary:", file=sys.stderr)
+print(
+    f"PASS: residual-status subject_limiter_max_subjects={want} when env set "
+    "(omit when unset; path never involved)"
+)
 sys.exit(0)
 PY
         then
