@@ -116,9 +116,12 @@ func TestGatewayResidualStatus_SecretFreeAndCoreFields(t *testing.T) {
 	if pcNote == "" || !strings.Contains(strings.ToLower(pcNote), "this process") {
 		t.Fatalf("principal_cache_process_note: %q", pcNote)
 	}
-	// shared_subject_rate_file default false when path unset.
+	// shared_subject_rate_file / shared_jwks_file default false when paths unset.
 	if body["shared_subject_rate_file"] != false {
 		t.Fatalf("shared_subject_rate_file default false: %+v", body["shared_subject_rate_file"])
+	}
+	if body["shared_jwks_file"] != false {
+		t.Fatalf("shared_jwks_file default false: %+v", body["shared_jwks_file"])
 	}
 
 	// Progressive consent object.

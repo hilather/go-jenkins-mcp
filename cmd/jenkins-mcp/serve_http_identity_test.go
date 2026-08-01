@@ -273,7 +273,7 @@ func TestNewHTTPJWKSSource_RefreshRotateKid(t *testing.T) {
 	}
 	// Short TTL; use ForceRefresh path via Get after advancing is internal —
 	// newHTTPJWKSSource starts background; we ForceRefresh after swapping doc.
-	src, err := newHTTPJWKSSource(context.Background(), srv.Client(), cfg, 30*time.Second, 0)
+	src, err := newHTTPJWKSSource(context.Background(), srv.Client(), cfg, 30*time.Second, 0, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -343,7 +343,7 @@ func TestNewHTTPJWKSSource_RefreshRotateKid(t *testing.T) {
 	}
 
 	// Unconfigured → nil source.
-	nilSrc, err := newHTTPJWKSSource(context.Background(), srv.Client(), httpJWTEnv{}, 30*time.Second, 0)
+	nilSrc, err := newHTTPJWKSSource(context.Background(), srv.Client(), httpJWTEnv{}, 30*time.Second, 0, "")
 	if err != nil || nilSrc != nil {
 		t.Fatalf("unconfigured: %v err=%v", nilSrc, err)
 	}
@@ -381,7 +381,7 @@ func TestNewHTTPJWKSSource_MaxStaleWired(t *testing.T) {
 	}
 	// Wire with max stale via newHTTPJWKSSource (same path as serve).
 	// Use library constructor with clock for age control after wiring check.
-	srcWire, err := newHTTPJWKSSource(context.Background(), srv.Client(), cfg, 30*time.Second, 2*time.Minute)
+	srcWire, err := newHTTPJWKSSource(context.Background(), srv.Client(), cfg, 30*time.Second, 2*time.Minute, "")
 	if err != nil {
 		t.Fatal(err)
 	}

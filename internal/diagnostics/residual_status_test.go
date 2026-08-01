@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
 	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 )
@@ -75,6 +76,10 @@ func TestBuildGatewayResidualStatus_SecretFreeAndModeBId(t *testing.T) {
 	// shared_subject_rate_file default false when path unset.
 	if out["shared_subject_rate_file"] != false {
 		t.Fatalf("shared_subject_rate_file default false: %+v", out["shared_subject_rate_file"])
+	}
+	// shared_jwks_file default false when JWKS cache path unset (HOST-001/HOST-008 lite).
+	if out["shared_jwks_file"] != false {
+		t.Fatalf("shared_jwks_file default false: %+v", out["shared_jwks_file"])
 	}
 	note, _ := out["residual_note"].(string)
 	doc, _ := out["doc"].(string)
@@ -147,5 +152,35 @@ func TestBuildGatewayResidualStatus_ModeCConsentNote(t *testing.T) {
 	}
 	if pc["browser_3lo_automated"] != false {
 		t.Fatalf("browser_3lo_automated: %+v", pc)
+	}
+}
+
+// shared_jwks_file=true when JWKS_CACHE_PATH set; path never dumped (HOST-001/HOST-008 lite).
+func TestBuildGatewayResidualStatus_SharedJWKSFile(t *testing.T) {
+	marker := "jwks-cache-path-canary-NEVER-IN-JSON"
+	path := t.TempDir() + "/" + marker + ".json"
+	t.Setenv(auth.EnvHTTPJWKSCachePath, path)
+
+	out := diagnostics.BuildGatewayResidualStatus(nil)
+	if out["shared_jwks_file"] != true {
+		t.Fatalf("shared_jwks_file want true when path set: %+v", out["shared_jwks_file"])
+	}
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: JWKS_CACHE_PATH leaked into residual-status JSON")
+	}
+	for _, bad := range []string{residualCanary, "access_token=", "refresh_token=", "client_secret="} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q in residual-status with jwks path", bad)
+		}
+	}
+	// Default getenv empty → false.
+	clear := diagnostics.BuildGatewayResidualStatus(func(string) string { return "" })
+	if clear["shared_jwks_file"] != false {
+		t.Fatalf("shared_jwks_file default false: %+v", clear["shared_jwks_file"])
 	}
 }

@@ -550,25 +550,25 @@ Missing identity env fields → bind fails closed at serve start.
 
 ---
 
-## 5b. HOST-001 JWKS refresh foundation (process-local)
+## 5b. HOST-001 JWKS refresh foundation (+ optional same-host file lite)
 
 Streamable HTTP JWT subject validation uses a **refreshable JWKS source**
 (`internal/auth.RefreshingJWKS` via `cmd/jenkins-mcp` `newHTTPJWKSSource`):
 
 | Behavior | Detail |
 |----------|--------|
-| Initial fetch | Fail-closed at serve start |
+| Initial fetch | Fail-closed at serve start unless optional same-host file snapshot is fresh enough |
 | Refresh TTL | Default **5m**; env `JENKINS_MCP_HTTP_JWKS_REFRESH_TTL` (Go duration; min **30s**, max **1h**; fail closed out of bounds) |
-| Max stale age | Default **0 = unlimited** stale-if-error; env `JENKINS_MCP_HTTP_JWKS_MAX_STALE` (Go duration; min **1m**, max **24h** when set; empty/`0`/`0s` = unlimited; invalid → fail closed at serve start). After a failed refresh, if last good snapshot age exceeds max, `Get` fails closed (process-local clock). |
+| Max stale age | Default **0 = unlimited** stale-if-error; env `JENKINS_MCP_HTTP_JWKS_MAX_STALE` (Go duration; min **1m**, max **24h** when set; empty/`0`/`0s` = unlimited; invalid → fail closed at serve start). After a failed refresh, if snapshot age (memory **or** file) exceeds max, `Get` fails closed. |
+| Optional file cache | Env `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` — same-host multi-process **public JWKS** snapshot (flock + 0600 atomic rename; keys only). Empty → memory-only. residual-status `shared_jwks_file: true` (path **never** returned). HOST-001 / HOST-008 **Done\* lite** only. |
 | On demand + background | `Get(ctx)` refreshes when TTL elapsed (singleflight); optional ticker also started for serve |
-| Refresh failure | **Stale-if-error** (keep last good) unless max stale exceeded; non-secret log line only |
+| Refresh failure | Prefer fresh enough **file** snapshot when configured; else **stale-if-error** (keep last good memory) unless max stale exceeded; non-secret log line only (no path, no key material) |
 | Validation | IdentityResolver calls `jwksSource.Get` **each** request so rotated `kid`s work after refresh |
-| Secret-free | JWKS URL must not embed credentials; never log tokens / key material (including max-stale fail-closed logs) |
+| Secret-free | JWKS URL must not embed credentials; never log tokens / key material / cache path (including max-stale fail-closed logs) |
 
-**Residual (do not claim multi-region HA):** multi-instance shared JWKS cache
-(`MaxStaleAge` / `JENKINS_MCP_HTTP_JWKS_MAX_STALE` is **process-local** only — each
-replica tracks its own last-good age); live Entra JWKS under load / multi-replica
-session store (HOST-008).
+**Residual (do not claim multi-pod / multi-region HA):** multi-pod external JWKS
+cache (Redis/etc.) remains residual; same-host file lite is **not** multi-replica
+Done. Live Entra JWKS under load / multi-replica session store (HOST-008).
 
 ---
 

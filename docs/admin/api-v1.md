@@ -294,6 +294,7 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 | `shared_subject_rate_file` | `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` set (path never returned) |
 | `principal_cache_entries` | Principal cache **count** only (memory or file; never inventory) |
 | `shared_principal_cache_file` | `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` set (HOST-008 same-host `FilePrincipalCache` lite; path never returned; never tokens) |
+| `shared_jwks_file` | **HOST-001 / HOST-008 Done\* lite:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path value **never** returned. Public keys only — never tokens. |
 | `progressive_consent_residual` / `progressive_consent_surfaces` | Mode C only; secret-free residual note + surface ids |
 | `rateEnabled` / `ratePerMinute` / `rateBurst` | HOST-006 process-local rate knobs (admin health field names) |
 | `shared_subject_rate_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is non-empty (same-host `FileSubjectRateLimiter`). **Not** multi-pod HA. Path value **never** returned. Never tokens. |

@@ -45,8 +45,10 @@
 // HOST-001 JWKS refresh foundation: JWKSSource / RefreshingJWKS (TTL refresh,
 // stale-if-error, optional MaxStaleAge fail-closed, per-validation Get).
 // Env JENKINS_MCP_HTTP_JWKS_REFRESH_TTL (default 5m, min 30s max 1h);
-// JENKINS_MCP_HTTP_JWKS_MAX_STALE (default 0 unlimited, min 1m max 24h when set;
-// process-local). Residual: multi-instance shared JWKS cache, live Entra under load.
+// JENKINS_MCP_HTTP_JWKS_MAX_STALE (default 0 unlimited, min 1m max 24h when set);
+// optional JENKINS_MCP_HTTP_JWKS_CACHE_PATH same-host multi-process public JWKS
+// snapshot (HOST-001/HOST-008 Done* lite; residual-status shared_jwks_file bool).
+// Residual: multi-pod external JWKS HA, live Entra under load.
 //
 // OAUTH-009 (offline expand): rs_qualification fallthrough classifier (status +
 // WWW-Authenticate + body class), JWKS outage fail-closed pure contracts,

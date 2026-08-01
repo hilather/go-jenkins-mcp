@@ -261,6 +261,7 @@ go test ./internal/mcpserver -count=1 -run 'Health|Readyz|PathPrefix|AllowedHost
 | `JENKINS_MCP_HTTP_JWKS_URL` / `JWT_ISSUER` / `JWT_AUDIENCE` | Process-local JWKS subject validation | No (URL/claims only) |
 | `JENKINS_MCP_HTTP_JWKS_REFRESH_TTL` | JWKS refresh interval (Go duration) | No |
 | `JENKINS_MCP_HTTP_JWKS_MAX_STALE` | Max last-good JWKS age after failed refresh | No |
+| `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` | Optional same-host public JWKS snapshot file (HOST-001/HOST-008 lite) | No (path only; residual-status bool) |
 
 ### General serve / policy (shared with local)
 
@@ -407,7 +408,7 @@ Raise replicas **only** when every row is satisfied (org-owned design):
 | 4 | Shared or carefully partitioned **cache / archive** policy | Avoid cross-pod archive handle / pin confusion | **Residual** (STO / HOST-004) |
 | 5 | **Audit aggregation** (central sink) | Per-pod files are not a fleet audit plane | **Residual** — per-process JSONL may carry multi-user `externalSubject` / `subjectKeyHash` (opaque correlation foundation; see `docs/observability.md`); fleet merge / multi-pod timeline still residual |
 | 6 | Sticky or shared Obtain / consent correlation | Refresh/consent must not double-mint unsafely | **Residual** (Mode C progressive consent) |
-| 7 | JWKS / identity multi-instance behavior measured | Process-local JWKS refresh is not multi-region HA | **Residual** |
+| 7 | JWKS / identity multi-instance behavior measured | Process-local default; optional same-host public JWKS file | **Done\* lite** same-host: optional `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` (flock + 0600 public keys; `shared_jwks_file: true`). **Multi-pod external** JWKS + live Entra under load still **residual** — not multi-replica Done |
 | 8 | Shared subject rate / concurrency limiters | Process-local default; multi-process same-host optional file rate | **Done\* lite** same-host: optional `FileSubjectRateLimiter` (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`, flock + secret-free JSON; `shared_subject_rate_file: true`). Default memory `SubjectRateLimiter`. Admin `rateEnabled`/`ratePerMinute`/`rateBurst` + `sharedSubjectRateFile`. Concurrency slots still process-local. **Multi-pod external** shared rate still **residual** — not multi-replica Done |
 
 **Honesty:**

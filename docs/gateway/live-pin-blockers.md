@@ -263,7 +263,7 @@ Raise Deployment `replicas` > 1 **only** when every row is met with org-owned de
 | 4 | Shared or carefully partitioned cache / archive policy | Residual (STO / HOST-004) |
 | 5 | Audit aggregation (central sink) | Residual |
 | 6 | Sticky or shared consent / Obtain correlation | Residual (Mode C progressive consent) |
-| 7 | JWKS / identity multi-instance measured | Residual (process-local JWKS) |
+| 7 | JWKS / identity multi-instance measured | **Done\* lite** same-host file (`JENKINS_MCP_HTTP_JWKS_CACHE_PATH`, flock + public keys 0600; `shared_jwks_file: true`); multi-pod external JWKS + live Entra under load still **residual** |
 | 8 | Shared subject rate / concurrency limiters | **Done\* lite** same-host `FileSubjectRateLimiter` (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`, flock + secret-free JSON 0600; `shared_subject_rate_file: true`); process-local default; multi-pod external shared rate still **residual**; concurrency slots still process-local |
 
 **Do not** treat `JENKINS_MCP_GATEWAY_MULTI_USER=1` as multi-replica HA.  

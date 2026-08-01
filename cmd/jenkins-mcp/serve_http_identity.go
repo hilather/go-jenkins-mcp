@@ -34,9 +34,13 @@ const (
 	EnvHTTPJWKSRefreshTTL = auth.EnvHTTPJWKSRefreshTTL
 	// EnvHTTPJWKSMaxStale is max age of last good JWKS after a failed refresh.
 	// Empty/zero → unlimited stale-if-error (default residual). When set: min 1m,
-	// max 24h (fail closed via ParseJWKSMaxStaleAge). Process-local only.
+	// max 24h (fail closed via ParseJWKSMaxStaleAge). Snapshot age (memory or file).
 	// Alias of auth.EnvHTTPJWKSMaxStale for cmd package discoverability.
 	EnvHTTPJWKSMaxStale = auth.EnvHTTPJWKSMaxStale
+	// EnvHTTPJWKSCachePath is the optional same-host multi-process JWKS snapshot
+	// file (public keys only). Empty → memory-only. HOST-001/HOST-008 lite.
+	// Alias of auth.EnvHTTPJWKSCachePath.
+	EnvHTTPJWKSCachePath = auth.EnvHTTPJWKSCachePath
 )
 
 // resolveHTTPRequireSubject combines --http-require-subject, --gateway (caller
@@ -178,22 +182,24 @@ func formatJWKSMaxStaleLog(d time.Duration) string {
 }
 
 // newHTTPJWKSSource builds a refreshable JWKS source for HTTP JWT subject validation.
-// Initial fetch is fail-closed. Refresh on TTL (default 5m) with stale-if-error.
+// Initial fetch is fail-closed (unless optional same-host file snapshot is fresh
+// enough). Refresh on TTL (default 5m) with stale-if-error.
 // client nil → DefaultClient with DefaultJWKSTimeout. refreshTTL 0 → default.
 // maxStaleAge 0 → unlimited stale-if-error; non-zero fails closed after last good
-// snapshot age exceeds the bound (process-local; multi-instance shared residual).
-// Unconfigured jwtEnv → nil source (no error).
+// snapshot age exceeds the bound. cachePath empty → memory-only; when set, public
+// keys only under flock + 0600 (HOST-001/HOST-008 lite). Unconfigured jwtEnv →
+// nil source (no error). Invalid cachePath fails closed.
 //
-// Residual (HOST-001 honesty): multi-instance / multi-region shared JWKS cache
-// and live Entra JWKS under load are not claimed. MaxStaleAge is process-local
-// only (JENKINS_MCP_HTTP_JWKS_MAX_STALE). Mid-session *subject* rebind remains
-// mcpserver fingerprint (separate).
+// Residual (HOST-001 honesty): multi-pod external JWKS HA and live Entra JWKS
+// under load are not claimed. Optional file is same-host multi-process lite only.
+// Mid-session *subject* rebind remains mcpserver fingerprint (separate).
 func newHTTPJWKSSource(
 	ctx context.Context,
 	client *http.Client,
 	cfg httpJWTEnv,
 	refreshTTL time.Duration,
 	maxStaleAge time.Duration,
+	cachePath string,
 ) (*auth.RefreshingJWKS, error) {
 	if !cfg.Configured() {
 		return nil, nil
@@ -209,6 +215,7 @@ func newHTTPJWKSSource(
 		URI:         cfg.JWKSURL,
 		TTL:         refreshTTL,
 		MaxStaleAge: maxStaleAge,
+		CachePath:   cachePath,
 		// Logf nil → log.Printf inside auth (non-secret refresh errors only).
 	})
 	if err != nil {

@@ -290,8 +290,10 @@ JENKINS_MCP_HTTP_JWT_AUDIENCE (secret-free); optional JENKINS_MCP_HTTP_JWT_REQUI
 implies require-subject. JWKS refreshes on TTL (default 5m;
 JENKINS_MCP_HTTP_JWKS_REFRESH_TTL, min 30s max 1h) with stale-if-error.
 Optional JENKINS_MCP_HTTP_JWKS_MAX_STALE (Go duration; empty/0 = unlimited;
-min 1m max 24h) fails closed after last good JWKS age exceeds the bound
-(process-local; multi-instance shared JWKS residual).
+min 1m max 24h) fails closed after last good JWKS age exceeds the bound.
+Optional JENKINS_MCP_HTTP_JWKS_CACHE_PATH same-host multi-process public JWKS
+snapshot (flock+0600; residual-status shared_jwks_file bool only — path never
+returned). Multi-pod external JWKS residual.
 Shared transport secret is never treated as subject.
 Request body cap defaults to
 4 MiB; raise with --http-max-body-bytes / JENKINS_MCP_HTTP_MAX_BODY_BYTES
@@ -300,8 +302,9 @@ Request body cap defaults to
 /; no // or ..; flag wins). When set, MCP Streamable routes are under the
 prefix only (stripped before the SDK); /healthz and /readyz stay at root and
 also at {prefix}/healthz|{prefix}/readyz. Mid-session subject change on the same
-Mcp-Session-Id fails closed (HOST-001). Residual: multi-instance JWKS HA; live
-Entra; live path-prefix origin pin matrix; prefer stdio for pilot (ADR 0002).
+Mcp-Session-Id fails closed (HOST-001). Residual: multi-pod external JWKS HA;
+live Entra under load; live path-prefix origin pin matrix; prefer stdio for
+pilot (ADR 0002).
 
 TLS/proxy (NET-004): profile may set caBundlePath, proxyURL, noProxy, clientCertFile,
 clientKeyFile (paths only — never private keys in profile JSON). CLI --ca-bundle /
@@ -2164,15 +2167,19 @@ func runServe(args []string) error {
 			if staleErr != nil {
 				return staleErr
 			}
-			src, srcErr := newHTTPJWKSSource(serveCtx, nil, jwtEnv, refreshTTL, maxStale)
+			cachePath, cacheErr := auth.JWKSCachePathFromEnviron(os.Getenv)
+			if cacheErr != nil {
+				return cacheErr
+			}
+			src, srcErr := newHTTPJWKSSource(serveCtx, nil, jwtEnv, refreshTTL, maxStale, cachePath)
 			if srcErr != nil {
 				return srcErr
 			}
 			jwksSource = src
 			if src != nil {
-				// Secret-free: durations + boolean only (never JWKS URL credentials or keys).
-				log.Printf("HTTP JWT JWKS source ready refresh_ttl=%s max_stale=%s uri_host_set=%v (stale-if-error process-local; multi-instance cache residual)",
-					src.TTL(), formatJWKSMaxStaleLog(src.MaxStaleAge()), strings.TrimSpace(jwtEnv.JWKSURL) != "")
+				// Secret-free: durations + booleans only (never JWKS URL credentials, keys, or cache path).
+				log.Printf("HTTP JWT JWKS source ready refresh_ttl=%s max_stale=%s uri_host_set=%v shared_jwks_file=%v (stale-if-error; multi-pod external JWKS residual)",
+					src.TTL(), formatJWKSMaxStaleLog(src.MaxStaleAge()), strings.TrimSpace(jwtEnv.JWKSURL) != "", src.CachePathConfigured())
 			}
 		}
 		cfg.IdentityResolver = newHTTPIdentityResolver(cfg.LabIdentity, token, jwksSource, auth.AccessTokenParams{
