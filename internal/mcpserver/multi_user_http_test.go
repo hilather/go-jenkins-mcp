@@ -20,10 +20,10 @@ import (
 // sessions; mid-session subject swap on the same Mcp-Session-Id still 401s;
 // 401 bodies never echo transport secrets or subjects.
 //
-// Residual: full tools/call JSON-RPC multi-user e2e is not proven here — the MCP
-// SDK Streamable HTTP path may not always pass r.Context() into tool handlers.
-// These tests prove protectHandler → next hop context flow (the boundary serve
-// wires via AfterIdentity + AuthProviderCtx / PolicySubjectFromContext).
+// tools/call JSON-RPC multi-user e2e (session-scoped Connect context + Mode A
+// AuthProviderCtx) lives in multi_user_tools_call_test.go. These tests prove
+// protectHandler → next hop context flow (the boundary serve wires via
+// AfterIdentity + AuthProviderCtx / PolicySubjectFromContext).
 
 const multiUserCanaryToken = "mu-http-canary-token-xyz-never-echo"
 
@@ -402,8 +402,8 @@ func TestMultiUserHTTP_SimulatedAuthProviderCtx_AliceThenBob(t *testing.T) {
 }
 
 // NewHTTPHandler (SDK inner) still runs AfterIdentity for multi-user subjects;
-// session independence + swap fail-closed at protect layer (SDK may not expose
-// context to tools — residual documented).
+// session independence + swap fail-closed at protect layer. Full tools/call
+// context propagation is covered in multi_user_tools_call_test.go.
 func TestMultiUserHTTP_NewHTTPHandler_SDKInner_AfterIdentityAndSwap(t *testing.T) {
 	t.Parallel()
 

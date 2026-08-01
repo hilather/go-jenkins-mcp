@@ -198,8 +198,9 @@ type HTTPConfig struct {
 	// for Obtain and policy.Subject for deny-only RBAC rebind).
 	// Called only when id.Present(), after ContextWithIdentity. Must never log
 	// secrets. Nil = no-op (identity still stored via IdentityFromContext).
-	// Tool-layer rebind depends on MCP SDK propagating this request context
-	// to tool handlers (serve wires SubjectFromContext = PolicySubjectFromContext).
+	// Tool-layer multi-user is session-scoped: Connect(req.Context()) at session
+	// create preserves AfterIdentity Values for tool handlers (go-sdk v1.1.0).
+	// serve wires SubjectFromContext = PolicySubjectFromContext.
 	AfterIdentity func(ctx context.Context, id RequestIdentity) context.Context
 
 	// Logger receives start/stop messages. Default: log.Default().
@@ -300,6 +301,7 @@ func ResolveHTTPPathPrefix(flagVal, envVal string) (string, error) {
 //   - must not contain ".." path segments (or a lone "..")
 //   - must not contain backslash or control characters
 //   - trailing slash is stripped (except when result would be empty → no prefix)
+//
 // Normalized form is returned (leading slash, no trailing slash).
 func ValidateHTTPPathPrefix(raw string) (string, error) {
 	p := strings.TrimSpace(raw)
@@ -485,9 +487,9 @@ func NewHTTPHandler(server *mcp.Server, cfg HTTPConfig) (http.Handler, error) {
 // Does not start a listener. Enforces the same validateHTTPHandlerPolicy rules
 // as NewHTTPHandler (no listen address required).
 //
-// Residual: full tools/call JSON-RPC multi-user e2e requires the MCP SDK to
-// propagate r.Context() into tool handlers; this API proves protect→next-hop
-// context flow without a heavy SDK harness.
+// tools/call multi-user e2e (multi_user_tools_call_test.go) proves session-scoped
+// Connect(req.Context()) Values reach tool handlers under NewHTTPHandler; this
+// API still proves protect→next-hop context flow with a mock inner.
 func NewHTTPProtectHandler(inner http.Handler, cfg HTTPConfig) (http.Handler, error) {
 	if inner == nil {
 		return nil, apperr.New(apperr.CodeInternal, "http protect inner handler is nil")
@@ -506,9 +508,9 @@ func NewHTTPProtectHandler(inner http.Handler, cfg HTTPConfig) (http.Handler, er
 	}
 	requireSubject := HTTPSubjectRequired(cfg)
 	h := &protectHandler{
-		inner:                   inner,
-		maxBody:                 maxBody,
-		pathPrefix:              pathPrefix,
+		inner:      inner,
+		maxBody:    maxBody,
+		pathPrefix: pathPrefix,
 		// HOST-002: store flag for residual clarity; Host/Origin/path never
 		// read X-Forwarded-* while trustedProxy is false (default) or while
 		// true remains unimplemented (fail closed — do not auto-trust).
@@ -694,9 +696,9 @@ func effectiveMaxBody(cfg HTTPConfig) int64 {
 // X-Forwarded-For / X-Forwarded-Proto are never consulted for auth or path
 // decisions while trustedProxy is false (default) or true-but-unimplemented.
 type protectHandler struct {
-	inner         http.Handler
-	maxBody       int64
-	pathPrefix    string // normalized; empty = no prefix (MCP at root path space)
+	inner      http.Handler
+	maxBody    int64
+	pathPrefix string // normalized; empty = no prefix (MCP at root path space)
 	// trustedProxy residual: when false (default), ignore X-Forwarded-* for
 	// Host/Origin/path. When true, still ignored until residual lands.
 	trustedProxy     bool

@@ -20,10 +20,10 @@ import (
 // mock next hop runs AuthProviderCtx on r.Context() → Alice then Bob tokens,
 // no cross-leak; mid-session swap 401 secret-free.
 //
-// Residual: full MCP tools/call JSON-RPC multi-user e2e still depends on the
-// Streamable HTTP SDK propagating r.Context() into tool handlers (see
-// docs/gateway/README.md). This test proves the protectHandler → AuthProviderCtx
-// boundary that serve wires.
+// Full MCP tools/call JSON-RPC multi-user e2e (session-scoped Connect context +
+// Mode A AuthProviderCtx Alice/Bob isolation) is in
+// internal/mcpserver/multi_user_tools_call_test.go. This test proves the
+// protectHandler → AuthProviderCtx boundary that serve wires.
 
 const muWireCanary = "MU_WIRE_CANARY_token_never_echo_xyz"
 
