@@ -58,10 +58,13 @@ func ContextWithCallerAndPolicySubject(ctx context.Context, c Caller, s policy.S
 //   - Groups come only from inbound (JWT groups/roles or lab header). Never
 //     inherited from process defaults for a different ExternalSubject.
 //     Bounded with MaxInboundGroups / MaxInboundGroupNameBytes and
-//     FailOnGroupOverage=true (production gateway default). On overage or
+//     FailOnGroupOverage=true (production gateway default). On count overage or
 //     oversize name, groups are dropped (empty) so unbounded claims cannot
-//     attach — cannot broaden deny-only / RO. Live Entra group overage /
-//     Microsoft Graph membership expansion remains residual.
+//     attach — cannot broaden deny-only / RO.
+//   - Entra group overage without a full groups claim fails earlier at
+//     ValidateAccessToken / ResolveHTTPInbound (auth.CheckIncompleteGroupOverage)
+//     so multi-user JWT subjects never bind with invented empty membership.
+//     Microsoft Graph membership expansion remains residual (OAUTH-010).
 //   - Verified is true only when inbound.Verified and JenkinsUserID is non-empty
 //     and non-anonymous.
 func PolicySubjectFromHTTPInbound(in HTTPInbound, profileID contracts.ProfileID, defaults policy.Subject) policy.Subject {

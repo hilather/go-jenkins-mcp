@@ -64,6 +64,10 @@ type AccessTokenParams struct {
 
 // AccessTokenClaims are non-secret claims extracted after successful JWT validation.
 // Never log the raw token; these fields are safe for session labels / diagnostics.
+//
+// OAUTH-006: Entra group overage markers (_claim_names / _claim_sources) without a
+// concrete groups array fail closed in ValidateAccessToken — Groups is never an
+// invented empty-or-partial membership set for multi-user gateway bind.
 type AccessTokenClaims struct {
 	Subject           string
 	PreferredUsername string
@@ -75,6 +79,7 @@ type AccessTokenClaims struct {
 	TenantID          string
 	TokenUse          string
 	// Groups are optional IdP group claims (normalized later by OAUTH-006).
+	// Populated only from concrete groups/roles string lists in the token.
 	Groups []string
 }
 
@@ -306,6 +311,17 @@ func validateJWTAccessToken(raw string, jwks *JWKS, p AccessTokenParams) (Access
 
 	signingInput := parts[0] + "." + parts[1]
 	if err := verifyJWS(strings.ToUpper(alg), pub, []byte(signingInput), sig); err != nil {
+		return AccessTokenClaims{}, err
+	}
+
+	// Map parse first so Entra group overage (_claim_names / groups-as-ref) is
+	// visible before typed unmarshal (object-shaped groups would otherwise fail
+	// as generic "payload JSON invalid"). Fail closed — never invent membership.
+	var rawClaims map[string]any
+	if err := json.Unmarshal(payloadJSON, &rawClaims); err != nil {
+		return AccessTokenClaims{}, apperr.New(apperr.CodeAuthentication, "jwt payload JSON is invalid")
+	}
+	if err := CheckIncompleteGroupOverage(rawClaims); err != nil {
 		return AccessTokenClaims{}, err
 	}
 

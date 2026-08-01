@@ -557,6 +557,111 @@ func TestValidateAccessToken_EmptyAndCanary(t *testing.T) {
 	}
 }
 
+// TestValidateAccessToken_EntraGroupOverage_FailClosed is OAUTH-006 foundation:
+// _claim_names/_claim_sources without a full groups array fail closed (no Graph).
+func TestValidateAccessToken_EntraGroupOverage_FailClosed(t *testing.T) {
+	t.Parallel()
+	priv, jwks := testRSAJWKS(t, "kid-1")
+	now := time.Unix(1_700_000_000, 0)
+	base := map[string]any{
+		"iss":                "https://idp.example.com/tenant",
+		"sub":                "user-sub-overage",
+		"preferred_username": "alice@corp.example",
+		"aud":                "https://jenkins.example.com",
+		"exp":                now.Add(time.Hour).Unix(),
+		"nbf":                now.Add(-time.Minute).Unix(),
+		"azp":                "mcp-public-client",
+		"tid":                "tenant-guid",
+		"token_use":          "access_token",
+	}
+	params := auth.AccessTokenParams{
+		Issuer:   "https://idp.example.com/tenant",
+		Audience: "https://jenkins.example.com",
+		ClientID: "mcp-public-client",
+		TenantID: "tenant-guid",
+		Now:      func() time.Time { return now },
+	}
+
+	// Overage-only: markers without groups array.
+	overageOnly := copyClaims(base)
+	overageOnly["_claim_names"] = map[string]any{"groups": "src1"}
+	overageOnly["_claim_sources"] = map[string]any{
+		"src1": map[string]any{
+			"endpoint": "https://graph.microsoft.com/v1.0/users/" + jwtCanary + "/getMemberObjects",
+		},
+	}
+	tok := mustSignRS256(t, priv, "kid-1", overageOnly)
+	_, err := auth.ValidateAccessToken(tok, jwks, params)
+	if err == nil || apperr.CodeOf(err) != apperr.CodeAuthentication {
+		t.Fatalf("overage-only must fail closed: %v", err)
+	}
+	if !strings.Contains(err.Error(), "overage") {
+		t.Fatalf("want overage wording: %v", err)
+	}
+	// Secret canaries: raw token, Graph endpoint, canary subject fragment.
+	if strings.Contains(err.Error(), tok) || strings.Contains(err.Error(), jwtCanary) ||
+		strings.Contains(err.Error(), "graph.microsoft.com") {
+		t.Fatalf("canary/endpoint leaked: %v", err)
+	}
+
+	// groups-as-reference object without concrete list.
+	refOnly := copyClaims(base)
+	refOnly["groups"] = map[string]any{
+		"src":      []string{"src1"},
+		"endpoint": "https://graph.microsoft.com/v1.0/users/me/getMemberGroups",
+	}
+	tok2 := mustSignRS256(t, priv, "kid-1", refOnly)
+	_, err = auth.ValidateAccessToken(tok2, jwks, params)
+	if err == nil {
+		t.Fatal("groups reference object must fail closed")
+	}
+	if strings.Contains(err.Error(), tok2) || strings.Contains(err.Error(), "graph.microsoft.com") {
+		t.Fatalf("canary leaked: %v", err)
+	}
+
+	// Hybrid: full groups array present — OK (current path).
+	hybrid := copyClaims(base)
+	hybrid["groups"] = []string{"g-ops", "g-dev"}
+	hybrid["roles"] = []string{"reader"}
+	hybrid["_claim_names"] = map[string]any{"groups": "src1"}
+	hybrid["_claim_sources"] = map[string]any{
+		"src1": map[string]any{"endpoint": "https://graph.microsoft.com/v1.0/users/me/getMemberObjects"},
+	}
+	tok3 := mustSignRS256(t, priv, "kid-1", hybrid)
+	res, err := auth.ValidateAccessToken(tok3, jwks, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Claims.Subject != "user-sub-overage" {
+		t.Fatalf("sub: %q", res.Claims.Subject)
+	}
+	// Concrete groups+roles merged; no invented Graph membership.
+	seen := map[string]bool{}
+	for _, g := range res.Claims.Groups {
+		seen[g] = true
+		if strings.Contains(g, "graph") || g == "src1" {
+			t.Fatalf("invented group: %v", res.Claims.Groups)
+		}
+	}
+	if !seen["g-ops"] || !seen["g-dev"] || !seen["reader"] {
+		t.Fatalf("want concrete groups/roles: %v", res.Claims.Groups)
+	}
+
+	// GroupsFromValidatedToken also fails closed on overage-only.
+	_, err = auth.GroupsFromValidatedToken(tok, auth.AccessTokenResult{Form: auth.TokenFormJWT}, auth.DefaultGroupClaimConfig())
+	if err == nil {
+		t.Fatal("GroupsFromValidatedToken overage-only must fail")
+	}
+}
+
+func copyClaims(in map[string]any) map[string]any {
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
 func TestSessionCredentialsFrom(t *testing.T) {
 	t.Parallel()
 	basic := auth.SessionCredentialsFrom(auth.Session{Method: auth.MethodAPIToken, User: "a", Secret: "t", ProfileID: "p"})

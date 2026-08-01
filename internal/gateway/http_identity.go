@@ -288,6 +288,10 @@ type AccessTokenParams = auth.AccessTokenParams
 // ResolveHTTPInboundFromAccessToken validates a JWT-shaped access token against
 // jwks and returns HTTPInbound with Source=jwt. Opaque tokens return empty
 // inbound (identity residual via whoAmI — not multi-user foundation alone).
+//
+// Fail closed on Entra group overage without a full groups claim
+// (auth.ValidateAccessToken → CheckIncompleteGroupOverage): multi-user bind
+// must not invent membership. Lab header path is separate (ParseLabHTTPInbound).
 // Errors never include the raw token (auth scrub).
 func ResolveHTTPInboundFromAccessToken(raw string, jwks *auth.JWKS, p auth.AccessTokenParams) (HTTPInbound, error) {
 	raw = strings.TrimSpace(raw)

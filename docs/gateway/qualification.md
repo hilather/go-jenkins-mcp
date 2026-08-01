@@ -103,7 +103,7 @@ Complete before enabling `CredentialProvider.Live` / production gateway mode.
 | Revocation / refresh failure | IdP revoke + refresh fail → subsequent tool path fails closed (OAUTH-006) | Security |
 | Invalid bearer no downgrade | No fallthrough to Basic/API-token/session/anonymous on OAuth-required routes | Security |
 | Token never in logs/errors/MCP | Canary redaction tests on live traffic samples | Security |
-| Groups overage | Cap 64; residual note; cannot broaden MCP deny-only | Security |
+| Groups overage | Cap 64; residual note; cannot broaden MCP deny-only. Entra incomplete overage (`_claim_names` without full `groups`) fail-closed foundation Done\*; Graph expansion residual | Security |
 | Generic passthrough disabled | Production config audit; exact-audience exception recorded | Security |
 
 ---
