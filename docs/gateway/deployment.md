@@ -239,6 +239,16 @@ go test ./internal/mcpserver -count=1 -run 'Health|Readyz|PathPrefix|AllowedHost
 | `JENKINS_MCP_GATEWAY_CREDENTIAL_MODE` | Primary: `api_token_vault` \| `jwt_rs_bearer` \| `agentcore_3lo_obo` | No |
 | `JENKINS_MCP_GATEWAY_ENABLED_MODES` | Optional comma allow-list of mode ids | No |
 
+### Multi-user / subject limits (foundation residual)
+
+| Variable | Meaning | Secret? |
+|----------|---------|---------|
+| `JENKINS_MCP_GATEWAY_MULTI_USER` | Opt-in per-request multi-user Obtain (default off) | No (bool) |
+| `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` | Per-subject concurrent slots (empty → 8) | No |
+| `JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT` | Process-wide slots (empty → 64) | No |
+
+**Not HA:** `MULTI_USER=1` is single-process foundation only (HOST-008 multi-replica residual).
+
 ### Streamable HTTP (optional; not pilot default)
 
 | Variable | Meaning | Secret? |
@@ -247,12 +257,16 @@ go test ./internal/mcpserver -count=1 -run 'Health|Readyz|PathPrefix|AllowedHost
 | `JENKINS_MCP_HTTP_MAX_BODY_BYTES` | Request body cap (bytes); flag wins; max 16 MiB absolute | No |
 | `JENKINS_MCP_HTTP_REQUIRE_TOKEN` / `JENKINS_MCP_HTTP_DENY_ANONYMOUS` | Require shared secret on loopback | No (bool) |
 | `JENKINS_MCP_HTTP_REQUIRE_SUBJECT` | Require per-request subject (HOST-001) | No (bool) |
+| `JENKINS_MCP_HTTP_JWKS_URL` / `JWT_ISSUER` / `JWT_AUDIENCE` | Process-local JWKS subject validation | No (URL/claims only) |
+| `JENKINS_MCP_HTTP_JWKS_REFRESH_TTL` | JWKS refresh interval (Go duration) | No |
+| `JENKINS_MCP_HTTP_JWKS_MAX_STALE` | Max last-good JWKS age after failed refresh | No |
 
 ### General serve / policy (shared with local)
 
 | Variable | Meaning |
 |----------|---------|
 | `JENKINS_MCP_READ_ONLY` | Force read-only when `true` |
+| `JENKINS_MCP_REQUIRE_SIGNED_POLICY` | Enterprise pin: fail closed without trusted signed overlay |
 | `XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_CACHE_HOME` | Per-user paths for profile + cache |
 
 **Never place in env or compose files:** API tokens, client secrets, refresh
@@ -393,8 +407,8 @@ Raise replicas **only** when every row is satisfied (org-owned design):
 | Surface | Fields | Honesty |
 |---------|--------|---------|
 | `SubjectLimiter.StatusMap` | `ha_multi_replica: false` | Always false until multi-replica runtime exists |
-| Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `gateway_ready=false`, `ha_multi_replica=false` | Env parse only; Ready is serve `/readyz` |
-| Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false` | Admin BFF ≠ MCP serve; Ready residual documented |
+| Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `mode_a/b/c_enabled`, `mode_*_live_*_qualified=false`, `oauth009_offline_only`, `gateway_ready=false`, `ha_multi_replica=false`, `mode_matrix_residual` | Env parse only; Ready is serve `/readyz`; unified modes A/B/C residual honesty |
+| Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false` | Admin BFF ≠ MCP serve; Ready residual documented; SPA shows foundation residual (no rebuild required for BFF-only honesty) |
 | Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false` + mode matrix | Never tokens; multi-user residual note when env set |
 
 **Never** claim multi-replica Done from docs, kustomize `replicas: 1`, or these

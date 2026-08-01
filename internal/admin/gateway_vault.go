@@ -62,7 +62,8 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 		Residual:         "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser)",
 	}
 	if multiUser {
-		resp.Residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO); " + resp.Residual
+		// Secret-free; SPA residual banner (no embed rebuild). host008_single_replica honesty.
+		resp.Residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO; haMultiReplica=false HOST-008); " + resp.Residual
 	}
 
 	mx, err := gateway.ModeMatrixFromEnviron(os.Getenv)

@@ -161,11 +161,28 @@ func ModeMatrixFromEnviron(getenv func(string) string) (ModeMatrix, error) {
 			"gateway primary credential mode is not in JENKINS_MCP_GATEWAY_ENABLED_MODES")
 	}
 	mx := ModeMatrix{Primary: primary, Enabled: enabled}
+	// Unified modes A/B/C residual honesty (doctor / admin / release-evidence).
+	// Offline foundations are Done*; live pins remain residual — never claim production GO.
+	mx.Residual = ModeMatrixResidualNote(primary, enabled)
+	return mx, nil
+}
+
+// ModeMatrixResidualNote returns a secret-free residual string for enabled modes
+// A/B/C (HOST-011 / OAUTH-009 / GWY honesty). Empty when no modes (should not
+// happen after ModeMatrixFromEnviron normalizes primary-only).
+func ModeMatrixResidualNote(primary CredentialMode, enabled []CredentialMode) string {
+	var parts []string
+	if ModeEnabledIn(CredentialModeAPITokenVault, enabled, primary) {
+		parts = append(parts, "mode_a api_token_vault offline vault foundation (HOST-009); live multi-user Obtain residual")
+	}
 	if ModeEnabledIn(CredentialModeJWTRSBearer, enabled, primary) {
 		// Offline vault Obtain is HOST-010 foundation; live RS pin is residual.
-		mx.Residual = "jwt_rs_bearer offline vault (HOST-010); live IdP/jwt-auth-filter pin residual (OAUTH-009)"
+		parts = append(parts, "mode_b jwt_rs_bearer offline vault (HOST-010); live IdP/jwt-auth-filter pin residual (OAUTH-009)")
 	}
-	return mx, nil
+	if ModeEnabledIn(CredentialModeAgentCore, enabled, primary) {
+		parts = append(parts, "mode_c agentcore_3lo_obo Live=false foundation (GWY-001); live AgentCore/Entra Obtain residual (OAUTH-010)")
+	}
+	return strings.Join(parts, "; ")
 }
 
 // VaultPathFromEnviron returns the Mode A vault file path from env or default

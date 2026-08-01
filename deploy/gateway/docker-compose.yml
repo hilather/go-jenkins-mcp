@@ -47,6 +47,19 @@ services:
       # HOST-011 mode matrix (mode ids only; no secrets)
       JENKINS_MCP_GATEWAY_CREDENTIAL_MODE: ${JENKINS_MCP_GATEWAY_CREDENTIAL_MODE:-}
       JENKINS_MCP_GATEWAY_ENABLED_MODES: ${JENKINS_MCP_GATEWAY_ENABLED_MODES:-}
+      # Multi-user Obtain opt-in + subject concurrency (foundation residual; not HA).
+      JENKINS_MCP_GATEWAY_MULTI_USER: ${JENKINS_MCP_GATEWAY_MULTI_USER:-}
+      JENKINS_MCP_SUBJECT_MAX_CONCURRENT: ${JENKINS_MCP_SUBJECT_MAX_CONCURRENT:-}
+      JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT: ${JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT:-}
+      # HTTP path prefix + process-local JWKS (no credentials in URL).
+      JENKINS_MCP_HTTP_PATH_PREFIX: ${JENKINS_MCP_HTTP_PATH_PREFIX:-}
+      JENKINS_MCP_HTTP_JWKS_URL: ${JENKINS_MCP_HTTP_JWKS_URL:-}
+      JENKINS_MCP_HTTP_JWT_ISSUER: ${JENKINS_MCP_HTTP_JWT_ISSUER:-}
+      JENKINS_MCP_HTTP_JWT_AUDIENCE: ${JENKINS_MCP_HTTP_JWT_AUDIENCE:-}
+      JENKINS_MCP_HTTP_JWKS_REFRESH_TTL: ${JENKINS_MCP_HTTP_JWKS_REFRESH_TTL:-}
+      JENKINS_MCP_HTTP_JWKS_MAX_STALE: ${JENKINS_MCP_HTTP_JWKS_MAX_STALE:-}
+      # Enterprise signed-policy pin (bool only; never private keys).
+      JENKINS_MCP_REQUIRE_SIGNED_POLICY: ${JENKINS_MCP_REQUIRE_SIGNED_POLICY:-}
       # XDG under container home (volume-mounted); no secrets on these volumes.
       XDG_CONFIG_HOME: /home/nonroot/.config
       XDG_DATA_HOME: /home/nonroot/.local/share

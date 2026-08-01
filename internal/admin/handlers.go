@@ -90,7 +90,9 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	multiUser := gateway.MultiUserEnabled(os.Getenv)
 	residual := ""
 	if multiUser {
-		residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO; no tokens in health)"
+		// Secret-free honesty only (SPA reads residual; no SPA rebuild required for this string).
+		// multi_user_offline + host008_single_replica residual ids: release-evidence --offline.
+		residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO; haMultiReplica always false / HOST-008 single-replica; no tokens in health)"
 	}
 	writeJSON(w, http.StatusOK, healthResponse{
 		Status:           "ok",

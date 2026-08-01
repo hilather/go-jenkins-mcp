@@ -229,6 +229,10 @@ func TestEnabledModesAndMatrix(t *testing.T) {
 	if len(mx.Enabled) != 1 || mx.Enabled[0] != gateway.CredentialModeAPITokenVault {
 		t.Fatalf("enabled %+v", mx.Enabled)
 	}
+	// Unified residual honesty: Mode A alone still carries offline/live residual note.
+	if mx.Residual == "" || !strings.Contains(mx.Residual, "mode_a") {
+		t.Fatalf("Mode A residual honesty: %q", mx.Residual)
+	}
 
 	// Explicit multi-enable with primary included.
 	env[gateway.EnvGatewayEnabledModes] = "api_token_vault, jwt_rs_bearer"
@@ -239,8 +243,11 @@ func TestEnabledModesAndMatrix(t *testing.T) {
 	if len(mx.Enabled) != 2 {
 		t.Fatalf("enabled %+v", mx.Enabled)
 	}
-	if mx.Residual == "" {
+	if mx.Residual == "" || !strings.Contains(mx.Residual, "OAUTH-009") {
 		t.Fatal("Mode B in enabled list should note residual")
+	}
+	if !strings.Contains(mx.Residual, "mode_a") || !strings.Contains(mx.Residual, "mode_b") {
+		t.Fatalf("unified A/B residual: %q", mx.Residual)
 	}
 
 	// Primary not in enabled → fail.

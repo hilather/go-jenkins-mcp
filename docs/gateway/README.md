@@ -5,7 +5,7 @@
 **Live opt-in:** `JENKINS_MCP_GATEWAY_LIVE=1` + token endpoint → `EnableLiveHTTPFetcher` (Mode C only).  
 **Multi-user opt-in:** `JENKINS_MCP_GATEWAY_MULTI_USER=1` → per-request Caller → Obtain (see §3b).  
 **Real Entra / AgentCore Identity vault pin residual** (GWY-003 / OAUTH-010) — do **not** mark GWY-001 fully Done.  
-**GWY-004:** deployment **scaffold** (compose/kustomize/docs) only — no live AgentCore image.  
+**GWY-004:** deployment **scaffold** (compose/kustomize/docs + `.env.example` lab flags: MULTI_USER, JWKS max stale, path prefix, REQUIRE_SIGNED_POLICY, subject concurrency) only — no live AgentCore image; live pins residual.  
 **Related:** [deployment.md](deployment.md), [qualification.md](qualification.md), [auth-architecture.md](../auth-architecture.md) §2.3, [ADR 0003](../adr/0003-jenkins-not-oauth-authorization-server.md), [policy-rbac.md](../policy-rbac.md), architecture §§1–2 / §6.6, **[server/team-hosted roadmap](../roadmap/server-team-hosted.md)** (Tier A path, HOST-*, 30/60/90).
 
 ---

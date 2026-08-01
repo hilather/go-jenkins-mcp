@@ -2620,7 +2620,7 @@ Produce a signed non-root Linux container/service with approved Streamable HTTP 
 - [ ] Image is minimal/non-root/signed with SBOM/provenance and bounded resources.
 - [ ] Near-source deployment demonstrates measurable bandwidth benefit without unacceptable auth/latency cost.
 
-**Packaging scaffold note (honest):** `deploy/gateway/` is **hardened scaffold** (non-root distroless, resource limits, secret-free compose/kustomize, `/healthz`+`/readyz` probes — HOST-005). **Not** production DoD: no signed org image, no live AgentCore sidecar, no bandwidth study, no multi-tenant quotas.
+**Packaging scaffold note (honest):** `deploy/gateway/` is **hardened scaffold** (non-root distroless, resource limits, secret-free compose/kustomize, `/healthz`+`/readyz` probes — HOST-005; `.env.example` lists MULTI_USER / JWKS max stale / path prefix / REQUIRE_SIGNED_POLICY / subject concurrency lab flags). **Not** production DoD: no signed org image, no live AgentCore sidecar, no bandwidth study, no multi-tenant quotas.
 
 ---
 

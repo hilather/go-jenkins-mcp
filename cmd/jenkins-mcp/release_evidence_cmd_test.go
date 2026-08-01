@@ -126,19 +126,30 @@ require (
 			t.Fatalf("empty residual message for %s", r.ID)
 		}
 	}
-	for _, id := range []string{"full_suite", "production_signoff", "live_entra", "gateway_modes_live", "stdio_binary_smoke", "cursor_host_ci", "install_operator"} {
+	for _, id := range []string{
+		"full_suite", "production_signoff", "live_entra", "gateway_modes_live",
+		"multi_user_offline", "oauth009_offline", "host008_single_replica",
+		"stdio_binary_smoke", "cursor_host_ci", "install_operator",
+	} {
 		if !resIDs[id] {
 			t.Fatalf("missing residual %s in %+v", id, ev.Residual)
 		}
 	}
 	// Honesty: stdio_binary_smoke is Done* (optional CI), cursor_host_ci remains open residual.
-	var stdioMsg, cursorMsg string
+	// multi_user_offline / oauth009_offline mark Done* foundations; host008 stays single-replica residual.
+	var stdioMsg, cursorMsg, multiUserMsg, oauth009Msg, host008Msg string
 	for _, r := range ev.Residual {
-		if r.ID == "stdio_binary_smoke" {
+		switch r.ID {
+		case "stdio_binary_smoke":
 			stdioMsg = r.Message
-		}
-		if r.ID == "cursor_host_ci" {
+		case "cursor_host_ci":
 			cursorMsg = r.Message
+		case "multi_user_offline":
+			multiUserMsg = r.Message
+		case "oauth009_offline":
+			oauth009Msg = r.Message
+		case "host008_single_replica":
+			host008Msg = r.Message
 		}
 	}
 	if !strings.Contains(strings.ToLower(stdioMsg), "done*") {
@@ -146,6 +157,18 @@ require (
 	}
 	if !strings.Contains(strings.ToLower(cursorMsg), "residual") {
 		t.Fatalf("cursor_host_ci should remain residual: %q", cursorMsg)
+	}
+	if !strings.Contains(strings.ToLower(multiUserMsg), "done*") {
+		t.Fatalf("multi_user_offline should mark Done* foundation: %q", multiUserMsg)
+	}
+	if !strings.Contains(strings.ToLower(multiUserMsg), "pilot") {
+		t.Fatalf("multi_user_offline should point pilot checklist: %q", multiUserMsg)
+	}
+	if !strings.Contains(strings.ToLower(oauth009Msg), "done*") || !strings.Contains(oauth009Msg, "OAUTH-009") {
+		t.Fatalf("oauth009_offline honesty: %q", oauth009Msg)
+	}
+	if !strings.Contains(strings.ToLower(host008Msg), "single-replica") && !strings.Contains(strings.ToLower(host008Msg), "single replica") {
+		t.Fatalf("host008_single_replica honesty: %q", host008Msg)
 	}
 
 	// Lite overall: core passes → pass (optional doctor/cache skip does not incomplete).

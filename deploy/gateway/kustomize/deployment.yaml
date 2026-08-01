@@ -61,6 +61,8 @@ spec:
               protocol: TCP
           env:
             # Non-secret only — never put API tokens / client secrets here.
+            # Lab multi-user / JWKS / path-prefix / signed-policy / subject rate
+            # flags: see deploy/gateway/.env.example (optional ConfigMap overlay).
             - name: JENKINS_MCP_GATEWAY_MODE
               value: "1"
             - name: JENKINS_MCP_READ_ONLY
@@ -79,6 +81,19 @@ spec:
               value: "replace-tenant"
             - name: JENKINS_MCP_GATEWAY_WORKLOAD
               value: "replace-workload"
+            # Optional lab flags (empty = defaults). Never secrets.
+            # - name: JENKINS_MCP_GATEWAY_MULTI_USER
+            #   value: "1"
+            # - name: JENKINS_MCP_SUBJECT_MAX_CONCURRENT
+            #   value: "8"
+            # - name: JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT
+            #   value: "64"
+            # - name: JENKINS_MCP_HTTP_PATH_PREFIX
+            #   value: "/mcp"
+            # - name: JENKINS_MCP_HTTP_JWKS_MAX_STALE
+            #   value: "1h"
+            # - name: JENKINS_MCP_REQUIRE_SIGNED_POLICY
+            #   value: "1"
             - name: XDG_CONFIG_HOME
               value: /home/nonroot/.config
             - name: XDG_DATA_HOME
