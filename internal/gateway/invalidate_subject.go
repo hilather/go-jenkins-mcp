@@ -72,6 +72,13 @@ func InvalidateSubjectLocal(caller Caller, principals *PrincipalCache, tokens To
 	// Prefer subject-namespace purge (all workloads for tenant|user|profile).
 	if d, ok := tokens.(interface{ DeleteBySubjectKey(string) int }); ok {
 		n := d.DeleteBySubjectKey(sk)
+		if n < 0 {
+			// FileTokenCache IO/corrupt/save failure — do not claim cleared.
+			res.TokenCacheCleared = false
+			res.TokenCacheEntriesDeleted = -1
+			res.TokenCacheNote = "token_cache subject-namespace purge failed (IO/corrupt residual); tokens may remain on disk"
+			return res
+		}
 		res.TokenCacheCleared = true
 		res.TokenCacheEntriesDeleted = n
 		res.TokenCacheNote = "token_cache subject-namespace deleted (process/file local; multi-pod external residual)"

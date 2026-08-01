@@ -225,7 +225,8 @@ func (c *FileTokenCache) Clear() {
 
 // DeleteBySubjectKey removes all entries whose NamespaceSubjectKey matches
 // subjectKey (tenant|user|profile, all workloads). Returns the number of
-// entries removed. IO failures return 0 (fail closed / best-effort). Secret-free.
+// entries removed. Empty/missing subjectKey → 0. IO/corrupt/save failures
+// return -1 (caller must not claim token_cache_cleared). Secret-free.
 // Used by force re-auth residual lite (GWY-002 / HOST-003).
 func (c *FileTokenCache) DeleteBySubjectKey(subjectKey string) int {
 	if c == nil {
@@ -236,7 +237,7 @@ func (c *FileTokenCache) DeleteBySubjectKey(subjectKey string) int {
 		return 0
 	}
 	deleted := 0
-	_ = c.withLocked(func() error {
+	if err := c.withLocked(func() error {
 		doc, err := c.loadLocked()
 		if err != nil {
 			return err
@@ -258,7 +259,9 @@ func (c *FileTokenCache) DeleteBySubjectKey(subjectKey string) int {
 			return nil
 		}
 		return c.saveLocked(doc)
-	})
+	}); err != nil {
+		return -1
+	}
 	return deleted
 }
 

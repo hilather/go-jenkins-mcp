@@ -352,8 +352,11 @@ func runGatewayConsentPurge(args []string) error {
 		"durable_agentcore_vault_residual": true,
 		"file_backed":                      filePath != "",
 		"file_basename":                    fileBasename,
-		"residual_note":                    "consent metadata purge only (OAUTH-010 residual); never tokens; not multi-replica HA; browser 3LO not automated",
-		"doc":                              "docs/gateway/README.md § progressive consent residual",
+		// Honesty: CLI mutates the file store only. Live serve may keep an
+		// in-memory ConsentSessionStore and rewrite the file on next Put
+		// (last-writer-wins; can resurrect purged metadata). Mirror subject-invalidate.
+		"residual_note": "consent metadata purge only (OAUTH-010 residual); never tokens; not multi-replica HA; browser 3LO not automated; does not clear live serve in-memory consent store (file rewrite on next Put may resurrect metadata)",
+		"doc":           "docs/gateway/README.md § progressive consent residual",
 	}
 	// Defense: never echo session id value if it looks secret-shaped (CLI still accepts ids for delete).
 	// Summary omits session_id entirely to keep residual-status style secret-free.
