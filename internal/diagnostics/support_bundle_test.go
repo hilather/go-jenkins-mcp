@@ -11,6 +11,7 @@ import (
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/config"
 	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
+	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
 	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
 	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
@@ -421,6 +422,9 @@ func TestCreateSupportBundle_DefaultIncludesWave23Categories(t *testing.T) {
 // OPS support-bundle residual lite: top-level gateway-residual-status.json is always
 // present (even when DoctorReport omits gateway_residual_status), secret-free, and
 // never claims HA multi-replica or live GO.
+// Progressive consent nest honesty (OAUTH-010): browser 3LO not automated; metadata
+// path Done*; stores_tokens=false (must survive sanitize — key contains "token");
+// multi_replica_shared=false; file_backed=false when CONSENT_STORE_PATH unset.
 func TestCreateSupportBundle_GatewayResidualStatusMember(t *testing.T) {
 	// Not parallel: plants env canary for secret-free residual map.
 	const residualCanary = "BUNDLE_GRS_CANARY_token_must_never_appear_xyz888"
@@ -428,6 +432,8 @@ func TestCreateSupportBundle_GatewayResidualStatusMember(t *testing.T) {
 	t.Setenv("KUBERNETES_SERVICE_HOST", "")
 	t.Setenv("JENKINS_MCP_GATEWAY_REPLICAS", "")
 	t.Setenv("REPLICAS", "")
+	// Empty consent path → progressive_consent.file_backed default false.
+	t.Setenv(gateway.EnvConsentSessionStorePath, "")
 
 	root := t.TempDir()
 	paths := config.Paths{
@@ -511,6 +517,32 @@ func TestCreateSupportBundle_GatewayResidualStatusMember(t *testing.T) {
 	if !strings.Contains(doc, "live-pin-blockers") && !strings.Contains(note, "live-pin-blockers") {
 		t.Fatalf("want live-pin-blockers pointer: doc=%q note=%q", doc, note)
 	}
+
+	// Progressive consent nest (always present on residual-status / support-bundle).
+	pc, ok := grs["progressive_consent"].(map[string]any)
+	if !ok || pc == nil {
+		t.Fatalf("progressive_consent object required in gateway-residual-status.json: %+v", grs["progressive_consent"])
+	}
+	if pc["browser_3lo_automated"] != false {
+		t.Fatalf("browser_3lo_automated must be false: %+v", pc)
+	}
+	if pc["metadata_path_done_star"] != true {
+		t.Fatalf("metadata_path_done_star must be true (Done*): %+v", pc)
+	}
+	// Regression: stores_tokens must survive sanitize (key contains "token" substring).
+	if pc["stores_tokens"] != false {
+		t.Fatalf("stores_tokens must be false after sanitize: %+v", pc)
+	}
+	if pc["multi_replica_shared"] != false {
+		t.Fatalf("multi_replica_shared must be false: %+v", pc)
+	}
+	if pc["file_backed"] != false {
+		t.Fatalf("file_backed default false without CONSENT_STORE_PATH: %+v", pc)
+	}
+	if pc["same_host_reload_before_persist"] != false {
+		t.Fatalf("same_host_reload_before_persist default false: %+v", pc)
+	}
+
 	for _, bad := range []string{
 		residualCanary,
 		"access_token=",
@@ -531,5 +563,103 @@ func TestCreateSupportBundle_GatewayResidualStatusMember(t *testing.T) {
 	}
 	if !strings.Contains(string(readme), "gateway-residual-status") {
 		t.Fatalf("README should mention gateway-residual-status: %s", readme)
+	}
+}
+
+// OPS support-bundle residual lite: when JENKINS_MCP_CONSENT_STORE_PATH is set,
+// gateway-residual-status.json progressive_consent reports file_backed=true and
+// same_host_reload_before_persist=true; path marker never appears in the zip member.
+func TestCreateSupportBundle_GatewayResidualStatus_ConsentStorePath(t *testing.T) {
+	// Not parallel: sets CONSENT_STORE_PATH for residual honesty during BuildSupportBundle.
+	const residualCanary = "BUNDLE_CONSENT_CANARY_token_must_never_appear_xyz777"
+	marker := "consent-bundle-path-canary-NEVER-IN-JSON"
+	path := filepath.Join(t.TempDir(), marker+".json")
+	t.Setenv("HOST_BUNDLE_CONSENT_CANARY", residualCanary)
+	t.Setenv(gateway.EnvConsentSessionStorePath, path)
+	t.Setenv("KUBERNETES_SERVICE_HOST", "")
+
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	outDir := filepath.Join(root, "bundles")
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	rep := diagnostics.Report{
+		ProfileID: "corp",
+		Overall:   diagnostics.StatusOK,
+		Version:   "test",
+		Checks: []diagnostics.Check{{
+			Name: "binary", Status: diagnostics.StatusOK, Message: "ok",
+		}},
+	}
+
+	res, err := diagnostics.CreateSupportBundle(context.Background(), diagnostics.SupportBundleOptions{
+		Profile:                    p,
+		Paths:                      &paths,
+		OutputDir:                  outDir,
+		DoctorReport:               &rep,
+		Version:                    "1.0.0",
+		Commit:                     "deadbeef",
+		IncludeSecuritySelfCheck:   boolPtr(false),
+		IncludeReleaseEvidenceLite: boolPtr(false),
+		IncludeRSQualification:     boolPtr(false),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body, err := diagnostics.ReadBundleFile(res.Path, "gateway-residual-status.json")
+	if err != nil {
+		t.Fatalf("gateway-residual-status.json missing: %v", err)
+	}
+	var grs map[string]any
+	if err := json.Unmarshal(body, &grs); err != nil {
+		t.Fatal(err)
+	}
+	pc, ok := grs["progressive_consent"].(map[string]any)
+	if !ok || pc == nil {
+		t.Fatalf("progressive_consent object required: %+v", grs["progressive_consent"])
+	}
+	if pc["file_backed"] != true {
+		t.Fatalf("file_backed want true when CONSENT_STORE_PATH set: %+v", pc)
+	}
+	if pc["same_host_reload_before_persist"] != true {
+		t.Fatalf("same_host_reload_before_persist want true: %+v", pc)
+	}
+	if pc["stores_tokens"] != false {
+		t.Fatalf("stores_tokens must stay false: %+v", pc)
+	}
+	if pc["multi_replica_shared"] != false {
+		t.Fatalf("multi_replica_shared must stay false: %+v", pc)
+	}
+	if pc["browser_3lo_automated"] != false {
+		t.Fatalf("browser_3lo_automated: %+v", pc)
+	}
+	if pc["metadata_path_done_star"] != true {
+		t.Fatalf("metadata_path_done_star: %+v", pc)
+	}
+
+	s := string(body)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: CONSENT_STORE_PATH leaked into gateway-residual-status.json")
+	}
+	for _, bad := range []string{
+		residualCanary,
+		"access_token=",
+		"refresh_token=",
+		"client_secret=",
+		"Authorization: Bearer",
+	} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q in gateway-residual-status.json with consent path", bad)
+		}
 	}
 }
