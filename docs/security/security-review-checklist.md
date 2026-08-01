@@ -47,7 +47,7 @@ The report always sets `independent_review_required: true`.
 | **NET-001** | Origin pin; no credential cross-origin | `internal/jenkins/origin.go` | `jenkins_origin_pin_residual` | Pure offline NormalizeBaseURL+SameOrigin; live reverse-proxy residual |
 | **NET-004** | TLS verify; diagnostic insecure dual-gated | transport + env gate | `origin_tls_posture` | Never persist skip-verify |
 | **MGR-001** | Signed policy bundles (Ed25519) | `bundle.go`, `ed25519.go`, `overlay.go` | `policy_signature_mode` | Production: trusted keys + `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` |
-| **MGR-002** | Fleet telemetry **off by default**; ForceOff lite offline | `internal/telemetry/fleet` | `telemetry_default_off`, `fleet_telemetry_force_off_residual` | Categories approved; no logs/tokens; signed-policy enterprise ForceOff pin residual |
+| **MGR-002** | Fleet telemetry **off by default**; overlay `fleet_telemetry_force_off` pin lite | `internal/telemetry/fleet`, `internal/policy` | `telemetry_default_off`, `fleet_telemetry_force_off_residual` | Categories approved; no logs/tokens; `policy_overlay_pin=true` lite (privacy board + HSM residual) |
 | **OPS-001** | Privacy-scrubbed support bundle | `support_bundle.go` | `support_bundle_canary` | Excludes keyring, full logs, auth headers |
 | **MCP-001** | Tool response budgets; absolute hard-max + soft-target process caps | `internal/tools` `ResolveHardMaxBytes`, `AbsoluteMaxHardMaxBytes` (64 MiB), `ResolveTargetBytes`, `AbsoluteMaxTargetBytes` (64 MiB), `EnforceBudget` | `hard_max_resolve_residual`, `operator_caps_snapshot` | Hard default 1 MiB (raise ≤ 64 MiB); soft target default 64 KiB (raise ≤ 64 MiB); oversize fail closed; soft clamped to live hard max; overlay only lowers hard; serve log is byte counts only |
 | **ARC-009** | Cache AEAD keys in keyring only | cache key CLI | doctor/cache key status | Keys never in packs/profile |
@@ -121,7 +121,7 @@ Use this during independent review; check boxes only when **external** evidence 
 | `http_require_token_residual` | warn | `ValidateHTTPConfig` rejects empty token + `AllowNonLocal` (supplies AllowedHosts so token path is exercised); documents loopback residual (KD-008); message names `--http-require-token` / `JENKINS_MCP_HTTP_REQUIRE_TOKEN` / `JENKINS_MCP_HTTP_DENY_ANONYMOUS` (Wave 41; default off) |
 | `http_allowed_hosts_residual` | ok | `ValidateHTTPConfig` rejects `AllowNonLocal` with empty `AllowedHosts` (origins+token set; host fail-closed independent of token); complete non-local config accepted (KD-008 / Wave 36) |
 | `telemetry_default_off` | ok/warn | Fleet telemetry env not enabled by default |
-| `fleet_telemetry_force_off_residual` | ok | Wave 46 / MGR-002: ForceOff lite disables collector offline; `policy_overlay_pin=false` signed-policy residual |
+| `fleet_telemetry_force_off_residual` | ok | MGR-002: ForceOff + overlay `fleet_telemetry_force_off` pin; `policy_overlay_pin=true`; HSM/multi-sig residual |
 | `read_only_default` | ok | Builtin RO effective; force defeats allow-mutations |
 | `mutations_opt_in_default` | ok | `AllowMutationsOptIn` false under zero Inputs (no surprise mutations) |
 | `origin_tls_posture` | ok/warn | NET-004: diagnostic insecure TLS env not set |

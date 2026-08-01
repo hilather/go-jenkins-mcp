@@ -154,8 +154,9 @@ func TestWave46_Wave45Done_Hard(t *testing.T) {
 			if item.Details["force_off_disables"] != true {
 				t.Fatalf("force_off_disables: %+v", item.Details)
 			}
-			if item.Details["policy_overlay_pin"] != false {
-				t.Fatalf("policy_overlay_pin residual honesty: %+v", item.Details)
+			// MGR-002 overlay pin wired (lite); HSM/multi-sig residual elsewhere.
+			if item.Details["policy_overlay_pin"] != true {
+				t.Fatalf("policy_overlay_pin must be true (overlay field wired): %+v", item.Details)
 			}
 		case "jenkins_resilience_residual":
 			if item.Status != diagnostics.SelfCheckOK {

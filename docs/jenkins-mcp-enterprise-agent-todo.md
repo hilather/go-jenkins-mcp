@@ -3063,7 +3063,8 @@ Define versioned signed policy bundles, trusted keys, expiry/rollback rules, loc
 ## MGR-002 - Add privacy-preserving fleet health telemetry
 
 **Priority:** P3  
-**Dependencies:** OBS-001, MGR-001
+**Dependencies:** OBS-001, MGR-001  
+**Status:** **Partial / Done\*** — MVP queue/export + overlay `fleet_telemetry_force_off` pin lite; privacy board + HSM residual
 
 **Objective**
 
@@ -3073,13 +3074,15 @@ Measure adoption, errors, versions, performance, and security posture without ce
 
 Export approved aggregate metrics/events with pseudonymous installation/profile identifiers, low cardinality, batching, backoff, and local queue limits. No logs, prompts, tokens, artifact content, or raw job parameters.
 
+**Done\* lite (this change):** overlay field `fleet_telemetry_force_off` (JSON) forces telemetry off regardless of `JENKINS_MCP_TELEMETRY`; serve wires `CollectorConfig.ForceOff` / hot-reload `SetForceOff`; show-effective + admin surfaces; self-check `policy_overlay_pin=true`. **Not** full production pin (privacy board, formal enterprise multi-sig/HSM, central analytics GO).
+
 **Acceptance criteria**
 
 - [ ] Export schema receives privacy/security approval.
-- [ ] Telemetry can be disabled or mandated only through policy.
+- [x] Telemetry can be disabled through policy overlay `fleet_telemetry_force_off` (force-off pin lite; force-on / mandate-enable residual).
 - [ ] Offline queue is bounded and encrypted/protected as required.
-- [ ] Network failures do not affect MCP operation.
-- [ ] A user/admin can inspect categories being exported.
+- [x] Network failures do not affect MCP operation.
+- [x] A user/admin can inspect categories being exported (`telemetry status`).
 
 ---
 

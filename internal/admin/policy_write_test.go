@@ -252,6 +252,69 @@ func TestPolicyWrite_ForceReadOnlyWidenRejected(t *testing.T) {
 	}
 }
 
+// MGR-002: admin cannot clear fleet_telemetry_force_off when current overlay pins it.
+func TestPolicyWrite_FleetTelemetryForceOffWidenRejected(t *testing.T) {
+	t.Setenv(policy.EnvPolicyRequiredVar, "")
+	t.Setenv(policy.EnvPolicyFileVar, "")
+	paths := testPaths(t)
+	path := writeTestOverlay(t, paths, policy.Overlay{
+		Version:                1,
+		ForceReadOnly:          true,
+		FleetTelemetryForceOff: true,
+		Mode:                   policy.ModePilot,
+	})
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newPolicyAdminHandler(t, admin.RolePolicyAdmin, policyWriteCanary, paths)
+	draft := map[string]any{
+		"overlay": map[string]any{
+			"version":                   1,
+			"force_read_only":           true,
+			"fleet_telemetry_force_off": false, // widen attempt
+			"mode":                      "pilot",
+		},
+		"profileId": "corp",
+	}
+	rr := doJSON(t, h, http.MethodPost, "/admin/v1/policy/validate", policyWriteCanary, draft)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("validate status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), policyWriteCanary) {
+		t.Fatal("canary in validate body")
+	}
+	var vresp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &vresp); err != nil {
+		t.Fatal(err)
+	}
+	if vresp["valid"] != false {
+		t.Fatalf("valid=%v want false", vresp["valid"])
+	}
+	errs, _ := vresp["errors"].([]any)
+	found := false
+	for _, e := range errs {
+		m, _ := e.(map[string]any)
+		if m["field"] == "fleet_telemetry_force_off" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("errors=%v want fleet_telemetry_force_off field", errs)
+	}
+	rr2 := doJSON(t, h, http.MethodPost, "/admin/v1/policy/apply", policyWriteCanary, draft)
+	if rr2.Code != http.StatusBadRequest {
+		t.Fatalf("apply widen want 400, got %d body=%s", rr2.Code, rr2.Body.String())
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("invalid apply must not rewrite overlay file")
+	}
+}
+
 func TestPolicyWrite_DenyListMustBeSuperset(t *testing.T) {
 	t.Setenv(policy.EnvPolicyRequiredVar, "")
 	t.Setenv(policy.EnvPolicyFileVar, "")

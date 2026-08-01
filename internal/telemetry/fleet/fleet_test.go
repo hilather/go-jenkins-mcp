@@ -117,6 +117,74 @@ func TestForceOffOverridesEnv(t *testing.T) {
 	}
 }
 
+// Regression: overlay fleet_telemetry_force_off true disables even when env would enable.
+func TestOverlayForceOffWinsOverEnvEnable(t *testing.T) {
+	t.Setenv(fleet.EnvTelemetry, "1")
+	if !fleet.EnabledFromEnv() {
+		t.Fatal("env should enable")
+	}
+	// Overlay pin true → EffectiveEnabled false (env cannot re-enable).
+	if fleet.EffectiveEnabled(true) {
+		t.Fatal("force-off must win over JENKINS_MCP_TELEMETRY=1")
+	}
+	// Overlay pin false → env wins.
+	if !fleet.EffectiveEnabled(false) {
+		t.Fatal("force-off false must leave env enable intact")
+	}
+	on := true
+	c, err := fleet.NewCollector(fleet.CollectorConfig{
+		Paths:    testPaths(t),
+		Enabled:  &on,
+		ForceOff: true, // same as overlay.FleetTelemetryForceOff
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c != nil {
+		t.Fatal("ForceOff true must yield nil even when Enabled=true")
+	}
+}
+
+// Regression: SetForceOff mid-session suppresses snapshots; clear re-enables.
+func TestSetForceOffHotApply(t *testing.T) {
+	t.Parallel()
+	on := true
+	c, err := fleet.NewCollector(fleet.CollectorConfig{
+		Paths:    testPaths(t),
+		Enabled:  &on,
+		ForceOff: false,
+		Metrics:  telemetry.NewMetrics(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("expected collector")
+	}
+	if !c.Enabled() || c.ForceOff() {
+		t.Fatal("initial state")
+	}
+	c.SnapshotOnce()
+	if c.LastEvent() == nil {
+		t.Fatal("expected snapshot before force-off")
+	}
+	c.SetForceOff(true)
+	if c.Enabled() || !c.ForceOff() {
+		t.Fatal("force-off should disable")
+	}
+	// Clear lastSnap observation: SnapshotOnce must no-op (no new event written).
+	// We only assert no panic and Enabled false.
+	c.SnapshotOnce()
+	c.SetForceOff(false)
+	if !c.Enabled() || c.ForceOff() {
+		t.Fatal("clear force-off should re-enable live collector")
+	}
+	c.SnapshotOnce()
+	if c.LastEvent() == nil {
+		t.Fatal("expected snapshot after clear")
+	}
+}
+
 func TestInstallationIDStableAndRandom(t *testing.T) {
 	fleet.ResetInstallIDCache()
 	paths := testPaths(t)
@@ -684,6 +752,9 @@ func TestBuildStatusCategoriesAndLocalQueueResidual(t *testing.T) {
 	}
 	if !strings.Contains(st2.Residual, "privacy review") {
 		t.Fatalf("expected production review residual, got %q", st2.Residual)
+	}
+	if !strings.Contains(st2.Residual, "fleet_telemetry_force_off") {
+		t.Fatalf("expected overlay force-off residual honesty, got %q", st2.Residual)
 	}
 	// With export URL configured, local-queue-only note should be absent.
 	st3 := fleet.BuildStatus(nil, "id", true, true, "telemetry.example")

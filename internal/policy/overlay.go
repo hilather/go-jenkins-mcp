@@ -67,7 +67,8 @@ const (
 //	  "deny_branch_names": ["release/*", "main"],
 //	  "max_result_bytes": 65536,
 //	  "max_tools_per_minute": 15,
-//	  "max_tools_burst": 5
+//	  "max_tools_burst": 5,
+//	  "fleet_telemetry_force_off": true
 //	}
 type Overlay struct {
 	// Version is the schema version (required; must equal CurrentOverlayVersion).
@@ -76,6 +77,13 @@ type Overlay struct {
 	// ForceReadOnly when true cannot be defeated by --allow-mutations, profile,
 	// or weaker CLI flags (wired into ReadOnlyGate via EnterpriseForce).
 	ForceReadOnly bool `json:"force_read_only"`
+
+	// FleetTelemetryForceOff when true forces fleet health telemetry off for this
+	// process regardless of JENKINS_MCP_TELEMETRY (MGR-002). Fail-closed lower-only
+	// pin: never elevates enablement. Env cannot re-enable while true; clearing to
+	// false on hot-reload re-allows env enable for a live collector that was
+	// force-off'd mid-session. Secret-free boolean only.
+	FleetTelemetryForceOff bool `json:"fleet_telemetry_force_off"`
 
 	// Mode is "pilot" (default) or "strict". Unknown values fail closed at load.
 	Mode PolicyMode `json:"mode,omitempty"`
@@ -653,6 +661,7 @@ func (r LoadResult) StatusMap() map[string]any {
 	if r.Overlay != nil {
 		m["policy_version"] = r.Overlay.Version
 		m["force_read_only"] = r.Overlay.ForceReadOnly
+		m["fleet_telemetry_force_off"] = r.Overlay.FleetTelemetryForceOff
 		m["mode"] = string(r.Overlay.NormalizeMode())
 		m["deny_tools_count"] = len(r.Overlay.DenyTools)
 		m["deny_job_prefixes_count"] = len(r.Overlay.DenyJobPrefixes)
@@ -689,22 +698,23 @@ type EffectivePolicyExplain struct {
 	PolicyPresent     bool           `json:"policy_present"`
 	PolicyPathBase    string         `json:"policy_path_base,omitempty"`
 	SignatureState    string         `json:"signature_state"`
-	ForceReadOnly     bool           `json:"force_read_only"`
-	Mode              string         `json:"mode,omitempty"`
-	DenyTools         []string       `json:"deny_tools,omitempty"`
-	DenyJobPrefixes   []string       `json:"deny_job_prefixes,omitempty"`
-	DenyNodeNames     []string       `json:"deny_node_names,omitempty"`
-	DenyViewNames     []string       `json:"deny_view_names,omitempty"`
-	DenyArtifactPaths []string       `json:"deny_artifact_paths,omitempty"`
-	DenyBranchNames   []string       `json:"deny_branch_names,omitempty"`
-	MaxResultBytes     *int           `json:"max_result_bytes,omitempty"`
-	MaxToolsPerMinute  *int           `json:"max_tools_per_minute,omitempty"`
-	MaxToolsBurst      *int           `json:"max_tools_burst,omitempty"`
-	BundleSeq          int64          `json:"bundle_seq,omitempty"`
-	KeyID              string         `json:"key_id,omitempty"`
-	ContentHash        string         `json:"content_hash,omitempty"`
-	ReadOnly           map[string]any `json:"read_only,omitempty"`
-	Notes              []string       `json:"notes,omitempty"`
+	ForceReadOnly          bool           `json:"force_read_only"`
+	FleetTelemetryForceOff bool           `json:"fleet_telemetry_force_off"`
+	Mode                   string         `json:"mode,omitempty"`
+	DenyTools              []string       `json:"deny_tools,omitempty"`
+	DenyJobPrefixes        []string       `json:"deny_job_prefixes,omitempty"`
+	DenyNodeNames          []string       `json:"deny_node_names,omitempty"`
+	DenyViewNames          []string       `json:"deny_view_names,omitempty"`
+	DenyArtifactPaths      []string       `json:"deny_artifact_paths,omitempty"`
+	DenyBranchNames        []string       `json:"deny_branch_names,omitempty"`
+	MaxResultBytes         *int           `json:"max_result_bytes,omitempty"`
+	MaxToolsPerMinute      *int           `json:"max_tools_per_minute,omitempty"`
+	MaxToolsBurst          *int           `json:"max_tools_burst,omitempty"`
+	BundleSeq              int64          `json:"bundle_seq,omitempty"`
+	KeyID                  string         `json:"key_id,omitempty"`
+	ContentHash            string         `json:"content_hash,omitempty"`
+	ReadOnly               map[string]any `json:"read_only,omitempty"`
+	Notes                  []string       `json:"notes,omitempty"`
 }
 
 // ExplainEffective builds EffectivePolicyExplain from a load result + RO gate inputs.
@@ -720,6 +730,7 @@ func ExplainEffective(profileID string, res LoadResult, ro Inputs) EffectivePoli
 	}
 	if res.Overlay != nil {
 		ex.ForceReadOnly = res.Overlay.ForceReadOnly
+		ex.FleetTelemetryForceOff = res.Overlay.FleetTelemetryForceOff
 		ex.Mode = string(res.Overlay.NormalizeMode())
 		if len(res.Overlay.DenyTools) > 0 {
 			ex.DenyTools = append([]string(nil), res.Overlay.DenyTools...)

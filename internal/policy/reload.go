@@ -40,6 +40,9 @@ type ReloadInfo struct {
 	Mode string
 	// ForceReadOnly mirrors overlay.force_read_only (Wave 25: hot-applied via DynamicForce).
 	ForceReadOnly bool
+	// FleetTelemetryForceOff mirrors overlay.fleet_telemetry_force_off (MGR-002).
+	// Serve OnSuccess may apply Collector.SetForceOff (env cannot re-enable while true).
+	FleetTelemetryForceOff bool
 	// MaxResultBytes is overlay max_result_bytes when set and positive (0 = unset).
 	// Wave 25/31: serve OnSuccess may SetWithinCeiling on tools.LiveHardMax.
 	MaxResultBytes int
@@ -92,13 +95,14 @@ type reloadSnapshot struct {
 	denyViewNames  int
 	denyArtPaths   int
 	denyBranchNms  int
-	mode           PolicyMode
-	forceRO           bool
-	maxResultBytes    int
-	maxToolsPerMinute int
-	maxToolsBurst     int
-	version           int
-	pathBase          string
+	mode                   PolicyMode
+	forceRO                bool
+	fleetTelemetryForceOff bool
+	maxResultBytes         int
+	maxToolsPerMinute      int
+	maxToolsBurst          int
+	version                int
+	pathBase               string
 }
 
 // ReloadableDenyOnly is a thread-safe PolicyEvaluator that can hot-reload the
@@ -116,10 +120,11 @@ type reloadSnapshot struct {
 //     (HOST-006 LowerRate is lower-only; raise needs restart with higher env)
 //   - Mutation tools omitted without AllowMutations stay unregistered for the process
 //
-// Hot-applied on successful reload (Wave 24/25/28/30/31/35/36/37 + HOST-006, via serve OnSuccess + live holders):
+// Hot-applied on successful reload (Wave 24/25/28/30/31/35/36/37 + HOST-006 + MGR-002, via serve OnSuccess + live holders):
 //   - deny_tools / deny_job_prefixes / deny_node_names / deny_view_names /
 //     deny_artifact_paths / deny_branch_names / mode (this evaluator; ListTools live filter Wave 28)
 //   - force_read_only → DynamicForce.Set (dispatch + ListTools mutation visibility)
+//   - fleet_telemetry_force_off → fleet.Collector.SetForceOff (env cannot re-enable while true)
 //   - max_result_bytes → tools.LiveHardMax.SetWithinCeiling (raise/lower ≤ ceiling)
 //   - max_tools_per_minute / max_tools_burst → SubjectRateLimiter.LowerRate (lower only)
 //   - AllowMutations + force clear re-lists mutations when registered under opt-in (Wave 30)
@@ -354,6 +359,7 @@ func (r *ReloadableDenyOnly) reloadLocked() error {
 			SignatureState:         snap.signatureState,
 			Mode:                   string(snap.mode),
 			ForceReadOnly:          snap.forceRO,
+			FleetTelemetryForceOff: snap.fleetTelemetryForceOff,
 			MaxResultBytes:         snap.maxResultBytes,
 			MaxToolsPerMinute:      snap.maxToolsPerMinute,
 			MaxToolsBurst:          snap.maxToolsBurst,
@@ -375,14 +381,15 @@ func snapshotFromResult(res LoadResult, path string) *reloadSnapshot {
 	ov := res.Overlay
 	eval := NewDenyOnlyFromOverlay(ov)
 	snap := &reloadSnapshot{
-		eval:           eval,
-		bundleSeq:      res.BundleSeq,
-		contentHash:    res.ContentHash,
-		signatureState: res.SignatureState,
-		mode:           ov.NormalizeMode(),
-		forceRO:        ov.ForceReadOnly,
-		version:        ov.Version,
-		pathBase:       sanitizePath(path),
+		eval:                   eval,
+		bundleSeq:              res.BundleSeq,
+		contentHash:            res.ContentHash,
+		signatureState:         res.SignatureState,
+		mode:                   ov.NormalizeMode(),
+		forceRO:                ov.ForceReadOnly,
+		fleetTelemetryForceOff: ov.FleetTelemetryForceOff,
+		version:                ov.Version,
+		pathBase:               sanitizePath(path),
 	}
 	if n, ok := ov.EffectiveMaxResultBytes(); ok {
 		snap.maxResultBytes = n
@@ -421,7 +428,8 @@ func samePolicyGeneration(a, b *reloadSnapshot) bool {
 	if a.bundleSeq != b.bundleSeq || a.contentHash != b.contentHash {
 		return false
 	}
-	if a.signatureState != b.signatureState || a.mode != b.mode || a.forceRO != b.forceRO {
+	if a.signatureState != b.signatureState || a.mode != b.mode || a.forceRO != b.forceRO ||
+		a.fleetTelemetryForceOff != b.fleetTelemetryForceOff {
 		return false
 	}
 	if a.denyTools != b.denyTools || a.denyJobPrefs != b.denyJobPrefs ||
@@ -432,7 +440,8 @@ func samePolicyGeneration(a, b *reloadSnapshot) bool {
 	}
 	// Deep compare deny sets via document fields when counts match.
 	da, db := a.eval.Document(), b.eval.Document()
-	if da.ForceReadOnly != db.ForceReadOnly || da.Mode != db.Mode || da.MaxResultBytes != db.MaxResultBytes ||
+	if da.ForceReadOnly != db.ForceReadOnly || da.FleetTelemetryForceOff != db.FleetTelemetryForceOff ||
+		da.Mode != db.Mode || da.MaxResultBytes != db.MaxResultBytes ||
 		da.MaxToolsPerMinute != db.MaxToolsPerMinute || da.MaxToolsBurst != db.MaxToolsBurst {
 		return false
 	}

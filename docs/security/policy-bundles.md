@@ -174,10 +174,12 @@ rely on pilot `unverified_pilot` overlays. Pin **real** Ed25519 verification:
 **Do not** treat `JENKINS_MCP_POLICY_REQUIRED=1` alone as crypto proof — without
 trusted keys it only uses the staging field-presence verifier.
 
-**Force-off residual (honest):** signed-policy overlay fields that pin fleet
-telemetry force-off (MGR-002 `policy_overlay_pin`) remain residual; the load-time
-REQUIRE_SIGNED pin ensures an enterprise host cannot silently run without a
-verified overlay when that env is set.
+**Fleet force-off pin (MGR-002 lite):** overlay field `fleet_telemetry_force_off`
+(when true) forces fleet telemetry off regardless of `JENKINS_MCP_TELEMETRY`.
+Serve applies on load and hot-reload; self-check Details `policy_overlay_pin=true`.
+HSM / true multi-sig t-of-n remains residual. The load-time REQUIRE_SIGNED pin
+ensures an enterprise host cannot silently run without a verified overlay when
+that env is set.
 
 ### Last-good cache
 
@@ -313,7 +315,7 @@ cannot start.
 | Detached `.sig` files | Envelope preferred; not implemented |
 | Gateway push of bundles | GWY / fleet epic |
 | Automatic emergency kill-switch channel | Manual higher-seq publish |
-| MGR-002 signed-policy telemetry force-off overlay field wire | Residual (`policy_overlay_pin=false`) — separate from load-time REQUIRE_SIGNED pin |
+| MGR-002 overlay `fleet_telemetry_force_off` pin (serve + hot-reload) | **Done\* lite** (`policy_overlay_pin=true`) — HSM/true multi-sig + privacy board residual; not full MGR-002 production claim |
 
 ## Security notes
 

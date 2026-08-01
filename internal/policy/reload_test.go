@@ -434,6 +434,7 @@ func TestReloadInfoNoSecrets(t *testing.T) {
 }
 
 // Wave 25: ReloadInfo carries force_read_only + max_result_bytes for OnSuccess hot-apply.
+// MGR-002: also fleet_telemetry_force_off for Collector.SetForceOff.
 func TestReloadInfoForceAndMaxResultBytes(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -442,6 +443,7 @@ func TestReloadInfoForceAndMaxResultBytes(t *testing.T) {
 		"version": 1,
 		"mode": "pilot",
 		"force_read_only": true,
+		"fleet_telemetry_force_off": true,
 		"max_result_bytes": 4096,
 		"deny_tools": ["jenkins_get_build_logs"]
 	}`)
@@ -464,6 +466,9 @@ func TestReloadInfoForceAndMaxResultBytes(t *testing.T) {
 	if !info.ForceReadOnly {
 		t.Fatal("ForceReadOnly want true")
 	}
+	if !info.FleetTelemetryForceOff {
+		t.Fatal("FleetTelemetryForceOff want true")
+	}
 	if info.MaxResultBytes != 4096 {
 		t.Fatalf("MaxResultBytes=%d want 4096", info.MaxResultBytes)
 	}
@@ -473,6 +478,7 @@ func TestReloadInfoForceAndMaxResultBytes(t *testing.T) {
 		"version": 1,
 		"mode": "pilot",
 		"force_read_only": false,
+		"fleet_telemetry_force_off": false,
 		"max_result_bytes": 1024,
 		"deny_tools": ["jenkins_get_build_logs"]
 	}`)
@@ -483,6 +489,9 @@ func TestReloadInfoForceAndMaxResultBytes(t *testing.T) {
 	}
 	if info.ForceReadOnly {
 		t.Fatal("ForceReadOnly want false after reload")
+	}
+	if info.FleetTelemetryForceOff {
+		t.Fatal("FleetTelemetryForceOff want false after reload")
 	}
 	if info.MaxResultBytes != 1024 {
 		t.Fatalf("MaxResultBytes=%d want 1024", info.MaxResultBytes)

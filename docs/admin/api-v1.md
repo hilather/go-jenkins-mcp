@@ -301,6 +301,7 @@ Returns the current **plain pilot** overlay document when the resolved policy pa
   "overlay": {
     "version": 1,
     "force_read_only": true,
+    "fleet_telemetry_force_off": false,
     "mode": "pilot",
     "deny_tools": ["jenkins_get_build_logs"],
     "max_result_bytes": 65536,
@@ -363,6 +364,7 @@ Requires **`policy_write`** (`policy_admin`). Dry-run only — does not write.
 | Rule | Behavior |
 |------|----------|
 | `force_read_only` | If current effective/overlay force is **true**, draft must keep `force_read_only: true`. **`CanWidenForceReadOnly` is always false.** |
+| `fleet_telemetry_force_off` | If current overlay pin is **true**, draft must keep `fleet_telemetry_force_off: true` (MGR-002; admin cannot re-enable fleet telemetry against enterprise pin). |
 | Deny lists | When a current overlay exists, each proposed deny list must be a **set superset** of the current list (entries may only grow). |
 | `mode` | Cannot weaken `strict` → `pilot`. |
 | `max_result_bytes` | When current has a cap, draft cannot clear it or raise it. |

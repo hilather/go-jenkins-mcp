@@ -745,11 +745,12 @@ Prefer `context` values (`audit.WithSink`, `telemetry.WithRegistry`) over global
 - KD-008 residual: loopback HTTP without require-token / deny-anonymous still open to local processes (default for pilot); opt-in via `--http-require-token` or `JENKINS_MCP_HTTP_REQUIRE_TOKEN` / `JENKINS_MCP_HTTP_DENY_ANONYMOUS`; self-check warns (`http_require_token_residual`); Host allow-list fail-closed covered by `http_allowed_hosts_residual`
 
 
-### Wave 46 fleet ForceOff residual canary
+### Wave 46 / MGR-002 fleet ForceOff + overlay pin canary
 
 Offline self-check item `fleet_telemetry_force_off_residual` (MGR-002) proves
-`ForceOff` disables fleet telemetry offline without network or export.
-Details mark `policy_overlay_pin=false` — signed-policy enterprise pin remains residual.
+`ForceOff` and overlay `fleet_telemetry_force_off` disable fleet telemetry
+offline without network or export (`policy_overlay_pin=true` lite).
+HSM / true multi-sig t-of-n and privacy board remain residual.
 Env enable path (`JENKINS_MCP_TELEMETRY`) remains separate from force-off.
 
 ## Residual
@@ -765,7 +766,7 @@ Env enable path (`JENKINS_MCP_TELEMETRY`) remains separate from force-off.
 - Support bundle: optional live capability attach from a running `serve` process; signed/encrypted export
 - Post-pack L1 release metrics: `cache_l1_released`, `cache_l1_release_bytes_reclaimed`
 - Authenticated Streamable HTTP / gateway session binding (GWY-*)
-- MGR-002 enterprise force-off via signed overlay; formal privacy board sign-off
+- MGR-002 formal privacy board sign-off + HSM/multi-sig (overlay force-off pin is **Done\* lite**)
 - KD-004 residual: migrate remaining `log.Printf` to `telemetry.Logger`; bare high-entropy detectors (Wave 25) + Writer line buffering (Wave 33) landed — residual sub-threshold hex FN / git-SHA FP / force-flush boundary only; Wave 34 self-check `writer_split_line_canary` guards line reassembly
 - KD-008 residual: loopback HTTP without require-token / deny-anonymous still open to local processes (default for pilot); opt-in via `--http-require-token` or `JENKINS_MCP_HTTP_REQUIRE_TOKEN` / `JENKINS_MCP_HTTP_DENY_ANONYMOUS`; self-check warns (`http_require_token_residual`); Host allow-list fail-closed covered by `http_allowed_hosts_residual`
 
