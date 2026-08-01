@@ -81,6 +81,29 @@ func OpenConsentSessionStoreForCLI(getenv func(string) string) (ConsentSessionSt
 	return NewFileBackedConsentSessionStore(0, path)
 }
 
+// OpenConsentSessionStoreForPurge opens a file-backed consent metadata store for
+// operator purge/expire mutations (OAUTH-010 residual). Always binds path so
+// Delete/Clear/PurgeExpired persist. Missing file → empty store at path (no error).
+// pathOverride non-empty wins over env/XDG. Never loads tokens (schema has none).
+func OpenConsentSessionStoreForPurge(pathOverride string, getenv func(string) string) (*MemoryConsentSessionStore, error) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	path := strings.TrimSpace(pathOverride)
+	if path == "" {
+		path = ConsentSessionPathFromEnviron(getenv)
+	}
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "consent session store path is required")
+	}
+	if st, err := os.Stat(path); err == nil && st.IsDir() {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "consent session store path is a directory")
+	}
+	// Missing file is OK — NewFileBackedConsentSessionStore loads empty.
+	return NewFileBackedConsentSessionStore(0, path)
+}
+
 // persistLocked writes metadata-only JSON when FilePath is set.
 // Caller must hold s.mu. Uses flock for multi-process safety on the same path
 // (HOST-008 lite; not multi-pod HA).
@@ -139,12 +162,13 @@ func (s *MemoryConsentSessionStore) loadLocked() error {
 		s.bySubject = make(map[string]string)
 	}
 	// Replace in-memory view with file contents (crash recovery).
+	// Keep expired entries so PurgeExpired / Get can remove them and rewrite
+	// the file (OAUTH-010 consent-purge). List/Get still treat expired as missing.
 	s.bySession = make(map[string]ConsentSessionRecord, len(doc.Entries))
 	s.bySubject = make(map[string]string)
-	now := s.clock()
 	for sid, e := range doc.Entries {
 		rec, ok := fileEntryToRecord(sid, e)
-		if !ok || rec.expired(now) {
+		if !ok {
 			continue
 		}
 		if looksLikeSecretMaterial(rec.Info.SessionID) || authorizationURLHasTokenMarkers(rec.Info.AuthorizationURL) {
@@ -154,6 +178,10 @@ func (s *MemoryConsentSessionStore) loadLocked() error {
 		s.bySession[rec.SessionID()] = rec
 		if sk := strings.TrimSpace(rec.SubjectKey); sk != "" {
 			// Prefer newest by StoredAt when multiple subjects collide.
+			// Skip expired when choosing subject→session binding.
+			if rec.expired(s.clock()) {
+				continue
+			}
 			if prevSID, exists := s.bySubject[sk]; exists {
 				if prev, ok := s.bySession[prevSID]; ok && !rec.StoredAt.After(prev.StoredAt) {
 					continue

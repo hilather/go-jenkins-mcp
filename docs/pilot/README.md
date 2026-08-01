@@ -13,7 +13,7 @@ provides:
 | [`checklist.md`](checklist.md) | Step-by-step install → diagnose → cache → rollback |
 | `jenkins-mcp pilot-check` | Offline/online evidence JSON (doctor + cache + sample verify) |
 | `scripts/pilot-evidence.sh` / `make pilot-evidence` | Offline/local secret-free evidence bundle under `dist/pilot-evidence/<ts>/` |
-| `scripts/gateway-residual-smoke.sh` / `make residual-smoke` | Opt-in offline residual honesty (qualify + release-evidence residual ids; not live GO) |
+| `scripts/gateway-residual-smoke.sh` / `make residual-smoke` | Opt-in offline residual honesty (qualify + release-evidence residual ids + residual-status honesty canaries; not live GO) |
 | [gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) | Live production GO residual runbook (OAUTH-009/010, HOST-008; residual-smoke proves-vs-not) |
 | Deterministic chaos tests (QA-002 lite) | Recovery under truncated fetch, corrupt L1/L2, disk-full pack, mid-evict kill, cancel |
 

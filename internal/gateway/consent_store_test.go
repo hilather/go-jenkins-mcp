@@ -91,6 +91,120 @@ func TestMemoryConsentSessionStore_TTLExpiry(t *testing.T) {
 	}
 }
 
+// OAUTH-010: PurgeExpired returns deleted count; keeps live metadata; secret-free.
+func TestMemoryConsentSessionStore_PurgeExpired(t *testing.T) {
+	t.Parallel()
+	s := gateway.NewMemoryConsentSessionStore(time.Hour, "")
+	now := time.Now()
+	if err := s.Put(gateway.ConsentSessionRecord{
+		Info:      consentInfo("sess-live-1"),
+		StoredAt:  now,
+		ExpiresAt: now.Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Put of an already-expired record: subsequent Put would purge it, so seed
+	// via Put then inject a second expired without an intervening purge by
+	// using Put only once for expired and calling PurgeExpired explicitly.
+	if err := s.Put(gateway.ConsentSessionRecord{
+		Info:      consentInfo("sess-exp-1"),
+		StoredAt:  now.Add(-2 * time.Hour),
+		ExpiresAt: now.Add(-time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// EntryCount includes expired until purge (Put does not purge the record
+	// it just inserted).
+	if n := s.EntryCount(); n != 2 {
+		t.Fatalf("EntryCount before purge: %d want 2 (live+expired)", n)
+	}
+	deleted := s.PurgeExpired()
+	if deleted != 1 {
+		t.Fatalf("PurgeExpired deleted=%d want 1", deleted)
+	}
+	if deleted2 := s.PurgeExpired(); deleted2 != 0 {
+		t.Fatalf("second PurgeExpired: %d", deleted2)
+	}
+	if s.EntryCount() != 1 {
+		t.Fatalf("remaining EntryCount: %d", s.EntryCount())
+	}
+	if _, ok := s.Get("sess-live-1"); !ok {
+		t.Fatal("live session must remain")
+	}
+	if _, ok := s.Get("sess-exp-1"); ok {
+		t.Fatal("expired must be gone")
+	}
+	// Surfaces secret-free after purge.
+	blob := s.String() + " " + fmt.Sprint(s.StatusMap())
+	for _, bad := range []string{consentStoreCanary, "access_token=", "refresh_token=", "client_secret="} {
+		if strings.Contains(blob, bad) {
+			t.Fatalf("surface contained %q", bad)
+		}
+	}
+}
+
+func TestMemoryConsentSessionStore_DeleteSessionAndClear(t *testing.T) {
+	t.Parallel()
+	s := gateway.NewMemoryConsentSessionStore(time.Hour, "")
+	if err := s.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-del-1")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-del-2")}); err != nil {
+		t.Fatal(err)
+	}
+	if !s.DeleteSession("sess-del-1") {
+		t.Fatal("want DeleteSession true")
+	}
+	if s.DeleteSession("sess-del-1") {
+		t.Fatal("second DeleteSession must be false")
+	}
+	if s.DeleteSession("") {
+		t.Fatal("empty id must be false")
+	}
+	if s.EntryCount() != 1 {
+		t.Fatalf("count: %d", s.EntryCount())
+	}
+	s.Clear()
+	if s.EntryCount() != 0 || len(s.List()) != 0 {
+		t.Fatal("Clear must empty store")
+	}
+}
+
+func TestMemoryConsentSessionStore_PurgeExpired_FileBacked(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "consent_sessions.json")
+	s, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	if err := s.Put(gateway.ConsentSessionRecord{
+		Info:      consentInfo("sess-file-live"),
+		ExpiresAt: now.Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Put(gateway.ConsentSessionRecord{
+		Info:      consentInfo("sess-file-exp"),
+		StoredAt:  now.Add(-time.Hour),
+		ExpiresAt: now.Add(-time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if n := s.PurgeExpired(); n != 1 {
+		t.Fatalf("purge: %d", n)
+	}
+	// Reload: only live remains.
+	s2, err := gateway.NewFileBackedConsentSessionStore(time.Hour, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s2.List()) != 1 || s2.List()[0].SessionID() != "sess-file-live" {
+		t.Fatalf("reload list: %+v", s2.List())
+	}
+}
+
 func TestMemoryConsentSessionStore_NoTokenCanaries(t *testing.T) {
 	t.Parallel()
 	s := gateway.NewMemoryConsentSessionStore(time.Hour, "")
@@ -340,5 +454,47 @@ func TestOpenConsentSessionStoreForCLI_ListsMetadata(t *testing.T) {
 	}
 	if _, ok := row["authorization_url"]; ok {
 		t.Fatal("CLI StatusMap must not dump full authorization_url")
+	}
+}
+
+func TestOpenConsentSessionStoreForPurge_MissingAndPathOverride(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing-purge.json")
+	s, err := gateway.OpenConsentSessionStoreForPurge(missing, func(string) string { return "" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.EntryCount() != 0 {
+		t.Fatal("missing file → empty")
+	}
+	// Mutations bind path (file appears after Put).
+	if err := s.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-purge-open-1")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(missing); err != nil {
+		t.Fatalf("expected file after put: %v", err)
+	}
+	// Env path used when override empty.
+	envPath := filepath.Join(dir, "env-consent.json")
+	s2, err := gateway.NewFileBackedConsentSessionStore(time.Hour, envPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s2.Put(gateway.ConsentSessionRecord{Info: consentInfo("sess-env-1")}); err != nil {
+		t.Fatal(err)
+	}
+	getenv := func(k string) string {
+		if k == gateway.EnvConsentSessionStorePath {
+			return envPath
+		}
+		return ""
+	}
+	opened, err := gateway.OpenConsentSessionStoreForPurge("", getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(opened.List()) != 1 || opened.List()[0].SessionID() != "sess-env-1" {
+		t.Fatalf("env open: %+v", opened.List())
 	}
 }
