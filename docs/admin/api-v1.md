@@ -252,7 +252,11 @@ rate knobs keep admin health names `rateEnabled` / `ratePerMinute` / `rateBurst`
   "replicas_env_residual": false,
   "progressive_consent": {
     "metadata_path_done_star": true,
-    "browser_3lo_automated": false
+    "browser_3lo_automated": false,
+    "stores_tokens": false,
+    "multi_replica_shared": false,
+    "file_backed": false,
+    "same_host_reload_before_persist": false
   },
   "rateEnabled": true,
   "ratePerMinute": 30,
@@ -297,7 +301,7 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 | `vault_path_emptydir_heuristic` | Heuristic residual when vault path looks emptyDir-like (value never embeds host path secrets) |
 | `replicas_env_residual` | Residual when replica-count env suggests multi-pod intent (not HA Done) |
 | `multi_pod_residual_checklist` | Optional secret-free multi-pod honesty checklist string |
-| `progressive_consent` | OAUTH-010 / GWY-001 StatusMap (static; never tokens) |
+| `progressive_consent` | OAUTH-010 / GWY-001 StatusMap + consent-store honesty: `stores_tokens=false`, `multi_replica_shared=false`, `file_backed` / `same_host_reload_before_persist` when `JENKINS_MCP_CONSENT_STORE_PATH` set (path never returned; HOST-007 SPA Overview/Doctor residual cards surface these; not multi-pod HA) |
 | `rateEnabled` / `ratePerMinute` / `rateBurst` | HOST-006 process-local rate knobs |
 | `shared_subject_rate_file` | `true` only when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` set (HOST-008 same-host lite); path never returned |
 | `principal_cache_entries` | Principal cache **count** for **this process only** (CLI or admin BFF — not remote MCP serve unless shared file caches) |
@@ -325,14 +329,11 @@ card** on older BFF builds. SPA shows `shared_subject_rate_file`,
 shown; not multi-pod external JWKS HA), `shared_token_cache_file` (bool when
 `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` set; same-host FileTokenCache lite only —
 path never shown; secrets never shown; not multi-pod Redis/HA), principal_cache
-count, and optional max/ttl with honesty (same-host rate/principal/JWKS/token
-lite; admin BFF process for cache count). Operators may also run CLI
-`gateway residual-status`.
-shown; not multi-pod external JWKS HA), principal_cache count, optional
-max/ttl, optional `subject_limiter_max_subjects` when env set, and always
-`subject_slots_process_local` with honesty (same-host rate/principal/JWKS lite;
-admin BFF process for cache count; concurrency process-local — not multi-pod).
-Operators may also run CLI `gateway residual-status`.
+count, optional max/ttl, optional `subject_limiter_max_subjects` when env set,
+always `subject_slots_process_local`, and progressive consent store honesty
+(`file_backed` / `same_host_reload_before_persist` when `JENKINS_MCP_CONSENT_STORE_PATH`
+set; `multi_replica_shared=false`; `stores_tokens=false` — path never shown; not
+multi-pod HA). Operators may also run CLI `gateway residual-status`.
 
 ## POST /admin/v1/gateway/subject-invalidate
 

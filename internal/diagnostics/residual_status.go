@@ -139,7 +139,10 @@ func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 		"vault_path_emptydir_heuristic": mp.VaultEmptyDirHeuristic,
 		"replicas_env_residual":         mp.ReplicasEnvResidual,
 		// Progressive consent residual (OAUTH-010 / GWY-001).
-		"progressive_consent": pc.StatusMap(),
+		// Nests ProgressiveConsentResidual.StatusMap + consent-store honesty
+		// (file_backed / same_host_reload_before_persist when path configured).
+		// Never tokens, paths, or session inventory. Multi-pod residual.
+		"progressive_consent": progressiveConsentResidualMap(getenv, pc),
 		// HOST-006 subject rate knobs (admin health field names).
 		// shared_subject_rate_file=true only when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH
 		// set (HOST-008 same-host lite); multi-pod shared rate still residual.
@@ -195,6 +198,30 @@ func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 		out["progressive_consent_surfaces"] = pc.Surfaces
 	}
 	return out
+}
+
+// progressiveConsentResidualMap nests ProgressiveConsentResidual.StatusMap with
+// consent-store residual honesty (HOST-007 SPA Overview progressive_consent card).
+//
+// Always: stores_tokens=false, multi_replica_shared=false (from StatusMap).
+// When JENKINS_MCP_CONSENT_STORE_PATH set: file_backed=true and
+// same_host_reload_before_persist=true (parity with ConsentSessionStore.StatusMap
+// when FilePath non-empty). Path value never returned. Never opens the consent
+// file (no session inventory). Multi-pod shared consent store still residual.
+func progressiveConsentResidualMap(getenv func(string) string, pc gateway.ProgressiveConsentResidual) map[string]any {
+	m := pc.StatusMap()
+	if m == nil {
+		m = map[string]any{}
+	}
+	// Defense in depth: force honesty even if StatusMap shape changes.
+	m["stores_tokens"] = false
+	m["multi_replica_shared"] = false
+	fileBacked := gateway.ConsentStorePathConfiguredFromEnviron(getenv)
+	m["file_backed"] = fileBacked
+	// OAUTH-010 Done* lite: file-backed reload-before-persist under flock.
+	// Only true when residual path is configured (same as ConsentSessionStore).
+	m["same_host_reload_before_persist"] = fileBacked
+	return m
 }
 
 // principalCacheEntriesForResidual returns a secret-free entry count for residual-status.

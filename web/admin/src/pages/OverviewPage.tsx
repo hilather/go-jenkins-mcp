@@ -24,11 +24,16 @@ import {
   CLEAR_ALL_CONFIRM_TOKEN,
 } from "../lib/consentPurge";
 import {
+  CONSENT_FILE_BACKED_HONESTY,
+  CONSENT_MULTI_REPLICA_SHARED_HONESTY,
+  CONSENT_SAME_HOST_RELOAD_HONESTY,
+  CONSENT_STORES_TOKENS_HONESTY,
   formatPrincipalCacheHygiene,
   formatResidualBool,
   GATEWAY_READY_RESIDUAL_HONESTY,
   HA_MULTI_REPLICA_RESIDUAL_HONESTY,
   LIVE_PIN_RESIDUAL_HONESTY,
+  pickProgressiveConsentFields,
   pickResidualLivePinFields,
   pickResidualRateCacheFields,
   PRINCIPAL_CACHE_HYGIENE_HONESTY,
@@ -289,8 +294,9 @@ export function OverviewPage() {
           <p className="muted" style={{ marginTop: 0 }}>
             OAUTH-010 / GWY-001 honesty from{" "}
             <code>GET /admin/v1/health</code> (
-            <code>gateway.NewProgressiveConsentResidual</code>). Static /
-            secret-free — never live Obtain, tokens, or{" "}
+            <code>gateway.NewProgressiveConsentResidual</code>) and residual-status{" "}
+            <code>progressive_consent</code> nest when present. Static /
+            secret-free — never live Obtain, tokens, paths, or{" "}
             <code>authorization_url</code> query strings in admin JSON.
             {!modeC ? (
               <>
@@ -318,6 +324,13 @@ export function OverviewPage() {
                   (browser 3LO not automated residual)
                 </span>
               </dd>
+              {/* HOST-007: consent store honesty from residual-status when loaded. */}
+              {residual.isSuccess && residual.data.progressive_consent ? (
+                <ProgressiveConsentStoreHonestyDl
+                  data={residual.data}
+                  compact
+                />
+              ) : null}
               {health.data.progressiveConsentResidual ? (
                 <>
                   <dt>progressiveConsentResidual</dt>
@@ -972,6 +985,56 @@ function SubjectInvalidateCard() {
   );
 }
 
+/**
+ * HOST-007 progressive_consent store honesty rows (file_backed /
+ * same_host_reload / multi_replica_shared / stores_tokens).
+ * Never paths or tokens. compact=true omits metadata_done and browser rows.
+ */
+function ProgressiveConsentStoreHonestyDl({
+  data,
+  compact = false,
+}: {
+  data: GatewayResidualStatusResponse;
+  compact?: boolean;
+}) {
+  const pc = pickProgressiveConsentFields(data);
+  return (
+    <>
+      {!compact ? (
+        <>
+          <dt>progressive_consent (Mode C residual)</dt>
+          <dd>
+            metadata_done*
+            {pc.metadata_path_done_star ? "=yes" : "=no"}
+            {" · browser_3lo_automated="}
+            {pc.browser_3lo_automated ? "yes" : "no"}
+          </dd>
+        </>
+      ) : null}
+      <dt>file_backed</dt>
+      <dd>
+        {pc.file_backed ? "yes" : "no"}{" "}
+        <span className="muted">({CONSENT_FILE_BACKED_HONESTY})</span>
+      </dd>
+      <dt>same_host_reload_before_persist</dt>
+      <dd>
+        {pc.same_host_reload_before_persist ? "yes" : "no"}{" "}
+        <span className="muted">({CONSENT_SAME_HOST_RELOAD_HONESTY})</span>
+      </dd>
+      <dt>multi_replica_shared</dt>
+      <dd>
+        {formatResidualBool(pc.multi_replica_shared)}{" "}
+        <span className="muted">({CONSENT_MULTI_REPLICA_SHARED_HONESTY})</span>
+      </dd>
+      <dt>stores_tokens</dt>
+      <dd>
+        {formatResidualBool(pc.stores_tokens)}{" "}
+        <span className="muted">({CONSENT_STORES_TOKENS_HONESTY})</span>
+      </dd>
+    </>
+  );
+}
+
 /** HOST-007 residual-status card body (snake_case CLI/BFF fields). */
 function ResidualStatusDl({ data }: { data: GatewayResidualStatusResponse }) {
   const rateCache = pickResidualRateCacheFields(data);
@@ -1151,15 +1214,7 @@ function ResidualStatusDl({ data }: { data: GatewayResidualStatusResponse }) {
         )}
       </dd>
       {data.progressive_consent ? (
-        <>
-          <dt>progressive_consent (Mode C residual)</dt>
-          <dd>
-            metadata_done*
-            {data.progressive_consent.metadata_path_done_star ? "=yes" : "=no"}
-            {" · browser_3lo_automated="}
-            {data.progressive_consent.browser_3lo_automated ? "yes" : "no"}
-          </dd>
-        </>
+        <ProgressiveConsentStoreHonestyDl data={data} />
       ) : null}
       {data.progressive_consent_residual ? (
         <>

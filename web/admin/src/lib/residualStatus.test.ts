@@ -5,11 +5,16 @@
 import { describe, expect, it } from "vitest";
 import type { GatewayResidualStatusResponse } from "../api/types";
 import {
+  CONSENT_FILE_BACKED_HONESTY,
+  CONSENT_MULTI_REPLICA_SHARED_HONESTY,
+  CONSENT_SAME_HOST_RELOAD_HONESTY,
+  CONSENT_STORES_TOKENS_HONESTY,
   formatPrincipalCacheHygiene,
   formatResidualBool,
   GATEWAY_READY_RESIDUAL_HONESTY,
   HA_MULTI_REPLICA_RESIDUAL_HONESTY,
   LIVE_PIN_RESIDUAL_HONESTY,
+  pickProgressiveConsentFields,
   pickResidualLivePinFields,
   pickResidualRateCacheFields,
   PRINCIPAL_CACHE_PROCESS_HONESTY,
@@ -222,6 +227,92 @@ describe("formatResidualBool", () => {
   });
 });
 
+describe("pickProgressiveConsentFields", () => {
+  it("defaults all consent honesty false when payload missing", () => {
+    expect(pickProgressiveConsentFields(undefined)).toEqual({
+      metadata_path_done_star: false,
+      browser_3lo_automated: false,
+      stores_tokens: false,
+      multi_replica_shared: false,
+      file_backed: false,
+      same_host_reload_before_persist: false,
+    });
+    expect(pickProgressiveConsentFields(null)).toEqual({
+      metadata_path_done_star: false,
+      browser_3lo_automated: false,
+      stores_tokens: false,
+      multi_replica_shared: false,
+      file_backed: false,
+      same_host_reload_before_persist: false,
+    });
+  });
+
+  it("picks progressive_consent nest from residual-status (file_backed + same_host_reload)", () => {
+    const data: GatewayResidualStatusResponse = {
+      progressive_consent: {
+        metadata_path_done_star: true,
+        browser_3lo_automated: false,
+        stores_tokens: false,
+        multi_replica_shared: false,
+        file_backed: true,
+        same_host_reload_before_persist: true,
+      },
+    };
+    expect(pickProgressiveConsentFields(data)).toEqual({
+      metadata_path_done_star: true,
+      browser_3lo_automated: false,
+      stores_tokens: false,
+      multi_replica_shared: false,
+      file_backed: true,
+      same_host_reload_before_persist: true,
+    });
+  });
+
+  it("accepts progressive_consent map alone", () => {
+    expect(
+      pickProgressiveConsentFields({
+        metadata_path_done_star: true,
+        file_backed: true,
+        same_host_reload_before_persist: true,
+        stores_tokens: false,
+        multi_replica_shared: false,
+      }),
+    ).toEqual({
+      metadata_path_done_star: true,
+      browser_3lo_automated: false,
+      stores_tokens: false,
+      multi_replica_shared: false,
+      file_backed: true,
+      same_host_reload_before_persist: true,
+    });
+  });
+
+  it("only treats explicit true as true (never invent tokens / multi-pod / path noise)", () => {
+    const noisy = {
+      progressive_consent: {
+        stores_tokens: "false",
+        multi_replica_shared: "true",
+        file_backed: 1,
+        same_host_reload_before_persist: "yes",
+        metadata_path_done_star: true,
+        token: "canary-secret-token",
+        path: "/tmp/consent-sessions.json",
+      },
+    } as unknown as GatewayResidualStatusResponse;
+    const picked = pickProgressiveConsentFields(noisy);
+    expect(picked).toEqual({
+      metadata_path_done_star: true,
+      browser_3lo_automated: false,
+      stores_tokens: false,
+      multi_replica_shared: false,
+      file_backed: false,
+      same_host_reload_before_persist: false,
+    });
+    // Must not surface adversarial noise; avoid matching metadata_path_* field names.
+    expect(JSON.stringify(picked)).not.toMatch(/canary|secret-token|consent-sessions|\/tmp/i);
+  });
+});
+
 describe("honesty constants", () => {
   it("rate file honesty is same-host lite not multi-pod", () => {
     expect(SHARED_SUBJECT_RATE_FILE_HONESTY).toMatch(/same-host/i);
@@ -267,5 +358,19 @@ describe("honesty constants", () => {
     expect(SUBJECT_LIMITER_MAX_SUBJECTS_HONESTY).toMatch(/process-local/i);
     expect(SUBJECT_LIMITER_MAX_SUBJECTS_HONESTY).toMatch(/unlimited/i);
     expect(SUBJECT_LIMITER_MAX_SUBJECTS_HONESTY).not.toMatch(/token|secret/i);
+  });
+
+  it("consent store honesty is same-host lite not multi-pod / never tokens", () => {
+    expect(CONSENT_FILE_BACKED_HONESTY).toMatch(/same-host/i);
+    expect(CONSENT_FILE_BACKED_HONESTY).toMatch(/not multi-pod/i);
+    expect(CONSENT_FILE_BACKED_HONESTY).toMatch(/path never shown/i);
+    expect(CONSENT_FILE_BACKED_HONESTY).not.toMatch(/access_token|\/tmp|\/var/i);
+    expect(CONSENT_SAME_HOST_RELOAD_HONESTY).toMatch(/reload-before-persist/i);
+    expect(CONSENT_SAME_HOST_RELOAD_HONESTY).toMatch(/not multi-pod/i);
+    expect(CONSENT_SAME_HOST_RELOAD_HONESTY).not.toMatch(/token|secret|\/tmp/i);
+    expect(CONSENT_STORES_TOKENS_HONESTY).toMatch(/always false/i);
+    expect(CONSENT_STORES_TOKENS_HONESTY).toMatch(/never tokens/i);
+    expect(CONSENT_MULTI_REPLICA_SHARED_HONESTY).toMatch(/always false/i);
+    expect(CONSENT_MULTI_REPLICA_SHARED_HONESTY).toMatch(/HOST-008|multi-pod/i);
   });
 });
