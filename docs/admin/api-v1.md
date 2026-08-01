@@ -102,6 +102,8 @@ Current process authentication state and console role. **Never includes the toke
   "ratePerMinute": 30,
   "rateBurst": 10,
   "sharedSubjectRateFile": false,
+  "sharedPrincipalCacheFile": false,
+  "sharedJwksFile": false,
   "progressiveConsentMetadataDoneStar": true,
   "progressiveConsentBrowser3loAutomated": false,
   "residual": "subject rate default process-local (HOST-006); optional same-host FileSubjectRateLimiter when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set (HOST-008 lite); multi-pod shared rate residual; multiPodVaultResidual=true; never tokens"
@@ -138,6 +140,8 @@ Mode C):
 | `ratePerMinute` | **HOST-006 residual knob:** resolved bootstrap tools/min via `gateway.SubjectRateConfigFromEnviron` (package default **30**; **0** when disabled). Never tokens. |
 | `rateBurst` | **HOST-006 residual knob:** resolved bootstrap burst (package default **10**; **0** when rate off). Never tokens. |
 | `sharedSubjectRateFile` | **HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is non-empty (same-host `FileSubjectRateLimiter`). **Not** multi-pod HA. Path value never returned. Never tokens. |
+| `sharedPrincipalCacheFile` | **HOST-007 / HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` is non-empty (same-host `FilePrincipalCache`). **Not** multi-pod HA. Path value never returned. Never tokens. |
+| `sharedJwksFile` | **HOST-001 / HOST-007 / HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` is non-empty (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path value never returned. Public keys only — never tokens. |
 | `progressiveConsentMetadataDoneStar` | **OAUTH-010 / GWY-001 residual:** always **`true`**. ConsentRequired metadata path Done*. Static residual only — never embeds authorize URLs or secrets. |
 | `progressiveConsentBrowser3loAutomated` | **OAUTH-010 residual:** always **`false`** until browser 3LO is automated (GWY-003). |
 | `progressiveConsentResidual` | **OAUTH-010 residual note** when Mode C enabled. Omitted otherwise. Never tokens or authorize URL secrets. |
@@ -162,6 +166,8 @@ Authorization headers, or raw subject keys.
   "ratePerMinute": 30,
   "rateBurst": 10,
   "sharedSubjectRateFile": false,
+  "sharedPrincipalCacheFile": false,
+  "sharedJwksFile": false,
   "vaultConfigured": true,
   "entryCount": 1,
   "subjects": ["a1b2c3…"],
@@ -182,6 +188,8 @@ Authorization headers, or raw subject keys.
 | `ratePerMinute` | Resolved bootstrap tools/min (default or `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE`); **0** when disabled. Never tokens. |
 | `rateBurst` | Resolved bootstrap burst (default or `JENKINS_MCP_SUBJECT_RATE_BURST`); **0** when rate disabled. Never tokens. |
 | `sharedSubjectRateFile` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` set (same-host file rate). **Not** multi-pod HA. Path never returned. Never tokens. |
+| `sharedPrincipalCacheFile` | **HOST-007 / HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` set (same-host FilePrincipalCache). **Not** multi-pod HA. Path never returned. Never tokens. |
+| `sharedJwksFile` | **HOST-001 / HOST-007 / HOST-008 Done\* lite:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path never returned. Public keys only — never tokens. |
 | `vaultConfigured` | Whether the Mode A vault file exists |
 | `entryCount` | Number of subject entries |
 | `subjects` | **SubjectKeyHash** values only (never raw keys or tokens) |

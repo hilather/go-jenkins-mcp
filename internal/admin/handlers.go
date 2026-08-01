@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
 	"github.com/simonfxr/go-jenkins-mcp/internal/config"
 	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
@@ -25,8 +26,9 @@ import (
 // multiUserEnabled / credentialMode / haMultiReplica / gatewayReady /
 // sessionAffinityRecommended / multiPodVaultResidual / kubernetesEnvDetected /
 // rateEnabled / ratePerMinute / rateBurst / sharedSubjectRateFile /
-// progressiveConsent* are secret-free gateway residual posture
-// (HOST-006 / HOST-008 / OAUTH-010); never tokens or subjects.
+// sharedPrincipalCacheFile / sharedJwksFile / progressiveConsent* are
+// secret-free gateway residual posture (HOST-006 / HOST-007 / HOST-008 /
+// OAUTH-010); never tokens, subjects, or file path values.
 // progressiveConsent* reuses gateway.ProgressiveConsentResidual (static only).
 type healthResponse struct {
 	Status       string   `json:"status"`
@@ -67,6 +69,14 @@ type healthResponse struct {
 	// non-empty (HOST-008 same-host FileSubjectRateLimiter lite). Not multi-pod HA.
 	// Path value is never returned (bool only; secret-free).
 	SharedSubjectRateFile bool `json:"sharedSubjectRateFile"`
+	// SharedPrincipalCacheFile is true when JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH
+	// is non-empty (HOST-008 same-host FilePrincipalCache lite). Not multi-pod HA.
+	// Path value is never returned (bool only; secret-free; never tokens).
+	SharedPrincipalCacheFile bool `json:"sharedPrincipalCacheFile"`
+	// SharedJwksFile is true when JENKINS_MCP_HTTP_JWKS_CACHE_PATH is non-empty
+	// (HOST-001 / HOST-008 same-host public JWKS snapshot lite). Not multi-pod
+	// external JWKS HA. Path value is never returned (bool only; public keys only).
+	SharedJwksFile bool `json:"sharedJwksFile"`
 	// ProgressiveConsentMetadataDoneStar is always true (ConsentRequired →
 	// authorization_url + session_id only path Done*; OAUTH-010 / GWY-001).
 	// Static residual from gateway.NewProgressiveConsentResidual — never tokens.
@@ -127,12 +137,22 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	multiUser := gateway.MultiUserEnabled(os.Getenv)
 	rateEnabled, ratePerMinute, rateBurst := gateway.SubjectRateConfigFromEnviron(os.Getenv)
+	sharedSubjectRateFile := gateway.SubjectRatePathConfiguredFromEnviron(os.Getenv)
+	sharedPrincipalCacheFile := gateway.PrincipalCachePathConfiguredFromEnviron(os.Getenv)
+	sharedJwksFile := auth.JWKSCachePathConfiguredFromEnviron(os.Getenv)
 	mp := diagnostics.MultiPodResidualFromEnviron(os.Getenv)
 	// HOST-006 residual honesty: default process-local rate; optional same-host
 	// file share when path set; multi-pod shared rate still residual (HOST-008).
+	// HOST-007 parity: shared*File bools only — never path values (HOST-008 lite).
 	residual := "subject rate default process-local (HOST-006); optional same-host FileSubjectRateLimiter when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set (HOST-008 lite); multi-pod shared rate residual; multiPodVaultResidual=true; never tokens"
-	if gateway.SubjectRatePathConfiguredFromEnviron(os.Getenv) {
+	if sharedSubjectRateFile {
 		residual = "sharedSubjectRateFile=true (same-host file rate lite only — not multi-pod HA); " + residual
+	}
+	if sharedPrincipalCacheFile {
+		residual = "sharedPrincipalCacheFile=true (same-host FilePrincipalCache lite only — not multi-pod HA); " + residual
+	}
+	if sharedJwksFile {
+		residual = "sharedJwksFile=true (same-host public JWKS file lite only — not multi-pod external JWKS HA); " + residual
 	}
 	if multiUser {
 		// Secret-free honesty only (SPA reads residual; no SPA rebuild required for this string).
@@ -168,7 +188,9 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		RateEnabled:                           rateEnabled,
 		RatePerMinute:                         ratePerMinute,
 		RateBurst:                             rateBurst,
-		SharedSubjectRateFile:                 gateway.SubjectRatePathConfiguredFromEnviron(os.Getenv),
+		SharedSubjectRateFile:                 sharedSubjectRateFile,
+		SharedPrincipalCacheFile:              sharedPrincipalCacheFile,
+		SharedJwksFile:                        sharedJwksFile,
 		ProgressiveConsentMetadataDoneStar:    pc.MetadataPathDoneStar,
 		ProgressiveConsentBrowser3loAutomated: pc.Browser3LOAutomated,
 		ProgressiveConsentResidual:            pcResidual,
