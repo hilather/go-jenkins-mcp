@@ -53,7 +53,7 @@ jenkins-mcp gateway qualify --offline   # JSON summary, no secrets
 - Mode B live jwt-auth-filter / IdP pin residual (OAUTH-009); offline JWT vault Bearer + claim fail-closed matrix Done* (`oauth009_offline_bearer_matrix`)
 - Mode C live Entra 3LO/OBO + AgentCore Identity vault residual (OAUTH-010 / GWY-003); offline prototype matrix Done* (`oauth010_mode_c_offline_matrix` + `mode_c_agentcore_live_matrix`) — **do not claim live Entra Done**
 - OAUTH-010: `HTTPTokenFetcher` https mock AS in package tests (`TestOAUTH010_*` / `TestHTTPTokenFetcher_*`)
-- Opt-in residual lab: `testdata/oauth-lab` + `make live-oauth-*` (HOST-015 mock-token Mode C peer; not default `make test`; not production Entra)
+- Opt-in residual lab: `testdata/oauth-lab` + `make live-oauth-*` + `go test -tags=live_oauth` Mode C Obtain vs mock-token (TLS test shim; not default `make test`; not production Entra)
 - Production P95/P99 token acquisition SLOs  
 - Exact-audience JWT passthrough exception process  
 
@@ -175,7 +175,7 @@ and not AgentCore Identity vault.
 |------|-------------|----------|
 | **A** | Jenkins API token compose | `make live-jenkins-up/test/down` → [`testdata/jenkins-compose/`](../../testdata/jenkins-compose/) |
 | **B** | `mock-oidc` + `mock-rs` | `make live-oauth-*` → [`testdata/oauth-lab/`](../../testdata/oauth-lab/) |
-| **C** | `mock-token` (HTTPTokenFetcher-shaped JSON; HOST-015) | same oauth-lab — **wire residual only**; TLS + Live Obtain against lab residual; not Entra/AgentCore pin |
+| **C** | `mock-token` (HTTPTokenFetcher-shaped JSON; HOST-015) | same oauth-lab — opt-in `-tags=live_oauth` Mode C Obtain via TLS **test shim** (lab HTTP residual; not Entra/AgentCore pin) |
 
 ### Commands
 
@@ -192,10 +192,13 @@ make live-oauth-down
 go test -count=1 ./internal/authlab/...
 ```
 
-### Optional `//go:build live_oauth` stub
+### Optional `//go:build live_oauth` package tests (HOST-015)
 
 Mirrors `live_jenkins` opt-in pattern. **Skips** when lab healthz is unreachable
-so a bare `-tags=live_oauth` without compose does not fail CI.
+so a bare `-tags=live_oauth` without compose does not fail CI. Not in default
+`make test`. Source: `internal/gateway/qualify/live_oauth_stub_test.go`.
+Cross-link: [`testdata/oauth-lab/README.md`](../../testdata/oauth-lab/README.md)
+(Makefile `live-oauth-*` help targets).
 
 ```bash
 make live-oauth-up
@@ -208,16 +211,24 @@ make live-oauth-down
 | `OAUTH_OIDC_PORT` | `18081` |
 | `OAUTH_RS_PORT` | `18082` |
 | `OAUTH_TOKEN_PORT` / `OAUTH_LAB_TOKEN_URL` | `18083` / `http://127.0.0.1:18083` |
+| `LAB_AUDIENCE` | `jenkins-api` |
 
-**What the stub proves today:** lab processes are healthy (residual reachability).
-**What it does not prove:** Entra Conditional Access, real AgentCore obtain,
-production RS plugin version, or gateway Live Obtain against TLS lab endpoints
-(`HTTPTokenFetcher` requires https — TLS residual; see oauth-lab README).
+| Case (when lab up) | What it proves |
+|--------------------|----------------|
+| Healthz (token / oidc / rs) | Residual reachability |
+| `HTTPTokenFetcher` + raw `http://` lab URL | **Rejected** (production https-only pin) |
+| Mode C Obtain success | `HTTPTokenFetcher` + AgentCore Live Obtain + Bearer + cache hit via **TLS test shim** → HTTP mock-token |
+| Wrong audience / consent / server_error | Fail closed; consent metadata only; canary-free errors |
+
+**What it does not prove:** Entra Conditional Access, real AgentCore Identity
+vault / 3LO browser, production RS plugin version, or production TLS termination
+at the lab (compose stays loopback **HTTP**; tests inject a local TLS reverse
+proxy so `HTTPTokenFetcher` can run). **Never mark live Entra Done from this tag.**
 
 ### Recommended residual order
 
 1. Offline: `go test ./internal/gateway/ ./internal/gateway/qualify/ -count=1`
 2. CLI: `jenkins-mcp gateway qualify --offline`
 3. Authlab units: `go test ./internal/authlab/...`
-4. Opt-in: `make live-oauth-test` (and optionally `-tags=live_oauth`)
+4. Opt-in: `make live-oauth-test` + `go test -tags=live_oauth ./internal/gateway/qualify/ -count=1`
 5. Full GWY-003 DoD: attach live Entra + AgentCore + jwt-auth-filter evidence (still open)

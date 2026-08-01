@@ -455,7 +455,7 @@ hit/miss, IdP outage chaos, JWKS kid-lite (see [qualification.md](qualification.
 HOST-001 `RequireSubject` + shared-secret not identity; mid-session
 `Mcp-Session-Id` subject swap 401; HOST-004 two-user token-cache + page_token
 subject isolation; HOST-006 SubjectLimiter + SubjectRateLimiter fair-share.
-Opt-in Mode C mock peer: `make live-oauth-*` (HOST-015).
+Opt-in Mode C mock peer: `make live-oauth-*` + `go test -tags=live_oauth ./internal/gateway/qualify/` (HOST-015; TLS residual; not Entra Done).
 
 ---
 

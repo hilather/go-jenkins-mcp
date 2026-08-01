@@ -113,11 +113,13 @@ consent metadata).
 | Offline package + qualify | Live=false; Live=true nil Fetcher; auth_code ConsentRequired; token_exchange Bearer; wrong aud; https mock AS | Live Entra / AgentCore Identity vault |
 | This lab (`make live-oauth-*`) | Loopback mock-token peer reachability + curl scenarios | Production AgentCore, Entra Conditional Access, durable vault |
 | `HTTPTokenFetcher` vs lab | Shape-compatible JSON | Lab is **http** loopback; production fetcher is **https-only** (TLS residual) |
+| `go test -tags=live_oauth` (qualify) | When healthz up: Mode C AgentCore Live Obtain + `HTTPTokenFetcher` success / wrong aud / consent / 5xx via **local TLS reverse-proxy shim** → HTTP mock-token; raw `http://` lab URL rejected | Real Entra TLS, AgentCore Identity vault, Conditional Access, durable vault |
 
 **Residual:** production `HTTPTokenFetcher` requires **https** token URLs; this lab
-publishes plain HTTP on loopback for curl smoke. TLS termination / live gateway
-Obtain against the lab is a follow-up residual (real AgentCore vault remains
-residual). **Do not mark OAUTH-010 live Entra Done from this lab.**
+publishes plain HTTP on loopback for curl smoke. Opt-in package tests use a
+**test-only TLS shim** so the production https pin can still Obtain against the
+HTTP peer — that is **not** production TLS termination. Real AgentCore vault
+remains residual. **Do not mark OAUTH-010 / GWY-003 live Entra Done from this lab.**
 
 ## Environment variables
 
@@ -185,7 +187,10 @@ curl -sS -D- 'http://127.0.0.1:18083/token?scenario=consent' -o /dev/null
 - [gateway HTTPTokenFetcher](../../docs/gateway/README.md)
 - Agent policy: [`AGENTS.md`](../../AGENTS.md) Docker scaffolds
 
-### Optional gateway qualify live_oauth tag
+### Optional gateway qualify live_oauth tag (HOST-015 Mode C Obtain)
+
+Makefile targets above (`live-oauth-up` / `smoke` / `test` / `down`) are the
+operator path; package tests are the automated residual pin:
 
 ```bash
 make live-oauth-up
@@ -193,7 +198,18 @@ go test -tags=live_oauth ./internal/gateway/qualify/ -count=1   # skips if lab d
 make live-oauth-down
 ```
 
-Not default `make test`. Not production Entra.
+| When lab **down** | When lab **up** |
+|-------------------|-----------------|
+| Healthz tests **Skip** (CI-safe) | Healthz pass; Mode C Live Obtain + `HTTPTokenFetcher` against mock-token |
+| — | Raw `http://127.0.0.1:18083` rejected by https-only pin |
+| — | Success / wrong_audience / consent / server_error via TLS **test shim** |
+
+Cross-link: [docs/gateway/qualification.md](../../docs/gateway/qualification.md) §7
+and Makefile help (`make help` → **live-oauth-***). Not default `make test`.
+**Not production Entra.**
+
+Env overrides (optional): `OAUTH_TOKEN_PORT`, `OAUTH_LAB_TOKEN_URL`,
+`OAUTH_OIDC_PORT`, `OAUTH_RS_PORT`, `LAB_AUDIENCE` (default `jenkins-api`).
 
 ## Residuals (honest)
 
@@ -202,5 +218,6 @@ Not default `make test`. Not production Entra.
 | Real Microsoft Entra tenant / Conditional Access | Not in lab |
 | Real Jenkins `jwt-auth-filter` plugin version pin | Mock RS only |
 | Real AgentCore Identity vault / 3LO browser | Mock peer only |
-| `HTTPTokenFetcher` https pin against lab | HTTP loopback smoke; TLS residual |
+| `HTTPTokenFetcher` https pin against lab | Lab is HTTP loopback; package tests use **TLS test shim** only (not production TLS) |
+| Mode C Live Obtain vs mock-token | Opt-in `-tags=live_oauth` when lab up — **not** Entra Done |
 | Mode A + B/C multi-compose single command | Use `live-jenkins-*` + `live-oauth-*` separately |

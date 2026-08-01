@@ -112,6 +112,7 @@ Code constant: `auth.FallbackAuthMethodWhenOnlyOICAuth == MethodAPIToken`.
 | Offline prototype matrix (auth_code + OBO + Live gates) | **Done*** offline | `oauth010_mode_c_offline_matrix` + `TestOAUTH010_*` |
 | Offline mock `TokenFetcher` / `HTTPTokenFetcher` + consent URL metadata | **Done*** offline | Mock AS / https-only tests (never live Entra) |
 | Docker mock token peer (HOST-015) | **Scaffold** opt-in | `testdata/oauth-lab/` `mock-token`; `make live-oauth-*` |
+| Opt-in Mode C Obtain vs mock-token | **Residual lab** (not Entra) | `go test -tags=live_oauth ./internal/gateway/qualify/` — healthz skip; Live Obtain + `HTTPTokenFetcher` via TLS test shim; https pin rejects raw HTTP lab URL |
 | Live Entra 3LO + OBO + durable vault | **Residual** | OAUTH-010 / GWY-001 / GWY-003 production pin — **not Done** |
 | AgentCore production binary pin | **Residual** | GWY-003 / GWY-004 |
 
@@ -119,9 +120,10 @@ Code constant: `auth.FallbackAuthMethodWhenOnlyOICAuth == MethodAPIToken`.
 # Offline (default make test path)
 go test ./internal/gateway/ ./internal/gateway/qualify/ ./internal/diagnostics/ -count=1 -run 'OAUTH010|ModeC|oauth010'
 
-# Opt-in HOST-015 mock-token peer (not production Entra)
+# Opt-in HOST-015 mock-token peer (not production Entra; TLS residual)
 make live-oauth-up    # mock-token :18083
 make live-oauth-smoke
+go test -tags=live_oauth ./internal/gateway/qualify/ -count=1   # skip if lab down
 make live-oauth-down
 ```
 

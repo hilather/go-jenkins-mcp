@@ -76,7 +76,7 @@ func RunOffline(ctx context.Context) Summary {
 			"OAUTH-009 offline: wrong aud/exp/iss rejected; ID token never API credential; Mode B Obtain never Basic fallthrough — live RS pin still open",
 			"Mode C live Entra 3LO/OBO + AgentCore Identity vault residual (OAUTH-010 / GWY-003); offline Live=false / mock Fetcher / auth_code consent / token_exchange / wrong audience Done* (oauth010_mode_c_offline_matrix + mode_c_agentcore_live_matrix)",
 			"OAUTH-010: HTTPTokenFetcher https mock AS covered in package tests (TestOAUTH010_* / TestHTTPTokenFetcher_*); do not claim live Entra Done",
-			"Opt-in residual lab: testdata/oauth-lab + make live-oauth-* (HOST-012…015 mock-token Mode C peer; not default make test; not production Entra / jwt-auth-filter / AgentCore vault)",
+			"Opt-in residual lab: testdata/oauth-lab + make live-oauth-* (HOST-012…015); go test -tags=live_oauth Mode C Obtain vs mock-token via TLS test shim (HTTPTokenFetcher https-only; lab is HTTP loopback — TLS residual; not production Entra / jwt-auth-filter / AgentCore vault)",
 			"Cross-link: docs/auth/oauth-capability-matrix.md §4 + docs/auth/jwt-auth-filter-qualification.md + docs/gateway/qualification.md (GWY-003 / OAUTH-010)",
 			"P95/P99 live token acquisition SLOs require production pin evidence",
 			"Generic-token passthrough remains disabled; exact-audience exception is residual approval",
