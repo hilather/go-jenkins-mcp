@@ -107,12 +107,26 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 |------|--------|
 | `ConsentRequired` → auth URL + session id only (Obtain / AuthProvider / `mapToolErr`) | **Done\*** |
 | Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway consent-residual`) | **Done\*** (env/static honesty) |
+| Process-local consent metadata store (TTL; optional file under XDG data) | **Done\*** — auth URL + session id + timestamps only; never tokens |
 | Browser 3LO interactive UX automation | **Residual** — not automated; operator/agent opens `authorization_url` out-of-band |
-| Durable consent session store | **Residual** (process-local metadata only) |
-| Multi-replica consent correlation | **Residual** (HOST-008) |
+| AgentCore durable consent / token vault | **Residual** (not this process-local metadata store) |
+| Multi-replica consent correlation | **Residual** (HOST-008) — process-local / single-node file only |
+
+**Process-local consent metadata store** (`internal/gateway/consent_store.go`):
+
+- When Obtain returns `ConsentRequired`, metadata is remembered in a process-local
+  TTL store (default 30m), keyed by session id and optional SubjectKey.
+- Optional file-backed crash recovery:
+  `$XDG_DATA_HOME/jenkins-mcp/gateway/consent_sessions.json` (override
+  `JENKINS_MCP_CONSENT_STORE_PATH`). Mode 0600; schema is metadata only
+  (no `access_token` / `refresh_token` / `client_secret` fields — load rejects them).
+- API: `Get` / `GetBySubjectKey` / `List` / `Delete` / `Clear`; `StatusMap` / `String`
+  are secret-free (host + truncated session; never full authorize query dump in
+  status maps).
+- **Not** multi-replica shared store; sticky sessions / shared AgentCore vault remain residual.
 
 ```bash
-jenkins-mcp gateway consent-residual   # secret-free JSON residual snapshot
+jenkins-mcp gateway consent-residual   # secret-free JSON residual + last consent_sessions if file present
 jenkins-mcp gateway qualify --offline  # includes progressive_consent_residual case + residual note
 jenkins-mcp doctor --offline           # gateway_status progressive_consent_* fields when Mode C
 ```
@@ -120,7 +134,8 @@ jenkins-mcp doctor --offline           # gateway_status progressive_consent_* fi
 **Honesty:** metadata propagation alone does **not** close full GWY-001/003 DoD.
 When Obtain would return `ConsentRequired`, surfaces never include tokens,
 refresh material, client secrets, or `Authorization` headers — only
-`authorization_url` + `session_id` on the progressive tool path.
+`authorization_url` + `session_id` on the progressive tool path. Browser 3LO is
+**not** automated. Multi-replica consent correlation is residual.
 
 Token cache: in-memory, keyed by `(tenant, user, workload, profile)` (HOST-004),
 TTL-bounded. `String()` / errors / `Status` **never** include token bytes (canary tests).
@@ -689,6 +704,8 @@ Consent metadata (`ConsentInfo`) may carry **authorization URL + session id** on
 never access tokens, refresh tokens, client secrets, or auth codes.
 Tool path: `mapToolErr` surfaces progressive `authorization_url` + `session_id`
 (**Done\*** metadata path; browser 3LO not automated — GWY-003 / OAUTH-010 residual).
+Process-local consent metadata store (optional XDG file) remembers metadata only
+when Obtain returns `ConsentRequired` — not multi-replica shared store.
 See §3 progressive consent residual table; CLI: `jenkins-mcp gateway consent-residual`.
 
 Token cache: in-memory, keyed by `(user, workload, profile)`, TTL-bounded.

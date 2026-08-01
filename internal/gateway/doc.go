@@ -4,7 +4,8 @@
 // namespace keys (HOST-004), and per-subject concurrent + rate budgets (HOST-006):
 // credential provider interfaces, config validation that never treats stock
 // Jenkins as an OAuth authorization server, token-cache contracts, consent URL
-// metadata, pluggable TokenFetcher (offline mock / HTTP), per-subject
+// metadata (process-local optional file-backed consent session store — never
+// tokens), pluggable TokenFetcher (offline mock / HTTP), per-subject
 // APITokenVault / JWTVault (memory/file), SubjectLimiter (concurrent slots),
 // SubjectRateLimiter (token-bucket rate), and binding of inbound claims to MCP
 // policy subjects (including OAUTH-006 group overage residual metadata).

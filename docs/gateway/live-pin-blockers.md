@@ -190,7 +190,7 @@ Fill during live lab; keep secrets out of git, tickets, and support bundles.
 | Gate | Offline Done\* | Live residual |
 |------|----------------|---------------|
 | AS base = Entra (Jenkins-as-AS reject) | Config validation + qualify | Production env audit |
-| `authorization_code` consent metadata only | ConsentRequired URL+session | Browser 3LO UX; durable consent session store |
+| `authorization_code` consent metadata only | ConsentRequired URL+session; process-local metadata store | Browser 3LO UX; multi-replica consent correlation |
 | `token_exchange` / OBO → Jenkins-audience Bearer | Mock AS + HTTPTokenFetcher | Real Entra OBO / RFC 8693 profile pin |
 | Live opt-in (`JENKINS_MCP_GATEWAY_LIVE=1`) | Wire + fail-closed without token endpoint | Real discovery + refresh isolation SLOs |
 | Per-user vault binding | Process memory cache / mock | **Durable AgentCore Identity vault** |

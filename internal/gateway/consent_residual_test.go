@@ -20,8 +20,11 @@ func TestProgressiveConsentResidual(t *testing.T) {
 	if !pc.MetadataPathDoneStar {
 		t.Fatal("metadata path must be Done*")
 	}
+	if !pc.ProcessLocalConsentMetadataStore {
+		t.Fatal("process-local consent metadata store must be Done*")
+	}
 	if pc.DurableConsentSessionStore || pc.MultiReplicaConsentCorrelation {
-		t.Fatal("durable/multi-replica must stay residual false")
+		t.Fatal("AgentCore durable vault / multi-replica must stay residual false")
 	}
 	if !pc.LastConsentWouldApply {
 		t.Fatal("last_consent_would_apply marker")
@@ -35,8 +38,17 @@ func TestProgressiveConsentResidual(t *testing.T) {
 	if !strings.Contains(pc.ResidualNote, "Done*") {
 		t.Fatalf("want Done* metadata path: %q", pc.ResidualNote)
 	}
+	if !strings.Contains(strings.ToLower(pc.ResidualNote), "process-local") {
+		t.Fatalf("want process-local store honesty: %q", pc.ResidualNote)
+	}
+	if !strings.Contains(strings.ToLower(pc.ResidualNote), "not multi-replica") {
+		t.Fatalf("want not multi-replica honesty: %q", pc.ResidualNote)
+	}
 	// StatusMap / JSON secret-free.
 	sm := pc.StatusMap()
+	if sm["process_local_consent_metadata_store"] != true {
+		t.Fatalf("StatusMap process_local: %+v", sm)
+	}
 	raw, err := json.Marshal(sm)
 	if err != nil {
 		t.Fatal(err)

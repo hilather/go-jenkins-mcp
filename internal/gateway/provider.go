@@ -121,6 +121,11 @@ type AgentCoreProvider struct {
 	// Fetcher is the optional pluggable token acquisition backend.
 	// Required when Live=true; nil + Live=true → capability_missing (not silent success).
 	Fetcher TokenFetcher
+	// ConsentStore holds progressive consent metadata only when Obtain returns
+	// ConsentRequired (auth URL + session id; never tokens). nil → process-local
+	// default (ProcessConsentSessionStore). Optional file-backed path is residual
+	// crash recovery of metadata only — not multi-replica shared store.
+	ConsentStore ConsentSessionStore
 }
 
 // NewAgentCoreProvider constructs a provider after validating cfg.
@@ -200,7 +205,13 @@ func (p *AgentCoreProvider) Obtain(ctx context.Context, caller Caller) (Credenti
 
 	cred, err := p.Fetcher.FetchJenkinsCredential(ctx, caller, p.Config)
 	if err != nil {
-		return Credential{}, mapFetcherError(err)
+		mapped := mapFetcherError(err)
+		// Process-local consent metadata residual (OAUTH-010 / GWY-001):
+		// remember auth URL + session id only when ConsentRequired — never tokens.
+		if cr, ok := AsConsentRequired(mapped); ok && cr != nil {
+			RememberConsentRequired(p.consentStore(), SubjectKey(caller), cr.Info)
+		}
+		return Credential{}, mapped
 	}
 	if strings.TrimSpace(cred.AccessToken) == "" {
 		return Credential{}, apperr.New(apperr.CodeAuthentication,
@@ -259,6 +270,15 @@ func (p *AgentCoreProvider) Status(ctx context.Context) ProviderStatus {
 		st.ErrorMessageSafe = "agentcore live acquisition requires a TokenFetcher"
 	}
 	return st
+}
+
+// consentStore returns the provider consent metadata store or the process default.
+// Metadata only — never tokens.
+func (p *AgentCoreProvider) consentStore() ConsentSessionStore {
+	if p != nil && p.ConsentStore != nil {
+		return p.ConsentStore
+	}
+	return ProcessConsentSessionStore()
 }
 
 // notConfigured returns a stable capability_missing error for unconfigured paths.

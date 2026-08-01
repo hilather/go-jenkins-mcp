@@ -76,7 +76,14 @@ func runGatewayQualify(args []string) error {
 
 // runGatewayConsentResidual prints Mode C progressive consent residual honesty
 // (OAUTH-010 / GWY-001). Secret-free JSON: browser 3LO not automated; metadata
-// path Done*; never tokens. Env-only — does not perform Obtain or open a browser.
+// path Done*; process-local consent metadata store Done* (optional file under
+// XDG data for crash recovery of metadata only); never tokens. Does not perform
+// Obtain or open a browser.
+//
+// When a consent metadata file is present (default XDG path or
+// JENKINS_MCP_CONSENT_STORE_PATH), lists last consent session metadata via
+// secret-free StatusMap entries (session_id, authorization_host, timestamps —
+// never access/refresh tokens).
 //
 //	jenkins-mcp gateway consent-residual
 func runGatewayConsentResidual(args []string) error {
@@ -107,6 +114,24 @@ func runGatewayConsentResidual(args []string) error {
 		out["mode_matrix_residual"] = gateway.ModeMatrixResidualNote(
 			gateway.CredentialModeAgentCore, []gateway.CredentialMode{gateway.CredentialModeAgentCore})
 	}
+
+	// List last consent metadata from process-local / file-backed store when
+	// present (metadata only; secret-free StatusMap rows). Residual honesty:
+	// not multi-replica shared store; browser 3LO not automated.
+	store, storeErr := gateway.OpenConsentSessionStoreForCLI(os.Getenv)
+	if storeErr != nil {
+		out["consent_store_error"] = "consent metadata store unavailable (see logs; never embeds secrets)"
+	} else if store != nil {
+		out["consent_store"] = store.StatusMap()
+		recs := store.List()
+		rows := make([]map[string]any, 0, len(recs))
+		for _, rec := range recs {
+			rows = append(rows, rec.StatusMap())
+		}
+		out["consent_sessions"] = rows
+		out["consent_sessions_count"] = len(rows)
+	}
+
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(out); err != nil {
