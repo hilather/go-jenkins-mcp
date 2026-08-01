@@ -2850,8 +2850,9 @@ process-local; raise env bootstrap needs serve restart.
 - [x] Secret-free multi-user residual note: no admin/`JENKINS_MCP_GATEWAY_MULTI_USER` production-ready pin; `enabledModes` is config enablement only.
 - [x] Admin residual-status surface: `GET /admin/v1/gateway/residual-status` + Overview SPA card (same secret-free map as CLI `gateway residual-status` via `diagnostics.BuildGatewayResidualStatus`; viewer ok; 404-hide on older BFF; never tokens/subjects; live-pin-blockers pointer). — BFF tests + docs/admin/api-v1.md
 - [x] Admin subject-invalidate residual lite: `POST /admin/v1/gateway/subject-invalidate` + Overview SPA form (mirrors CLI; `gateway_ops` for operator/policy_admin; FilePrincipalCache/FileTokenCache when env paths set; process PrincipalCache otherwise; secret-free StatusMap; never tokens). **Residual:** multi-pod fan-out, live Entra revocation.
+- [x] Admin consent-purge residual lite: `POST /admin/v1/gateway/consent-purge` + Overview Mode C residual SPA form (mirrors CLI `gateway consent-purge`; `gateway_ops`; OpenConsentSessionStoreForPurge / env path; purge_expired \| delete_session \| clear_all; secret-free counts; never tokens; session_id not echoed). **Residual:** multi-pod shared store, browser 3LO automation, memory-only serve without shared FilePath.
 
-**Status:** **Done*** for operator residual documentation + secret-free mode listing + multi-user honesty + residual-status BFF/SPA + subject-invalidate BFF/SPA residual lite. Cookie sessions / multi-operator OIDC remain residual.
+**Status:** **Done*** for operator residual documentation + secret-free mode listing + multi-user honesty + residual-status BFF/SPA + subject-invalidate BFF/SPA residual lite + consent-purge BFF/SPA residual lite. Cookie sessions / multi-operator OIDC remain residual.
 
 ---
 

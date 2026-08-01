@@ -10,9 +10,11 @@ import {
   formatApiError,
   getProfileId,
   hasGatewayOps,
+  postGatewayConsentPurge,
   postGatewaySubjectInvalidate,
 } from "../api/client";
 import type {
+  GatewayConsentPurgeResponse,
   GatewayResidualStatusResponse,
   GatewaySubjectInvalidateResponse,
 } from "../api/types";
@@ -251,7 +253,9 @@ export function OverviewPage() {
         </div>
       )}
 
-      {modeC && health.isSuccess && (
+      {/* Mode C residual card when Mode C is active, or always for gateway_ops
+          so operators can purge consent metadata without Mode C health flags. */}
+      {health.isSuccess && (modeC || canGatewayOps) && (
         <div className="card">
           <h2>Progressive consent residual (Mode C)</h2>
           <p className="muted" style={{ marginTop: 0 }}>
@@ -260,29 +264,51 @@ export function OverviewPage() {
             <code>gateway.NewProgressiveConsentResidual</code>). Static /
             secret-free — never live Obtain, tokens, or{" "}
             <code>authorization_url</code> query strings in admin JSON.
-          </p>
-          <dl className="dl">
-            <dt>progressiveConsentMetadataDoneStar</dt>
-            <dd>
-              {health.data.progressiveConsentMetadataDoneStar ? "yes" : "no"}{" "}
-              <span className="muted">
-                (ConsentRequired → authorization_url + session_id only)
-              </span>
-            </dd>
-            <dt>progressiveConsentBrowser3loAutomated</dt>
-            <dd>
-              {health.data.progressiveConsentBrowser3loAutomated
-                ? "yes"
-                : "no"}{" "}
-              <span className="muted">(browser 3LO not automated residual)</span>
-            </dd>
-            {health.data.progressiveConsentResidual ? (
+            {!modeC ? (
               <>
-                <dt>progressiveConsentResidual</dt>
-                <dd className="muted">{health.data.progressiveConsentResidual}</dd>
+                {" "}
+                Mode C not detected on health; consent purge residual still
+                available for <code>gateway_ops</code>.
               </>
             ) : null}
-          </dl>
+          </p>
+          {modeC ? (
+            <dl className="dl">
+              <dt>progressiveConsentMetadataDoneStar</dt>
+              <dd>
+                {health.data.progressiveConsentMetadataDoneStar ? "yes" : "no"}{" "}
+                <span className="muted">
+                  (ConsentRequired → authorization_url + session_id only)
+                </span>
+              </dd>
+              <dt>progressiveConsentBrowser3loAutomated</dt>
+              <dd>
+                {health.data.progressiveConsentBrowser3loAutomated
+                  ? "yes"
+                  : "no"}{" "}
+                <span className="muted">
+                  (browser 3LO not automated residual)
+                </span>
+              </dd>
+              {health.data.progressiveConsentResidual ? (
+                <>
+                  <dt>progressiveConsentResidual</dt>
+                  <dd className="muted">
+                    {health.data.progressiveConsentResidual}
+                  </dd>
+                </>
+              ) : null}
+            </dl>
+          ) : null}
+          {canGatewayOps ? (
+            <ConsentPurgeForm />
+          ) : (
+            <p className="muted" style={{ marginBottom: 0 }}>
+              Consent purge requires <code>gateway_ops</code> (
+              <code>operator</code> or <code>policy_admin</code>). CLI:{" "}
+              <code>jenkins-mcp gateway consent-purge</code>.
+            </p>
+          )}
         </div>
       )}
 
@@ -528,12 +554,167 @@ export function OverviewPage() {
             response.
           </li>
           <li>
+            Consent purge (HOST-007 Mode C residual lite):{" "}
+            <code>POST /admin/v1/gateway/consent-purge</code> requires{" "}
+            <code>gateway_ops</code>. Mirrors CLI{" "}
+            <code>gateway consent-purge</code> (TTL expire / session delete /
+            clear_all). Metadata only —{" "}
+            <strong>never</strong> tokens; same-host file reload-before-persist
+            lite; <strong>not</strong> multi-pod HA; browser 3LO not automated.
+          </li>
+          <li>
             BFF is loopback-only by default (ADR 0014). No Jenkins tokens in
             this SPA.
           </li>
         </ul>
       </div>
     </>
+  );
+}
+
+/** HOST-007 Mode C progressive consent metadata purge form (gateway_ops). */
+function ConsentPurgeForm() {
+  const [action, setAction] = useState<"purge_expired" | "delete_session" | "clear_all">(
+    "purge_expired",
+  );
+  const [sessionId, setSessionId] = useState("");
+  const [result, setResult] = useState<GatewayConsentPurgeResponse | null>(null);
+
+  const mutate = useMutation({
+    mutationFn: postGatewayConsentPurge,
+    onSuccess: (data) => setResult(data),
+  });
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setResult(null);
+    if (action === "delete_session") {
+      const sid = sessionId.trim();
+      if (!sid) return;
+      mutate.mutate({ action: "delete_session", session_id: sid });
+      return;
+    }
+    if (action === "clear_all") {
+      mutate.mutate({ action: "clear_all", clear_all: true });
+      return;
+    }
+    mutate.mutate({ action: "purge_expired" });
+  }
+
+  const canSubmit =
+    action === "purge_expired" ||
+    action === "clear_all" ||
+    (action === "delete_session" && sessionId.trim().length > 0);
+
+  return (
+    <div style={{ marginTop: "0.85rem" }}>
+      <h3 style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>
+        Consent purge (metadata only)
+      </h3>
+      <p className="muted" style={{ marginTop: 0 }}>
+        HOST-007 residual lite —{" "}
+        <code>POST /admin/v1/gateway/consent-purge</code> mirrors CLI{" "}
+        <code>gateway consent-purge</code>. Uses{" "}
+        <code>JENKINS_MCP_CONSENT_STORE_PATH</code> / XDG file (same-host share
+        with serve). <strong>Never</strong> tokens; session_id not echoed;{" "}
+        <strong>not</strong> multi-pod HA; browser 3LO not automated.
+      </p>
+      <form
+        onSubmit={onSubmit}
+        style={{ display: "grid", gap: "0.6rem", maxWidth: "36rem" }}
+      >
+        <label>
+          <span className="muted">action</span>
+          <select
+            value={action}
+            onChange={(e) =>
+              setAction(
+                e.target.value as "purge_expired" | "delete_session" | "clear_all",
+              )
+            }
+            style={{ width: "100%", display: "block", marginTop: "0.2rem" }}
+          >
+            <option value="purge_expired">purge_expired (default TTL)</option>
+            <option value="delete_session">delete_session</option>
+            <option value="clear_all">clear_all (explicit)</option>
+          </select>
+        </label>
+        {action === "delete_session" ? (
+          <label>
+            <span className="muted">session_id (not echoed in response)</span>
+            <input
+              className="mono"
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              value={sessionId}
+              onChange={(e) => setSessionId(e.target.value)}
+              placeholder="sess-…"
+              style={{ width: "100%", display: "block", marginTop: "0.2rem" }}
+            />
+          </label>
+        ) : null}
+        {action === "clear_all" ? (
+          <p className="muted" style={{ margin: 0 }}>
+            Clears <strong>all</strong> consent metadata on the store path
+            (requires explicit action; mirrors CLI <code>--all</code>).
+          </p>
+        ) : null}
+        <div>
+          <button type="submit" disabled={!canSubmit || mutate.isPending}>
+            {mutate.isPending ? "Purging…" : "Run consent purge"}
+          </button>
+        </div>
+      </form>
+      {mutate.isError && (
+        <div style={{ marginTop: "0.75rem" }}>
+          <ErrorBanner error={mutate.error} />
+          <p className="muted">
+            {formatApiError(mutate.error).code}:{" "}
+            {formatApiError(mutate.error).message}
+          </p>
+        </div>
+      )}
+      {result ? (
+        <dl className="dl" style={{ marginTop: "0.75rem" }}>
+          <dt>action</dt>
+          <dd className="mono">{result.action || "—"}</dd>
+          <dt>deleted_count</dt>
+          <dd>{typeof result.deleted_count === "number" ? result.deleted_count : "—"}</dd>
+          <dt>remaining_count</dt>
+          <dd>
+            {typeof result.remaining_count === "number" ? result.remaining_count : "—"}
+          </dd>
+          <dt>metadata_only / stores_tokens</dt>
+          <dd>
+            {result.metadata_only !== false ? "yes" : "no"} /{" "}
+            {result.stores_tokens ? "yes" : "no"}
+          </dd>
+          <dt>file_backed</dt>
+          <dd>
+            {result.file_backed ? "yes" : "no"}
+            {result.file_basename ? (
+              <>
+                {" "}
+                · basename <code>{result.file_basename}</code>
+              </>
+            ) : null}
+          </dd>
+          {result.residual_note ? (
+            <>
+              <dt>residual_note</dt>
+              <dd className="muted">{result.residual_note}</dd>
+            </>
+          ) : null}
+          {result.admin_note ? (
+            <>
+              <dt>admin_note</dt>
+              <dd className="muted">{result.admin_note}</dd>
+            </>
+          ) : null}
+        </dl>
+      ) : null}
+    </div>
   );
 }
 

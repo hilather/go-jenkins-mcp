@@ -41,8 +41,8 @@ Console roles are **separate** from MCP deny-only subjects (ADR 0004). They neve
 | Role | Name | Permissions | Writes |
 |------|------|-------------|--------|
 | `viewer` | Read-only operator | `read` (GET routes) | none |
-| `operator` | Day-2 ops | `read` + `cache_destructive` + `gateway_ops` | cache/doctor destructive (UI-007); subject-invalidate (HOST-007) |
-| `policy_admin` | Policy apply | `read` + `policy_write` + `gateway_ops` | policy validate/apply (UI-004); subject-invalidate (HOST-007) |
+| `operator` | Day-2 ops | `read` + `cache_destructive` + `gateway_ops` | cache/doctor destructive (UI-007); subject-invalidate + consent-purge (HOST-007) |
+| `policy_admin` | Policy apply | `read` + `policy_write` + `gateway_ops` | policy validate/apply (UI-004); subject-invalidate + consent-purge (HOST-007) |
 
 - Invalid `--admin-role` → **fail start**.
 - **UI-004** ships `POST /admin/v1/policy/validate` and `POST /admin/v1/policy/apply` (require `policy_write`).
@@ -397,6 +397,117 @@ as credentials and never echoed.
 **Same-host multi-process:** set the same principal/token cache path env on
 admin BFF and MCP serve so invalidate reaches serve’s caches. Multi-pod external
 shared map remains residual (HOST-008).
+
+## POST /admin/v1/gateway/consent-purge
+
+**HOST-007 Mode C progressive consent metadata purge residual lite.** Mirrors CLI
+`jenkins-mcp gateway consent-purge` (alias `consent-expire`).
+
+Requires console permission **`gateway_ops`** (`operator` or `policy_admin`).
+Viewer → **403** `permission_denied`.
+
+Purges **metadata only** (authorization URL + session id + timestamps) from the
+consent session store opened via `OpenConsentSessionStoreForPurge`:
+
+| Source | Behavior |
+|--------|----------|
+| Body `path` | Optional override (wins over env) |
+| Env | `JENKINS_MCP_CONSENT_STORE_PATH` |
+| Default | XDG data `…/jenkins-mcp/gateway/consent_sessions.json` |
+
+| Action | When | Effect |
+|--------|------|--------|
+| `purge_expired` | **default** (empty body or `action: "purge_expired"`) | Delete TTL-expired sessions; return counts |
+| `delete_session` | `action: "delete_session"` **or** `session_id` set | Delete one session by id (metadata only) |
+| `clear_all` | `clear_all: true` **or** `action: "clear_all"` (explicit) | Clear all entries; `deleted_count` = pre-clear `EntryCount` |
+
+**Never** accepts or returns tokens, vault bytes, Authorization material, full
+store path values, or `session_id` echo. **Not** multi-pod HA (HOST-008 residual).
+**Not** browser 3LO automation. Same-host file reload-before-persist Done\* lite
+(admin/CLI purge not resurrected by serve Put of stale memory). Memory-only serve
+process is **not** cleared unless it shares the same file path.
+
+### Request body
+
+```json
+{}
+```
+
+```json
+{
+  "action": "purge_expired"
+}
+```
+
+```json
+{
+  "action": "delete_session",
+  "session_id": "sess-abc"
+}
+```
+
+```json
+{
+  "clear_all": true
+}
+```
+
+```json
+{
+  "action": "clear_all",
+  "path": "/optional/override/consent_sessions.json"
+}
+```
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `action` | optional | `purge_expired` (default) \| `delete_session` \| `clear_all` |
+| `session_id` | for delete | Consent session correlation id (metadata only; **not** echoed) |
+| `clear_all` | for clear | Explicit flag required for clear-all (mirrors CLI `--all`) |
+| `path` | optional | Consent metadata file path override |
+
+`clear_all` and `session_id` are **mutually exclusive** (400). Unknown body
+fields (e.g. `token`, `access_token`) are **ignored** — never treated as
+credentials and never echoed.
+
+### Response (secret-free; CLI summary + admin notes)
+
+```json
+{
+  "action": "purge_expired",
+  "deleted_count": 1,
+  "remaining_count": 2,
+  "metadata_only": true,
+  "stores_tokens": false,
+  "process_local": true,
+  "multi_replica_shared": false,
+  "browser_3lo_automated": false,
+  "durable_agentcore_vault_residual": true,
+  "file_backed": true,
+  "file_basename": "consent_sessions.json",
+  "consent_store_path_configured": true,
+  "residual_note": "consent metadata purge only (OAUTH-010 residual); never tokens; same-host file reload-before-persist Done* lite …",
+  "doc": "docs/gateway/README.md § progressive consent residual",
+  "admin_note": "mirrors CLI gateway consent-purge; set JENKINS_MCP_CONSENT_STORE_PATH … multi-pod residual"
+}
+```
+
+| HTTP | When |
+|------|------|
+| **200** | Purge attempted (counts describe outcome) |
+| **400** | Mutual exclusion, missing session_id, unknown action, unusable path |
+| **401** | Admin shared secret required and missing/wrong |
+| **403** | Role lacks `gateway_ops` (viewer) |
+| **405** | Method not POST |
+
+**SPA:** Overview “Progressive consent residual (Mode C)” card embeds a small
+consent-purge form when `/me` includes `gateway_ops` (shown when Mode C is on
+health **or** always for gateway_ops residual). Viewers see CLI-only residual.
+Never put tokens in the form; response never echoes `session_id`.
+
+**Same-host multi-process:** set the same `JENKINS_MCP_CONSENT_STORE_PATH` on
+admin BFF and MCP serve so purge reaches serve’s file-backed store. Multi-pod
+external shared store remains residual (HOST-008).
 
 ## GET /admin/v1/version
 
