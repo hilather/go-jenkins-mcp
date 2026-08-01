@@ -1,5 +1,11 @@
 # Documentation index — go-jenkins-mcp
 
+<p>
+  <a href="https://hilather.github.io/go-jenkins-mcp/"><strong>Product site</strong></a>
+  · <a href="../README.md">Repository README</a>
+  · <a href="https://github.com/hilather/go-jenkins-mcp/releases">Releases</a>
+</p>
+
 **Wave 20 (DOC-001 / DOC-002):** short user/admin/agent docs synced to waves 16–19 code.  
 Do **not** treat this tree as a claim of full production OAuth / gateway readiness — residuals stay explicit.
 

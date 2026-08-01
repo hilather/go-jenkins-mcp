@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose a capability, tool, or operator workflow improvement.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Prefer aligning with the enterprise backlog when possible:
+        `docs/jenkins-mcp-enterprise-agent-todo.md` and task IDs in the planning pack.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What pain does this solve for pilots / operators / agents?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Desired behavior, tool surface, or policy change.
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: What should explicitly stay out of scope?
+  - type: input
+    id: task_id
+    attributes:
+      label: Related task ID (optional)
+      description: e.g. AUTH-003, MUT-001, REL-002
+  - type: checkboxes
+    id: posture
+    attributes:
+      label: Security posture
+      options:
+        - label: This can ship under the read-only default (or I describe mutation impact)
+          required: true
+        - label: No new secret material would appear in config, logs, or tool results
+          required: true

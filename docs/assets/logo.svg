@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="go-jenkins-mcp logo">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#141418"/>
+      <stop offset="100%" stop-color="#0c0d10"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#g)"/>
+  <rect x="18" y="18" width="220" height="220" rx="44" fill="none" stroke="#2a2d35" stroke-width="3"/>
+  <path d="M64 88h128M64 128h78M64 168h108" stroke="#f4f4f5" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="178" cy="128" r="16" fill="#8fa3b8"/>
+</svg>

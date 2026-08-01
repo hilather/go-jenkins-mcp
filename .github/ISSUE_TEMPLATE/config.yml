@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/hilather/go-jenkins-mcp/security/advisories/new
+    about: Privately report a vulnerability (do not open a public issue).
+  - name: Product site & docs
+    url: https://hilather.github.io/go-jenkins-mcp/
+    about: Overview, getting started, architecture, and security guides.
+  - name: User guide
+    url: https://github.com/hilather/go-jenkins-mcp/blob/master/docs/user/README.md
+    about: Install, login, Cursor setup, and diagnose workflows.
