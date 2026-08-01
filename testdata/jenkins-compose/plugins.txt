@@ -1,0 +1,5 @@
+# Minimal plugin set for TST-001 live smoke (disposable only).
+# Install via Dockerfile jenkins-plugin-cli; never pin production secrets here.
+workflow-aggregator:latest
+junit:latest
+ws-cleanup:latest

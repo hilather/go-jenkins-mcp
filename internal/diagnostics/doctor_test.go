@@ -1,0 +1,897 @@
+package diagnostics_test
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/simonfxr/go-jenkins-mcp/internal/config"
+	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
+	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
+	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
+	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
+	"github.com/simonfxr/go-jenkins-mcp/internal/update"
+)
+
+const doctorCanary = "DOCTOR_CANARY_token_must_never_appear_xyz789"
+
+func TestRunDoctor_OfflineNoSecrets(t *testing.T) {
+	// Not parallel with Setenv: isolate LKG path so update_lkg resolves under Paths.
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.ProfilesDir(), 0o700)
+
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	// Inject canary into username only as a negative control for message scrubbing
+	// is not needed; secret canary must not appear even if present in error paths.
+	kr := keyring.NewStore(keyring.NewMemory())
+
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     kr,
+		Version:     "test",
+		Commit:      "abc",
+		SkipNetwork: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Overall == "" {
+		t.Fatal("overall empty")
+	}
+	// Must have core checks.
+	names := map[string]bool{}
+	for _, c := range rep.Checks {
+		names[c.Name] = true
+		if strings.Contains(c.Message, doctorCanary) {
+			t.Fatalf("canary in message: %s", c.Message)
+		}
+		for k, v := range c.Details {
+			if diagnosticsLooksSecretKey(k) {
+				t.Fatalf("secret-like detail key %q", k)
+			}
+			if s, ok := v.(string); ok && strings.Contains(s, doctorCanary) {
+				t.Fatalf("canary in detail %s=%s", k, s)
+			}
+		}
+	}
+	for _, want := range []string{"binary", "profile", "keyring", "data_dir", "store", "policy", "read_only", "mutations", "identity", "rs_auth", "jenkins_as_as", "metrics", "circuit_breaker", "update_lkg"} {
+		if !names[want] {
+			t.Errorf("missing check %q", want)
+		}
+	}
+	// Offline identity is skip; api_token skips Jenkins-as-AS structural check.
+	// Circuit without client is skip (offline-capable doctor).
+	for _, c := range rep.Checks {
+		if c.Name == "identity" && c.Status != diagnostics.StatusSkip {
+			t.Fatalf("identity offline: %s %s", c.Status, c.Message)
+		}
+		if c.Name == "keyring" && c.Status != diagnostics.StatusFail {
+			// No credential stored → fail (actionable).
+			t.Fatalf("keyring without cred: %s %s", c.Status, c.Message)
+		}
+		if c.Name == "jenkins_as_as" && c.Status != diagnostics.StatusSkip {
+			t.Fatalf("jenkins_as_as for api_token: %s %s", c.Status, c.Message)
+		}
+		if c.Name == "circuit_breaker" && c.Status != diagnostics.StatusSkip {
+			t.Fatalf("circuit_breaker without client: %s %s", c.Status, c.Message)
+		}
+		if c.Name == "update_lkg" && c.Status != diagnostics.StatusSkip {
+			// Isolated temp Paths with no LKG → skip.
+			t.Fatalf("update_lkg without LKG: %s %s", c.Status, c.Message)
+		}
+	}
+
+	var buf bytes.Buffer
+	diagnostics.FormatReportText(&buf, rep)
+	out := buf.String()
+	if strings.Contains(out, doctorCanary) {
+		t.Fatalf("canary in formatted report: %s", out)
+	}
+	if strings.Contains(strings.ToLower(out), "api_token:") || strings.Contains(out, "token:") {
+		t.Fatalf("token field in doctor output: %s", out)
+	}
+}
+
+// Wave 38 / POL-005: doctor policy check Details include deny_branch_names_count
+// when the overlay has the field (StatusMap passthrough).
+func TestRunDoctor_PolicyStatusMap_DenyBranchNamesCount(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.ProfilesDir(), 0o700)
+
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	kr := keyring.NewStore(keyring.NewMemory())
+
+	polRes := &policy.LoadResult{
+		Present:        true,
+		Path:           "/etc/jenkins-mcp/policy/overlay.json",
+		SignatureState: "unverified_pilot",
+		Overlay: &policy.Overlay{
+			Version:           1,
+			ForceReadOnly:     true,
+			Mode:              policy.ModePilot,
+			DenyTools:         []string{"jenkins_get_build_logs"},
+			DenyJobPrefixes:   []string{"secret-folder"},
+			DenyNodeNames:     []string{"prod-agent-*"},
+			DenyViewNames:     []string{"secret-view"},
+			DenyArtifactPaths: []string{"secrets/**"},
+			DenyBranchNames:   []string{"release/*", "main"},
+		},
+	}
+
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:      p,
+		Paths:        &paths,
+		Keyring:      kr,
+		Version:      "test",
+		Commit:       "abc",
+		SkipNetwork:  true,
+		PolicyResult: polRes,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var policyCheck *diagnostics.Check
+	for i := range rep.Checks {
+		if rep.Checks[i].Name == "policy" {
+			policyCheck = &rep.Checks[i]
+			break
+		}
+	}
+	if policyCheck == nil {
+		t.Fatal("missing policy check")
+	}
+	if policyCheck.Status != diagnostics.StatusOK {
+		t.Fatalf("policy status=%s msg=%s", policyCheck.Status, policyCheck.Message)
+	}
+	if policyCheck.Details == nil {
+		t.Fatal("policy Details nil")
+	}
+	if got := policyCheck.Details["deny_branch_names_count"]; got != 2 {
+		t.Fatalf("deny_branch_names_count=%v want 2 details=%v", got, policyCheck.Details)
+	}
+	if got := policyCheck.Details["deny_artifact_paths_count"]; got != 1 {
+		t.Fatalf("deny_artifact_paths_count=%v", got)
+	}
+	if got := policyCheck.Details["deny_node_names_count"]; got != 1 {
+		t.Fatalf("deny_node_names_count=%v", got)
+	}
+	// Must not echo pattern bodies as secret-like free text keys.
+	for k := range policyCheck.Details {
+		if strings.Contains(strings.ToLower(k), "token") || strings.Contains(strings.ToLower(k), "password") {
+			t.Fatalf("secret-like detail key %q", k)
+		}
+	}
+}
+
+func TestSanitizeCheck_DropsSecretKeys(t *testing.T) {
+	t.Parallel()
+	c := diagnostics.SanitizeCheck(diagnostics.Check{
+		Name:    "x",
+		Status:  diagnostics.StatusOK,
+		Message: "Bearer " + doctorCanary,
+		Details: map[string]any{
+			"token":       doctorCanary,
+			"password":    doctorCanary,
+			"has_cred":    true,
+			"safe_string": "ok",
+		},
+	})
+	if strings.Contains(c.Message, doctorCanary) {
+		// redact.Secrets should scrub Bearer tokens.
+		t.Fatalf("canary survived redact in message: %q", c.Message)
+	}
+	if _, ok := c.Details["token"]; ok {
+		t.Fatal("token detail key must be dropped")
+	}
+	if _, ok := c.Details["password"]; ok {
+		t.Fatal("password detail key must be dropped")
+	}
+	if c.Details["has_cred"] != true {
+		t.Fatal("safe detail dropped")
+	}
+}
+
+func TestRunCacheStatus(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com",
+		AuthMethod:    profile.AuthMethodAPIToken,
+	}
+	st, err := diagnostics.RunCacheStatus(context.Background(), diagnostics.CacheStatusOptions{
+		Profile: p,
+		Paths:   &paths,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.DataDirOK || !st.StoreOpen || !st.SchemaOK {
+		t.Fatalf("cache status: %+v", st)
+	}
+	if st.SchemaVersion == 0 {
+		t.Fatal("schema version zero")
+	}
+	var buf bytes.Buffer
+	diagnostics.FormatCacheStatusText(&buf, st)
+	if strings.Contains(buf.String(), doctorCanary) {
+		t.Fatal("canary in cache status")
+	}
+}
+
+func TestOverallStatus(t *testing.T) {
+	t.Parallel()
+	if diagnostics.OverallStatus(nil) != diagnostics.StatusOK {
+		t.Fatal("empty")
+	}
+	if diagnostics.OverallStatus([]diagnostics.Check{{Status: diagnostics.StatusWarn}, {Status: diagnostics.StatusOK}}) != diagnostics.StatusWarn {
+		t.Fatal("warn")
+	}
+	if diagnostics.OverallStatus([]diagnostics.Check{{Status: diagnostics.StatusWarn}, {Status: diagnostics.StatusFail}}) != diagnostics.StatusFail {
+		t.Fatal("fail wins")
+	}
+	// Skips must not demote ok (offline identity / absent metrics).
+	if diagnostics.OverallStatus([]diagnostics.Check{
+		{Status: diagnostics.StatusOK},
+		{Status: diagnostics.StatusSkip},
+	}) != diagnostics.StatusOK {
+		t.Fatal("skip should not demote ok")
+	}
+}
+
+func TestMetricsSnapshotInDoctor(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	m := telemetry.NewMetrics()
+	m.Inc(telemetry.MetricToolCalls, 3)
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true,
+		Metrics:     m,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range rep.Checks {
+		if c.Name == "metrics" {
+			if c.Status != diagnostics.StatusOK {
+				t.Fatalf("%+v", c)
+			}
+			return
+		}
+	}
+	t.Fatal("metrics check missing")
+}
+
+// Regression JAS-001: doctor flags OIDC issuer co-hosted with Jenkins (offline).
+func TestRunDoctor_JenkinsAsASStructuralFail(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	// Bypass Save/Validate — doctor must still surface the structural AS misconfig.
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "bad-as",
+		JenkinsURL:    "https://jenkins.example.com",
+		AuthMethod:    profile.AuthMethodOIDC,
+		Username:      "alice",
+		OIDC: &profile.OIDCConfig{
+			Issuer:          "https://jenkins.example.com",
+			ClientID:        "client",
+			JenkinsAudience: "api://jenkins",
+		},
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, c := range rep.Checks {
+		if c.Name != "jenkins_as_as" {
+			continue
+		}
+		found = true
+		if c.Status != diagnostics.StatusFail {
+			t.Fatalf("expected fail, got %s %s", c.Status, c.Message)
+		}
+		msg := strings.ToLower(c.Message)
+		if !strings.Contains(msg, "jenkins") || !strings.Contains(msg, "authorization") {
+			t.Fatalf("expected AS wording: %s", c.Message)
+		}
+	}
+	if !found {
+		t.Fatal("jenkins_as_as check missing")
+	}
+}
+
+// JAS-001: external IdP issuer passes doctor structural AS check.
+func TestRunDoctor_JenkinsAsASOKExternalIssuer(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "good-oidc",
+		JenkinsURL:    "https://jenkins.example.com",
+		AuthMethod:    profile.AuthMethodOIDC,
+		Username:      "alice",
+		OIDC: &profile.OIDCConfig{
+			Issuer:          "https://login.microsoftonline.com/tenant/v2.0",
+			ClientID:        "public-client",
+			JenkinsAudience: "api://jenkins-api",
+			RedirectURIs:    []string{"http://127.0.0.1:9876/callback"},
+		},
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range rep.Checks {
+		if c.Name == "jenkins_as_as" {
+			if c.Status != diagnostics.StatusOK {
+				t.Fatalf("expected ok, got %s %s", c.Status, c.Message)
+			}
+			return
+		}
+	}
+	t.Fatal("jenkins_as_as check missing")
+}
+
+func diagnosticsLooksSecretKey(k string) bool {
+	lk := strings.ToLower(k)
+	return strings.Contains(lk, "token") || strings.Contains(lk, "password") ||
+		strings.Contains(lk, "secret") || strings.Contains(lk, "cookie") ||
+		strings.Contains(lk, "authorization") || strings.Contains(lk, "private_key")
+}
+
+// OBS Wave 27: doctor reports CircuitState when a client is available (offline-capable).
+func TestRunDoctor_CircuitStateWhenClientAvailable(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.ProfilesDir(), 0o700)
+
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	// Closed client with resilience defaults → circuit closed / OK.
+	c := &jenkins.Client{URL: "https://jenkins.example.com/", User: "u", Token: "t"}
+	c.WithResilience(jenkins.DefaultResilienceConfig())
+
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		Version:     "test",
+		SkipNetwork: true,
+		Circuit:     c,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ch := range rep.Checks {
+		if ch.Name != "circuit_breaker" {
+			continue
+		}
+		if ch.Status != diagnostics.StatusOK {
+			t.Fatalf("closed circuit: %s %s", ch.Status, ch.Message)
+		}
+		if st, _ := ch.Details["state"].(string); st != "closed" {
+			t.Fatalf("details.state=%v want closed", ch.Details["state"])
+		}
+		return
+	}
+	t.Fatal("circuit_breaker check missing")
+}
+
+// stubCircuit implements CircuitStateProvider for open-state doctor warn path.
+type stubCircuit struct {
+	st jenkins.CircuitState
+}
+
+func (s stubCircuit) CircuitState() jenkins.CircuitState { return s.st }
+
+// Wave 32: mutations check — pilot default RO is skip (not registered).
+func TestRunDoctor_MutationsDefaultROSkip(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true,
+		// AllowMutations false: pilot default.
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch := findCheck(t, rep, "mutations")
+	if ch.Status != diagnostics.StatusSkip {
+		t.Fatalf("default RO mutations: %s %s", ch.Status, ch.Message)
+	}
+	assertMutDetailBool(t, ch, "read_only_effective", true)
+	assertMutDetailBool(t, ch, "allow_mutations_opt_in", false)
+	assertMutDetailBool(t, ch, "mutations_should_register", false)
+	assertMutDetailBool(t, ch, "mutations_executable", false)
+}
+
+// Wave 32: allow-mutations + force RO → registered but not executable (warn).
+func TestRunDoctor_MutationsRegisteredNotExecutableWarn(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	force := policy.StaticForce{Force: true, Present: true}
+	gate := policy.NewReadOnlyGate(policy.Inputs{
+		AllowMutations: true,
+		Force:          force,
+	})
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:        p,
+		Paths:          &paths,
+		Keyring:        keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork:    true,
+		AllowMutations: true,
+		Gate:           gate,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch := findCheck(t, rep, "mutations")
+	if ch.Status != diagnostics.StatusWarn {
+		t.Fatalf("registered-not-executable: %s %s", ch.Status, ch.Message)
+	}
+	assertMutDetailBool(t, ch, "read_only_effective", true)
+	assertMutDetailBool(t, ch, "allow_mutations_opt_in", true)
+	assertMutDetailBool(t, ch, "mutations_should_register", true)
+	assertMutDetailBool(t, ch, "mutations_executable", false)
+	msg := strings.ToLower(ch.Message)
+	if !strings.Contains(msg, "not executable") && !strings.Contains(msg, "registered") {
+		t.Fatalf("expected registered/not-executable wording: %s", ch.Message)
+	}
+	// Secret-free: no token-like keys; tool names not required (count only).
+	for k := range ch.Details {
+		if diagnosticsLooksSecretKey(k) {
+			t.Fatalf("secret-like key in mutations details: %q", k)
+		}
+	}
+	if _, ok := ch.Details["mutation_tool_catalog_count"]; !ok {
+		t.Fatal("expected mutation_tool_catalog_count")
+	}
+}
+
+// Wave 32: allow-mutations without stronger RO → executable ok.
+func TestRunDoctor_MutationsExecutableOK(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:        p,
+		Paths:          &paths,
+		Keyring:        keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork:    true,
+		AllowMutations: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch := findCheck(t, rep, "mutations")
+	if ch.Status != diagnostics.StatusOK {
+		t.Fatalf("executable mutations: %s %s", ch.Status, ch.Message)
+	}
+	assertMutDetailBool(t, ch, "read_only_effective", false)
+	assertMutDetailBool(t, ch, "allow_mutations_opt_in", true)
+	assertMutDetailBool(t, ch, "mutations_should_register", true)
+	assertMutDetailBool(t, ch, "mutations_executable", true)
+}
+
+// Wave 32: live Gate preferred over reconstructed Inputs (force clear mid-life).
+func TestRunDoctor_MutationsUsesLiveGate(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	dyn := policy.NewDynamicForce(true, true)
+	gate := policy.NewReadOnlyGate(policy.Inputs{
+		AllowMutations: true,
+		Force:          dyn,
+	})
+	// DoctorOptions AllowMutations false would reconstruct pilot RO — Gate wins.
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:        p,
+		Paths:          &paths,
+		Keyring:        keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork:    true,
+		AllowMutations: false,
+		Gate:           gate,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch := findCheck(t, rep, "mutations")
+	if ch.Status != diagnostics.StatusWarn {
+		t.Fatalf("live gate force+allow: %s %s", ch.Status, ch.Message)
+	}
+	// Clear force → executable without re-building doctor options.
+	dyn.Set(false, true)
+	rep2, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true,
+		Gate:        gate,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch2 := findCheck(t, rep2, "mutations")
+	if ch2.Status != diagnostics.StatusOK {
+		t.Fatalf("after force clear: %s %s", ch2.Status, ch2.Message)
+	}
+	assertMutDetailBool(t, ch2, "mutations_executable", true)
+}
+
+func findCheck(t *testing.T, rep diagnostics.Report, name string) diagnostics.Check {
+	t.Helper()
+	for _, c := range rep.Checks {
+		if c.Name == name {
+			return c
+		}
+	}
+	t.Fatalf("check %q missing", name)
+	return diagnostics.Check{}
+}
+
+func assertMutDetailBool(t *testing.T, ch diagnostics.Check, key string, want bool) {
+	t.Helper()
+	v, ok := ch.Details[key]
+	if !ok {
+		t.Fatalf("missing detail %q in %+v", key, ch.Details)
+	}
+	got, ok := v.(bool)
+	if !ok {
+		t.Fatalf("detail %q type %T want bool", key, v)
+	}
+	if got != want {
+		t.Fatalf("detail %q=%v want %v", key, got, want)
+	}
+}
+
+func TestRunDoctor_CircuitOpenWarns(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile:     p,
+		Paths:       &paths,
+		Keyring:     keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true,
+		Circuit: stubCircuit{st: jenkins.CircuitState{
+			State:               "open",
+			ConsecutiveFailures: 5,
+			FailureThreshold:    5,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ch := range rep.Checks {
+		if ch.Name != "circuit_breaker" {
+			continue
+		}
+		if ch.Status != diagnostics.StatusWarn {
+			t.Fatalf("open circuit: %s %s", ch.Status, ch.Message)
+		}
+		return
+	}
+	t.Fatal("circuit_breaker check missing")
+}
+
+func TestCheckUpdateLKG_SkipAbsent(t *testing.T) {
+	// Not parallel: clears LKG env so Paths-based resolution is deterministic.
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.ProfilesDir(), 0o700)
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile: p, Paths: &paths, Keyring: keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true, Version: "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ch := range rep.Checks {
+		if ch.Name == "update_lkg" {
+			if ch.Status != diagnostics.StatusSkip {
+				t.Fatalf("want skip: %s %s", ch.Status, ch.Message)
+			}
+			return
+		}
+	}
+	t.Fatal("update_lkg missing")
+}
+
+func TestCheckUpdateLKG_OKMatch(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.UpdateDataDir(), 0o700)
+	payload := []byte("doctor-lkg-ok")
+	// hash via write + update.StoreLKG / VerifyLKG path
+	sum := sha256SumDoctor(payload)
+	base := "doctor-art.bin"
+	if err := os.WriteFile(filepath.Join(paths.UpdateDataDir(), base), payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := update.StoreLKG(update.LKGWriteOptions{
+		Path: paths.UpdateLKGFile(), Version: "1.2.3", Channel: "stable",
+		ArtifactSHA256: sum, ArtifactPath: base,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile: p, Paths: &paths, Keyring: keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true, Version: "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ch := range rep.Checks {
+		if ch.Name == "update_lkg" {
+			if ch.Status != diagnostics.StatusOK {
+				t.Fatalf("want ok: %s %s", ch.Status, ch.Message)
+			}
+			if !strings.Contains(ch.Message, "1.2.3") {
+				t.Fatalf("message: %s", ch.Message)
+			}
+			return
+		}
+	}
+	t.Fatal("update_lkg missing")
+}
+
+func TestCheckUpdateLKG_WarnMissingArtifact(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.UpdateDataDir(), 0o700)
+	if _, err := update.StoreLKG(update.LKGWriteOptions{
+		Path: paths.UpdateLKGFile(), Version: "1.0.0", Channel: "stable",
+		ArtifactSHA256: strings.Repeat("ab", 32), ArtifactPath: "missing.bin",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile: p, Paths: &paths, Keyring: keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true, Version: "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ch := range rep.Checks {
+		if ch.Name == "update_lkg" {
+			if ch.Status != diagnostics.StatusWarn {
+				t.Fatalf("want warn: %s %s", ch.Status, ch.Message)
+			}
+			return
+		}
+	}
+	t.Fatal("update_lkg missing")
+}
+
+func TestCheckUpdateLKG_WarnMismatch(t *testing.T) {
+	t.Setenv(update.EnvUpdateLKGPath, "")
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.UpdateDataDir(), 0o700)
+	base := "bad.bin"
+	if err := os.WriteFile(filepath.Join(paths.UpdateDataDir(), base), []byte("tampered"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := update.StoreLKG(update.LKGWriteOptions{
+		Path: paths.UpdateLKGFile(), Version: "1.0.0", Channel: "stable",
+		ArtifactSHA256: strings.Repeat("cd", 32), ArtifactPath: base,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	rep, err := diagnostics.RunDoctor(context.Background(), diagnostics.DoctorOptions{
+		Profile: p, Paths: &paths, Keyring: keyring.NewStore(keyring.NewMemory()),
+		SkipNetwork: true, Version: "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ch := range rep.Checks {
+		if ch.Name == "update_lkg" {
+			if ch.Status != diagnostics.StatusWarn {
+				t.Fatalf("want warn: %s %s", ch.Status, ch.Message)
+			}
+			if !strings.Contains(strings.ToLower(ch.Message), "mismatch") {
+				t.Fatalf("message: %s", ch.Message)
+			}
+			return
+		}
+	}
+	t.Fatal("update_lkg missing")
+}
+
+func sha256SumDoctor(b []byte) string {
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:])
+}

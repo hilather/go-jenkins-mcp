@@ -1,0 +1,417 @@
+package diagnostics_test
+
+import (
+	"archive/zip"
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/simonfxr/go-jenkins-mcp/internal/config"
+	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
+	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
+	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
+	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
+)
+
+const bundleCanary = "BUNDLE_CANARY_token_must_never_appear_xyz999"
+
+func boolPtr(v bool) *bool { return &v }
+
+func TestCreateSupportBundle_PreviewListsCategories(t *testing.T) {
+	t.Parallel()
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	res, err := diagnostics.CreateSupportBundle(context.Background(), diagnostics.SupportBundleOptions{
+		Profile:     p,
+		PreviewOnly: true,
+		Version:     "test",
+		Commit:      "abc",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Plan.PreviewOnly {
+		t.Fatal("preview")
+	}
+	if len(res.Plan.Included) == 0 || len(res.Plan.Excluded) == 0 {
+		t.Fatalf("plan: %+v", res.Plan)
+	}
+	// Excluded must mention tokens / keyring / logs.
+	joined := strings.Join(res.Plan.Excluded, ",")
+	for _, want := range []string{"tokens", "keyring", "full_build_logs", "authorization"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("excluded missing %q: %s", want, joined)
+		}
+	}
+	if res.Path != "" {
+		t.Fatal("preview must not write path")
+	}
+}
+
+func TestCreateSupportBundle_CanaryAbsent(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	_ = os.MkdirAll(paths.ProfilesDir(), 0o700)
+	outDir := filepath.Join(root, "bundles")
+
+	// Plant canary in keyring — bundle must never read/export the secret value.
+	kr := keyring.NewStore(keyring.NewMemory())
+	if err := kr.SetAPIToken(keyring.CredentialRef{
+		ProfileID: "corp",
+		Origin:    "https://jenkins.example.com",
+		Method:    "api_token",
+		Account:   "alice",
+	}, bundleCanary); err != nil {
+		t.Fatalf("plant keyring canary: %v", err)
+	}
+	// ARC-009: plant cache encryption key canary (32-byte test vector).
+	cacheMat := make([]byte, 32)
+	copy(cacheMat, []byte(bundleCanary))
+	if err := kr.SetCacheKey("corp", 1, cacheMat); err != nil {
+		t.Fatalf("plant cache key canary: %v", err)
+	}
+
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+		// Canary must not leak even if accidentally placed in a non-secret field path.
+		DisplayName: "display-without-secret",
+	}
+
+	rep := diagnostics.Report{
+		ProfileID: "corp",
+		Overall:   diagnostics.StatusOK,
+		Version:   "test",
+		Checks: []diagnostics.Check{{
+			Name:    "binary",
+			Status:  diagnostics.StatusOK,
+			Message: "ok",
+			Details: map[string]any{
+				// Secret-like keys must be dropped by SanitizeCheck when doctor runs;
+				// also plant canary as a value that redact should scrub if token-shaped.
+				"safe": "value",
+			},
+		}},
+	}
+
+	m := telemetry.NewMetrics()
+	m.Inc(telemetry.MetricToolCalls, 3)
+
+	res, err := diagnostics.CreateSupportBundle(context.Background(), diagnostics.SupportBundleOptions{
+		Profile:      p,
+		Paths:        &paths,
+		OutputDir:    outDir,
+		DoctorReport: &rep,
+		Version:      "1.2.3",
+		Commit:       "deadbeef",
+		BuildTime:    "2026-01-01T00:00:00Z",
+		Metrics:      m,
+		CapabilitySummary: map[string]any{
+			"jenkinsVersion":  "2.462.3",
+			"hasPipelineREST": true,
+			// Planted secret key must be dropped.
+			"token": bundleCanary,
+		},
+		ErrorSignatures: []diagnostics.ErrorSignatureEntry{{
+			Signature: "sig1",
+			Pattern:   "error",
+			Count:     2,
+			Message:   "failed without secret",
+		}},
+		DoctorOpts: diagnostics.DoctorOptions{
+			Keyring:     kr,
+			SkipNetwork: true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Path == "" || res.Bytes <= 0 {
+		t.Fatalf("result: %+v", res)
+	}
+	// Mode 0600
+	fi, err := os.Stat(res.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm()&0o077 != 0 {
+		t.Fatalf("bundle mode too open: %04o", fi.Mode().Perm())
+	}
+
+	// Scan entire zip for canary.
+	zr, err := zip.OpenReader(res.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zr.Close()
+	var names []string
+	for _, f := range zr.File {
+		names = append(names, f.Name)
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		size := int(f.UncompressedSize64) + 1
+		if size < 64 {
+			size = 64
+		}
+		buf := make([]byte, size)
+		n, _ := rc.Read(buf)
+		_ = rc.Close()
+		body := string(buf[:n])
+		if strings.Contains(body, bundleCanary) {
+			t.Fatalf("canary leaked in %s", f.Name)
+		}
+		if strings.Contains(strings.ToLower(body), "authorization:") {
+			t.Fatalf("authorization header-like content in %s", f.Name)
+		}
+	}
+	for _, want := range []string{
+		"manifest.json", "version.json", "runtime.json", "profile_effective.json",
+		"doctor.json", "cache_status.json", "capability_summary.json",
+		"metrics.json", "error_signatures.json", "README.txt",
+		"security_self_check.json", "release_evidence_lite.json", "rs_qualification_summary.json",
+	} {
+		found := false
+		for _, n := range names {
+			if n == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing member %s in %v", want, names)
+		}
+	}
+
+	// capability_summary must not retain token key.
+	capBody, err := diagnostics.ReadBundleFile(res.Path, "capability_summary.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(capBody), bundleCanary) || strings.Contains(string(capBody), `"token"`) {
+		t.Fatalf("capability summary retained secret: %s", capBody)
+	}
+
+	// profile must not claim to embed token.
+	profBody, err := diagnostics.ReadBundleFile(res.Path, "profile_effective.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(profBody), bundleCanary) {
+		t.Fatal("canary in profile")
+	}
+
+	// Wave 23 members: offline content, no canary.
+	for _, mem := range []string{
+		"security_self_check.json", "release_evidence_lite.json", "rs_qualification_summary.json",
+	} {
+		body, err := diagnostics.ReadBundleFile(res.Path, mem)
+		if err != nil {
+			t.Fatalf("%s: %v", mem, err)
+		}
+		if strings.Contains(string(body), bundleCanary) {
+			t.Fatalf("canary in %s", mem)
+		}
+	}
+
+	// release_evidence_lite is version/runtime only.
+	relBody, err := diagnostics.ReadBundleFile(res.Path, "release_evidence_lite.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rel map[string]any
+	if err := json.Unmarshal(relBody, &rel); err != nil {
+		t.Fatal(err)
+	}
+	if rel["offline"] != true {
+		t.Fatalf("release_evidence_lite offline: %+v", rel)
+	}
+	if _, ok := rel["version"].(map[string]any); !ok {
+		t.Fatalf("release_evidence_lite missing version: %s", relBody)
+	}
+
+	// RS qualification has fallthrough contract.
+	rsBody, err := diagnostics.ReadBundleFile(res.Path, "rs_qualification_summary.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rs map[string]any
+	if err := json.Unmarshal(rsBody, &rs); err != nil {
+		t.Fatal(err)
+	}
+	if rs["fallthrough_must_deny"] != true {
+		t.Fatalf("rs summary: %+v", rs)
+	}
+}
+
+func TestCreateSupportBundle_RequiresProfile(t *testing.T) {
+	t.Parallel()
+	_, err := diagnostics.CreateSupportBundle(context.Background(), diagnostics.SupportBundleOptions{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestCreateSupportBundle_Wave23SectionsDisableAndLogSample(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	paths := config.Paths{
+		ConfigDir: filepath.Join(root, "cfg"),
+		DataDir:   filepath.Join(root, "data"),
+		CacheDir:  filepath.Join(root, "cache"),
+	}
+	outDir := filepath.Join(root, "bundles")
+	p := &profile.Profile{
+		ConfigVersion: profile.CurrentConfigVersion,
+		ID:            "corp",
+		JenkinsURL:    "https://jenkins.example.com/",
+		AuthMethod:    profile.AuthMethodAPIToken,
+		Username:      "alice",
+	}
+	rep := diagnostics.Report{
+		ProfileID: "corp",
+		Overall:   diagnostics.StatusOK,
+		Version:   "test",
+		Checks: []diagnostics.Check{{
+			Name: "binary", Status: diagnostics.StatusOK, Message: "ok",
+		}},
+	}
+
+	// Disable optional Wave 23 sections; expand error_signatures from a log sample
+	// that contains a canary-shaped token line — sample text must not appear in zip.
+	logSample := "BUILD FAILURE\nError: Authorization: Bearer " + bundleCanary + "\nFATAL: boom\n"
+	res, err := diagnostics.CreateSupportBundle(context.Background(), diagnostics.SupportBundleOptions{
+		Profile:                    p,
+		Paths:                      &paths,
+		OutputDir:                  outDir,
+		DoctorReport:               &rep,
+		Version:                    "1.0.0",
+		Commit:                     "cafebabe",
+		BuildTime:                  "2026-08-01T00:00:00Z",
+		IncludeSecuritySelfCheck:   boolPtr(false),
+		IncludeReleaseEvidenceLite: boolPtr(false),
+		IncludeRSQualification:     boolPtr(false),
+		LogSample:                  logSample,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Preview categories should omit disabled sections.
+	prev, err := diagnostics.CreateSupportBundle(context.Background(), diagnostics.SupportBundleOptions{
+		Profile:                    p,
+		PreviewOnly:                true,
+		IncludeSecuritySelfCheck:   boolPtr(false),
+		IncludeReleaseEvidenceLite: boolPtr(false),
+		IncludeRSQualification:     boolPtr(false),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(prev.Plan.Included, ",")
+	for _, ban := range []string{
+		diagnostics.BundleCatSecuritySelfCheck,
+		diagnostics.BundleCatReleaseEvidenceLite,
+		diagnostics.BundleCatRSQualification,
+	} {
+		if strings.Contains(joined, ban) {
+			t.Errorf("disabled category still included: %s in %s", ban, joined)
+		}
+	}
+	if !strings.Contains(strings.Join(prev.Plan.Excluded, ","), "raw_log_samples") {
+		t.Errorf("excluded missing raw_log_samples: %v", prev.Plan.Excluded)
+	}
+
+	zr, err := zip.OpenReader(res.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zr.Close()
+	var names []string
+	for _, f := range zr.File {
+		names = append(names, f.Name)
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		size := int(f.UncompressedSize64) + 1
+		if size < 64 {
+			size = 64
+		}
+		buf := make([]byte, size)
+		n, _ := rc.Read(buf)
+		_ = rc.Close()
+		body := string(buf[:n])
+		if strings.Contains(body, bundleCanary) {
+			t.Fatalf("Regression: canary leaked from LogSample into %s", f.Name)
+		}
+		if strings.Contains(body, "Authorization: Bearer") {
+			t.Fatalf("authorization material from log sample in %s", f.Name)
+		}
+	}
+	for _, ban := range []string{
+		"security_self_check.json", "release_evidence_lite.json", "rs_qualification_summary.json",
+	} {
+		for _, n := range names {
+			if n == ban {
+				t.Errorf("disabled member present: %s", ban)
+			}
+		}
+	}
+
+	sigBody, err := diagnostics.ReadBundleFile(res.Path, "error_signatures.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sigDoc map[string]any
+	if err := json.Unmarshal(sigBody, &sigDoc); err != nil {
+		t.Fatal(err)
+	}
+	if sigDoc["source"] != "log_sample_extract" {
+		t.Fatalf("expected log_sample_extract source: %s", sigBody)
+	}
+	sigs, _ := sigDoc["signatures"].([]any)
+	if len(sigs) == 0 {
+		t.Fatalf("expected signatures from sample: %s", sigBody)
+	}
+	// Messages must be empty/absent for sample-derived rows.
+	for _, raw := range sigs {
+		m, _ := raw.(map[string]any)
+		if msg, ok := m["message"].(string); ok && strings.TrimSpace(msg) != "" {
+			t.Fatalf("sample-derived signature must not carry message: %+v", m)
+		}
+	}
+}
+
+func TestCreateSupportBundle_DefaultIncludesWave23Categories(t *testing.T) {
+	t.Parallel()
+	cats := diagnostics.DefaultBundleCategories()
+	joined := strings.Join(cats, ",")
+	for _, want := range []string{
+		diagnostics.BundleCatSecuritySelfCheck,
+		diagnostics.BundleCatReleaseEvidenceLite,
+		diagnostics.BundleCatRSQualification,
+		diagnostics.BundleCatErrorSigs,
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("DefaultBundleCategories missing %s: %v", want, cats)
+		}
+	}
+}

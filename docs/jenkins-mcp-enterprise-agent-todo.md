@@ -4,11 +4,25 @@
 **Target:** Local per-user Jenkins MCP for Cursor plus optional per-user AgentCore/managed-gateway deployment  
 **Primary priorities:** Per-user identity, fail-closed read-only/RBAC, network efficiency, seekable compressed storage, interactive performance  
 **Companion design:** `jenkins-mcp-enterprise-architecture.md`  
-**Revision:** Engineer authentication, read-only/RBAC, and seekable-Zstandard notes incorporated
+**Revision:** Engineer authentication, read-only/RBAC, and seekable-Zstandard notes incorporated; Tier-1 OS matrix (Rocky Linux + Ubuntu; macOS nice-to-have; Windows excluded — no native FUSE)
 
 ---
 
 ## How an implementation agent must use this backlog
+
+**Repo agent policy:** read and obey root `AGENTS.md` for every session. The
+rules below are backlog-specific; `AGENTS.md` is mandatory for tests,
+regressions, code review, documentation, and incomplete-work tracking.
+
+### Quality gates (non-negotiable — see `AGENTS.md`)
+
+1. **Tests for every feature:** no feature or behavior change without automated tests in the same change (unit + integration/contract as applicable; success/failure/cancel/limits).
+2. **Regression tests for every fix:** each bug fix lands with a red–green regression test; re-run the relevant suite after the fix.
+3. **Code review for every change set:** structured review (prefer `/review`) after tests/docs; fix bug-severity findings before treating work as done or committing large behavioral changes.
+4. **Documentation always updated:** behavior, CLI/tool contracts, architecture, packaging, and agent guidance stay in sync with the code in the same change; no silent capability claims.
+5. **Todo / backlog tracking:** work against task IDs; maintain session todos; if incomplete, leave explicit **next steps** (remaining work, blockers, verification); never check acceptance/DoD boxes without demonstrated evidence.
+
+### Backlog workflow
 
 1. Work on **one task ID per pull request** unless the task explicitly permits a paired change.
 2. Read the companion architecture and every dependency task before editing code.
@@ -33,18 +47,22 @@
 21. AgentCore authorization, token, discovery, and consent endpoints point to Entra ID or another approved authorization server, not Jenkins, unless the conditional Jenkins authorization-server epic receives an explicit go decision.
 22. Count encoded wire bytes and decoded bytes separately. Stream the decoded response directly into bounded parsers or independent Zstandard frames; never stage an unbounded plaintext log merely to compress it later.
 23. Batch only related logs whose user, profile/controller, authorization policy, retention, sensitivity, and encryption domains match; never improve locality by weakening isolation.
+24. If a task or session is only partially done, record **next steps** (remaining acceptance criteria, blockers, follow-up task IDs, verification commands) before stopping; do not leave status implied.
 
 ### Definition of done for every task
 
 - [ ] Implementation is isolated to the task scope.
 - [ ] Unit tests cover success, failure, cancellation, and limits.
 - [ ] Integration tests are added where Jenkins, OAuth, keyring, storage, or sidecars are involved.
+- [ ] Bug fixes include a regression test that failed before the fix and passes after.
 - [ ] No secret values appear in logs or errors under canary tests.
 - [ ] Static analysis, race tests where applicable, vulnerability scan, and format/lint checks pass.
 - [ ] Performance evidence is attached when the task can affect CPU, memory, network, disk, startup, or response size.
 - [ ] Documentation and changelog are updated.
+- [ ] Structured code review completed; bug-severity findings fixed or explicitly accepted by the user.
 - [ ] A rollback or backward-compatibility note is included for persistent-format or configuration changes.
 - [ ] Acceptance criteria below are demonstrated, not merely asserted.
+- [ ] If anything remains incomplete, next steps are written and no DoD item is falsely checked.
 
 ### Priority legend
 
@@ -101,17 +119,21 @@ Make builds deterministic enough to compare behavior and produce trusted release
 **Implementation**
 
 - Pin the supported Go toolchain through `go.mod` and CI configuration.
-- Add build scripts for Windows, Linux, and macOS targets required by policy.
+- Add package scripts for the **Tier-1** matrix: Rocky Linux and Ubuntu (`linux/amd64`, plus `linux/aarch64` when the support matrix requires it). Prefer oldest-supported glibc baselines per Rocky major and Ubuntu LTS so newer minors stay binary-compatible.
+- Add optional **Tier-2** macOS (`darwin/arm64`, `darwin/amd64`) build jobs that may be best-effort and non-blocking.
+- **Do not** add Windows client targets, installers, or release gates (Windows is out of scope: no native FUSE).
+- Run unit/integration tests on Rocky- and Ubuntu-based containers/VMs covering every major/LTS listed in the support matrix.
 - Add a development container or documented isolated build environment without embedding secrets.
 - Enable module checksum verification and fail on dirty generated files.
-- Add `make`/Taskfile targets for build, test, race, lint, benchmark, SBOM, and package.
+- Add `make`/Taskfile targets for build, test, race, lint, benchmark, SBOM, and package (including `rpm` and `deb` artifact targets).
 
 **Acceptance criteria**
 
-- [ ] A fresh environment can build and test using one documented command.
+- [ ] A fresh environment can build and test using one documented command on Rocky and Ubuntu baselines.
 - [ ] Two clean builds from the same commit produce matching source manifests; binary reproducibility gaps are documented.
 - [ ] CI never requires a real Jenkins credential for unit tests.
 - [ ] Build outputs include version, commit, dirty state, Go version, and build time policy.
+- [ ] CI produces Tier-1 artifacts for Rocky (RPM and/or linux tarball) and Ubuntu (DEB and/or linux tarball); macOS artifacts are optional and do not gate merges; no Windows artifacts are required or gated.
 
 ---
 
@@ -338,15 +360,15 @@ Turn the preferred but not yet supplied Rust archive implementation into a measu
 
 **Implementation**
 
-Obtain the exact repository URL, owner, commit or release, license, provenance, support model, and expected integration mode from engineering. If the dependency cannot be supplied or reproduced, record an explicit no-go/deferred result and continue with the native Go reader; never substitute a similarly named public project silently. Review build reproducibility, release/signing process, SBOM/crates, unsafe Rust, parser boundaries, fuzzing, CVE response, supported seekable-Zstandard dialect, index format, Windows behavior, and recovery semantics. Prototype direct library/FFI, managed local sidecar/CLI, and optional FUSE/WinFsp modes as applicable, while keeping normal MCP reads independent of a mounted filesystem. Verify independent-frame seekable `.tar.zst` compatibility and compare all reads with the native Go fallback. Benchmark index build/load, range access, concurrency, cancellation, endpoint protection, truncation, corruption, crash recovery, and antivirus/EDR impact.
+Obtain the exact repository URL, owner, commit or release, license, provenance, support model, and expected integration mode from engineering. If the dependency cannot be supplied or reproduced, record an explicit no-go/deferred result and continue with the native Go reader; never substitute a similarly named public project silently. Review build reproducibility, release/signing process, SBOM/crates, unsafe Rust, parser boundaries, fuzzing, CVE response, supported seekable-Zstandard dialect, index format, Tier-1 platform behavior (Rocky Linux, Ubuntu) including **native Linux FUSE**, optional macOS behavior, and recovery semantics. Prototype direct library/FFI, managed local sidecar/CLI, and Linux FUSE mount modes; do **not** design for WinFsp/Windows. Keep MCP core reads functional via direct API/native Go when FUSE is absent. Verify independent-frame seekable `.tar.zst` compatibility and compare all reads with the native Go fallback. Benchmark index build/load, range access, concurrency, cancellation, SELinux/AppArmor, truncation, corruption, crash recovery, and endpoint protection on representative Rocky/Ubuntu images.
 
 **Acceptance criteria**
 
 - [ ] Approved go/no-go names the exact repository, commit/release, owner, license, provenance, SBOM/dependencies, build process, update/rollback plan, and security-response owner.
 - [ ] If the exact dependency cannot be accessed, reproduced, or approved, status is explicit no-go/deferred and the native reader remains the supported path.
 - [ ] No similarly named project is substituted or described as the intended dependency without engineering confirmation.
-- [ ] Windows works without mandatory FUSE, or the limitation is explicitly rejected/accepted by endpoint security and product owners.
-- [ ] Direct API, sidecar, and mount integration choices are measured and documented; FUSE/WinFsp is never required for ordinary reads.
+- [ ] Rocky Linux and Ubuntu qualify native Linux FUSE mount paths; MCP still serves log/search reads via direct API or native Go when FUSE is unavailable.
+- [ ] Direct API, sidecar, and Linux FUSE mount choices are measured and documented; WinFsp/Windows is out of scope.
 - [ ] Qualified adapter and native reader return identical golden pack/member/range bytes.
 - [ ] Warm/cold read, index, memory, concurrency, cancellation, corruption, recovery, and EDR measurements exist.
 - [ ] Adapter failure/disablement does not invalidate `ArchiveStore` or the durable format.
@@ -434,15 +456,17 @@ Keep long-lived secrets local and outside Cursor configuration.
 
 **Implementation**
 
-Implement Windows Credential Manager first, then required macOS Keychain/Linux Secret Service adapters. Namespace entries by application, OS user, profile, controller origin, auth method, and account identity.
+Implement the Tier-1 **Linux Secret Service** backend (`libsecret` / org.freedesktop.secrets) for Rocky Linux and Ubuntu Desktop/Server sessions. Document and test headless Rocky/Ubuntu behavior when no Secret Service is available (fail closed by default; policy-controlled protected file only when explicitly approved). Implement **macOS Keychain** as a Tier-2 nice-to-have adapter that is not required for pilot exit. Do **not** implement Windows Credential Manager (Windows clients are out of scope). Namespace entries by application, OS user, profile, controller origin, auth method, and account identity.
 
 **Acceptance criteria**
 
-- [ ] API tokens can be stored, loaded, replaced, and deleted under the current OS user.
+- [ ] API tokens can be stored, loaded, replaced, and deleted under the current OS user on Rocky/Ubuntu with Secret Service.
 - [ ] Another local user cannot read the credential through normal APIs.
 - [ ] Error and debug paths never print the secret.
-- [ ] Headless fallback is disabled unless policy explicitly allows a protected file.
+- [ ] Headless fallback is disabled unless policy explicitly allows a protected file; Rocky/Ubuntu server images without an unlocked keyring fail closed with a clear `doctor` diagnosis.
 - [ ] Backend tests use mocks or isolated test entries and clean them up.
+- [ ] macOS Keychain, if present, passes the same store/load/delete contract tests but is not a release gate.
+- [ ] No Windows Credential Manager code path is required for pilot or production gates.
 
 ---
 
@@ -1089,26 +1113,33 @@ Check binary/version, config/policy, ACL/free space, keyring access, DNS/TLS/pro
 
 ---
 
-## PKG-001 - Produce signed Windows-first pilot packages
+## PKG-001 - Produce signed Tier-1 pilot packages (Rocky Linux, Ubuntu)
 
 **Priority:** P0  
 **Dependencies:** FND-007, AUTH-003, OPS-001
 
 **Objective**
 
-Deliver a trustworthy local executable that Cursor can launch without secrets in configuration.
+Deliver trustworthy local executables that Cursor can launch on every Tier-1 Linux OS without secrets in configuration. macOS packages are optional nice-to-have artifacts. Windows packages are out of scope.
 
 **Implementation**
 
-Build signed Windows x64 package, install/uninstall flow, per-user data paths, version metadata, SBOM, provenance, and secret-free Cursor configuration documentation. Add ARM64 only if required by the support matrix.
+- **Rocky Linux:** signed `.rpm` for each supported Rocky major series in the matrix, plus a portable `linux/amd64` tarball; XDG per-user data paths; Secret Service integration; SELinux smoke notes; document optional `fuse`/`fuse3` dependency for L2 mount.
+- **Ubuntu:** signed `.deb` for each supported Ubuntu LTS in the matrix, plus the same portable tarball where appropriate; XDG paths; Secret Service; AppArmor smoke notes; same FUSE package notes.
+- Document secret-free Cursor `command`/`args` examples for Linux paths.
+- Optional **macOS** archive/app bundle may be produced on a best-effort cadence; do not block pilot on notarization or Keychain polish.
+- Do **not** produce Windows `.exe`/MSI/MSIX or WinFsp-based packaging.
+- Version metadata, SBOM, and provenance accompany every Tier-1 artifact.
 
 **Acceptance criteria**
 
-- [ ] Installed binary signature validates.
-- [ ] Ordinary operation requires no administrator rights unless deployment policy mandates it.
-- [ ] Uninstall behavior for cache and credentials is explicit and user-controlled.
-- [ ] Cursor starts the MCP over stdio with profile-only arguments.
-- [ ] Endpoint-protection compatibility smoke tests pass.
+- [ ] Installed binary signature validates on Rocky RPM and Ubuntu DEB baselines listed in the support matrix.
+- [ ] Ordinary operation requires no root rights unless deployment policy mandates them.
+- [ ] Uninstall behavior for cache and credentials is explicit and user-controlled on each Tier-1 OS.
+- [ ] Cursor starts the MCP over stdio with profile-only arguments on Rocky and Ubuntu.
+- [ ] SELinux/AppArmor compatibility smoke tests pass on Tier-1 images.
+- [ ] macOS artifacts, if published, are labeled best-effort and are not required for pilot exit.
+- [ ] Release evidence does not claim Windows support.
 
 ---
 
@@ -1198,10 +1229,13 @@ Validate signature/algorithm, issuer/tenant, audience, token type/use, expiry/no
 
 **Acceptance criteria**
 
-- [ ] Wrong issuer/tenant/audience/algorithm/type/time/client tests fail closed.
-- [ ] An ID token or Graph token is rejected for Jenkins API authentication.
-- [ ] JWKS rotation succeeds without accepting unknown issuers.
-- [ ] Token contents are never logged or persisted outside approved keyring fields.
+- [x] Wrong issuer/tenant/audience/algorithm/type/time/client tests fail closed. *(offline `ValidateAccessToken` table; Wave 17)*
+- [x] An ID token or Graph token is rejected for Jenkins API authentication. *(offline; live RS residual OAUTH-005/009)*
+- [x] JWKS rotation succeeds without accepting unknown issuers. *(offline multi-kid / wrong-issuer tests)*
+- [x] Token contents are never logged or persisted outside approved keyring fields. *(scrub + canary tests)*
+
+**Evidence:** `docs/auth/oauth-003-claim-validation.md`; `go test ./internal/auth -run ValidateAccessToken`.  
+**Residual:** live jwt-auth-filter / Entra pin remains OAUTH-005/009.
 
 ---
 
@@ -1463,7 +1497,7 @@ Parse and validate the selected seek table, map raw TAR/member ranges to indepen
 - [ ] Reads return exact member/range bytes for every format fixture.
 - [ ] A 64 KiB range never triggers full-pack decompression and reports amplification.
 - [ ] Malformed frame/seek/TAR/dictionary metadata fails safely under fuzzing.
-- [ ] Windows works without FUSE/WinFsp.
+- [ ] Rocky Linux and Ubuntu recover via native Go without FUSE; Linux FUSE mount is optional for inspection; Windows/WinFsp is out of scope.
 - [ ] Reader output matches the qualified `ratarmount-rs` adapter byte-for-byte when that adapter is available.
 
 ---
@@ -2227,13 +2261,24 @@ Trigger approved builds without duplicate enqueues or hidden parameters.
 
 Fetch parameter definitions, validate names/types/choices, show preview, confirm, perform a single non-retried enqueue, and return queue reference. Add optional client-generated correlation parameter only when job policy explicitly supports it.
 
+**Wave 18 note:** `GetJenkinsJob` / `GetJobParameterDefinitions` surface `property.parameterDefinitions`
+(String/Choice/Boolean/Password; `_class` fallback; secret defaults scrubbed). `mutation.ValidateAgainstDefinitions`
+rejects unknown names, bad choices, bad booleans, Password/Credentials/Secret types, and unsupported File/Run/…
+types. `jenkins_start_job` normalizes → validates (fresh defs) → MUT-001 preview/confirm → single non-retried
+`buildWithParameters` POST. Sensitive-name heuristic remains an extra defense. Docs: `tool-contracts.md`,
+`agent-usage.md`.
+
+**Residuals:** Jenkins “required without default” is not consistently available on all definition types
+(omitted params allowed for Jenkins defaults). Active Choices / dynamic plugins not fully modeled.
+Optional client-generated correlation parameter not implemented (needs explicit job policy support).
+
 **Acceptance criteria**
 
-- [ ] No automatic retry can create a duplicate build.
-- [ ] Unknown/secret/unsupported parameters are rejected.
-- [ ] Preview exactly matches executed request after normalization.
-- [ ] Jenkins permission is checked by the actual request and failures are attributable.
-- [ ] Audit event contains no secret values.
+- [x] No automatic retry can create a duplicate build. *(NET-003: mutation POST not auto-retried; token single-use)*
+- [x] Unknown/secret/unsupported parameters are rejected. *(name + definition type + choice/bool checks)*
+- [x] Preview exactly matches executed request after normalization. *(normalized map stored on token; redacted in preview)*
+- [x] Jenkins permission is checked by the actual request and failures are attributable. *(enqueue POST; execute fail audit)*
+- [x] Audit event contains no secret values. *(target hash / reason codes only; param values not audited)*
 
 ---
 
@@ -2252,10 +2297,14 @@ Implement separate actions for queue cancellation and running build stop, each w
 
 **Acceptance criteria**
 
-- [ ] Completed/wrong-state targets are not treated as successful stops.
-- [ ] Confirmation includes controller, full job, build/queue ID, and current state.
-- [ ] Repeated requests are idempotent only in their reported outcome, not blindly resent.
-- [ ] All actions are locally audited and Jenkins-attributed to the user.
+- [x] Completed/wrong-state targets are not treated as successful stops.
+- [x] Confirmation includes controller, full job, build/queue ID, and current state.
+- [x] Repeated requests are idempotent only in their reported outcome, not blindly resent.
+- [x] All actions are locally audited and Jenkins-attributed to the user.
+
+**Wave 17 note:** `jenkins_stop_build` + `jenkins_cancel_queue_item` both use MUT-001 preview/confirm;
+client `CancelQueueItem` POSTs `/queue/cancelItem?id=`; missing/cancelled/assigned queue items
+and finished builds return clear non-success errors; RO omits tools; force-registered RO denies.
 
 ---
 
@@ -2316,12 +2365,21 @@ Retrieve logs that Jenkins links to but does not store, without weakening local 
 
 Create adapters for approved systems only, with per-user auth, query allowlists, time/byte/result limits, redaction, local chunking, and source-specific evidence. Avoid arbitrary query-language passthrough to the model.
 
+**MVP landed (framework stub):** adapter `ext-logs` (`noop`/`mock`/optional HTTPS JSON), tool
+`jenkins_query_external_logs` (disabled by default), bounds + redaction + evidence labels.
+**Wave 18:** fail-closed Jenkins ACL preflight (`GetBuildDetailsByJob` before querier;
+401/403/404 no external call); default adapter rate limit for non-noop backends (10 / 1/s).
+Docs: `docs/adapters/ext-logs.md`. **Residual:** real Splunk/ELK clients, per-user adapter
+credentials, local L1 chunking of external payloads, fleet metrics export, POL-004 Target
+job binding (offline policy — separate from Jenkins ACL preflight).
+
 **Acceptance criteria**
 
-- [ ] Model cannot submit unrestricted backend queries.
-- [ ] Returned external logs use the same storage/search/evidence controls.
-- [ ] Source credentials never cross into Jenkins requests or vice versa.
-- [ ] Network and data-volume budgets are measurable.
+- [x] Model cannot submit unrestricted backend queries. *(MVP: max query length; free-text only; no SPL/Lucene passthrough)*
+- [ ] Returned external logs use the same storage/search/evidence controls. *(MVP: redaction + evidence labels; full local storage/search residual)*
+- [x] Source credentials never cross into Jenkins requests or vice versa. *(MVP: no credentials path; keyring namespace residual for SaaS)*
+- [x] Jenkins job access preflight before external query. *(Wave 18: GetBuildDetailsByJob; querier not called on deny/missing)*
+- [ ] Network and data-volume budgets are measurable. *(MVP: hard entry/excerpt/body caps + default token bucket for non-noop; fleet metrics residual)*
 
 ---
 
@@ -2338,12 +2396,17 @@ Enrich triage with explicitly referenced Jira/Bitbucket/GitHub/GitLab objects.
 
 Resolve approved keys/commit/PR identifiers, retrieve minimal metadata, and return links/summaries. Avoid broad project scraping or automatic inclusion of private discussion content.
 
+**MVP landed:** pure extractors in `internal/correlate`, tool `jenkins_get_change_correlation`
+(disabled by default; enable via `work-items` adapter), optional work-items stub (refs only,
+no network). Docs: `docs/adapters/work-items.md`. **Residual:** real ticket-system APIs and
+per-user ticket credentials.
+
 **Acceptance criteria**
 
-- [ ] Correlation requires an explicit identifier or policy-approved extraction rule.
-- [ ] Access uses the current user's separate credentials.
-- [ ] Results remain bounded and source-labeled.
-- [ ] Failure of external correlation does not block Jenkins diagnosis.
+- [x] Correlation requires an explicit identifier or policy-approved extraction rule. *(MVP: allowlisted patterns on params/changeSets)*
+- [ ] Access uses the current user's separate credentials. *(N/A for stub; residual when ticket API lands)*
+- [x] Results remain bounded and source-labeled.
+- [x] Failure of external correlation does not block Jenkins diagnosis. *(SCM failure degrades; adapter stub failure ignored)*
 
 ---
 
@@ -2681,7 +2744,7 @@ Run representative benchmarks on stable hardware or calibrated runners. Track p5
 
 - [ ] More than approved regression thresholds block or alert with comparison data.
 - [ ] Cold/warm cache states are separated.
-- [ ] Windows endpoint-security-on measurements are included.
+- [ ] Rocky/Ubuntu SELinux or AppArmor-on measurements are included for Tier-1 Linux baselines.
 - [ ] Results are retained and graphable by commit/release.
 
 ---
@@ -2810,7 +2873,7 @@ Validate real workflows and performance with a small approved user group.
 
 **Implementation**
 
-Deploy signed builds, collect approved metrics and structured feedback, sample network/cache behavior, track auth/support issues, and maintain rapid rollback. Use API-token and OAuth cohorts if OAuth is ready.
+Deploy signed Tier-1 builds (Rocky Linux, Ubuntu), collect approved metrics and structured feedback, sample network/cache behavior, track auth/support issues, and maintain rapid rollback. Use API-token and OAuth cohorts if OAuth is ready. Pilot cohorts must include Rocky and Ubuntu users. macOS participants are optional and non-blocking. Windows is not a pilot platform.
 
 **Acceptance criteria**
 
@@ -2818,6 +2881,7 @@ Deploy signed builds, collect approved metrics and structured feedback, sample n
 - [ ] Network and result-size targets are measured on real workflows.
 - [ ] No secret/privacy incident occurs; any incident triggers the documented response.
 - [ ] Pilot exit report lists defects, SLOs, adoption, and go/no-go recommendation.
+- [ ] Pilot evidence includes successful install/login/diagnose on Rocky and on Ubuntu.
 
 ---
 
@@ -2852,7 +2916,7 @@ These scenarios become end-to-end tests and release evidence.
 ## Scenario A - Personal API token with no plaintext secret
 
 - Signed local binary starts from a secret-free Cursor profile.
-- User enters a personal token through a non-echoing prompt; it exists only in Windows Credential Manager and process memory.
+- User enters a personal token through a non-echoing prompt; it exists only in Linux Secret Service (Rocky/Ubuntu) and process memory.
 - Status and Jenkins audit show the expected person.
 - Logout removes credential, invalidates sessions/handles, and blocks new remote calls.
 
@@ -2955,7 +3019,7 @@ Complete or substantially advance:
 - POL-001 demonstration from Cursor configuration, including direct/crafted bypass attempts.
 - POL-002/003 policy schema and trusted-subject spike that restricts a Jenkins administrator to one read-only folder.
 - OAUTH-008 capability matrix proving the roles of Jenkins core, `oic-auth`, `oidc-provider`, `github-oauth`, `oauth-credentials`, and `jwt-auth-filter`.
-- ARC-000 code, license, supply-chain, API, Windows, recovery, and performance qualification of the exact engineering-supplied `ratarmount-rs` repository and pinned revision.
+- ARC-000 code, license, supply-chain, API, Tier-1 platform (Rocky/Ubuntu + Linux FUSE), recovery, and performance qualification of the exact engineering-supplied `ratarmount-rs` repository and pinned revision.
 - ARC-002 spike producing and validating a multi-frame seekable `.tar.zst`, rejecting a single-frame archive, and reading the same range through the native reader and the qualified Rust path when available.
 
 The sprint demo should preserve existing Jenkins reads while showing bounded network/allocation behavior, secret-free local configuration, effective read-only provenance, deny-only RBAC, an approved authentication ADR, an honest exact-dependency `ratarmount-rs` qualification status, and measured random access into compressed related-log storage.

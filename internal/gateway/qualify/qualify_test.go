@@ -1,0 +1,83 @@
+package qualify_test
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/simonfxr/go-jenkins-mcp/internal/gateway/qualify"
+)
+
+func TestRunOffline_AllPass(t *testing.T) {
+	t.Parallel()
+	sum := qualify.RunOffline(context.Background())
+	if !sum.OK || sum.Failed != 0 {
+		b, _ := json.MarshalIndent(sum, "", "  ")
+		t.Fatalf("offline qualify failed:\n%s", b)
+	}
+	if sum.Suite != "offline" {
+		t.Fatalf("suite %q", sum.Suite)
+	}
+	if sum.Passed < 12 {
+		t.Fatalf("expected >= 12 cases, got %d", sum.Passed)
+	}
+	// Residuals must document live AgentCore gap and offline vault/IdP Done*.
+	foundLive := false
+	foundOfflineDone := false
+	for _, r := range sum.Residuals {
+		low := strings.ToLower(r)
+		if strings.Contains(low, "agentcore") || strings.Contains(low, "live") {
+			foundLive = true
+		}
+		if strings.Contains(low, "vault hit/miss") && strings.Contains(low, "done") {
+			foundOfflineDone = true
+		}
+	}
+	if !foundLive {
+		t.Fatal("expected live AgentCore residual note")
+	}
+	if !foundOfflineDone {
+		t.Fatal("expected residual noting offline vault hit/miss Done*")
+	}
+	// JSON summary must never include canary token.
+	raw, err := json.Marshal(sum)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), qualify.CanaryToken) {
+		t.Fatal("canary token in JSON summary")
+	}
+}
+
+func TestRunOffline_SecurityCaseNames(t *testing.T) {
+	t.Parallel()
+	sum := qualify.RunOffline(context.Background())
+	want := map[string]bool{
+		"jenkins_as_as_rejected":              false,
+		"wrong_audience_rejected":             false,
+		"wrong_subject_binding_rejected":      false,
+		"subject_binding_contracts":           false,
+		"token_never_in_errors":               false,
+		"consent_url_has_no_token":            false,
+		"cross_user_cache_isolation":          false,
+		"vault_hit_miss":                      false,
+		"idp_outage_chaos":                    false,
+		"jwks_key_rotation_lite":              false,
+		"concurrent_obtain_stub_under_budget": false,
+		"fail_closed_obtain_latency":          false,
+	}
+	for _, c := range sum.Cases {
+		if _, ok := want[c.Name]; ok {
+			want[c.Name] = true
+			if !c.Passed {
+				t.Errorf("case %s failed: %s", c.Name, c.Detail)
+			}
+		}
+	}
+	for name, seen := range want {
+		if !seen {
+			t.Errorf("missing case %s", name)
+		}
+	}
+}

@@ -1,0 +1,220 @@
+# Managed gateway / AgentCore foundation (GWY-001/002)
+
+**Status:** Foundation + **offline mock obtain path** (pluggable `TokenFetcher`).  
+**Default:** `Live=false`, `Fetcher=nil` → fail-closed `not_configured` (no network).  
+**Offline qualify** (GWY-003 lite) available; **live Entra / AgentCore pin residual**.  
+**GWY-004:** deployment **scaffold** (compose/kustomize/docs) only — no live AgentCore image.  
+**Related:** [deployment.md](deployment.md), [qualification.md](qualification.md), [auth-architecture.md](../auth-architecture.md) §2.3, [ADR 0003](../adr/0003-jenkins-not-oauth-authorization-server.md), [policy-rbac.md](../policy-rbac.md), architecture §§1–2 / §6.6.
+
+---
+
+## 1. What this is
+
+Optional **managed-gateway** path for near-source MCP: validate an AgentCore-style
+credential provider config, bind inbound Entra/workload claims into MCP
+`policy.Subject`, and keep the same **deny-only RBAC** and **global read-only**
+invariants as local stdio mode.
+
+| Package | Role |
+|---------|------|
+| `internal/gateway` | Credential provider interface, AgentCore config validation, token cache, consent metadata, claim → subject binding |
+| `internal/policy.Subject` | Optional `Tenant`, `WorkloadID`, `Groups` for gateway subjects |
+| `jenkins-mcp serve --gateway` | Require provider config + bind identity; still default RO |
+
+---
+
+## 2. Non-negotiable: Jenkins is not the authorization server
+
+**Threat model / default no-go:** [jas-no-go.md](../auth/jas-no-go.md) (JAS-001), [ADR 0013](../adr/0013-jas-default-no-go-enforcement.md).
+
+| Correct | Forbidden |
+|---------|-----------|
+| AgentCore **discovery / authorization / token** endpoints → **Entra** (or approved AS) | Pointing those endpoints at **stock Jenkins** |
+| Requested **audience** = dedicated **Jenkins API resource** | Graph / generic gateway tokens sent to Jenkins |
+| Jenkins validates **Jenkins-audience** JWT as **resource server** (e.g. jwt-auth-filter) | Treating Jenkins UI OIDC / `oic-auth` as MCP 3LO |
+| Full Jenkins authorization-server plugin | **Default no-go** (ADR 0011) unless funded decision |
+
+`gateway.ValidateProviderConfig` **rejects** configs where the authorization
+server base URL or auth/token endpoints share origin with the Jenkins base URL.
+
+Regression: `go test ./internal/gateway -run JenkinsAsAS`
+
+---
+
+## 3. Credential modes and offline obtain path
+
+| Mode | Intent | Default (`Live=false`) | Offline mock (`Live=true` + `Fetcher`) |
+|------|--------|------------------------|----------------------------------------|
+| `authorization_code` | User-delegated 3LO + consent URL propagation | `not_configured` | Cache → `TokenFetcher`; may return `ConsentRequired` |
+| `token_exchange` / `obo` | OBO / RFC 8693 exchange → Jenkins-audience token | `not_configured` | Same; wrong-audience fails closed |
+
+### Pluggable `TokenFetcher` (GWY-001 offline mock)
+
+```text
+Obtain:
+  Live=false              → capability_missing / not_configured (cache ignored)
+  Live=true, Fetcher=nil  → capability_missing (not silent success)
+  Live=true, Fetcher set  → validate → cache hit? → Fetcher → cache → Credential
+  Fetcher error           → authentication / capability_missing / ConsentRequired
+                            (never shared Jenkins SA)
+```
+
+| Type | Role |
+|------|------|
+| `TokenFetcher` | Interface: `FetchJenkinsCredential(ctx, caller, cfg) (Credential, error)` |
+| `FuncTokenFetcher` | Function adapter for unit tests |
+| `HTTPTokenFetcher` | Optional production-shaped HTTPS token POST (https-only, no redirects, body cap, never log tokens). **Not** attached by `NewAgentCoreProvider` |
+| Mock AS (`httptest` TLS in tests) | Returns JSON `access_token` + `expires_in` + optional `audience` / `jenkins_principal`; consent via 401 + auth URL/session |
+
+`NewAgentCoreProvider` always starts **Live=false**, **Fetcher=nil**. Tests (or future operators) inject a fetcher and set `Live=true` explicitly. **No real Entra** is called from default serve wiring.
+
+Consent metadata (`ConsentInfo`) may carry **authorization URL + session id** only —
+never access tokens, refresh tokens, client secrets, or auth codes.
+
+Token cache: in-memory, keyed by `(user, workload, profile)`, TTL-bounded.
+`String()` / errors / `Status` **never** include token bytes (canary tests).
+
+When the token JSON includes `audience` / `resource`, it must **exactly** match
+configured Jenkins API audience (wrong-audience residual fail-closed).
+
+---
+
+## 4. Identity binding (GWY-002)
+
+Trusted inbound claims (gateway / Entra) map to `policy.Subject` via
+`gateway.BindSubject` / `BindSubjectFromEnviron`. **Live Entra claim extraction
+is residual** (GWY-003 / OAUTH-010); foundation binding uses verified process
+env labels + whoAmI principal.
+
+### Claim → subject mapping
+
+| Inbound claim / source | `policy.Subject` field | Notes |
+|------------------------|------------------------|--------|
+| Entra/OIDC `sub` | `ExternalSubject` | Required |
+| Tenant | `Tenant` | Required (`DefaultBindOptions.RequireTenant`) |
+| Workload id | `WorkloadID` | Required (`RequireWorkload`) |
+| Groups (bounded) | `Groups` | Optional; see overage table |
+| Exchanged / whoAmI Jenkins principal | `JenkinsUserID` | Required for RBAC `Valid()` |
+| Profile id | `ProfileID` | Required |
+| Gateway trust path | `Verified` | True only when claims verified **and** Jenkins principal present |
+
+### Binding rules matrix
+
+| Condition | Result |
+|-----------|--------|
+| Missing `Subject` / `ProfileID` | Fail closed (`authentication`) |
+| Missing `Tenant` (default opts) | Fail closed |
+| Missing `WorkloadID` (default opts) | Fail closed |
+| `Verified=false` (default opts) | Fail closed |
+| `JenkinsPrincipal` empty + `RequireJenkinsPrincipal` | Fail closed |
+| `JenkinsPrincipal` empty, not required | Bind OK but `Valid()==false`, `Verified==false` (not RBAC-ready) |
+| `JenkinsPrincipal == "anonymous"` | Fail closed |
+| Env `JENKINS_MCP_GATEWAY_JENKINS_PRINCIPAL` ≠ verified whoAmI | Fail closed (mismatch) |
+| Env principal empty | Defaults to verified whoAmI |
+| Env principal == whoAmI | Bind OK; `Valid()==true` when other fields present |
+| `ExpectedJenkinsPrincipal` set and ≠ claim principal | Fail closed |
+| Unique groups > `MaxGroups` (default 64) + `FailOnGroupOverage` | Fail closed (default production) |
+| Unique groups > `MaxGroups` + truncate mode | Truncate; `GroupMeta.Truncated` + residual note; **cannot broaden** |
+| Single group name > 256 bytes | Fail closed (never truncated short form) |
+| Tool args supply `subject` / `jenkins_user` / `tenant` / `as_user` / … | `RejectIdentityToolArgs` → `policy_denial` |
+| Mid-session claim fingerprint change | `Binding.Revalidate` fail closed |
+| Binding TTL exceeded | Re-bind from claims; still fail closed on bind errors |
+
+**API shape:** `BindSubject(claims InboundClaims, opts)` — there is **no** tool-args
+parameter. Callers must never construct claims from MCP tool arguments.
+`BindSubjectFromEnviron(profileID, verifiedJenkinsUser, getenv)` is the serve-path
+wrapper (injectable `getenv` for offline tests).
+
+**Group overage (OAUTH-006 parity):** `MaxInboundGroups=64`,
+`MaxInboundGroupNameBytes=256`. Default `FailOnGroupOverage=true` (gateway is
+stricter than local OIDC truncate-by-default). Truncate residual string:
+`group_overage_truncated: stored_groups capped at N; excess ignored (cannot broaden access)`.
+
+**Policy**
+
+Gateway subjects **cannot** grant tools denied by MCP `deny_tools` or defeat
+`force_read_only` / global RO. Effective access remains:
+
+```text
+Jenkins allow ∧ global RO ∧ MCP deny-only ∧ budgets
+```
+
+Short TTL: `DefaultBindingTTL` (2m); revalidate per call or within window.
+
+---
+
+## 5. Serve / configuration
+
+Enable gateway mode with any of:
+
+- `jenkins-mcp serve --profile <id> --gateway`
+- Profile field `gatewayMode: true`
+- `JENKINS_MCP_GATEWAY_MODE=1`
+
+**Required provider env (non-secret):**
+
+| Env | Meaning |
+|-----|---------|
+| `JENKINS_MCP_AGENTCORE_AS_URL` | Authorization server base (Entra), **not** Jenkins |
+| `JENKINS_MCP_AGENTCORE_AUDIENCE` | Exact Jenkins API audience |
+| `JENKINS_MCP_AGENTCORE_CLIENT_ID` | Public client id (secret → keyring later) |
+| `JENKINS_MCP_AGENTCORE_MODE` | `authorization_code` or `token_exchange` |
+| `JENKINS_MCP_AGENTCORE_AUTH_ENDPOINT` | Optional authorize URL |
+| `JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT` | Optional token URL |
+
+**Identity env (non-secret labels for foundation binding):**
+
+| Env | Constant | Meaning |
+|-----|----------|---------|
+| `JENKINS_MCP_GATEWAY_SUBJECT` | `EnvGatewaySubject` | Entra/OIDC sub (**required** in gateway mode) |
+| `JENKINS_MCP_GATEWAY_TENANT` | `EnvGatewayTenant` | Tenant id (**required**) |
+| `JENKINS_MCP_GATEWAY_WORKLOAD` | `EnvGatewayWorkload` | Workload id (**required**) |
+| `JENKINS_MCP_GATEWAY_JENKINS_PRINCIPAL` | `EnvGatewayJenkinsPrincipal` | Optional; defaults to verified whoAmI; **must match** whoAmI when set |
+
+Missing AS URL/audience → serve fails closed (`capability_missing` / not_configured).  
+Invalid Jenkins-as-AS → `invalid_argument`.  
+Missing identity env fields → bind fails closed at serve start.
+
+---
+
+## 6. Residuals (explicit non-goals of this foundation)
+
+| Residual | Track |
+|----------|--------|
+| **Live Entra / AgentCore network acquisition pin** | GWY-003 / OAUTH-010 — offline mock + `HTTPTokenFetcher` only prove contracts |
+| AgentCore Identity/Token Vault (durable) | GWY-001 completion (process memory cache is not a vault) |
+| Serve wiring that injects `HTTPTokenFetcher` + Live | Operator config residual; default remains fail-closed |
+| Packaging near-source gateway image (signed prod) | GWY-004 residual — scaffold in `deploy/gateway/` + [deployment.md](deployment.md) |
+| Live AgentCore sidecar pin | GWY-003 / GWY-004 residual |
+| Custom Jenkins authorization-server plugin | ADR 0011 / OAUTH-011 **default no-go** |
+| Shared Jenkins service account for interactive users | **Never** |
+| Real client secret storage | keyring / vault (not profile JSON) |
+| Streamable HTTP gateway transport hardening | GWY-004 residual |
+
+Until live AgentCore is pinned, local **API token + keyring** remains the Jenkins
+HTTP credential path when serve still starts. Default `CredentialProvider.Obtain`
+stays fail-closed (`Live=false`) so no shared SA is substituted for gateway credentials.
+
+---
+
+## 7. Tests
+
+```bash
+export PATH="$HOME/.local/go/bin:$PATH"
+go test ./internal/gateway/ ./internal/gateway/qualify/ ./internal/auth/ ./internal/policy/ ./cmd/jenkins-mcp/ ./internal/depgraph/ -count=1
+```
+
+Coverage includes: Live=false not_configured; Live+nil Fetcher; cache hit
+(Fetcher once); wrong audience; ConsentRequired; token canary never in
+errors/Status/String; cancelled context; HTTPS-only HTTPTokenFetcher + mock AS;
+offline qualify vault hit/miss, IdP outage chaos, JWKS kid-lite (see
+[qualification.md](qualification.md)).
+
+---
+
+## 8. Merge notes (for PR)
+
+- New package `internal/gateway` (FND-004 allow-list updated).
+- `policy.Subject` gains optional gateway fields; API-token path unchanged.
+- Profile `gatewayMode` optional bool; serve `--gateway` flag.
+- Docs: this file; backlog GWY-001/002 foundation progress (not full DoD).

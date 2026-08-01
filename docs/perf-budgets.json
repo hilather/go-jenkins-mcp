@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "task": "QA-003",
+  "description": "Checked-in latency budgets for continuous performance regression (MVP). Absolute ns/op varies by hardware; fail when measured p50/p95 exceed budget by more than tolerance_percent.",
+  "tolerance_percent": 100,
+  "bench_count": 5,
+  "benchtime": "50ms",
+  "notes": [
+    "Default sizes are CI-safe (1 MiB progressive, small L2 range, policy microbench).",
+    "Hardware variance: GitHub-hosted runners and developer laptops differ by 2–5× on ns/op; tolerance_percent defaults to 100 (2×).",
+    "Wire-byte and amplification contracts remain enforced by unit tests (LOG-001 / PERF-002); this gate is latency-oriented.",
+    "Override: PERF_TOLERANCE_PERCENT=N make perf-regression",
+    "Optional larger sizes remain env-gated (PERF_BENCH_100MIB) and are out of default perf-regression."
+  ],
+  "budgets": {
+    "BenchmarkGetBuildLogs_Progressive1MiB": {
+      "package": "./internal/jenkins",
+      "ns_per_op_p50": 8000000,
+      "ns_per_op_p95": 25000000,
+      "notes": "LOG-001 bounded progressive read; fixture only"
+    },
+    "BenchmarkL2PackRangeRead_Warm1MiB": {
+      "package": "./internal/archive",
+      "ns_per_op_p50": 5000000,
+      "ns_per_op_p95": 20000000,
+      "notes": "PERF-002 warm 8 KiB range on 1 MiB multi-frame pack"
+    },
+    "BenchmarkPolicyEvaluate_Allow": {
+      "package": "./internal/policy",
+      "ns_per_op_p50": 50000,
+      "ns_per_op_p95": 200000,
+      "notes": "Deny-only evaluator microbench (no I/O)"
+    }
+  }
+}

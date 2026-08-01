@@ -1,0 +1,559 @@
+{
+  "version": 1,
+  "task": "TST-001",
+  "description": "Machine-readable Jenkins route matrix for go-jenkins-mcp. Offline MVP: httptest fixtures cover most cells; disposable live Jenkins smoke is opt-in (make live-jenkins-test).",
+  "auth_schemes": [
+    "api_token_basic",
+    "oidc_bearer",
+    "agentcore_obo",
+    "csrf_crumb"
+  ],
+  "routes": [
+    {
+      "id": "artifact_bytes",
+      "path_pattern": "/job/{segments}/{n}/artifact/{path}",
+      "path_prefixes": [
+        "/artifact/"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_artifact_text",
+        "jenkins_inspect_artifact"
+      ],
+      "auth_scheme_notes": "Bounded download; path sanitized against zip-slip (ART-001/002).",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/artifacts.go",
+        "internal/jenkins/artifact_inspect.go"
+      ]
+    },
+    {
+      "id": "build_api_json",
+      "path_pattern": "/job/{segments}/{n}/api/json",
+      "path_prefixes": [
+        "/job/"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_build",
+        "jenkins_get_build_graph",
+        "jenkins_get_build_changes",
+        "jenkins_list_artifacts",
+        "jenkins_compare_builds",
+        "jenkins_diagnose_build",
+        "jenkins_trace_failure_graph",
+        "jenkins_find_regression_window",
+        "jenkins_survey_recent_failures"
+      ],
+      "auth_scheme_notes": "Build number path; tree= for SCM/artifacts/graph fields.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/client_builds.go",
+        "internal/jenkins/graph.go",
+        "internal/jenkins/scm.go",
+        "internal/jenkins/artifacts.go"
+      ]
+    },
+    {
+      "id": "build_with_parameters",
+      "path_pattern": "/job/{segments}/buildWithParameters",
+      "path_prefixes": [
+        "/buildwithparameters",
+        "/build"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "class": "mutation",
+      "tools": [
+        "jenkins_start_job"
+      ],
+      "auth_scheme_notes": "Requires crumb when enabled; denied under global RO / MCP deny.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/client_mutations.go"
+      ]
+    },
+    {
+      "id": "classifier_cancel_item",
+      "path_pattern": "/queue/cancelItem|/…/cancel",
+      "path_prefixes": [
+        "/cancelitem",
+        "/cancel"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "class": "mutation",
+      "tools": [
+        "jenkins_cancel_queue_item"
+      ],
+      "auth_scheme_notes": "Crumb + RO gate; MUT-003 preview/confirm; no POST auto-retry.",
+      "fixture_covered": true,
+      "fixture_notes": "httptest cancelItem success/404/403/crumb; tool wrong-state tests.",
+      "source_files": [
+        "internal/jenkins/client_mutations.go",
+        "internal/jenkins/requestclass.go",
+        "internal/tools/mutation_tools.go"
+      ]
+    },
+    {
+      "id": "classifier_do_delete",
+      "path_pattern": "/…/doDelete",
+      "path_prefixes": [
+        "/dodelete"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "class": "mutation",
+      "tools": [],
+      "auth_scheme_notes": "Destructive path classified mutate (fail closed under RO).",
+      "fixture_covered": false,
+      "source_files": [
+        "internal/jenkins/requestclass.go"
+      ]
+    },
+    {
+      "id": "classifier_kill_term",
+      "path_pattern": "/job/{segments}/{n}/kill|/term",
+      "path_prefixes": [
+        "/kill",
+        "/term"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "class": "mutation",
+      "tools": [],
+      "auth_scheme_notes": "Not issued by MCP today; ClassifyJenkinsRequest → mutate under RO.",
+      "fixture_covered": false,
+      "fixture_notes": "Unit-tested in requestclass_test only.",
+      "source_files": [
+        "internal/jenkins/requestclass.go"
+      ]
+    },
+    {
+      "id": "computer_api",
+      "path_pattern": "/computer/api/json",
+      "path_prefixes": [
+        "/computer/api/json"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_nodes",
+        "jenkins_get_running_builds",
+        "jenkins_controller_health",
+        "jenkins_explain_queue_delay"
+      ],
+      "auth_scheme_notes": "Basic or Bearer; may 403 under restricted Jenkins ACLs.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/nodes.go",
+        "internal/jenkins/client_builds.go"
+      ]
+    },
+    {
+      "id": "computer_node",
+      "path_pattern": "/computer/{name}/api/json",
+      "path_prefixes": [
+        "/computer/"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_node"
+      ],
+      "auth_scheme_notes": "Single node; path name URL-encoded ((master) → %28master%29). Basic or Bearer; 404 not_found; 403 authorization.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/nodes.go"
+      ]
+    },
+    {
+      "id": "crumb_issuer",
+      "path_pattern": "/crumbIssuer/api/json",
+      "path_prefixes": [
+        "/crumbissuer/"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "auth",
+      "tools": [
+        "jenkins_start_job",
+        "jenkins_stop_build"
+      ],
+      "auth_scheme_notes": "CSRF crumb; RequestAuth — allowed under global read-only.",
+      "fixture_covered": true,
+      "fixture_notes": "Fixture returns 404 (crumb optional); mutation tests still POST.",
+      "source_files": [
+        "internal/jenkins/client.go",
+        "internal/jenkins/requestclass.go"
+      ]
+    },
+    {
+      "id": "descriptor_by_name",
+      "path_pattern": "/descriptorByName/{class}/api/json",
+      "path_prefixes": [
+        "/descriptorbyname/",
+        "/descriptorByName/"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_capabilities"
+      ],
+      "auth_scheme_notes": "Capability probes for WorkflowJob, JUnit, Pipeline REST RunExt; Basic or Bearer.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/capabilities.go"
+      ]
+    },
+    {
+      "id": "job_api_json",
+      "path_pattern": "/job/{segments}/api/json",
+      "path_prefixes": [
+        "/job/"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_job",
+        "jenkins_list_builds",
+        "jenkins_search_builds",
+        "jenkins_resolve_baseline",
+        "jenkins_list_jobs"
+      ],
+      "auth_scheme_notes": "Folder/multibranch path segments via BuildJobPath; Basic or Bearer.",
+      "fixture_covered": true,
+      "fixture_notes": "Fixture handles /job/*/api/json including nested folders.",
+      "source_files": [
+        "internal/jenkins/jobs.go",
+        "internal/jenkins/builds.go",
+        "internal/jenkins/client_jobs.go"
+      ]
+    },
+    {
+      "id": "pipeline_node_wfapi",
+      "path_pattern": "/job/{segments}/{n}/execution/node/{id}/wfapi/{describe|log}",
+      "path_prefixes": [
+        "/execution/node/",
+        "/wfapi/log"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_pipeline_stages",
+        "jenkins_get_stage_log"
+      ],
+      "auth_scheme_notes": "Stage/node log + nested describe; capability gated.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/pipeline.go",
+        "internal/jenkins/stagelog.go"
+      ]
+    },
+    {
+      "id": "pipeline_wfapi_describe",
+      "path_pattern": "/job/{segments}/{n}/wfapi/describe",
+      "path_prefixes": [
+        "/wfapi/describe"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_pipeline_stages",
+        "jenkins_get_stage_log"
+      ],
+      "auth_scheme_notes": "Requires pipeline-stage-view / workflow-api REST; capability gated.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/pipeline.go",
+        "internal/jenkins/stagelog.go"
+      ]
+    },
+    {
+      "id": "plugin_manager",
+      "path_pattern": "/pluginManager/api/json",
+      "path_prefixes": [
+        "/pluginmanager/api/json",
+        "/pluginManager/api/json"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_capabilities",
+        "jenkins_controller_health"
+      ],
+      "auth_scheme_notes": "May require Overall/Administer on some controllers; fail soft when denied.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/capabilities.go"
+      ]
+    },
+    {
+      "id": "progressive_text",
+      "path_pattern": "/job/{segments}/{n}/logText/progressiveText",
+      "path_prefixes": [
+        "/logtext/progressivetext",
+        "logText/progressiveText"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_build_logs",
+        "jenkins_get_build_log_tail",
+        "jenkins_search_logs",
+        "jenkins_diagnose_build"
+      ],
+      "auth_scheme_notes": "Bounded progressive read (LOG-001); start= query; Basic or Bearer.",
+      "fixture_covered": true,
+      "fixture_notes": "Large/growing log fixtures; early close residual on wire.",
+      "source_files": [
+        "internal/jenkins/client_logs.go"
+      ]
+    },
+    {
+      "id": "queue_api",
+      "path_pattern": "/queue/api/json",
+      "path_prefixes": [
+        "/queue/api/json"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_running_builds",
+        "jenkins_queue_pressure",
+        "jenkins_explain_queue_delay",
+        "jenkins_controller_health"
+      ],
+      "auth_scheme_notes": "Basic or Bearer.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/client_builds.go",
+        "internal/jenkins/queue_pressure.go",
+        "internal/jenkins/queue_delay.go"
+      ]
+    },
+    {
+      "id": "queue_item",
+      "path_pattern": "/queue/item/{id}/api/json",
+      "path_prefixes": [
+        "/queue/item/"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_queue_item",
+        "jenkins_wait_for_queue_item",
+        "jenkins_explain_queue_delay",
+        "jenkins_start_job"
+      ],
+      "auth_scheme_notes": "Queue id path; start_job polls executable.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/client_mutations.go",
+        "internal/jenkins/queue_delay.go",
+        "internal/jenkins/wait.go"
+      ]
+    },
+    {
+      "id": "root_api_json",
+      "path_pattern": "/api/json",
+      "path_prefixes": [
+        "/api/json"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_jobs",
+        "jenkins_list_jobs",
+        "jenkins_list_views",
+        "jenkins_get_capabilities",
+        "jenkins_controller_health",
+        "jenkins_explain_queue_delay"
+      ],
+      "auth_scheme_notes": "Basic or Bearer; tree= query varies by caller.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/jobs.go",
+        "internal/jenkins/views.go",
+        "internal/jenkins/capabilities.go",
+        "internal/jenkins/mode.go"
+      ]
+    },
+    {
+      "id": "stop_build",
+      "path_pattern": "/job/{segments}/{n}/stop",
+      "path_prefixes": [
+        "/stop"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "class": "mutation",
+      "tools": [
+        "jenkins_stop_build"
+      ],
+      "auth_scheme_notes": "Crumb + RO gate; classifier also matches /kill /term.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/client_mutations.go",
+        "internal/jenkins/requestclass.go"
+      ]
+    },
+    {
+      "id": "test_report",
+      "path_pattern": "/job/{segments}/{n}/testReport/api/json",
+      "path_prefixes": [
+        "/testreport/api/json",
+        "/testReport/api/json"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_get_test_report",
+        "jenkins_analyze_tests"
+      ],
+      "auth_scheme_notes": "JUnit plugin testReport action; Basic or Bearer.",
+      "fixture_covered": true,
+      "source_files": [
+        "internal/jenkins/testreport.go",
+        "internal/jenkins/testanalyze.go"
+      ]
+    },
+    {
+      "id": "whoami",
+      "path_pattern": "/whoAmI/api/json",
+      "path_prefixes": [
+        "/whoami/api/json",
+        "/whoAmI/api/json"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "class": "read",
+      "tools": [
+        "jenkins_doctor"
+      ],
+      "auth_scheme_notes": "Personal Basic API token or Jenkins-audience Bearer; identity bind (AUTH-004).",
+      "fixture_covered": true,
+      "fixture_notes": "bearer_auth_test + whoami path via CallJenkins; fixture may 404 root-only setups.",
+      "source_files": [
+        "internal/jenkins/whoami.go"
+      ]
+    }
+  ],
+  "fixture_inventory": [
+    {
+      "id": "httptest_core_api",
+      "description": "Root/job/build api/json, progressiveText, queue, computer, crumb, start/stop/cancel",
+      "status": "covered",
+      "routes": [
+        "root_api_json",
+        "job_api_json",
+        "build_api_json",
+        "progressive_text",
+        "queue_api",
+        "queue_item",
+        "computer_api",
+        "crumb_issuer",
+        "build_with_parameters",
+        "stop_build",
+        "classifier_cancel_item"
+      ]
+    },
+    {
+      "id": "httptest_pipeline_test_artifact",
+      "description": "wfapi describe/log, testReport, artifact bytes, descriptors, pluginManager",
+      "status": "covered",
+      "routes": [
+        "pipeline_wfapi_describe",
+        "pipeline_node_wfapi",
+        "test_report",
+        "artifact_bytes",
+        "descriptor_by_name",
+        "plugin_manager"
+      ]
+    },
+    {
+      "id": "auth_schemes_live",
+      "description": "API-token Basic vs OIDC Bearer vs JWT filter on reverse-proxy",
+      "status": "partial",
+      "routes": [
+        "whoami",
+        "root_api_json"
+      ],
+      "notes": "Unit tests cover AuthProvider Basic/Bearer headers; live API-token Basic smoke via make live-jenkins-test; jwt-auth-filter / OIDC residual (OAUTH-009)."
+    },
+    {
+      "id": "rbac_inaccessible",
+      "description": "Jenkins ACL 403/404 for inaccessible jobs vs MCP deny",
+      "status": "partial",
+      "notes": "Fixture can return 403 on computer/queue; full matrix of Jenkins roles needs disposable Jenkins."
+    },
+    {
+      "id": "reverse_proxy_prefix",
+      "description": "Controller behind /jenkins path prefix + origin pin",
+      "status": "partial",
+      "notes": "NormalizeBaseURL + origin pin unit tests; live reverse-proxy residual."
+    },
+    {
+      "id": "multibranch_matrix_folders",
+      "description": "Multibranch, matrix projects, deep folders, parameters, views",
+      "status": "residual_live",
+      "notes": "BuildJobPath supports nested /job/ segments; deterministic freestyle/pipeline fixtures only offline."
+    },
+    {
+      "id": "oauth_required_no_fallback",
+      "description": "OAuth-required Jenkins routes without Basic fallback (anti-fallback)",
+      "status": "residual_live",
+      "notes": "Acceptance: adding OAuth-required route without anti-fallback coverage must fail CI once live harness lands."
+    },
+    {
+      "id": "disposable_jenkins_lts",
+      "description": "Ephemeral LTS + plugins (Pipeline, folders, JUnit, artifacts) with destroy",
+      "status": "partial",
+      "notes": "MVP harness: testdata/jenkins-compose + internal/jenkins/live (-tags=live_jenkins) + make live-jenkins-test. Smoke: whoAmI, list jobs, get build, progressive tail, capabilities. Full plugin/proxy/OIDC matrix residual."
+    }
+  ],
+  "residuals": [
+    "Full CI matrix of Jenkins LTS majors + reverse-proxy remains residual (manual/dispatch only; default CI is offline).",
+    "Live smoke uses ephemeral API tokens via compose init; broader RBAC/role-strategy matrix residual.",
+    "Growing/truncated log fixtures exist offline; live multi-GiB progressive residual.",
+    "JWT auth filter / OIDC UI realm qualification pins residual (docs/auth).",
+    "Classifier-only mutation paths have unit coverage but no MCP tool issuance (by design under RO)."
+  ]
+}

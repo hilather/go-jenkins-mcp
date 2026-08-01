@@ -1,0 +1,16 @@
+# GWY-004 MVP scaffold — ClusterIP service (no public LB by default).
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins-mcp-gateway
+  labels:
+    app.kubernetes.io/name: jenkins-mcp-gateway
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: jenkins-mcp-gateway
+  ports:
+    - name: mcp-http
+      port: 8081
+      targetPort: mcp-http
+      protocol: TCP

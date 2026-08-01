@@ -1,8 +1,8 @@
 {
   "schema_version": "1.1",
-  "generated_for_revision": "Engineer authentication, read-only/RBAC, AgentCore 3LO/OBO, and seekable-Zstandard/ratarmount-rs update",
+  "generated_for_revision": "Engineer authentication, read-only/RBAC, AgentCore 3LO/OBO, seekable-Zstandard/ratarmount-rs; Tier-1 Rocky+Ubuntu, macOS nice-to-have, Windows excluded (no native FUSE)",
   "source_file": "jenkins-mcp-enterprise-agent-todo.md",
-  "source_sha256": "84affb3daf8ddac6bd673ff4d79ff8598db5b36d625f55bdb30cc4d85d31c88f",
+  "source_sha256": "c932f89b3f80f1bae5f3d0934075049ce9764748838f5a63fdb7b74ffed0b2db",
   "validation": {
     "unique_task_ids": true,
     "known_dependencies": true,
@@ -29,9 +29,9 @@
     "phase_count": 7,
     "dependency_edge_count": 244,
     "maximum_dependency_depth": 19,
-    "acceptance_criteria_count": 559,
-    "definition_of_done_checkbox_count": 9,
-    "total_markdown_checkbox_count": 568,
+    "acceptance_criteria_count": 565,
+    "definition_of_done_checkbox_count": 12,
+    "total_markdown_checkbox_count": 577,
     "topological_wave_count": 20
   },
   "phases": [
@@ -43,7 +43,7 @@
       "priority_counts": {
         "P0": 12
       },
-      "acceptance_criteria_count": 58
+      "acceptance_criteria_count": 59
     },
     {
       "phase": "Phase 1 - Secure local read-only MVP",
@@ -54,7 +54,7 @@
         "P0": 31,
         "P1": 3
       },
-      "acceptance_criteria_count": 161
+      "acceptance_criteria_count": 165
     },
     {
       "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
@@ -110,7 +110,7 @@
         "P0": 5,
         "P1": 5
       },
-      "acceptance_criteria_count": 43
+      "acceptance_criteria_count": 44
     }
   ],
   "topological_order": [
@@ -442,14 +442,15 @@
       "dependency_text": "FND-001",
       "parallel_safe": null,
       "objective": "Make builds deterministic enough to compare behavior and produce trusted releases.",
-      "implementation": "- Pin the supported Go toolchain through `go.mod` and CI configuration.\n- Add build scripts for Windows, Linux, and macOS targets required by policy.\n- Add a development container or documented isolated build environment without embedding secrets.\n- Enable module checksum verification and fail on dirty generated files.\n- Add `make`/Taskfile targets for build, test, race, lint, benchmark, SBOM, and package.",
+      "implementation": "- Pin the supported Go toolchain through `go.mod` and CI configuration.\n- Add package scripts for the **Tier-1** matrix: Rocky Linux and Ubuntu (`linux/amd64`, plus `linux/aarch64` when the support matrix requires it). Prefer oldest-supported glibc baselines per Rocky major and Ubuntu LTS so newer minors stay binary-compatible.\n- Add optional **Tier-2** macOS (`darwin/arm64`, `darwin/amd64`) build jobs that may be best-effort and non-blocking.\n- **Do not** add Windows client targets, installers, or release gates (Windows is out of scope: no native FUSE).\n- Run unit/integration tests on Rocky- and Ubuntu-based containers/VMs covering every major/LTS listed in the support matrix.\n- Add a development container or documented isolated build environment without embedding secrets.\n- Enable module checksum verification and fail on dirty generated files.\n- Add `make`/Taskfile targets for build, test, race, lint, benchmark, SBOM, and package (including `rpm` and `deb` artifact targets).",
       "acceptance_criteria": [
-        "A fresh environment can build and test using one documented command.",
+        "A fresh environment can build and test using one documented command on Rocky and Ubuntu baselines.",
         "Two clean builds from the same commit produce matching source manifests; binary reproducibility gaps are documented.",
         "CI never requires a real Jenkins credential for unit tests.",
-        "Build outputs include version, commit, dirty state, Go version, and build time policy."
+        "Build outputs include version, commit, dirty state, Go version, and build time policy.",
+        "CI produces Tier-1 artifacts for Rocky (RPM and/or linux tarball) and Ubuntu (DEB and/or linux tarball); macOS artifacts are optional and do not gate merges; no Windows artifacts are required or gated."
       ],
-      "acceptance_criteria_count": 4,
+      "acceptance_criteria_count": 5,
       "evidence_tests": [],
       "source_line": 92,
       "dependency_depth": 1,
@@ -754,13 +755,13 @@
       "dependency_text": "FND-002, FND-008",
       "parallel_safe": null,
       "objective": "Turn the preferred but not yet supplied Rust archive implementation into a measured, security-reviewed go/no-go decision without guessing which project is intended.",
-      "implementation": "Obtain the exact repository URL, owner, commit or release, license, provenance, support model, and expected integration mode from engineering. If the dependency cannot be supplied or reproduced, record an explicit no-go/deferred result and continue with the native Go reader; never substitute a similarly named public project silently. Review build reproducibility, release/signing process, SBOM/crates, unsafe Rust, parser boundaries, fuzzing, CVE response, supported seekable-Zstandard dialect, index format, Windows behavior, and recovery semantics. Prototype direct library/FFI, managed local sidecar/CLI, and optional FUSE/WinFsp modes as applicable, while keeping normal MCP reads independent of a mounted filesystem. Verify independent-frame seekable `.tar.zst` compatibility and compare all reads with the native Go fallback. Benchmark index build/load, range access, concurrency, cancellation, endpoint protection, truncation, corruption, crash recovery, and antivirus/EDR impact.",
+      "implementation": "Obtain the exact repository URL, owner, commit or release, license, provenance, support model, and expected integration mode from engineering. If the dependency cannot be supplied or reproduced, record an explicit no-go/deferred result and continue with the native Go reader; never substitute a similarly named public project silently. Review build reproducibility, release/signing process, SBOM/crates, unsafe Rust, parser boundaries, fuzzing, CVE response, supported seekable-Zstandard dialect, index format, Tier-1 platform behavior (Rocky Linux, Ubuntu) including **native Linux FUSE**, optional macOS behavior, and recovery semantics. Prototype direct library/FFI, managed local sidecar/CLI, and Linux FUSE mount modes; do **not** design for WinFsp/Windows. Keep MCP core reads functional via direct API/native Go when FUSE is absent. Verify independent-frame seekable `.tar.zst` compatibility and compare all reads with the native Go fallback. Benchmark index build/load, range access, concurrency, cancellation, SELinux/AppArmor, truncation, corruption, crash recovery, and endpoint protection on representative Rocky/Ubuntu images.",
       "acceptance_criteria": [
         "Approved go/no-go names the exact repository, commit/release, owner, license, provenance, SBOM/dependencies, build process, update/rollback plan, and security-response owner.",
         "If the exact dependency cannot be accessed, reproduced, or approved, status is explicit no-go/deferred and the native reader remains the supported path.",
         "No similarly named project is substituted or described as the intended dependency without engineering confirmation.",
-        "Windows works without mandatory FUSE, or the limitation is explicitly rejected/accepted by endpoint security and product owners.",
-        "Direct API, sidecar, and mount integration choices are measured and documented; FUSE/WinFsp is never required for ordinary reads.",
+        "Rocky Linux and Ubuntu qualify native Linux FUSE mount paths; MCP still serves log/search reads via direct API or native Go when FUSE is unavailable.",
+        "Direct API, sidecar, and Linux FUSE mount choices are measured and documented; WinFsp/Windows is out of scope.",
         "Qualified adapter and native reader return identical golden pack/member/range bytes.",
         "Warm/cold read, index, memory, concurrency, cancellation, corruption, recovery, and EDR measurements exist.",
         "Adapter failure/disablement does not invalidate `ArchiveStore` or the durable format.",
@@ -886,15 +887,17 @@
       "dependency_text": "AUTH-001",
       "parallel_safe": null,
       "objective": "Keep long-lived secrets local and outside Cursor configuration.",
-      "implementation": "Implement Windows Credential Manager first, then required macOS Keychain/Linux Secret Service adapters. Namespace entries by application, OS user, profile, controller origin, auth method, and account identity.",
+      "implementation": "Implement the Tier-1 **Linux Secret Service** backend (`libsecret` / org.freedesktop.secrets) for Rocky Linux and Ubuntu Desktop/Server sessions. Document and test headless Rocky/Ubuntu behavior when no Secret Service is available (fail closed by default; policy-controlled protected file only when explicitly approved). Implement **macOS Keychain** as a Tier-2 nice-to-have adapter that is not required for pilot exit. Do **not** implement Windows Credential Manager (Windows clients are out of scope). Namespace entries by application, OS user, profile, controller origin, auth method, and account identity.",
       "acceptance_criteria": [
-        "API tokens can be stored, loaded, replaced, and deleted under the current OS user.",
+        "API tokens can be stored, loaded, replaced, and deleted under the current OS user on Rocky/Ubuntu with Secret Service.",
         "Another local user cannot read the credential through normal APIs.",
         "Error and debug paths never print the secret.",
-        "Headless fallback is disabled unless policy explicitly allows a protected file.",
-        "Backend tests use mocks or isolated test entries and clean them up."
+        "Headless fallback is disabled unless policy explicitly allows a protected file; Rocky/Ubuntu server images without an unlocked keyring fail closed with a clear `doctor` diagnosis.",
+        "Backend tests use mocks or isolated test entries and clean them up.",
+        "macOS Keychain, if present, passes the same store/load/delete contract tests but is not a release gate.",
+        "No Windows Credential Manager code path is required for pilot or production gates."
       ],
-      "acceptance_criteria_count": 5,
+      "acceptance_criteria_count": 7,
       "evidence_tests": [],
       "source_line": 426,
       "dependency_depth": 7,
@@ -1781,7 +1784,7 @@
     },
     {
       "id": "PKG-001",
-      "title": "Produce signed Windows-first pilot packages",
+      "title": "Produce signed Tier-1 pilot packages (Rocky Linux, Ubuntu)",
       "phase": "Phase 1 - Secure local read-only MVP",
       "phase_order": 1,
       "conditional": false,
@@ -1793,16 +1796,18 @@
       ],
       "dependency_text": "FND-007, AUTH-003, OPS-001",
       "parallel_safe": null,
-      "objective": "Deliver a trustworthy local executable that Cursor can launch without secrets in configuration.",
-      "implementation": "Build signed Windows x64 package, install/uninstall flow, per-user data paths, version metadata, SBOM, provenance, and secret-free Cursor configuration documentation. Add ARM64 only if required by the support matrix.",
+      "objective": "Deliver trustworthy local executables that Cursor can launch on every Tier-1 Linux OS without secrets in configuration. macOS packages are optional nice-to-have artifacts. Windows packages are out of scope.",
+      "implementation": "- **Rocky Linux:** signed `.rpm` for each supported Rocky major series in the matrix, plus a portable `linux/amd64` tarball; XDG per-user data paths; Secret Service integration; SELinux smoke notes; document optional `fuse`/`fuse3` dependency for L2 mount.\n- **Ubuntu:** signed `.deb` for each supported Ubuntu LTS in the matrix, plus the same portable tarball where appropriate; XDG paths; Secret Service; AppArmor smoke notes; same FUSE package notes.\n- Document secret-free Cursor `command`/`args` examples for Linux paths.\n- Optional **macOS** archive/app bundle may be produced on a best-effort cadence; do not block pilot on notarization or Keychain polish.\n- Do **not** produce Windows `.exe`/MSI/MSIX or WinFsp-based packaging.\n- Version metadata, SBOM, and provenance accompany every Tier-1 artifact.",
       "acceptance_criteria": [
-        "Installed binary signature validates.",
-        "Ordinary operation requires no administrator rights unless deployment policy mandates it.",
-        "Uninstall behavior for cache and credentials is explicit and user-controlled.",
-        "Cursor starts the MCP over stdio with profile-only arguments.",
-        "Endpoint-protection compatibility smoke tests pass."
+        "Installed binary signature validates on Rocky RPM and Ubuntu DEB baselines listed in the support matrix.",
+        "Ordinary operation requires no root rights unless deployment policy mandates them.",
+        "Uninstall behavior for cache and credentials is explicit and user-controlled on each Tier-1 OS.",
+        "Cursor starts the MCP over stdio with profile-only arguments on Rocky and Ubuntu.",
+        "SELinux/AppArmor compatibility smoke tests pass on Tier-1 images.",
+        "macOS artifacts, if published, are labeled best-effort and are not required for pilot exit.",
+        "Release evidence does not claim Windows support."
       ],
-      "acceptance_criteria_count": 5,
+      "acceptance_criteria_count": 7,
       "evidence_tests": [],
       "source_line": 1092,
       "dependency_depth": 18,
@@ -2270,7 +2275,7 @@
         "Reads return exact member/range bytes for every format fixture.",
         "A 64 KiB range never triggers full-pack decompression and reports amplification.",
         "Malformed frame/seek/TAR/dictionary metadata fails safely under fuzzing.",
-        "Windows works without FUSE/WinFsp.",
+        "Rocky Linux and Ubuntu recover via native Go without FUSE; Linux FUSE mount is optional for inspection; Windows/WinFsp is out of scope.",
         "Reader output matches the qualified `ratarmount-rs` adapter byte-for-byte when that adapter is available."
       ],
       "acceptance_criteria_count": 5,
@@ -3313,7 +3318,7 @@
       "dependency_text": "MUT-001, JEN-002, JEN-004",
       "parallel_safe": null,
       "objective": "Trigger approved builds without duplicate enqueues or hidden parameters.",
-      "implementation": "Fetch parameter definitions, validate names/types/choices, show preview, confirm, perform a single non-retried enqueue, and return queue reference. Add optional client-generated correlation parameter only when job policy explicitly supports it.",
+      "implementation": "Fetch parameter definitions (GetJobParameterDefinitions / GetJenkinsJob), ValidateAgainstDefinitions (names/types/choices/secret types), MUT-001 preview/confirm, single non-retried buildWithParameters enqueue. Residual: required-without-default not always available; Active Choices/dynamic plugins limited; optional client correlation param deferred.",
       "acceptance_criteria": [
         "No automatic retry can create a duplicate build.",
         "Unknown/secret/unsupported parameters are rejected.",
@@ -3322,7 +3327,11 @@
         "Audit event contains no secret values."
       ],
       "acceptance_criteria_count": 5,
-      "evidence_tests": [],
+      "evidence_tests": [
+        "internal/jenkins/param_defs_test.go",
+        "internal/mutation/validate_test.go",
+        "internal/tools/mutation_tools_test.go (StartJob unknown/choice/secret-type/RO omit/preview-confirm)"
+      ],
       "source_line": 2217,
       "dependency_depth": 17,
       "dependents": []
@@ -3886,7 +3895,7 @@
       "acceptance_criteria": [
         "More than approved regression thresholds block or alert with comparison data.",
         "Cold/warm cache states are separated.",
-        "Windows endpoint-security-on measurements are included.",
+        "Rocky/Ubuntu SELinux or AppArmor-on measurements are included for Tier-1 Linux baselines.",
         "Results are retained and graphable by commit/release."
       ],
       "acceptance_criteria_count": 4,
@@ -4040,14 +4049,15 @@
       "dependency_text": "Phase 1 complete, QA-005/006 scoped approval, PKG-001, DOC-001",
       "parallel_safe": null,
       "objective": "Validate real workflows and performance with a small approved user group.",
-      "implementation": "Deploy signed builds, collect approved metrics and structured feedback, sample network/cache behavior, track auth/support issues, and maintain rapid rollback. Use API-token and OAuth cohorts if OAuth is ready.",
+      "implementation": "Deploy signed Tier-1 builds (Rocky Linux, Ubuntu), collect approved metrics and structured feedback, sample network/cache behavior, track auth/support issues, and maintain rapid rollback. Use API-token and OAuth cohorts if OAuth is ready. Pilot cohorts must include Rocky and Ubuntu users. macOS participants are optional and non-blocking. Windows is not a pilot platform.",
       "acceptance_criteria": [
         "No shared credentials are used.",
         "Network and result-size targets are measured on real workflows.",
         "No secret/privacy incident occurs; any incident triggers the documented response.",
-        "Pilot exit report lists defects, SLOs, adoption, and go/no-go recommendation."
+        "Pilot exit report lists defects, SLOs, adoption, and go/no-go recommendation.",
+        "Pilot evidence includes successful install/login/diagnose on Rocky and on Ubuntu."
       ],
-      "acceptance_criteria_count": 4,
+      "acceptance_criteria_count": 5,
       "evidence_tests": [],
       "source_line": 2802,
       "dependency_depth": 19,

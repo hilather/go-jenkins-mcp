@@ -1,0 +1,14 @@
+/.direnv
+/go-jenkins-mcp
+/bin/
+/dist/
+/out/
+*.local.env
+*.log
+*.exe
+coverage.out
+coverage.html
+*.test
+.idea/
+.vscode/
+*.swp

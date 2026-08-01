@@ -1,0 +1,104 @@
+# GWY-004 MVP scaffold — per-user / isolated gateway Deployment stub.
+# Platforms: Linux nodes only (Rocky/Ubuntu workers). Windows nodes unsupported.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins-mcp-gateway
+  labels:
+    app.kubernetes.io/name: jenkins-mcp-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jenkins-mcp-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jenkins-mcp-gateway
+    spec:
+      # Non-root; no shared service account token for Jenkins interactive path.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: jenkins-mcp
+          image: jenkins-mcp-gateway:dev
+          imagePullPolicy: IfNotPresent
+          args:
+            - serve
+            - --profile
+            - corp
+            - --gateway
+            - --read-only
+            - --http
+            # Loopback default matches mcpserver validator. All-interfaces + mesh
+            # requires --http-allow-non-local and --http-allowed-origin (residual).
+            - 127.0.0.1:8081
+          ports:
+            - name: mcp-http
+              containerPort: 8081
+              protocol: TCP
+          env:
+            # Non-secret only — inject real values via external Secret managers
+            # that never place token/client-secret values in git.
+            - name: JENKINS_MCP_GATEWAY_MODE
+              value: "1"
+            - name: JENKINS_MCP_READ_ONLY
+              value: "true"
+            - name: JENKINS_MCP_AGENTCORE_AS_URL
+              value: "https://login.microsoftonline.com/TENANT/v2.0"
+            - name: JENKINS_MCP_AGENTCORE_AUDIENCE
+              value: "api://jenkins-api.example.corp"
+            - name: JENKINS_MCP_AGENTCORE_CLIENT_ID
+              value: "replace-public-client-id"
+            - name: JENKINS_MCP_AGENTCORE_MODE
+              value: "authorization_code"
+            - name: JENKINS_MCP_GATEWAY_SUBJECT
+              value: "replace-subject"
+            - name: JENKINS_MCP_GATEWAY_TENANT
+              value: "replace-tenant"
+            - name: JENKINS_MCP_GATEWAY_WORKLOAD
+              value: "replace-workload"
+            - name: XDG_CONFIG_HOME
+              value: /home/nonroot/.config
+            - name: XDG_DATA_HOME
+              value: /home/nonroot/.local/share
+            - name: XDG_CACHE_HOME
+              value: /home/nonroot/.cache
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /home/nonroot/.config/jenkins-mcp
+            - name: data
+              mountPath: /home/nonroot/.local/share/jenkins-mcp
+            - name: cache
+              mountPath: /home/nonroot/.cache/jenkins-mcp
+            - name: tmp
+              mountPath: /tmp
+          # Residual: real readiness when live AgentCore + HTTP health exist.
+          # readinessProbe / livenessProbe intentionally omitted in scaffold.
+      volumes:
+        - name: config
+          emptyDir: {}
+        - name: data
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

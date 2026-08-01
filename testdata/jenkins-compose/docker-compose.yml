@@ -1,0 +1,43 @@
+# Disposable Jenkins LTS for TST-001 live integration smoke.
+# Ephemeral volume; destroy with: docker compose down -v
+# Default admin password is for disposable labs only (see README).
+#
+# Usage:
+#   export JENKINS_ADMIN_PASSWORD=test   # disposable default
+#   docker compose -f testdata/jenkins-compose/docker-compose.yml up -d --build --wait
+#   # token written inside container: /var/jenkins_home/mcp-api-token
+#   docker compose -f testdata/jenkins-compose/docker-compose.yml down -v
+
+name: go-jenkins-mcp-live
+
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: go-jenkins-mcp/live-jenkins:lts
+    ports:
+      # Loopback-only host publish (lab safety). Override bind with
+      # JENKINS_HOST_BIND=0.0.0.0 only on isolated CI runners if required.
+      - "${JENKINS_HOST_BIND:-127.0.0.1}:${JENKINS_HOST_PORT:-18080}:8080"
+    environment:
+      # Disposable lab password only — never a production secret.
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:-test}
+      JAVA_OPTS: >-
+        -Djenkins.install.runSetupWizard=false
+        -Djenkins.model.Jenkins.slaveAgentPort=-1
+    # Named volume for home; removed by `compose down -v` (ephemeral lifecycle).
+    volumes:
+      - jenkins_home:/var/jenkins_home
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/login >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 36
+      start_period: 90s
+    # Prefer no restart so failed smoke leaves a clear stop state.
+    restart: "no"
+
+volumes:
+  jenkins_home:
+    # Explicit name optional; compose project + down -v is enough for ephemeral.

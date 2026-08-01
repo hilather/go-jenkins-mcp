@@ -1,0 +1,82 @@
+# GWY-004 MVP scaffold: near-source managed gateway (optional).
+#
+# This file is illustrative packaging only:
+#   - No real AgentCore sidecar binary is bundled
+#   - Image name is a placeholder; org supplies signed images
+#   - No secrets in this file or committed .env
+#
+# Platforms: Rocky Linux / Ubuntu hosts (Tier-1). Windows out of scope.
+# Docs: docs/gateway/deployment.md
+#
+# Validate: docker compose -f deploy/gateway/docker-compose.yml config
+# Do not `up` in production until image signing + live AgentCore pin exist.
+
+name: jenkins-mcp-gateway
+
+services:
+  jenkins-mcp-gateway:
+    # Org-owned signed image once available; local builds may use a build context.
+    image: ${GATEWAY_IMAGE:-jenkins-mcp-gateway:dev}
+    build:
+      context: ../..
+      dockerfile: deploy/gateway/Dockerfile
+    user: "65532:65532"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    # Optional: cap_drop ALL when your runtime supports it.
+    environment:
+      JENKINS_MCP_GATEWAY_MODE: ${JENKINS_MCP_GATEWAY_MODE:-1}
+      JENKINS_MCP_READ_ONLY: ${JENKINS_MCP_READ_ONLY:-true}
+      JENKINS_MCP_AGENTCORE_AS_URL: ${JENKINS_MCP_AGENTCORE_AS_URL:-}
+      JENKINS_MCP_AGENTCORE_AUDIENCE: ${JENKINS_MCP_AGENTCORE_AUDIENCE:-}
+      JENKINS_MCP_AGENTCORE_CLIENT_ID: ${JENKINS_MCP_AGENTCORE_CLIENT_ID:-}
+      JENKINS_MCP_AGENTCORE_MODE: ${JENKINS_MCP_AGENTCORE_MODE:-authorization_code}
+      JENKINS_MCP_AGENTCORE_AUTH_ENDPOINT: ${JENKINS_MCP_AGENTCORE_AUTH_ENDPOINT:-}
+      JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT: ${JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT:-}
+      JENKINS_MCP_GATEWAY_SUBJECT: ${JENKINS_MCP_GATEWAY_SUBJECT:-}
+      JENKINS_MCP_GATEWAY_TENANT: ${JENKINS_MCP_GATEWAY_TENANT:-}
+      JENKINS_MCP_GATEWAY_WORKLOAD: ${JENKINS_MCP_GATEWAY_WORKLOAD:-}
+      JENKINS_MCP_GATEWAY_JENKINS_PRINCIPAL: ${JENKINS_MCP_GATEWAY_JENKINS_PRINCIPAL:-}
+      # XDG under container home (volume-mounted); no secrets on these volumes.
+      XDG_CONFIG_HOME: /home/nonroot/.config
+      XDG_DATA_HOME: /home/nonroot/.local/share
+      XDG_CACHE_HOME: /home/nonroot/.cache
+    # serve --gateway: same MCP core as local; fails closed without AS+audience.
+    # Profile must already exist under the config volume (created offline).
+    # HTTP default is loopback inside the container (matches mcpserver validator).
+    # All-interfaces + mesh/mTLS is residual: requires --http-allow-non-local AND
+    # explicit --http-allowed-origin entries (never ship bare :8081 alone).
+    command:
+      - serve
+      - --profile
+      - ${JENKINS_MCP_PROFILE:-corp}
+      - --gateway
+      - --read-only
+      - --http
+      - ${JENKINS_MCP_HTTP_ADDR:-127.0.0.1:8081}
+    ports:
+      # Host loopback only in lab; production uses mesh/mTLS residual.
+      - "127.0.0.1:8081:8081"
+    volumes:
+      # Per-user/profile config + data (no credential files — keyring residual).
+      - gateway-config:/home/nonroot/.config/jenkins-mcp
+      - gateway-data:/home/nonroot/.local/share/jenkins-mcp
+      - gateway-cache:/home/nonroot/.cache/jenkins-mcp
+    tmpfs:
+      - /tmp:size=64M,mode=1777
+    restart: "no"
+    # Resource bounds (tune per site).
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+
+volumes:
+  gateway-config:
+  gateway-data:
+  gateway-cache:

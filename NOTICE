@@ -1,0 +1,11 @@
+go-jenkins-mcp
+Copyright contributors to the hilather/go-jenkins-mcp project.
+
+This product includes software developed from the upstream seed project:
+
+  go-jenkins-mcp (https://github.com/simonfxr/go-jenkins-mcp)
+  Copyright (c) 2025 Simon Reiser
+  Licensed under the MIT License — see LICENSE.
+
+Additional third-party dependencies are listed in go.mod / go.sum and in
+generated SBOMs for releases.

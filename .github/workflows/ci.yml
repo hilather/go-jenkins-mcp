@@ -1,0 +1,216 @@
+# CI quality and security pipeline (FND-007).
+#
+# Merge gate (configure branch protection required checks for these job names):
+#   - lint-test-build   (job id: check)  — gofmt, vet, test, race (Ubuntu), build, package
+#   - govulncheck                        — vulnerability scan
+#
+# Optional / non-blocking (continue-on-error or workflow_dispatch only):
+#   - macos-optional    — Tier-2 best-effort
+#   - package-smoke     — PKG-001 offline tarball smoke (bare Ubuntu only)
+#   - fuzz-smoke        — QA-001 short native fuzz (FUZZTIME=1s on PR path)
+#   - stdio-smoke       — FND-006 offline MCP binary host-lifecycle (Wave 26+33; not Cursor product)
+#   - live-jenkins-smoke — TST-001 Docker Jenkins (workflow_dispatch only)
+#   - Perf regression step inside check (Ubuntu only, continue-on-error)
+#
+# Untrusted PR jobs never inject Jenkins/OAuth secrets (contents: read only).
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  # Manual only for optional jobs (e.g. live Jenkins smoke). Does not change default push/PR gate.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: lint-test-build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Tier-1 host runners are Ubuntu; Rocky compatibility is via container job.
+        include:
+          - id: ubuntu
+            container: ""
+          - id: rocky9
+            container: rockylinux:9
+    container: ${{ matrix.container || null }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Go (container)
+        if: matrix.container != ''
+        run: |
+          dnf install -y golang git make tar gzip which || yum install -y golang git make tar gzip which
+          go version || true
+
+      - name: Setup Go
+        if: matrix.container == ''
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Go (container fallback pin)
+        if: matrix.container != ''
+        run: |
+          # rockylinux packages may lag; install official toolchain to $HOME
+          GOVER=$(grep '^go ' go.mod | awk '{print $2}')
+          curl -fsSL "https://go.dev/dl/go${GOVER}.linux-amd64.tar.gz" -o /tmp/go.tgz || \
+            curl -fsSL "https://go.dev/dl/go1.25.0.linux-amd64.tar.gz" -o /tmp/go.tgz
+          rm -rf "$HOME/.local/go"
+          mkdir -p "$HOME/.local"
+          tar -C "$HOME/.local" -xzf /tmp/go.tgz
+          echo "$HOME/.local/go/bin" >> "$GITHUB_PATH"
+
+      - name: Module download
+        run: go mod download
+
+      - name: Format check
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed on:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -count=1 ./...
+        env:
+          # Never inject real Jenkins credentials into unit CI
+          JENKINS_MCP_AUTH: ""
+
+      - name: Test race
+        if: matrix.container == ''
+        run: go test -count=1 -race ./...
+
+      - name: Build
+        run: make build
+
+      # QA-003: optional continuous perf regression (Ubuntu host only; budgets are generous).
+      # Does not run on Rocky container matrix cell (slower cold start). Not a hard merge
+      # requirement historically; continue-on-error keeps default gate green under noise.
+      - name: Perf regression (QA-003 opt-in)
+        if: matrix.container == ''
+        continue-on-error: true
+        run: make perf-regression
+        env:
+          PERF_TOLERANCE_PERCENT: "150"
+
+      - name: Package tarball
+        run: make package
+
+      - name: Upload artifacts
+        if: matrix.container == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: jenkins-mcp-linux
+          path: dist/*
+          if-no-files-found: warn
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  # Optional best-effort macOS (Tier-2) — does not block merge if workflow is required only for check+govulncheck
+  macos-optional:
+    name: macos-optional
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test -count=1 ./...
+      - run: go build -o bin/jenkins-mcp .
+
+  # Wave 23 / FND-007 expand: PKG-001 offline package smoke (bare Ubuntu only).
+  # Does not run in Rocky container (no dpkg tooling assumptions; keeps Rocky job lean).
+  # Non-required merge check; continue-on-error so optional branch-protection config stays simple.
+  package-smoke:
+    name: package-smoke
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Package smoke (PKG-001 offline)
+        run: make package-smoke
+        env:
+          # Never inject real Jenkins credentials into unit CI
+          JENKINS_MCP_AUTH: ""
+
+  # Wave 23 / FND-007 expand: QA-001 short native fuzz smoke.
+  # FUZZTIME=1s per target keeps PR wall time modest (~20 targets + compile).
+  # Non-required merge check; continue-on-error. Longer runs: make fuzz-smoke FUZZTIME=2s locally.
+  fuzz-smoke:
+    name: fuzz-smoke
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Fuzz smoke (QA-001 short)
+        run: make fuzz-smoke FUZZTIME=1s
+        env:
+          # Never inject real Jenkins credentials into unit CI
+          JENKINS_MCP_AUTH: ""
+
+  # Wave 26 + Wave 33 / FND-006+FND-007: offline MCP stdio host-lifecycle smoke
+  # (make stdio-smoke). Spawns real bin/jenkins-mcp over stdio against httptest Jenkins —
+  # host-lifecycle matrix Done*; not Cursor product binary CI.
+  # Non-required merge check; continue-on-error (keep until smoke is long-term stable).
+  stdio-smoke:
+    name: stdio-smoke (host-lifecycle offline)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: MCP stdio host-lifecycle smoke (FND-006 offline binary)
+        run: make stdio-smoke
+        env:
+          # Never inject real Jenkins credentials into unit CI
+          # (stdio-smoke uses a canary token + httptest only; env must stay empty of real secrets)
+          JENKINS_MCP_AUTH: ""
+
+  # TST-001: disposable Jenkins LTS live smoke — workflow_dispatch only (not push/PR gate).
+  live-jenkins-smoke:
+    name: live-jenkins-smoke (manual)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Live Jenkins smoke (Docker)
+        run: make live-jenkins-test
+        env:
+          JENKINS_ADMIN_PASSWORD: test
+          JENKINS_HOST_PORT: "18080"

@@ -5,7 +5,7 @@
 **Primary client:** Cursor running a local MCP process  
 **Optional enterprise deployment:** AgentCore/managed gateway near Jenkins  
 **Prepared:** July 31, 2026  
-**Revision:** Engineer-note and authentication/storage update  
+**Revision:** Engineer-note and authentication/storage update; Tier-1 OS matrix (Rocky Linux + Ubuntu; macOS nice-to-have; Windows excluded — no native FUSE)  
 **Status:** Revised target architecture and delivery plan
 
 ---
@@ -45,6 +45,7 @@ The recommended enterprise design is:
 | Cold archive format | Immutable seekable multi-frame `.tar.zst` with TAR member and frame indexes |
 | Archive grouping | Related build/stage/downstream/test logs share a bounded affinity pack |
 | Archive reader | `ratarmount-rs` preferred, native Go fallback mandatory |
+| Local client OS | Tier 1: Rocky Linux (all supported majors) + Ubuntu (all supported LTS); Tier 2: macOS nice-to-have; Windows excluded (no native FUSE) |
 ---
 
 ## 2. Engineer-note validation and resulting decisions
@@ -111,7 +112,7 @@ The requirement is **Zstandard random access through independent frames/checkpoi
 - Operate efficiently against very large logs and long build histories.
 - Preserve useful cached evidence while respecting per-user/profile isolation, MCP RBAC, quotas, retention, sensitivity, revocation, and legal/security policy.
 - Degrade gracefully when Jenkins plugins or optional APIs are absent.
-- Package as a signed, easy-to-deploy Windows binary first, with Linux and macOS support where required.
+- Package signed, easy-to-deploy local binaries for **Rocky Linux** (all currently supported major series) and **Ubuntu** (all currently supported LTS Desktop/Server flavors; same binary). Treat **macOS** as a nice-to-have, best-effort platform that is not a pilot or production release gate. **Windows is out of scope** for GA because it has no native FUSE mount (WinFsp is third-party and not assumed).
 - Produce enough audit and diagnostic data for security and platform teams without logging secrets or full customer data.
 
 ### 3.2 Non-goals for the first production release
@@ -121,7 +122,7 @@ The requirement is **Zstandard random access through independent frames/checkpoi
 - Allowing an LLM to edit Jenkins job configuration, credentials, plugins, nodes, or controller settings.
 - Sending complete multi-gigabyte logs to the model.
 - Requiring a central shared MCP service or shared service account. A managed gateway remains optional and per-user.
-- Treating FUSE as a required runtime dependency for normal log access. `ratarmount-rs` must also support a library/sidecar or direct archive API.
+- Supporting Windows local clients (no native FUSE; WinFsp not assumed). Archive access is designed for Linux FUSE plus a native Go/direct-API fallback; Windows is not a Tier-1 or Tier-2 platform.
 - Building a full Jenkins OAuth authorization server in the first release. External IdP/resource-server and token-exchange paths are evaluated first.
 - Building an embeddings or vector-search platform before literal and regular-expression search are proven insufficient.
 - Running arbitrary downloaded artifacts or build scripts on the developer workstation.
@@ -332,7 +333,7 @@ jenkins-mcp status --profile corp
 jenkins-mcp logout --profile corp
 ```
 
-`login` reads username/token from a non-echoing terminal and stores the token in Windows Credential Manager, macOS Keychain, or Linux Secret Service. Secret command-line options are unsupported. Environment-secret compatibility is opt-in, policy-controlled, and omitted from enterprise examples.
+`login` reads username/token from a non-echoing terminal and stores the token in the platform credential store: **Linux Secret Service** on Rocky/Ubuntu (Tier 1), with macOS Keychain only when the optional macOS build is exercised (Tier 2). Secret command-line options are unsupported. Environment-secret compatibility is opt-in, policy-controlled, and omitted from enterprise examples.
 
 The client sends preemptive Basic authentication with `username:api-token` over verified TLS. It never logs headers. Identity is verified immediately against an approved Jenkins identity endpoint; anonymous fallback or an unexpected principal fails closed.
 
@@ -797,9 +798,11 @@ Preferred order:
 
 1. **Direct Rust library/FFI** if the API is stable, memory-safe at the boundary, cancellable, and straightforward to sign/package.
 2. **Managed Rust sidecar** over stdin/stdout or a private named pipe with a versioned bounded protocol, opaque IDs, lifecycle management, and no public listener.
-3. **Direct non-FUSE archive API** exposed by the project, especially for Windows.
-4. **FUSE/WinFsp mount** only as an optional human/diagnostic convenience, never required by the MCP read path.
-5. **Native Go fallback** implementing the same seek-table/TAR/manifest contract.
+3. **Linux FUSE mount** via `ratarmount-rs` (or equivalent) for interactive/human inspection and qualified L2 access paths on Rocky/Ubuntu.
+4. **Direct non-FUSE archive API** / library or managed sidecar when mount is unavailable or undesirable for the MCP process itself.
+5. **Native Go fallback** implementing the same seek-table/TAR/manifest contract (recovery/degraded path; must not depend on FUSE).
+
+Windows WinFsp and other third-party FUSE ports are **not** design targets. The product does not ship a Windows local client.
 
 ### 10.6 Ratarmount-rs qualification
 
@@ -808,9 +811,9 @@ Review the exact repository and release candidate for:
 - License, provenance, ownership, maintenance/release process, SBOM, dependencies, unsafe Rust, fuzzing, and security policy.
 - Supported seekable-Zstd dialect and compatibility with the selected writer.
 - TAR edge cases, sparse/long paths, duplicate names, PAX/GNU headers, truncation, corruption, and archive bombs.
-- Direct API/sidecar/FUSE modes on Windows x64 first and Linux where gateway deployment is planned.
+- Direct API, sidecar, and **native Linux FUSE** modes on Rocky Linux and Ubuntu (primary local matrix); Linux gateway where planned; macOS FUSE (macFUSE) only if Tier-2 is exercised.
 - Persistent index format, memory mapping, rebuild, migration, cancellation, and mismatched-index detection.
-- Concurrent reads, descriptor limits, cache behavior, endpoint-protection impact, and crash recovery.
+- Concurrent reads, descriptor limits, cache behavior, SELinux/AppArmor impact, and crash recovery.
 - 10 GiB, 100 GiB, and at least 1 TiB logical corpus tests with representative line sizes and member counts.
 
 A qualification failure changes the adapter choice, not the on-disk contract or product backlog.
@@ -828,7 +831,7 @@ Indexes are built off the interactive request path. A stale or mismatched index 
 
 ### 10.8 Performance and bandwidth SLOs
 
-Initial qualification targets, calibrated on corporate Windows hardware and gateway Linux hardware:
+Initial qualification targets, calibrated on Rocky/Ubuntu workstation hardware and gateway Linux hardware:
 
 - Repeated diagnosis of a sealed build downloads zero duplicate Jenkins log bytes.
 - A 64 KiB logical range read decompresses at most the containing frame(s), with target read amplification <= 2 frames and <= 32 MiB uncompressed at the default setting.
@@ -1082,6 +1085,8 @@ Expose two layers:
 - `jenkins_list_tests`
 - `jenkins_list_artifacts`
 - `jenkins_get_nodes`
+- `jenkins_list_views`
+- `jenkins_get_node`
 - `jenkins_get_capabilities`
 
 **Triage operations**
@@ -1255,7 +1260,8 @@ Use layered redaction:
 2. Structured parameter redaction based on Jenkins parameter names/types and policy patterns.
 3. Pattern detectors for bearer tokens, API keys, private keys, connection strings, and credential URLs.
 4. Enterprise-configured patterns.
-5. Optional PII/customer-data patterns for model output.
+5. Bare high-entropy hex / base64url tokens without labels (`CategoryBareToken`) — length and charset-diversity heuristics so unlabeled API tokens do not slip logs/MCP output (KD-004). Single-case pure hex ≥40; mixed-case pure hex ≥32; W3C 32-hex `trace_id` preserved. Serve `log.SetOutput(redact.NewWriter)` line-buffers incomplete lines across Writes so secrets split mid-line are redacted when the line completes (or on Flush/Close). Residual: full git SHAs may false-positive; single-case 32–39 hex may false-negative; force-flush of pending lines over 256 KiB without `\n` may miss secrets only at that boundary.
+6. Optional PII/customer-data patterns for model output.
 
 Return redaction counts and categories, not matched values. Test false positives so error evidence remains useful.
 
@@ -1372,7 +1378,7 @@ CI or scheduled hardware runners should fail or alert on:
 - Use content hashing in a streaming pass.
 - Build indexes incrementally when possible.
 - Separate foreground and background worker priorities.
-- Profile with realistic Windows antivirus and endpoint security enabled.
+- Profile with representative Rocky SELinux and Ubuntu AppArmor endpoint policies enabled.
 
 ---
 
@@ -1556,37 +1562,63 @@ Maintain disposable Jenkins test matrices covering:
 
 ## 19. Packaging, deployment, and lifecycle
 
-### 19.1 Windows-first packaging
+### 19.1 Supported platform matrix
 
-- Signed standalone `.exe` and optionally signed MSI/MSIX according to corporate deployment standards.
-- Default data under a private per-user local application-data directory.
-- No administrator rights for normal installation or operation unless company deployment requires them.
-- Windows Credential Manager integration.
-- Windows Event Log optional for sanitized security events; private rotating logs otherwise.
-- Long-path support and endpoint-security compatibility testing.
-- Cursor configuration references executable and profile only, never credentials.
+| Tier | Platforms | Architectures | Role |
+|---|---|---|---|
+| **Tier 1 (GA / pilot gate)** | Rocky Linux (all major series currently in Rocky's support lifecycle); Ubuntu (all LTS currently in Canonical standard/ESM support; Desktop and Server share one binary) | `amd64`/`x86_64` required; `aarch64` when CI and signing cover it | Install, keyring, stdio MCP, L1 storage, optional Linux FUSE L2 mount, doctor, and packaging acceptance must pass on every Tier-1 OS before pilot exit |
+| **Tier 2 (nice-to-have)** | macOS | Apple Silicon preferred; Intel when CI allows | Built and smoke-tested when resources allow; failures do **not** block pilot or production release |
+| **Optional service** | Managed gateway container/service | Linux `amd64`/`aarch64` as approved | After local pilot; not a substitute for local Tier-1 clients |
+| **Out of scope** | **Windows** (desktop/server) | — | No native FUSE mount; WinFsp and other third-party FUSE ports are not assumed. No Windows packages, CI gates, or pilot cohort |
 
-Example secret-free Cursor configuration:
+**Why Windows is excluded:** L2 archive inspection and preferred `ratarmount-rs` integration rely on **native Linux FUSE**. Windows has no in-box FUSE; depending on WinFsp would add a third-party kernel/filter driver, signing, and endpoint-security burden outside this product's support model. Local clients therefore target Rocky and Ubuntu only.
+
+**Rocky Linux "all flavors"** means every currently supported Rocky major series (for example 8.x, 9.x, and any subsequent supported major) and their corresponding minor updates. Prefer building against the oldest supported glibc in each major series so newer minors remain binary-compatible.
+
+**Ubuntu "all flavors"** means Desktop and Server for every currently supported LTS (for example 22.04 and 24.04 while still supported, plus any additional LTS the support matrix lists). Ubuntu flavor spins (Kubuntu, Xubuntu, etc.) are covered by the same Ubuntu binary when the base LTS and architecture match. Non-LTS interim releases are optional CI targets only, not GA requirements.
+
+**Explicit non-requirements for GA:** Windows clients; macOS (Tier 2 only); other Linux distros (Fedora, Debian non-Ubuntu, RHEL clones other than Rocky) unless later promoted into the matrix.
+
+### 19.2 Rocky Linux and Ubuntu packaging (Tier 1)
+
+- Publish static or near-static `linux/amd64` (and `linux/aarch64` when in the matrix) binaries with version, commit, and SBOM metadata.
+- Prefer enterprise distribution packages in addition to a tarball:
+  - **Rocky:** signed `.rpm` for each supported major series, installable via corporate yum/dnf repos or offline RPM.
+  - **Ubuntu:** signed `.deb` for each supported LTS, installable via corporate apt repos or offline DEB.
+- Per-user data under XDG conventions (`$XDG_CONFIG_HOME`, `$XDG_DATA_HOME`, `$XDG_CACHE_HOME` with documented defaults under `$HOME`).
+- No root required for normal operation; packages may install the binary system-wide while cache/credentials remain per-user.
+- Credential store: **Linux Secret Service** (`libsecret` / org.freedesktop.secrets) on Desktop sessions; document and test headless/server sessions (GNOME keyring unlocked session, KWallet, or policy-controlled protected file only when Secret Service is unavailable).
+- **FUSE:** document `fuse`/`fuse3` package dependency for optional L2 mount paths; MCP core log mirror and native Go reader must still function when FUSE is absent (degraded: no mount-based inspection).
+- glibc compatibility matrix is part of CI: build or test against the oldest supported Rocky and Ubuntu baselines listed in the support matrix.
+- SELinux (Rocky) and AppArmor (Ubuntu) smoke tests on representative images, including FUSE allow rules where mounts are used.
+- Cursor configuration references binary path and profile only, never credentials.
+
+Example secret-free Cursor configuration (Linux):
 
 ```json
 {
   "mcpServers": {
     "jenkins": {
-      "command": "C:\\Program Files\\JenkinsMCP\\jenkins-mcp.exe",
+      "command": "/usr/bin/jenkins-mcp",
       "args": ["serve", "--profile", "corp", "--stdio"]
     }
   }
 }
 ```
 
-### 19.2 Linux and macOS
+### 19.3 macOS packaging (Tier 2, nice-to-have)
 
-- Native binaries and OS keyring integrations.
-- No FUSE requirement for core operation.
-- Package or archive format chosen by enterprise distribution needs.
+- Native `darwin` binaries and Keychain integration when built.
+- Optional ad-hoc or Developer ID signing/notarization only if enterprise distribution requires it; absence does not block Tier-1 releases.
 - Same profile and cache schemas where portability is safe; secrets never exported automatically.
+- CI may produce macOS artifacts on a best-effort cadence without making them pilot gates.
+- macFUSE is not a GA dependency; Tier-2 may use direct/native readers only.
 
-### 19.3 Updates
+### 19.4 Windows (out of scope)
+
+Do **not** produce Windows installers, Credential Manager backends, WinFsp adapters, or Windows pilot gates. If a future program revisits Windows, it would be a new product decision requiring an archive path that does not depend on native FUSE (or an explicitly approved third-party FUSE stack). Until then, Windows remains unsupported.
+
+### 19.5 Updates
 
 - Prefer managed deployment through existing enterprise software distribution.
 - If self-update is implemented, use signed metadata, rollback protection, staged channels, and policy control.
@@ -1594,13 +1626,15 @@ Example secret-free Cursor configuration:
 - Preserve last-known-good binary where policy allows.
 - Publish release notes with tool-schema, storage-schema, auth, and policy changes.
 
-### 19.4 Support window
+### 19.6 Support window
 
-Define:
+Define and publish a living support matrix that includes at least:
 
 - Supported Jenkins LTS versions.
 - Supported MCP protocol versions and Cursor versions.
-- Supported OS versions/architectures.
+- **Tier-1 OS versions/architectures:** Rocky major series and min glibc; Ubuntu LTS codenames and min glibc; `amd64` and any approved `aarch64`; FUSE package baseline for mount-enabled installs.
+- **Tier-2 OS:** macOS versions treated as best-effort.
+- **Explicitly unsupported:** Windows local clients.
 - Supported OAuth providers or standards profile.
 - Supported ratarmount-rs adapter versions and pack schemas.
 - Vulnerability response and emergency kill-switch process.
@@ -1608,9 +1642,9 @@ Define:
 ---
 
 
-### 19.5 Optional managed gateway package
+### 19.7 Optional managed gateway package
 
-Package the same core as a non-root Linux container/service only after the local read-only pilot. Add workload limits, per-user subject binding, AgentCore credential-provider adapter, encrypted/partitioned cache roots, health/readiness, horizontal-concurrency tests, and no public archive sidecar listener. The gateway build must not enable mutations merely because it is centrally hosted.
+Package the same core as a non-root Linux container/service only after the local read-only pilot. Prefer Rocky- or Ubuntu-based images aligned with the Tier-1 matrix. Add workload limits, per-user subject binding, AgentCore credential-provider adapter, encrypted/partitioned cache roots, health/readiness, horizontal-concurrency tests, and no public archive sidecar listener. The gateway build must not enable mutations merely because it is centrally hosted.
 ---
 
 ## 20. Delivery roadmap
@@ -1619,19 +1653,21 @@ Package the same core as a non-root Linux container/service only after the local
 
 - Fork and pin the Simon baseline; preserve useful behavior with integration fixtures.
 - Split packages and add CI/security/performance harnesses.
+- CI-test matrix for Rocky Linux majors and Ubuntu LTS; optional macOS jobs non-blocking; no Windows client CI gates.
 - Reproduce and fix hidden progressive-log over-download.
-- Approve ADRs for no-native-3LO terminology, identity modes, read-only/RBAC, seekable Zstandard format, affinity packs, and ratarmount-rs integration.
-- Obtain, pin, code-review, reproduce, and benchmark the exact production `ratarmount-rs` repository and commit/release selected by engineering.
+- Approve ADRs for no-native-3LO terminology, identity modes, read-only/RBAC, seekable Zstandard format, affinity packs, ratarmount-rs + Linux FUSE, Windows exclusion, and the Tier-1/Tier-2 OS matrix.
+- Obtain, pin, code-review, reproduce, and benchmark the exact production `ratarmount-rs` repository and commit/release selected by engineering on Rocky/Ubuntu.
 
 ### Phase 1 - Secure local read-only pilot
 
-- Windows-first signed local stdio binary.
-- Personal API token in Windows Credential Manager.
+- Signed local stdio binaries and packages for **Rocky Linux** and **Ubuntu** (Tier 1); macOS artifacts optional; **no Windows packages**.
+- Personal API token in Linux Secret Service on Rocky/Ubuntu (Keychain only if macOS is exercised).
 - Verified Jenkins identity, hardened HTTP, route-safe URL construction.
 - Global read-only kill switch configurable from Cursor and forced by policy.
 - Restricting MCP-side RBAC policy engine and audit.
 - Incremental log mirror, independent Zstandard frames, SQLite line indexes, literal/regex search, redaction, bounded results.
-- No L2 dependency required for pilot readiness, but format prototype must exist.
+- No L2 mount dependency required for pilot readiness, but format prototype and native Go reader must exist; FUSE mount path qualified on Tier-1 Linux when L2 lands.
+- Pilot cohorts must include both Rocky and Ubuntu users (or at least one of each major family if cohort size is small).
 
 ### Phase 2 - OAuth resource-server path and seekable L2
 
@@ -1696,13 +1732,14 @@ A production release must not ship until all applicable gates pass.
 
 - Supported Jenkins LTS and plugin matrices pass, including every non-`api` route used by progressive logs, artifacts, Pipeline, and mutations.
 - The exact JWT filter/proxy release passes claim, group, JWKS, audience, route, and fallback tests.
-- Cursor stdio lifecycle, cancellation, and `args`/`env` read-only configuration pass.
+- Cursor stdio lifecycle, cancellation, and `args`/`env` read-only configuration pass on every Tier-1 OS (Rocky Linux, Ubuntu).
 - MCP conformance passes for supported protocol versions.
-- Native and ratarmount-rs readers return identical logical bytes/ranges for supported pack fixtures.
+- Native and ratarmount-rs readers return identical logical bytes/ranges for supported pack fixtures; Linux FUSE mount path is qualified where offered.
+- Tier-1 install packages (Rocky RPM; Ubuntu DEB) install, run, and uninstall cleanly on the support-matrix baselines. macOS is optional evidence only. Windows is not tested for GA.
 
 ### Usability gate
 
-- A new user can install, add a profile, choose API-token or OAuth login, verify identity/effective policy, diagnose a failed build, understand a policy denial, inspect cache/archive status, and purge local data.
+- A new user on Rocky or Ubuntu can install, add a profile, choose API-token or OAuth login, verify identity/effective policy, diagnose a failed build, understand a policy denial, inspect cache/archive status, and purge local data.
 - `doctor` explains TLS, proxy, permission, OAuth, policy, route-protection, cache, and archive problems without recommending insecure bypasses.
 - Every heuristic finding has evidence and uncertainty labeling.
 
@@ -1729,6 +1766,9 @@ A production release must not ship until all applicable gates pass.
 | Archive access | Qualified ratarmount-rs adapter plus native Go reader | Preferred implementation without dependency lock-in |
 | Search | Literal + RE2 + deterministic parsers before vector search | Fast, safe, explainable, and space efficient |
 | Mutations | Later, exact policy + confirmation + no unsafe retries | Reduces model-driven operational risk |
+| Local client platforms | Tier 1: Rocky Linux (all supported majors) + Ubuntu (all supported LTS Desktop/Server); Tier 2: macOS nice-to-have; **Windows excluded** | Native Linux FUSE for L2/ratarmount; no WinFsp dependency |
+| Linux packaging | Signed RPM (Rocky) and DEB (Ubuntu) plus portable tarball; XDG data paths | Matches enterprise Linux software distribution |
+| Linux credentials | Secret Service (`libsecret`); documented headless fallback only under policy | No plaintext config secrets; no Windows Credential Manager path |
 
 ---
 
@@ -1748,7 +1788,7 @@ A production release must not ship until all applicable gates pass.
 12. Is application-level encryption required in addition to ACLs and full-disk encryption?
 13. What frame size, small-member coalescing threshold, pack target, member limit, quota, and retention policy pass representative benchmarks?
 14. Should text artifacts join log affinity packs or remain in separate retention/security domains?
-15. Is Windows the only launch OS, and are Windows ARM64, Linux gateway, or macOS required?
+15. **Resolved (platform scope):** Tier-1 GA platforms are Rocky Linux (all currently supported major series) and Ubuntu (all currently supported LTS Desktop/Server). macOS is nice-to-have and not release-blocking. **Windows is excluded** because it has no native FUSE mount and WinFsp is not an assumed dependency. Remaining sub-questions: exact min Rocky/Ubuntu minors for CI, whether `aarch64` is required at pilot or only post-pilot, fuse3 package policy for desktop vs headless, and which code-signing keys/repos own RPM/DEB publication.
 16. What telemetry may leave a workstation/gateway and how are user/controller/job identities pseudonymized?
 17. Who owns Jenkins-side OAuth hardening, Entra configuration, policy authoring, and incident response?
 18. What concrete unmet requirement would justify starting the full Jenkins authorization-server plugin epic?
@@ -1786,7 +1826,7 @@ The revision was researched against primary project/vendor documentation availab
 - [Zstandard compression format](https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md) defines concatenated frames as independently decodable while compressed blocks inside a frame may depend on earlier data.
 - [Zstandard Seekable Format](https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md) defines independent frames followed by a final seek-table skippable frame.
 - [`t2sz`](https://github.com/martinellimarco/t2sz) is a reference implementation that maps TAR members or bounded input regions to independent Zstandard frames and supports member grouping/splitting tradeoffs.
-- The user-preferred `ratarmount-rs` implementation was not identified by an exact authoritative public repository in the supplied notes or public research. Adoption therefore requires an explicit dependency handoff plus code, license, supply-chain, API, Windows, recovery, format-compatibility, and performance qualification of a pinned revision.
+- The user-preferred `ratarmount-rs` implementation was not identified by an exact authoritative public repository in the supplied notes or public research. Adoption therefore requires an explicit dependency handoff plus code, license, supply-chain, API, Linux FUSE/Rocky/Ubuntu, recovery, format-compatibility, and performance qualification of a pinned revision.
 
 ### Cursor
 
@@ -1802,4 +1842,4 @@ The enterprise MCP must start local, personal, and read-only. A global kill swit
 
 For performance, progressive log bytes are deduplicated and compressed while streaming into independent Zstandard frames. Related sealed logs are grouped into bounded semantic seekable `.tar.zst` packs. The preferred packer reuses existing compressed payload frames, surrounding them with small generated TAR header/padding frames, so promotion does not recompress log data when selected readers support it; a native Go reader and compatibility writer prevent lock-in. The exact engineering-selected `ratarmount-rs` dependency remains the preferred L2 adapter once it has been supplied, audited, reproduced, and benchmarked.
 
-The companion agent backlog expresses these decisions as dependency-aware implementation tasks, including OAuth capability tests, JWT filter hardening, AgentCore 3LO/OBO, read-only/RBAC enforcement, HTTP wire-compression measurement, seekable archive format, zero-recompression promotion, semantic batching, and a conditional Jenkins authorization-server plugin epic.
+The companion agent backlog expresses these decisions as dependency-aware implementation tasks, including OAuth capability tests, JWT filter hardening, AgentCore 3LO/OBO, read-only/RBAC enforcement, HTTP wire-compression measurement, seekable archive format, zero-recompression promotion, semantic batching, a conditional Jenkins authorization-server plugin epic, and Tier-1 packaging for Rocky Linux and Ubuntu (macOS nice-to-have; Windows excluded for lack of native FUSE).
