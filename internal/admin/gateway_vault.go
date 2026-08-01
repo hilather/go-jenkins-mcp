@@ -19,6 +19,11 @@ type gatewayVaultResponse struct {
 	Mode string `json:"mode"`
 	// EnabledModes is the allow-list (primary-only when ENABLED_MODES unset).
 	EnabledModes []string `json:"enabledModes"`
+	// MultiUserEnabled is true when JENKINS_MCP_GATEWAY_MULTI_USER is truthy
+	// (foundation residual; not a production GO pin). Secret-free bool only.
+	MultiUserEnabled bool `json:"multiUserEnabled"`
+	// HAMultiReplica is always false (HOST-008 Tier A single-replica default).
+	HAMultiReplica bool `json:"haMultiReplica"`
 	// VaultConfigured is true when the Mode A vault file exists on disk.
 	VaultConfigured bool `json:"vaultConfigured"`
 	// EntryCount is the number of subject entries (0 when missing/unreadable).
@@ -48,10 +53,16 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	multiUser := gateway.MultiUserEnabled(os.Getenv)
 	resp := gatewayVaultResponse{
-		Subjects:     []string{},
-		EnabledModes: []string{},
-		Residual:     "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser)",
+		Subjects:         []string{},
+		EnabledModes:     []string{},
+		MultiUserEnabled: multiUser,
+		HAMultiReplica:   false, // HOST-008 Tier A; no multi-replica runtime
+		Residual:         "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser)",
+	}
+	if multiUser {
+		resp.Residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO); " + resp.Residual
 	}
 
 	mx, err := gateway.ModeMatrixFromEnviron(os.Getenv)

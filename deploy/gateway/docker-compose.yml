@@ -5,7 +5,7 @@
 #   - Image name is a placeholder; org supplies signed images
 #   - No secrets in this file or committed .env (copy .env.example → .env)
 #   - Non-root (65532), read-only root, resource limits, health probes
-#   - Single replica semantics (HOST-008 multi-replica residual)
+#   - Single replica semantics (HOST-008: multi-replica HA non-goal until durable vault)
 #
 # Platforms: Rocky Linux / Ubuntu hosts (Tier-1). Windows out of scope.
 # Docs: docs/gateway/deployment.md  |  deploy/gateway/README.md

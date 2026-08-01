@@ -346,23 +346,66 @@ Obtain Ready and Streamable HTTP mTLS hardening remain residuals.
 
 ---
 
-## 9. HA / multi-replica residual (HOST-008 — Tier B)
+## 9. HA / multi-replica residual runbook (HOST-008 — Tier B)
 
-**Tier A default: single replica.** Do not scale Deployment `replicas` > 1 for
-interactive multi-user until the checklist below is satisfied.
+### Tier A default: single replica
 
-### Multi-replica checklist (not Tier A MVP)
+| Control | Tier A posture |
+|---------|----------------|
+| Kustomize / compose | **`replicas: 1`** (`deploy/gateway/kustomize/deployment.yaml`) |
+| Token / JWT vault | Process-local file or memory (not multi-pod safe) |
+| Token Obtain cache | In-process `MemoryTokenCache` only |
+| Subject limiter | Process-local (`SubjectLimiter.StatusMap` → `ha_multi_replica: false`) |
+| Audit | Local file / sink per process |
+| Operator readiness | `GET /readyz` + `gateway_ready` on **this** process only |
 
-| Requirement | Why |
-|-------------|-----|
-| Durable shared token vault (external) | Process-memory vault is not multi-pod safe |
-| Session affinity **or** shared session store | Subject bind / confirm tokens must not split-brain |
-| Shared or partitioned cache policy | Avoid cross-pod archive handle confusion |
-| Audit aggregation | Per-pod files are not a fleet audit plane |
-| Sticky or shared Obtain cache | Refresh/consent must not double-mint unsafely |
+**Do not** set Deployment `replicas` > 1 for interactive multi-user gateway until
+**all** multi-replica checklist rows below are met with durable shared vault.
+Scaffold comments and docs treat multi-replica HA as an **explicit non-goal**
+until that vault exists.
 
-**Explicit non-goal until vault exists:** multi-replica HA SaaS control plane.
-See [roadmap § HOST-008](../roadmap/server-team-hosted.md).
+### Why single-replica is the default
+
+| Risk if scaled without vault | Failure mode |
+|------------------------------|--------------|
+| Memory token cache alone | Pod A has refresh; pod B re-fetches / re-consents → double-mint, thrash |
+| File vault on emptyDir | Each pod has a different vault → cross-subject miss / wrong-subject risk |
+| Confirm / session tokens | Sticky sessions missing → 401 / re-auth loops |
+| Continuations / page tokens | Subject-bound tokens minted on pod A rejected on pod B |
+| Audit files | Incomplete fleet forensics; no single timeline |
+
+### Multi-replica checklist (not Tier A MVP — not implemented)
+
+Raise replicas **only** when every row is satisfied (org-owned design):
+
+| # | Requirement | Why | Status in this repo |
+|---|-------------|-----|---------------------|
+| 1 | **Durable shared token vault** (external / AgentCore Identity) | Process-memory and local file vaults are not multi-pod safe | **Residual** (HOST-008 / GWY-001) |
+| 2 | **Session affinity** (sticky sessions) **or** shared session store | Subject bind / confirm tokens must not split-brain across pods | **Residual** |
+| 3 | **No reliance on memory token cache alone** | In-process Obtain cache must be shared or disabled under multi-replica | **Residual** (`MemoryTokenCache` only today) |
+| 4 | Shared or carefully partitioned **cache / archive** policy | Avoid cross-pod archive handle / pin confusion | **Residual** (STO / HOST-004) |
+| 5 | **Audit aggregation** (central sink) | Per-pod files are not a fleet audit plane | **Residual** |
+| 6 | Sticky or shared Obtain / consent correlation | Refresh/consent must not double-mint unsafely | **Residual** (Mode C progressive consent) |
+| 7 | JWKS / identity multi-instance behavior measured | Process-local JWKS refresh is not multi-region HA | **Residual** |
+
+### Operator status surfaces (secret-free residual)
+
+| Surface | Fields | Honesty |
+|---------|--------|---------|
+| `SubjectLimiter.StatusMap` | `ha_multi_replica: false` | Always false until multi-replica runtime exists |
+| Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `gateway_ready=false`, `ha_multi_replica=false` | Env parse only; Ready is serve `/readyz` |
+| Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false` | Admin BFF ≠ MCP serve; Ready residual documented |
+| Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false` + mode matrix | Never tokens; multi-user residual note when env set |
+
+**Never** claim multi-replica Done from docs, kustomize `replicas: 1`, or these
+status fields. See [roadmap § HOST-008](../roadmap/server-team-hosted.md).
+
+### Explicit non-goal until durable vault exists
+
+- Multi-replica HA SaaS control plane  
+- Shared in-memory token cache across pods  
+- Raising kustomize / compose replicas above **1** in this scaffold  
+- Treating `JENKINS_MCP_GATEWAY_MULTI_USER=1` as multi-replica or production HA  
 
 ---
 

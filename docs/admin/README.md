@@ -122,9 +122,10 @@ a multi-tenant end-user control plane or SaaS console.
 | Enabled auth modes | Secret-free mode **ids** on `GET /admin/v1/health` (`enabledModes`) and `GET /admin/v1/gateway/vault` (`mode` + `enabledModes`). No secrets, no vault material. |
 | Multi-operator sessions | **Residual: single process role** (`--admin-role`) for the whole BFF. No multi-user admin session table / CSRF cookies in v1. |
 | localStorage token UX | **Pilot / quarantine for production.** SPA may store admin Bearer in `localStorage` for loopback labs only — **not** a production multi-host authn story. Prefer httpOnly cookie + CSRF or reverse-proxy mTLS/OIDC residual (ADR 0014). |
-| Multi-user MCP gateway pin | **Foundation residual:** `JENKINS_MCP_GATEWAY_MULTI_USER=1` enables per-request Obtain + SubjectKey from HTTP Caller (not a production GO flip). Policy.Subject still process-bound; live Entra residual. Shared admin token ≠ per-user MCP subject. Admin never surfaces tokens/subjects raw. |
+| Multi-user MCP gateway pin | **Foundation residual:** `JENKINS_MCP_GATEWAY_MULTI_USER=1` enables per-request Obtain + SubjectKey from HTTP Caller (not a production GO flip). Policy.Subject still process-bound; live Entra residual. Shared admin token ≠ per-user MCP subject. Admin never surfaces tokens/subjects raw. Health/vault expose secret-free `multiUserEnabled` + residual note when env is set. |
+| Gateway Ready / HA | Admin health always reports `gatewayReady: false` and `haMultiReplica: false` (admin BFF ≠ MCP serve `/readyz`; HOST-008 single-replica Tier A). Live Ready is on the gateway serve process only. |
 | CSP under reverse-proxy | Prefer **same-origin** (SPA + `/admin/v1`). Do not strip CSP; re-apply if TLS terminates upstream. |
-| HA admin | Not multi-replica admin plane (HOST-008 Tier B). |
+| HA admin | Not multi-replica admin plane (HOST-008 Tier B). See [gateway/deployment.md §9](../gateway/deployment.md). |
 
 See also [`api-v1.md`](api-v1.md) health + gateway/vault; [`../gateway/deployment.md`](../gateway/deployment.md).
 ---

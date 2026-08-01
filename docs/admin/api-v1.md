@@ -90,7 +90,11 @@ Current process authentication state and console role. **Never includes the toke
   "version": "v0.1.0",
   "commit": "abc1234",
   "uiBuild": "",
-  "enabledModes": ["api_token_vault"]
+  "enabledModes": ["api_token_vault"],
+  "credentialMode": "api_token_vault",
+  "multiUserEnabled": false,
+  "gatewayReady": false,
+  "haMultiReplica": false
 }
 ```
 
@@ -99,6 +103,11 @@ Current process authentication state and console role. **Never includes the toke
 | `status` | Always `ok` when the BFF process is up (liveness). |
 | `version` / `commit` / `uiBuild` | Secret-free binary / SPA build metadata |
 | `enabledModes` | **HOST-007 / HOST-011:** optional list of gateway credential mode **ids** from env (`JENKINS_MCP_GATEWAY_ENABLED_MODES` or primary-only default). **Never** tokens, vault bytes, or subjects. Omitted or empty when mode config is invalid (see `/gateway/vault` residual). **Not** a multi-user “production ready” pin — listing a mode id means it is **enabled in config**, not that live multi-user GO / `JENKINS_MCP_GATEWAY_MULTI_USER` residual is closed. |
+| `credentialMode` | **HOST-008 residual:** primary `JENKINS_MCP_GATEWAY_CREDENTIAL_MODE` id (empty when invalid). Mode id only — never tokens. |
+| `multiUserEnabled` | **HOST-008 residual:** `true` when `JENKINS_MCP_GATEWAY_MULTI_USER` is truthy. Foundation residual only — **not** production multi-user GO. |
+| `gatewayReady` | Always **`false` on admin BFF** (separate process from MCP serve). Live Obtain Ready is `GET /readyz` on the gateway serve process. |
+| `haMultiReplica` | Always **`false`** (HOST-008 Tier A single-replica default; multi-replica runtime not implemented). |
+| `residual` | Present when multi-user env is set (secret-free honesty note; never tokens). |
 
 ## GET /admin/v1/gateway/vault
 
@@ -110,10 +119,12 @@ Authorization headers, or raw subject keys.
 {
   "mode": "api_token_vault",
   "enabledModes": ["api_token_vault"],
+  "multiUserEnabled": false,
+  "haMultiReplica": false,
   "vaultConfigured": true,
   "entryCount": 1,
   "subjects": ["a1b2c3…"],
-  "residual": "vault write is CLI-only: jenkins-mcp gateway vault-put / vault-delete (never put tokens in the browser)"
+  "residual": "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser)"
 }
 ```
 
@@ -121,19 +132,22 @@ Authorization headers, or raw subject keys.
 |-------|---------|
 | `mode` | Primary credential mode id |
 | `enabledModes` | Allow-list of mode ids (secret-free) |
+| `multiUserEnabled` | `JENKINS_MCP_GATEWAY_MULTI_USER` truthy parse (foundation residual; not production GO) |
+| `haMultiReplica` | Always `false` (HOST-008 Tier A; multi-replica not implemented) |
 | `vaultConfigured` | Whether the Mode A vault file exists |
 | `entryCount` | Number of subject entries |
 | `subjects` | **SubjectKeyHash** values only (never raw keys or tokens) |
-| `residual` | Operator notes (CLI-only write; Mode B/C residuals) |
+| `residual` | Operator notes (CLI-only write; Mode B/C residuals; multi-user honesty when env set) |
 
 Writes remain CLI-only. SPA Overview may display this status; provision/rotate/revoke
 is not available from the browser.
 
 **Multi-user residual (secret-free):** Admin JSON never returns Jenkins tokens,
-vault bytes, Authorization headers, or raw subject keys. There is no admin field
-or env (`JENKINS_MCP_GATEWAY_MULTI_USER`) that certifies multi-user MCP production
-readiness — operators track mode enablement via `enabledModes` only and rely on
-gateway/REL evidence for live multi-user claims.
+vault bytes, Authorization headers, or raw subject keys. `multiUserEnabled` reports
+env parse only — it does **not** certify multi-user MCP production readiness.
+When the env is set, `residual` includes an honesty note (no tokens). Operators
+rely on gateway/REL evidence for live multi-user claims. Multi-replica remains
+HOST-008 Tier B (`haMultiReplica: false`).
 
 ## GET /admin/v1/version
 

@@ -2,7 +2,10 @@
 # Platforms: Linux nodes only (Rocky/Ubuntu workers). Windows nodes unsupported.
 #
 # Hardening notes:
-#   - replicas: 1 (HOST-008 Tier A default; multi-replica residual)
+#   - replicas: 1 (HOST-008 Tier A default; multi-replica HA is a non-goal until
+#     durable shared vault + sticky sessions + audit aggregation exist — see
+#     docs/gateway/deployment.md §9). Do not claim multi-replica Done from this
+#     scaffold.
 #   - non-root, read-only root FS, drop ALL caps
 #   - resource requests/limits (pilot envelope)
 #   - HTTP probes on /healthz and /readyz (secret-free; no inventory)
@@ -15,8 +18,11 @@ metadata:
   labels:
     app.kubernetes.io/name: jenkins-mcp-gateway
 spec:
-  # HOST-008: single-replica Tier A default. Do not raise until durable vault +
-  # affinity checklist in docs/gateway/deployment.md §9 is complete.
+  # HOST-008 Tier A: single-replica default.
+  # Do NOT raise replicas until the multi-replica checklist is complete:
+  #   shared durable vault, sticky sessions or shared session store,
+  #   no memory-only token cache, audit aggregation
+  #   (docs/gateway/deployment.md §9). HA is an explicit non-goal until then.
   replicas: 1
   selector:
     matchLabels:

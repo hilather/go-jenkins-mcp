@@ -22,12 +22,26 @@ import (
 
 // healthResponse is GET /admin/v1/health.
 // enabledModes is a secret-free HOST-011 listing (mode ids only; no tokens).
+// multiUserEnabled / credentialMode / haMultiReplica / gatewayReady are
+// secret-free gateway residual posture (HOST-008); never tokens or subjects.
 type healthResponse struct {
 	Status       string   `json:"status"`
 	Version      string   `json:"version"`
 	Commit       string   `json:"commit"`
 	UIBuild      string   `json:"uiBuild"`
 	EnabledModes []string `json:"enabledModes,omitempty"`
+	// CredentialMode is the primary HOST-011 mode id from env (empty if invalid).
+	CredentialMode string `json:"credentialMode,omitempty"`
+	// MultiUserEnabled is true when JENKINS_MCP_GATEWAY_MULTI_USER is truthy.
+	// Not a production multi-user GO pin — foundation residual only.
+	MultiUserEnabled bool `json:"multiUserEnabled"`
+	// GatewayReady is always false on the admin BFF (separate process from MCP
+	// serve; Ready lives on serve GET /readyz). Honest residual.
+	GatewayReady bool `json:"gatewayReady"`
+	// HAMultiReplica is always false (HOST-008 Tier A single-replica default).
+	HAMultiReplica bool `json:"haMultiReplica"`
+	// Residual notes multi-user / HA honesty when relevant (secret-free).
+	Residual string `json:"residual,omitempty"`
 }
 
 // versionResponse is GET /admin/v1/version (subset of jenkins-mcp version --json).
@@ -65,15 +79,30 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusMethodNotAllowed, "invalid_argument", "method not allowed")
 		return
 	}
-	// HOST-007: secret-free enabled auth modes (mode ids only). Full vault
-	// inventory remains on GET /admin/v1/gateway/vault (hash-only subjects).
+	// HOST-007 / HOST-008: secret-free enabled modes + gateway residual posture.
+	// Full vault inventory remains on GET /admin/v1/gateway/vault (hash-only subjects).
+	// Never tokens, vault bytes, Authorization headers, or raw subjects.
 	modes := healthEnabledModes()
+	mode := string(gateway.CredentialModeFromEnviron(os.Getenv))
+	if !gateway.CredentialMode(mode).Valid() {
+		mode = ""
+	}
+	multiUser := gateway.MultiUserEnabled(os.Getenv)
+	residual := ""
+	if multiUser {
+		residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO; no tokens in health)"
+	}
 	writeJSON(w, http.StatusOK, healthResponse{
-		Status:       "ok",
-		Version:      s.cfg.Version,
-		Commit:       s.cfg.Commit,
-		UIBuild:      s.cfg.UIBuild,
-		EnabledModes: modes,
+		Status:           "ok",
+		Version:          s.cfg.Version,
+		Commit:           s.cfg.Commit,
+		UIBuild:          s.cfg.UIBuild,
+		EnabledModes:     modes,
+		CredentialMode:   mode,
+		MultiUserEnabled: multiUser,
+		GatewayReady:     false, // admin BFF ≠ MCP serve Ready probe
+		HAMultiReplica:   false, // HOST-008 Tier A default
+		Residual:         residual,
 	})
 }
 

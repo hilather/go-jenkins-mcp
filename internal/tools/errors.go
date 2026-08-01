@@ -2,16 +2,42 @@ package tools
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 )
 
+// progressiveConsent is satisfied by *gateway.ConsentRequired (Mode C) without
+// tools importing gateway (depgraph). Surfaces auth URL + session id only.
+type progressiveConsent interface {
+	ConsentAuthorizationURL() string
+	ConsentSessionID() string
+}
+
 // mapToolErr converts failures to stable apperr codes for MCP surfaces.
 // Seed handlers still return Go errors; the SDK stringifies them. Using apperr
 // ensures Error() is model-safe and coded (FND-005 light wiring).
+//
+// Mode C ConsentRequired is preserved as authentication with authorization_url
+// + session_id only (progressive consent UX residual). Never tokens, refresh
+// material, client secrets, or Authorization headers.
 func mapToolErr(err error) error {
 	if err == nil {
 		return nil
+	}
+	// Progressive consent (gateway ConsentRequired): full auth URL + session for
+	// agent UX. Must run before generic Classify (which would drop metadata).
+	var pc progressiveConsent
+	if errors.As(err, &pc) && pc != nil {
+		url := strings.TrimSpace(pc.ConsentAuthorizationURL())
+		sid := strings.TrimSpace(pc.ConsentSessionID())
+		if url != "" && sid != "" {
+			return apperr.New(apperr.CodeAuthentication,
+				fmt.Sprintf("consent required; authorization_url=%s session_id=%s", url, sid))
+		}
+		// Incomplete consent metadata: still fail closed as authentication.
+		return apperr.Wrap(apperr.CodeAuthentication, "consent required", err)
 	}
 	var ae *apperr.Error
 	if errors.As(err, &ae) && ae != nil {

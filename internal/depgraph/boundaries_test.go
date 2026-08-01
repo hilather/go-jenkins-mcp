@@ -252,7 +252,8 @@ func TestDependencyDirection(t *testing.T) {
 		// Wave 46 MGR-002: fleet_telemetry_force_off_residual canary (fleet ForceOff pure offline).
 		// Wave 47 UPD-001: update_lkg_residual offline residual honesty canary (update package).
 		// Wave 48 MUT-001: mutation_confirm_cooldown_residual offline canary (mutation Manager + audit.Memory).
-		"internal/diagnostics": {"internal/apperr", "internal/redact", "internal/telemetry", "internal/telemetry/fleet", "internal/store", "internal/auth", "internal/profile", "internal/policy", "internal/config", "internal/keyring", "internal/jenkins", "internal/archive", "internal/mcpserver", "internal/update", "internal/adapter", "internal/mutation", "internal/audit"},
+		// HOST-008: gateway env posture (multi_user / credential_mode / ha residual) for doctor.
+		"internal/diagnostics": {"internal/apperr", "internal/redact", "internal/telemetry", "internal/telemetry/fleet", "internal/store", "internal/auth", "internal/profile", "internal/policy", "internal/config", "internal/keyring", "internal/jenkins", "internal/archive", "internal/mcpserver", "internal/update", "internal/adapter", "internal/mutation", "internal/audit", "internal/gateway"},
 		"internal/audit":       {"internal/redact"},
 		"internal/telemetry":   {"internal/redact"},
 		// MGR-002: fleet health export schema, local queue, optional HTTPS exporter.
