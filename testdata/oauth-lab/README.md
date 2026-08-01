@@ -167,11 +167,22 @@ curl -sS -D- 'http://127.0.0.1:18083/token?scenario=consent' -o /dev/null
 
 ## Related docs
 
+- [Gateway qualification (GWY-003)](../../docs/gateway/qualification.md) — offline modes A/B/C matrix + residual live pin notes (§7)
 - [server-team-hosted roadmap](../../docs/roadmap/server-team-hosted.md) — HOST-012…015
 - [jwt-auth-filter qualification](../../docs/auth/jwt-auth-filter-qualification.md) — OAUTH-009 residual
 - [jenkins-compose mode A](../jenkins-compose/README.md) — API token lab
 - [gateway HTTPTokenFetcher](../../docs/gateway/README.md)
 - Agent policy: [`AGENTS.md`](../../AGENTS.md) Docker scaffolds
+
+### Optional gateway qualify live_oauth tag
+
+```bash
+make live-oauth-up
+go test -tags=live_oauth ./internal/gateway/qualify/ -count=1   # skips if lab down
+make live-oauth-down
+```
+
+Not default `make test`. Not production Entra.
 
 ## Residuals (honest)
 

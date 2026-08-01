@@ -16,7 +16,8 @@
 // APITokenVault, or JWTVault and set Live=true for offline-testable obtain
 // paths. Live Entra / AgentCore pin remains GWY-003 residual; live
 // jwt-auth-filter production pin remains OAUTH-009 residual. Offline
-// qualification lives in package gateway/qualify (GWY-003 lite).
+// qualification (modes A/B/C matrix + HOST-011 no fallthrough) lives in
+// package gateway/qualify (GWY-003 lite; see docs/gateway/qualification.md).
 //
 // Mode B never uses ID tokens as Jenkins API credentials.
 // HOST-004/006 are single-process MVP foundations (HOST-008 multi-replica residual).
