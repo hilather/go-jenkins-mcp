@@ -1,7 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { fetchDoctor, getProfileId } from "../api/client";
+import type { GatewayResidualStatusResponse } from "../api/types";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
+import {
+  formatPrincipalCacheHygiene,
+  pickResidualRateCacheFields,
+  PRINCIPAL_CACHE_HYGIENE_HONESTY,
+  PRINCIPAL_CACHE_PROCESS_HONESTY,
+  SHARED_JWKS_FILE_HONESTY,
+  SHARED_SUBJECT_RATE_FILE_HONESTY,
+} from "../lib/residualStatus";
 
 function statusClass(status: string): string {
   const s = status.toLowerCase();
@@ -9,6 +18,107 @@ function statusClass(status: string): string {
   if (s === "warn") return "warn";
   if (s === "fail") return "fail";
   return "skip";
+}
+
+/**
+ * HOST-007 SPA Doctor residual lite: show embedded gateway_residual_status
+ * after overall when present. Same secret-free rate/cache helpers as Overview.
+ */
+function DoctorGatewayResidualCard({
+  data,
+}: {
+  data: GatewayResidualStatusResponse;
+}) {
+  const rateCache = pickResidualRateCacheFields(data);
+  const hygiene = formatPrincipalCacheHygiene(
+    rateCache.principal_cache_max_entries,
+    rateCache.principal_cache_ttl_seconds,
+  );
+  const doc = data.doc || "docs/gateway/live-pin-blockers.md";
+
+  return (
+    <div className="card">
+      <h2>Gateway residual status</h2>
+      <p className="muted" style={{ marginTop: 0 }}>
+        HOST-007 doctor embed (
+        <code>gateway_residual_status</code>) — same secret-free map as{" "}
+        <code>gateway residual-status</code> / Overview residual card.
+        Informational only; does not drive overall. Live pin residual honesty:{" "}
+        <code>{doc}</code>
+        {doc.includes("live-pin-blockers") ? null : (
+          <>
+            {" "}
+            · see also <code>docs/gateway/live-pin-blockers.md</code>
+          </>
+        )}
+        . Never tokens or subjects; not live GO.
+      </p>
+      <dl className="dl">
+        <dt>shared_subject_rate_file</dt>
+        <dd>
+          {rateCache.shared_subject_rate_file ? "yes" : "no"}{" "}
+          <span className="muted">({SHARED_SUBJECT_RATE_FILE_HONESTY})</span>
+        </dd>
+        <dt>shared_principal_cache_file</dt>
+        <dd>
+          {rateCache.shared_principal_cache_file ? "yes" : "no"}{" "}
+          <span className="muted">
+            (same-host FilePrincipalCache lite when true; path never shown; not
+            multi-pod)
+          </span>
+        </dd>
+        <dt>shared_jwks_file</dt>
+        <dd>
+          {rateCache.shared_jwks_file ? "yes" : "no"}{" "}
+          <span className="muted">({SHARED_JWKS_FILE_HONESTY})</span>
+        </dd>
+        <dt>principal_cache_entries</dt>
+        <dd>
+          {typeof rateCache.principal_cache_entries === "number"
+            ? rateCache.principal_cache_entries
+            : "—"}{" "}
+          <span className="muted">
+            (count only; never subjects;{" "}
+            {rateCache.principal_cache_process_note ||
+              PRINCIPAL_CACHE_PROCESS_HONESTY}
+            )
+          </span>
+        </dd>
+        {hygiene ? (
+          <>
+            <dt>principal_cache max / ttl</dt>
+            <dd>
+              {hygiene}{" "}
+              <span className="muted">({PRINCIPAL_CACHE_HYGIENE_HONESTY})</span>
+            </dd>
+          </>
+        ) : null}
+        <dt>ha_multi_replica</dt>
+        <dd>
+          {data.ha_multi_replica ? "yes" : "no"}{" "}
+          <span className="muted">(HOST-008 Tier A single-replica default)</span>
+        </dd>
+        <dt>residual_id (Mode B)</dt>
+        <dd>
+          <code>{data.residual_id || "oauth009_offline"}</code>{" "}
+          <span className="muted">
+            (oauth009_offline=
+            {data.oauth009_offline !== false ? "true" : "false"}; live RS residual)
+          </span>
+        </dd>
+        {data.residual_note ? (
+          <>
+            <dt>residual_note</dt>
+            <dd className="muted">{data.residual_note}</dd>
+          </>
+        ) : null}
+        <dt>doc</dt>
+        <dd>
+          <code>{doc}</code>
+        </dd>
+      </dl>
+    </div>
+  );
 }
 
 export function DoctorPage() {
@@ -21,6 +131,11 @@ export function DoctorPage() {
     queryFn: () => fetchDoctor(profileId, offline),
     retry: 1,
   });
+
+  const gatewayResidual =
+    q.isSuccess && q.data.gateway_residual_status
+      ? q.data.gateway_residual_status
+      : undefined;
 
   return (
     <>
@@ -74,6 +189,10 @@ export function DoctorPage() {
               <dd>{q.data.commit || "—"}</dd>
             </dl>
           </div>
+
+          {gatewayResidual ? (
+            <DoctorGatewayResidualCard data={gatewayResidual} />
+          ) : null}
 
           <div className="card">
             <h2>Checks</h2>

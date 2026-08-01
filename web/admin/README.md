@@ -113,7 +113,7 @@ localStorage.setItem("jenkins-mcp.admin.profile", "corp");
 
 - **Profiles:** list + detail (no secrets; `hasCredential` boolean only), offline security self-check, support-bundle preview/create when `/me` has `cache_destructive`.
 - **Cache:** quota/usage (`available:false` residual when store missing), non-destructive eviction plan for all roles, destructive evict only when role is operator — double-confirm modal (type `EVICT` twice); server also requires exact `confirm: "EVICT"`.
-- **Doctor:** run button + offline toggle (online needs admin shared secret on the BFF).
+- **Doctor:** run button + offline toggle (online needs admin shared secret on the BFF). When the report includes `gateway_residual_status`, a residual card (shared_*_file, principal count honesty, live-pin-blockers pointer) appears after Overall — HOST-007 lite; does not drive overall; never tokens.
 - **Residuals:** pin list UI, full cache repair/verify from SPA (use CLI); policy apply (UI-004).
 
 ### Metrics page (UI-005)

@@ -163,6 +163,13 @@ export interface DoctorReport {
   commit?: string;
   overall: DoctorStatus | string;
   checks: DoctorCheck[];
+  /**
+   * HOST-007 / OPS doctor residual embed: same secret-free map as
+   * `gateway residual-status` / GET /admin/v1/gateway/residual-status.
+   * Informational only (does not drive overall); optional on older BFF.
+   * Never tokens/subjects. SPA Doctor card hides when absent.
+   */
+  gateway_residual_status?: GatewayResidualStatusResponse;
 }
 
 export interface AuditQuery {
