@@ -200,7 +200,8 @@ pilot-evidence: build
 
 # REL offline residual honesty smoke (opt-in; NOT part of make test / make ci).
 # Runs gateway qualify --offline + release-evidence --offline and asserts residual
-# ids multi_user_offline, oauth009_offline, host008_single_replica, gateway_modes_live.
+# ids multi_user_offline, oauth009_offline, oauth010_offline, progressive_consent_offline,
+# host008_single_replica, gateway_modes_live (offline only — not live Entra/AgentCore GO).
 # Optional: PROFILE=<id> also checks doctor --offline residual fields.
 # Artifacts: dist/residual-smoke/<timestamp>/  (or OUT_DIR=).
 # See docs/release/gates.md · docs/pilot/checklist.md §0.

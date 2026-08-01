@@ -161,6 +161,18 @@ func knownReleaseResiduals() []releaseResidual {
 			Message: "Done*: oauth009_offline_bearer_matrix + Mode B offline vault foundation; live Entra/jwt-auth-filter production pin residual (OAUTH-009; docs/auth/jwt-auth-filter-qualification.md)",
 		},
 		{
+			// OAUTH-010 offline Mode C prototype matrix; live Entra 3LO/OBO + AgentCore pin open.
+			ID:      "oauth010_offline",
+			GateIDs: []string{"REL-002.compat.auth", "REL-002.sec.oauth", "REL-002.compat.modes", "REL-002.compat.gateway"},
+			Message: "Done*: oauth010_mode_c_offline_matrix + Mode C offline Live=false/mock Fetcher foundation; live Entra 3LO/OBO + AgentCore Identity vault production pin residual (OAUTH-010 / GWY-003; docs/auth/oauth-capability-matrix.md §4) — offline only, not live Entra Done",
+		},
+		{
+			// Progressive consent metadata path Done*; browser 3LO not automated (OAUTH-010 / GWY-001).
+			ID:      "progressive_consent_offline",
+			GateIDs: []string{"REL-002.compat.auth", "REL-002.sec.oauth", "REL-002.compat.modes", "REL-002.compat.gateway"},
+			Message: "Done*: progressive consent metadata path (authorization_url + session_id only; qualify progressive_consent_residual); browser 3LO not automated; durable consent store / multi-replica correlation residual (OAUTH-010 / GWY-001) — offline only, not live consent UX GO",
+		},
+		{
 			// HOST-008 Tier A single-replica honesty (scaffold replicas:1).
 			ID:      "host008_single_replica",
 			GateIDs: []string{"REL-002.compat.gateway", "REL-002.ops.doctor"},

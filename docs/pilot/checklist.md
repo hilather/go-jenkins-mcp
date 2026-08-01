@@ -29,10 +29,11 @@ from offline qualify alone. Modes: **A** personal API-token vault,
 Modes **not** piloted: _____________  
 Gateway residual accepted (ticket/notes): _____________  
 
-**REL lite residual ids** (from `jenkins-mcp release-evidence --offline`; do not treat as live GO):  
-`multi_user_offline` · `oauth009_offline` · `host008_single_replica` · `gateway_modes_live`  
+**REL lite residual ids** (from `jenkins-mcp release-evidence --offline`; **offline only** — do not treat as live GO):  
+`multi_user_offline` · `oauth009_offline` · `oauth010_offline` · `progressive_consent_offline` · `host008_single_replica` · `gateway_modes_live`  
 See [release gates](../release/gates.md) residuals section.  
-Optional honesty automation (not default test): `make residual-smoke` → fails if those ids are missing from offline evidence.
+Optional honesty automation (not default `make test` / `make ci`):  
+`make residual-smoke` (alias `make gateway-residual-smoke`) → runs `gateway qualify --offline` + `release-evidence --offline` and **fails** if those residual ids are missing. Artifacts: `dist/residual-smoke/<ts>/`.
 
 ## 1. Install
 

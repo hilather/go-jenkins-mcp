@@ -3,7 +3,9 @@
 #
 # Verifies that offline gateway qualify + release-evidence still emit the
 # structured residual ids operators must not treat as live multi-user GO:
-#   multi_user_offline · oauth009_offline · host008_single_replica · gateway_modes_live
+#   multi_user_offline · oauth009_offline · oauth010_offline · progressive_consent_offline
+#   · host008_single_replica · gateway_modes_live
+# Offline only — not live Entra / AgentCore / multi-replica production GO.
 #
 # Steps:
 #   1. Build or reuse jenkins-mcp binary
@@ -42,9 +44,12 @@ SKIP_BUILD="${SKIP_BUILD:-0}"
 SKIP_QUALIFY="${SKIP_QUALIFY:-0}"
 
 # Required residual ids (REL lite honesty — see docs/release/gates.md + pilot checklist §0).
+# Offline Done* foundations + open live pins only; never production GO.
 REQUIRED_RESIDUAL_IDS=(
   multi_user_offline
   oauth009_offline
+  oauth010_offline
+  progressive_consent_offline
   host008_single_replica
   gateway_modes_live
 )
@@ -61,7 +66,8 @@ REL offline residual honesty smoke (opt-in; not default make test).
   --skip-qualify   only assert release-evidence residual ids
   -h, --help       Show this help
 
-Required residual ids: multi_user_offline oauth009_offline host008_single_replica gateway_modes_live
+Required residual ids (offline honesty): multi_user_offline oauth009_offline
+  oauth010_offline progressive_consent_offline host008_single_replica gateway_modes_live
 EOF
 }
 
@@ -217,16 +223,22 @@ if suite != "offline":
     errors.append(f"suite={suite!r} want 'offline'")
 if failed != 0:
     errors.append(f"failed={failed} want 0")
-# OAUTH-009 offline matrix case must be present and passed when suite is complete.
-want_case = "oauth009_offline_bearer_matrix"
+# Offline Mode B/C residual cases must be present and passed when suite is complete.
 case_map = {c.get("name"): c for c in cases if isinstance(c, dict)}
-if want_case not in case_map:
-    # Older binaries may rename; still require residual honesty strings.
-    if not any("OAUTH-009" in str(r) or "oauth009" in str(r).lower() for r in residuals):
-        errors.append(f"missing case {want_case} and no OAUTH-009 residual string")
-else:
-    if not case_map[want_case].get("passed"):
-        errors.append(f"case {want_case} not passed: {case_map[want_case]}")
+want_cases = [
+    ("oauth009_offline_bearer_matrix", ("OAUTH-009", "oauth009")),
+    ("oauth010_mode_c_offline_matrix", ("OAUTH-010", "oauth010")),
+    ("progressive_consent_residual", ("progressive consent", "OAUTH-010", "progressive_consent")),
+]
+for want_case, residual_needles in want_cases:
+    if want_case not in case_map:
+        # Older binaries may rename; still require residual honesty strings when present.
+        blob_r = " ".join(str(r) for r in residuals).lower()
+        if not any(n.lower() in blob_r for n in residual_needles):
+            errors.append(f"missing case {want_case} and no residual honesty string {residual_needles}")
+    else:
+        if not case_map[want_case].get("passed"):
+            errors.append(f"case {want_case} not passed: {case_map[want_case]}")
 if not residuals:
     errors.append("residuals[] empty — qualify must list live pins as residual")
 # Must not claim production live GO complete (honest residuals may say
@@ -325,7 +337,8 @@ for rid in required:
     msg = (by_id[rid].get("message") or "").strip()
     if not msg:
         errors.append(f"residual {rid!r} has empty message")
-    # Honesty: multi_user / oauth009 foundations mark Done*; host008 single-replica; modes live residual.
+    # Honesty: multi_user / oauth009 / oauth010 / progressive_consent mark Done* offline;
+    # host008 single-replica; modes live residual. Offline only — not production GO.
     low = msg.lower()
     if rid == "multi_user_offline" and "done*" not in low:
         errors.append(f"{rid} message should mark Done* foundation: {msg[:120]!r}")
@@ -334,6 +347,16 @@ for rid in required:
             errors.append(f"{rid} message should mark Done* offline foundation: {msg[:120]!r}")
         if "oauth-009" not in low and "oauth009" not in low:
             errors.append(f"{rid} message should reference OAUTH-009: {msg[:120]!r}")
+    if rid == "oauth010_offline":
+        if "done*" not in low:
+            errors.append(f"{rid} message should mark Done* offline foundation: {msg[:120]!r}")
+        if "oauth-010" not in low and "oauth010" not in low:
+            errors.append(f"{rid} message should reference OAUTH-010: {msg[:120]!r}")
+    if rid == "progressive_consent_offline":
+        if "done*" not in low:
+            errors.append(f"{rid} message should mark Done* metadata foundation: {msg[:120]!r}")
+        if "browser" not in low and "3lo" not in low:
+            errors.append(f"{rid} message should note browser 3LO residual: {msg[:120]!r}")
     if rid == "host008_single_replica" and "single-replica" not in low and "single replica" not in low:
         errors.append(f"{rid} message should state single-replica honesty: {msg[:120]!r}")
     if rid == "gateway_modes_live" and "residual" not in low and "live" not in low:
@@ -453,7 +476,7 @@ SUMMARY="$OUT_DIR/SUMMARY.txt"
 echo ""
 if [[ $fail -eq 0 ]]; then
   echo "gateway-residual-smoke complete: PASS (artifacts: $OUT_DIR)"
-  echo "Honest residual: offline qualify + residual ids ≠ live multi-user / Entra / multi-replica GO"
+  echo "Honest residual: offline qualify + residual ids ≠ live multi-user / Entra / AgentCore / multi-replica GO"
   echo "See docs/release/gates.md and docs/pilot/checklist.md §0"
   exit 0
 fi

@@ -159,9 +159,12 @@ make residual-smoke PROFILE=corp
 ```
 
 Runs `gateway qualify --offline` and `release-evidence --offline`, asserts
-`multi_user_offline` · `oauth009_offline` · `host008_single_replica` ·
-`gateway_modes_live`, and writes artifacts under `dist/residual-smoke/<ts>/`.
-**Not** part of default `make test` / `make ci`. See [release gates](../release/gates.md).
+`multi_user_offline` · `oauth009_offline` · `oauth010_offline` ·
+`progressive_consent_offline` · `host008_single_replica` · `gateway_modes_live`
+(**offline only** — not live Entra / AgentCore / multi-replica GO), and writes
+artifacts under `dist/residual-smoke/<ts>/`.
+**Not** part of default `make test` / `make ci`. See [release gates](../release/gates.md)
+and [checklist §0](checklist.md).
 
 ## Doctor / cache / support-bundle / policy
 
