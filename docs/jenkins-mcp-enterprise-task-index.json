@@ -1,0 +1,4083 @@
+{
+  "schema_version": "1.1",
+  "generated_for_revision": "Engineer authentication, read-only/RBAC, AgentCore 3LO/OBO, and seekable-Zstandard/ratarmount-rs update",
+  "source_file": "jenkins-mcp-enterprise-agent-todo.md",
+  "source_sha256": "84affb3daf8ddac6bd673ff4d79ff8598db5b36d625f55bdb30cc4d85d31c88f",
+  "validation": {
+    "unique_task_ids": true,
+    "known_dependencies": true,
+    "no_self_dependencies": true,
+    "no_duplicate_dependencies": true,
+    "acyclic_dependency_graph": true
+  },
+  "validation_details": {
+    "duplicate_task_ids": [],
+    "missing_dependency_ids": [],
+    "self_dependency_task_ids": [],
+    "duplicate_dependency_ids_by_task": {},
+    "cycle_task_ids": []
+  },
+  "summary": {
+    "task_count": 121,
+    "conditional_task_count": 5,
+    "priority_counts": {
+      "P0": 53,
+      "P1": 45,
+      "P2": 14,
+      "P3": 9
+    },
+    "phase_count": 7,
+    "dependency_edge_count": 244,
+    "maximum_dependency_depth": 19,
+    "acceptance_criteria_count": 559,
+    "definition_of_done_checkbox_count": 9,
+    "total_markdown_checkbox_count": 568,
+    "topological_wave_count": 20
+  },
+  "phases": [
+    {
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "task_count": 12,
+      "priority_counts": {
+        "P0": 12
+      },
+      "acceptance_criteria_count": 58
+    },
+    {
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "task_count": 34,
+      "priority_counts": {
+        "P0": 31,
+        "P1": 3
+      },
+      "acceptance_criteria_count": 161
+    },
+    {
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "task_count": 24,
+      "priority_counts": {
+        "P0": 1,
+        "P1": 20,
+        "P2": 3
+      },
+      "acceptance_criteria_count": 122
+    },
+    {
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "task_count": 22,
+      "priority_counts": {
+        "P0": 4,
+        "P1": 17,
+        "P2": 1
+      },
+      "acceptance_criteria_count": 92
+    },
+    {
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "task_count": 14,
+      "priority_counts": {
+        "P2": 10,
+        "P3": 4
+      },
+      "acceptance_criteria_count": 65
+    },
+    {
+      "phase": "Conditional epic - Jenkins-hosted OAuth authorization server (execute only after OAUTH-011 go decision)",
+      "phase_order": 5,
+      "conditional": true,
+      "task_count": 5,
+      "priority_counts": {
+        "P3": 5
+      },
+      "acceptance_criteria_count": 18
+    },
+    {
+      "phase": "Phase 5 - Hardening, validation, and production rollout",
+      "phase_order": 6,
+      "conditional": false,
+      "task_count": 10,
+      "priority_counts": {
+        "P0": 5,
+        "P1": 5
+      },
+      "acceptance_criteria_count": 43
+    }
+  ],
+  "topological_order": [
+    "FND-001",
+    "QA-001",
+    "QA-004",
+    "QA-005",
+    "DOC-001",
+    "DOC-002",
+    "REL-002",
+    "FND-002",
+    "FND-003",
+    "FND-007",
+    "FND-004",
+    "PERF-001",
+    "FND-005",
+    "FND-006",
+    "FND-008",
+    "SEC-001",
+    "ARC-000",
+    "CFG-001",
+    "MCP-001",
+    "AUTH-000",
+    "CFG-002",
+    "AUTH-001",
+    "NET-001",
+    "STO-001",
+    "AUTH-002",
+    "NET-002",
+    "POL-001",
+    "MCP-002",
+    "STO-002",
+    "INT-001",
+    "AUTH-003",
+    "NET-003",
+    "NET-004",
+    "TST-001",
+    "AUTH-004",
+    "LOG-001",
+    "OAUTH-001",
+    "OAUTH-008",
+    "JEN-001",
+    "POL-002",
+    "LOG-002",
+    "OAUTH-002",
+    "JEN-002",
+    "JEN-004",
+    "TEST-001",
+    "HEALTH-002",
+    "POL-003",
+    "STO-003",
+    "OAUTH-003",
+    "JEN-003",
+    "HEALTH-001",
+    "MGR-001",
+    "POL-004",
+    "STO-004",
+    "OAUTH-004",
+    "OAUTH-005",
+    "PIPE-001",
+    "TEST-002",
+    "SCM-001",
+    "ART-001",
+    "DIAG-007",
+    "POL-005",
+    "LOG-003",
+    "OAUTH-006",
+    "OAUTH-007",
+    "OAUTH-009",
+    "OAUTH-010",
+    "ARC-001",
+    "GRAPH-001",
+    "INT-004",
+    "LOG-004",
+    "SEARCH-001",
+    "SEC-002",
+    "SEC-003",
+    "OAUTH-011",
+    "ARC-002",
+    "PIPE-002",
+    "GWY-001",
+    "SEARCH-002",
+    "AUD-001",
+    "ARC-003",
+    "ARC-004",
+    "ARC-009",
+    "ARC-010",
+    "ARC-011",
+    "ART-002",
+    "INT-003",
+    "GWY-002",
+    "JAS-001",
+    "OBS-001",
+    "ARC-005",
+    "ARC-012",
+    "DIAG-001",
+    "MUT-001",
+    "GWY-003",
+    "JAS-002",
+    "OPS-001",
+    "ARC-006",
+    "ARC-007",
+    "DIAG-002",
+    "DIAG-003",
+    "DIAG-004",
+    "DIAG-005",
+    "DIAG-006",
+    "MUT-002",
+    "MUT-003",
+    "MGR-002",
+    "JAS-003",
+    "PKG-001",
+    "ARC-008",
+    "PERF-002",
+    "PERF-003",
+    "INT-002",
+    "JAS-004",
+    "QA-002",
+    "QA-006",
+    "GWY-004",
+    "UPD-001",
+    "JAS-005",
+    "QA-003",
+    "REL-001"
+  ],
+  "topological_waves": [
+    [
+      "FND-001",
+      "QA-001",
+      "QA-004",
+      "QA-005",
+      "DOC-001",
+      "DOC-002",
+      "REL-002"
+    ],
+    [
+      "FND-002"
+    ],
+    [
+      "FND-003",
+      "FND-007"
+    ],
+    [
+      "FND-004",
+      "PERF-001"
+    ],
+    [
+      "FND-005",
+      "FND-006",
+      "FND-008"
+    ],
+    [
+      "SEC-001",
+      "ARC-000",
+      "CFG-001",
+      "MCP-001"
+    ],
+    [
+      "AUTH-000",
+      "CFG-002",
+      "AUTH-001",
+      "NET-001",
+      "STO-001"
+    ],
+    [
+      "AUTH-002",
+      "NET-002",
+      "POL-001",
+      "MCP-002",
+      "STO-002",
+      "INT-001"
+    ],
+    [
+      "AUTH-003",
+      "NET-003",
+      "NET-004",
+      "TST-001"
+    ],
+    [
+      "AUTH-004",
+      "LOG-001",
+      "OAUTH-001",
+      "OAUTH-008",
+      "JEN-001"
+    ],
+    [
+      "POL-002",
+      "LOG-002",
+      "OAUTH-002",
+      "JEN-002",
+      "JEN-004",
+      "TEST-001",
+      "HEALTH-002"
+    ],
+    [
+      "POL-003",
+      "STO-003",
+      "OAUTH-003",
+      "JEN-003",
+      "HEALTH-001",
+      "MGR-001"
+    ],
+    [
+      "POL-004",
+      "STO-004",
+      "OAUTH-004",
+      "OAUTH-005",
+      "PIPE-001",
+      "TEST-002",
+      "SCM-001",
+      "ART-001",
+      "DIAG-007"
+    ],
+    [
+      "POL-005",
+      "LOG-003",
+      "OAUTH-006",
+      "OAUTH-007",
+      "OAUTH-009",
+      "OAUTH-010",
+      "ARC-001",
+      "GRAPH-001",
+      "INT-004"
+    ],
+    [
+      "LOG-004",
+      "SEARCH-001",
+      "SEC-002",
+      "SEC-003",
+      "OAUTH-011",
+      "ARC-002",
+      "PIPE-002",
+      "GWY-001"
+    ],
+    [
+      "SEARCH-002",
+      "AUD-001",
+      "ARC-003",
+      "ARC-004",
+      "ARC-009",
+      "ARC-010",
+      "ARC-011",
+      "ART-002",
+      "INT-003",
+      "GWY-002",
+      "JAS-001"
+    ],
+    [
+      "OBS-001",
+      "ARC-005",
+      "ARC-012",
+      "DIAG-001",
+      "MUT-001",
+      "GWY-003",
+      "JAS-002"
+    ],
+    [
+      "OPS-001",
+      "ARC-006",
+      "ARC-007",
+      "DIAG-002",
+      "DIAG-003",
+      "DIAG-004",
+      "DIAG-005",
+      "DIAG-006",
+      "MUT-002",
+      "MUT-003",
+      "MGR-002",
+      "JAS-003"
+    ],
+    [
+      "PKG-001",
+      "ARC-008",
+      "PERF-002",
+      "PERF-003",
+      "INT-002",
+      "JAS-004",
+      "QA-002",
+      "QA-006"
+    ],
+    [
+      "GWY-004",
+      "UPD-001",
+      "JAS-005",
+      "QA-003",
+      "REL-001"
+    ]
+  ],
+  "tasks": [
+    {
+      "id": "FND-001",
+      "title": "Create the internal fork and freeze the upstream baseline",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [],
+      "dependency_text": "None",
+      "parallel_safe": "No; first task",
+      "objective": "Create the controlled source repository and preserve a reproducible reference to the seed project.",
+      "implementation": "- Fork or import the upstream repository under the approved organization.\n- Record upstream URL, commit SHA, license, and import date.\n- Add `UPSTREAM.md`, `NOTICE`, `SECURITY.md`, `CONTRIBUTING.md`, and ownership rules.\n- Protect the default branch and require reviewed pull requests.\n- Tag the untouched import as `upstream-simonfxr-baseline`.",
+      "acceptance_criteria": [
+        "A clean checkout at the baseline tag matches the selected upstream commit.",
+        "MIT license attribution is retained.",
+        "Default branch cannot be directly pushed by ordinary contributors.",
+        "Repository ownership and security reporting paths are documented."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Baseline file hash report.",
+        "Branch protection screenshot or policy export."
+      ],
+      "source_line": 60,
+      "dependency_depth": 0,
+      "dependents": [
+        "FND-002"
+      ]
+    },
+    {
+      "id": "FND-002",
+      "title": "Establish reproducible local and CI build environments",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-001"
+      ],
+      "dependency_text": "FND-001",
+      "parallel_safe": null,
+      "objective": "Make builds deterministic enough to compare behavior and produce trusted releases.",
+      "implementation": "- Pin the supported Go toolchain through `go.mod` and CI configuration.\n- Add build scripts for Windows, Linux, and macOS targets required by policy.\n- Add a development container or documented isolated build environment without embedding secrets.\n- Enable module checksum verification and fail on dirty generated files.\n- Add `make`/Taskfile targets for build, test, race, lint, benchmark, SBOM, and package.",
+      "acceptance_criteria": [
+        "A fresh environment can build and test using one documented command.",
+        "Two clean builds from the same commit produce matching source manifests; binary reproducibility gaps are documented.",
+        "CI never requires a real Jenkins credential for unit tests.",
+        "Build outputs include version, commit, dirty state, Go version, and build time policy."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 92,
+      "dependency_depth": 1,
+      "dependents": [
+        "FND-003",
+        "FND-007",
+        "ARC-000"
+      ]
+    },
+    {
+      "id": "FND-003",
+      "title": "Characterize and lock current seed behavior",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-002"
+      ],
+      "dependency_text": "FND-002",
+      "parallel_safe": null,
+      "objective": "Create compatibility tests before refactoring.",
+      "implementation": "- Inventory every current MCP tool, argument, default, output field, error shape, timeout, and side effect.\n- Build an HTTP fixture server that emulates the Jenkins endpoints currently used.\n- Add golden contract tests for jobs, build details, queue, log range/tail, start, stop, wait, and build search.\n- Record known defects separately so tests do not enshrine unsafe behavior as desired behavior.",
+      "acceptance_criteria": [
+        "Every currently documented tool has at least one successful contract test.",
+        "Failure, timeout, cancellation, nested-folder, and malformed-response cases are covered.",
+        "Known over-download and credential-handling defects are documented as expected-to-change.",
+        "Refactoring can prove no accidental contract regression."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 118,
+      "dependency_depth": 2,
+      "dependents": [
+        "FND-004",
+        "PERF-001",
+        "OAUTH-008"
+      ]
+    },
+    {
+      "id": "FND-004",
+      "title": "Refactor the monolith into bounded packages",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-003"
+      ],
+      "dependency_text": "FND-003",
+      "parallel_safe": null,
+      "objective": "Separate concerns without changing supported behavior.",
+      "implementation": "Create packages for application lifecycle, configuration, profile, authentication, Jenkins HTTP/API, capabilities, MCP server, tools, policy, log mirror, storage, archive, search, diagnostics, redaction, audit, and telemetry. Move code in small steps behind interfaces.",
+      "acceptance_criteria": [
+        "Jenkins client code imports no MCP package.",
+        "Tool handlers construct no raw HTTP request.",
+        "Authentication is not a global string.",
+        "No production `.go` file exceeds an agreed review threshold without an exception ADR.",
+        "Existing compatibility tests pass.",
+        "Package dependency graph contains no cycles and matches the architecture."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 143,
+      "dependency_depth": 3,
+      "dependents": [
+        "FND-005",
+        "FND-006",
+        "FND-008",
+        "INT-001"
+      ]
+    },
+    {
+      "id": "FND-005",
+      "title": "Define stable internal contracts and error taxonomy",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-004"
+      ],
+      "dependency_text": "FND-004",
+      "parallel_safe": null,
+      "objective": "Prevent ad hoc coupling and make failures actionable without exposing secrets.",
+      "implementation": "- Define typed references for profile, job, build, queue item, log generation, stage, test, artifact, and node.\n- Define error codes for authentication, authorization, not found, capability missing, throttled, timeout, cancelled, corrupt cache, quota, policy denial, and upstream protocol errors.\n- Add safe wrapping that separates internal diagnostics from model-visible messages.",
+      "acceptance_criteria": [
+        "Tool handlers map all expected failures to stable codes.",
+        "Errors never contain authorization headers, tokens, cookies, or raw secret parameters.",
+        "Error codes are documented and contract-tested.",
+        "Internal cause chains remain available in local diagnostic mode without leaking to MCP output."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 167,
+      "dependency_depth": 4,
+      "dependents": [
+        "CFG-001",
+        "AUTH-001",
+        "NET-001",
+        "POL-001",
+        "MCP-001",
+        "MCP-002",
+        "STO-002",
+        "AUD-001",
+        "OAUTH-010"
+      ]
+    },
+    {
+      "id": "FND-006",
+      "title": "Upgrade and pin the official MCP Go SDK",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-004"
+      ],
+      "dependency_text": "FND-004",
+      "parallel_safe": null,
+      "objective": "Use an approved stable SDK version with current security and protocol behavior.",
+      "implementation": "- Select the newest stable, security-reviewed v1.x release compatible with the supported Cursor fleet.\n- Record the selected protocol versions in an ADR.\n- Enable official conformance tests.\n- Preserve stdio as default; keep Streamable HTTP behind an explicit feature/policy flag.\n- Ensure cancellation reaches tool handler contexts.",
+      "acceptance_criteria": [
+        "MCP conformance passes for every declared protocol version.",
+        "Cursor stdio startup, discovery, tool calls, cancellation, and shutdown pass an integration smoke test.",
+        "HTTP mode, if compiled/shipped, has localhost/origin/body protections enabled.",
+        "SDK downgrade/upgrade compatibility is documented."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 191,
+      "dependency_depth": 4,
+      "dependents": [
+        "MCP-001"
+      ]
+    },
+    {
+      "id": "FND-007",
+      "title": "Build the CI quality and security pipeline",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-002"
+      ],
+      "dependency_text": "FND-002",
+      "parallel_safe": null,
+      "objective": "Make quality, security, and format regressions visible on every change.",
+      "implementation": "Add Go tests, race tests, lint, formatting, `govulncheck`, dependency/license review, secret scanning, code scanning, fuzz smoke tests, SBOM generation, and artifact retention. Separate untrusted pull-request jobs from secret-bearing integration jobs.",
+      "acceptance_criteria": [
+        "Required checks block merge.",
+        "Untrusted CI cannot access Jenkins/OAuth secrets.",
+        "Findings have documented severity and remediation policy.",
+        "Generated SBOM is attached to release candidates."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 217,
+      "dependency_depth": 2,
+      "dependents": [
+        "PKG-001",
+        "TST-001"
+      ]
+    },
+    {
+      "id": "FND-008",
+      "title": "Add architecture decision records",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-004"
+      ],
+      "dependency_text": "FND-004",
+      "parallel_safe": null,
+      "objective": "Capture security, compatibility, and persistent-format decisions before implementation hardens around them.",
+      "implementation": "Create ADRs for local stdio, authentication provider boundaries, Jenkins-not-an-authorization-server, local PKCE, AgentCore 3LO/OBO, JWT resource-server validation, global read-only precedence, deny-only MCP RBAC, log frame format, seekable TAR/Zstandard, semantic batching, native and `ratarmount-rs` readers, zero-recompression option, encryption, tool budgets, and signing.",
+      "acceptance_criteria": [
+        "Every listed decision records context, decision, alternatives, consequences, and owner.",
+        "The custom Jenkins authorization-server plugin is explicitly decision-gated rather than assumed.",
+        "Code/config schemas link to applicable ADRs.",
+        "ADR changes affecting auth, policy, or storage require designated security/architecture approval."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 239,
+      "dependency_depth": 4,
+      "dependents": [
+        "SEC-001",
+        "AUTH-000",
+        "ARC-000",
+        "CFG-002",
+        "MGR-001"
+      ]
+    },
+    {
+      "id": "PERF-001",
+      "title": "Establish baseline network, memory, and latency benchmarks",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-003"
+      ],
+      "dependency_text": "FND-003",
+      "parallel_safe": null,
+      "objective": "Quantify the seed implementation before optimization.",
+      "implementation": "Benchmark startup, job listing, build detail, queue polling, log range, log tail, waits, and search using controlled fixture sizes. Measure wire bytes, decoded bytes, allocations, peak memory, wall time, and MCP result size.",
+      "acceptance_criteria": [
+        "Benchmarks include 1 MiB, 100 MiB, and 1 GiB logical logs.",
+        "The current log over-download is reproduced and quantified.",
+        "Results are stored in machine-readable form and summarized in CI artifacts.",
+        "Reference hardware/software is documented."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 261,
+      "dependency_depth": 3,
+      "dependents": [
+        "LOG-001",
+        "OBS-001",
+        "QA-003"
+      ]
+    },
+    {
+      "id": "SEC-001",
+      "title": "Formalize the threat model and data classification",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-008"
+      ],
+      "dependency_text": "FND-008",
+      "parallel_safe": null,
+      "objective": "Turn security assumptions into reviewable controls for local and optional gateway deployment.",
+      "implementation": "Document assets, actors, data classes, and trust boundaries for local OS user/keyring, Cursor, MCP process, signed policy/RBAC, Jenkins, external IdP, AgentCore authorization-code/OBO providers and token vault, gateway subjects/workloads, logs/artifacts, SQLite/seekable archives, the qualified `ratarmount-rs` sidecar/library, updates, and optional mutations. Include bearer downgrade/fallthrough, OAuth consent/session replay, wrong audience/issuer, cross-user cache/handle/archive leakage, prompt injection, SSRF/redirects, wire/decompression bombs, archive corruption/bombs, shared-account substitution, and Jenkins compromise assumptions.",
+      "acceptance_criteria": [
+        "Security/platform owners approve local and gateway threat models.",
+        "Every high/critical threat maps to backlog tasks and tests.",
+        "Data retention, telemetry, cache isolation, archive affinity, and export classifications are explicit.",
+        "API-token, external-IdP resource-server, AgentCore 3LO/OBO, exact-audience passthrough, and conditional Jenkins 3LO risks are distinguished.",
+        "Shared/generic Jenkins identities are explicitly prohibited for interactive users."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 283,
+      "dependency_depth": 5,
+      "dependents": [
+        "AUTH-000",
+        "STO-001",
+        "SEC-002"
+      ]
+    },
+    {
+      "id": "AUTH-000",
+      "title": "Lock the Jenkins authentication architecture and no-native-3LO terminology",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-008",
+        "SEC-001"
+      ],
+      "dependency_text": "FND-008, SEC-001",
+      "parallel_safe": null,
+      "objective": "Prevent implementation and documentation from relying on OAuth capabilities Jenkins does not provide.",
+      "implementation": "Write an ADR and security review note that distinguishes Jenkins scripted Basic/API-token access, browser OIDC security realms, outbound build workload OIDC, credentials frameworks, JWT bearer resource-server validation, external Entra/IdP authorization, AgentCore user-delegated authorization-code 3LO, AgentCore on-behalf-of/token exchange, a narrow broker/filter, and a full Jenkins-hosted authorization server. Record the evaluated plugin categories and the order in which alternatives must be tried. State explicitly that AgentCore provider discovery/authorization/token endpoints are Entra or another approved authorization server, not Jenkins, unless the conditional authorization-server epic is approved and implemented.",
+      "acceptance_criteria": [
+        "The architecture explicitly states Jenkins core is not the required three-legged OAuth authorization server.",
+        "Initial supported identity paths are a personal API token and an external-IdP Jenkins-audience access token.",
+        "AgentCore evaluates per-user authorization-code 3LO and OBO/RFC 8693/RFC 7523 exchange before a custom Jenkins authorization server.",
+        "AgentCore OAuth endpoints never point at stock Jenkins.",
+        "A full Jenkins 3LO plugin is a conditional separately owned/security-reviewed epic with a default no-go posture.",
+        "Security/platform owners approve terminology, attribution, token audience, and shared-account prohibitions."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 306,
+      "dependency_depth": 6,
+      "dependents": [
+        "OAUTH-001",
+        "OAUTH-008"
+      ]
+    },
+    {
+      "id": "ARC-000",
+      "title": "Obtain and qualify the exact `ratarmount-rs` dependency",
+      "phase": "Phase 0 - Baseline, architecture, and proof",
+      "phase_order": 0,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-002",
+        "FND-008"
+      ],
+      "dependency_text": "FND-002, FND-008",
+      "parallel_safe": null,
+      "objective": "Turn the preferred but not yet supplied Rust archive implementation into a measured, security-reviewed go/no-go decision without guessing which project is intended.",
+      "implementation": "Obtain the exact repository URL, owner, commit or release, license, provenance, support model, and expected integration mode from engineering. If the dependency cannot be supplied or reproduced, record an explicit no-go/deferred result and continue with the native Go reader; never substitute a similarly named public project silently. Review build reproducibility, release/signing process, SBOM/crates, unsafe Rust, parser boundaries, fuzzing, CVE response, supported seekable-Zstandard dialect, index format, Windows behavior, and recovery semantics. Prototype direct library/FFI, managed local sidecar/CLI, and optional FUSE/WinFsp modes as applicable, while keeping normal MCP reads independent of a mounted filesystem. Verify independent-frame seekable `.tar.zst` compatibility and compare all reads with the native Go fallback. Benchmark index build/load, range access, concurrency, cancellation, endpoint protection, truncation, corruption, crash recovery, and antivirus/EDR impact.",
+      "acceptance_criteria": [
+        "Approved go/no-go names the exact repository, commit/release, owner, license, provenance, SBOM/dependencies, build process, update/rollback plan, and security-response owner.",
+        "If the exact dependency cannot be accessed, reproduced, or approved, status is explicit no-go/deferred and the native reader remains the supported path.",
+        "No similarly named project is substituted or described as the intended dependency without engineering confirmation.",
+        "Windows works without mandatory FUSE, or the limitation is explicitly rejected/accepted by endpoint security and product owners.",
+        "Direct API, sidecar, and mount integration choices are measured and documented; FUSE/WinFsp is never required for ordinary reads.",
+        "Qualified adapter and native reader return identical golden pack/member/range bytes.",
+        "Warm/cold read, index, memory, concurrency, cancellation, corruption, recovery, and EDR measurements exist.",
+        "Adapter failure/disablement does not invalidate `ArchiveStore` or the durable format.",
+        "No ordinary single-frame `.tar.zst` is accepted as performant random-access storage."
+      ],
+      "acceptance_criteria_count": 9,
+      "evidence_tests": [],
+      "source_line": 330,
+      "dependency_depth": 5,
+      "dependents": [
+        "ARC-001",
+        "ARC-002",
+        "ARC-003",
+        "ARC-004"
+      ]
+    },
+    {
+      "id": "CFG-001",
+      "title": "Implement versioned profile configuration",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-005"
+      ],
+      "dependency_text": "FND-005",
+      "parallel_safe": null,
+      "objective": "Represent non-secret controller, authentication, policy, and storage configuration safely and support migration.",
+      "implementation": "Define a strict schema for profile name, Jenkins origin, auth method (`api_token`, `oidc_bearer`, optional `agentcore_delegated`), issuer/client/resource/scopes, TLS/proxy, HTTP content-encoding policy, cache, seekable-pack parameters, read-only request, policy references, and feature toggles. `agentcore_delegated` covers user-delegated authorization-code 3LO and OBO/token exchange selected by the managed deployment. Use atomic writes and reject unsafe/unknown fields.",
+      "acceptance_criteria": [
+        "Configuration contains no secret material.",
+        "Read-only can be requested through profile or Cursor CLI/environment without allowing a stronger enforced value to be disabled.",
+        "Invalid origins, authorization-server endpoints, token audiences, unsafe data paths, duplicate profiles, and unsupported versions fail clearly.",
+        "A stock Jenkins URL cannot be configured as an authorization or token endpoint for a non-conditional profile.",
+        "Migration tests cover every released schema version."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 359,
+      "dependency_depth": 5,
+      "dependents": [
+        "CFG-002",
+        "AUTH-001",
+        "NET-001",
+        "NET-004",
+        "STO-001"
+      ]
+    },
+    {
+      "id": "CFG-002",
+      "title": "Add enterprise policy overlay and fail-closed precedence",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "CFG-001",
+        "FND-008"
+      ],
+      "dependency_text": "CFG-001, FND-008",
+      "parallel_safe": null,
+      "objective": "Allow centrally managed restrictions and make the effective read-only/policy state deterministic.",
+      "implementation": "Define precedence across built-in emergency safe mode, signed enterprise policy, machine/admin policy, profile, environment compatibility settings, and CLI/Cursor non-secret overrides. Restrictions combine monotonically: a lower layer may further restrict, never widen. Add secret-free `config effective` output with rule/source provenance.",
+      "acceptance_criteria": [
+        "User/Cursor values cannot override enforced read-only, origin, auth, quota, RBAC, storage, or telemetry restrictions.",
+        "Conflicting or invalid security policy fails closed into a documented safe mode.",
+        "Effective configuration shows each value, source, enforcement status, and signature state without secrets.",
+        "Tests prove `--read-only=false`/environment/profile cannot defeat a stronger true value."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 382,
+      "dependency_depth": 6,
+      "dependents": [
+        "POL-001",
+        "OAUTH-001",
+        "INT-001",
+        "MGR-001"
+      ]
+    },
+    {
+      "id": "AUTH-001",
+      "title": "Introduce the credential-provider abstraction",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "CFG-001",
+        "FND-005"
+      ],
+      "dependency_text": "CFG-001, FND-005",
+      "parallel_safe": null,
+      "objective": "Remove authentication logic from global configuration and HTTP call sites.",
+      "implementation": "Define provider/session/status interfaces for API token and OIDC. Sessions supply request authentication without exposing token values to tools. Add fake providers for tests.",
+      "acceptance_criteria": [
+        "Jenkins client receives an auth session, not a raw credential string.",
+        "Tool packages cannot access token bytes.",
+        "Session refresh/cancellation behavior is testable.",
+        "Auth status output is sanitized."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 404,
+      "dependency_depth": 6,
+      "dependents": [
+        "AUTH-002",
+        "NET-002",
+        "OAUTH-001"
+      ]
+    },
+    {
+      "id": "AUTH-002",
+      "title": "Implement OS credential-store backends",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "AUTH-001"
+      ],
+      "dependency_text": "AUTH-001",
+      "parallel_safe": null,
+      "objective": "Keep long-lived secrets local and outside Cursor configuration.",
+      "implementation": "Implement Windows Credential Manager first, then required macOS Keychain/Linux Secret Service adapters. Namespace entries by application, OS user, profile, controller origin, auth method, and account identity.",
+      "acceptance_criteria": [
+        "API tokens can be stored, loaded, replaced, and deleted under the current OS user.",
+        "Another local user cannot read the credential through normal APIs.",
+        "Error and debug paths never print the secret.",
+        "Headless fallback is disabled unless policy explicitly allows a protected file.",
+        "Backend tests use mocks or isolated test entries and clean them up."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 426,
+      "dependency_depth": 7,
+      "dependents": [
+        "AUTH-003",
+        "OAUTH-002",
+        "OAUTH-004",
+        "ARC-009"
+      ]
+    },
+    {
+      "id": "AUTH-003",
+      "title": "Add API-token login, logout, and status commands",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "AUTH-002"
+      ],
+      "dependency_text": "AUTH-002",
+      "parallel_safe": null,
+      "objective": "Provide a safe per-user setup flow.",
+      "implementation": "Prompt for username and token through a non-echoing terminal input. Store the token in the keyring. Verify it against Jenkins before declaring login successful. Remove secret CLI flags from normal documentation and deprecate them in code.",
+      "acceptance_criteria": [
+        "`login --method api-token` never echoes or persists the token outside the keyring.",
+        "Failed verification does not retain the credential unless explicitly chosen for troubleshooting and policy permits it.",
+        "`status` shows profile, identity, method, and health without a token.",
+        "`logout` removes the credential and invalidates in-memory sessions.",
+        "Environment credential compatibility emits a policy-controlled warning and is off in enterprise mode."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 449,
+      "dependency_depth": 8,
+      "dependents": [
+        "AUTH-004",
+        "PKG-001"
+      ]
+    },
+    {
+      "id": "AUTH-004",
+      "title": "Verify and bind the Jenkins user identity",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "AUTH-003",
+        "NET-001"
+      ],
+      "dependency_text": "AUTH-003, NET-001",
+      "parallel_safe": null,
+      "objective": "Ensure the process is operating as the intended individual, not anonymous or a shared identity.",
+      "implementation": "Call an approved Jenkins identity endpoint after authentication. Store only sanitized identity metadata. Detect unexpected anonymous fallback or identity changes.",
+      "acceptance_criteria": [
+        "Startup or first remote call verifies the principal.",
+        "Anonymous fallback fails closed for profiles requiring auth.",
+        "Identity mismatch invalidates the session and produces an audit event.",
+        "Tests cover renamed accounts and controller responses missing optional fields."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 472,
+      "dependency_depth": 9,
+      "dependents": [
+        "POL-002",
+        "POL-003",
+        "OPS-001"
+      ]
+    },
+    {
+      "id": "NET-001",
+      "title": "Implement normalized origin pinning and safe URL construction",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "CFG-001",
+        "FND-005"
+      ],
+      "dependency_text": "CFG-001, FND-005",
+      "parallel_safe": null,
+      "objective": "Prevent SSRF and credential forwarding while supporting folders and reverse-proxy prefixes.",
+      "implementation": "- Parse and normalize the configured Jenkins base URL once.\n- Construct endpoint paths from typed references and escaped path segments.\n- Accept Jenkins-provided absolute URLs only when scheme, host, port, and approved base path match policy.\n- Reject userinfo, fragments, unsupported schemes, and ambiguous encodings.",
+      "acceptance_criteria": [
+        "Credentials are never sent to an unapproved origin.",
+        "Tests cover malicious Location headers, protocol-relative URLs, encoded separators, IPv6, IDNs, alternate ports, and path-prefix Jenkins deployments.",
+        "Nested job/folder names round-trip correctly.",
+        "No tool accepts an arbitrary URL for a Jenkins request."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 494,
+      "dependency_depth": 6,
+      "dependents": [
+        "AUTH-004",
+        "NET-002",
+        "POL-004",
+        "MCP-002"
+      ]
+    },
+    {
+      "id": "NET-002",
+      "title": "Build the shared enterprise HTTP transport",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "NET-001",
+        "AUTH-001"
+      ],
+      "dependency_text": "NET-001, AUTH-001",
+      "parallel_safe": null,
+      "objective": "Provide efficient connection reuse, bounded cancellation, and measured wire compression.",
+      "implementation": "Create one shared transport/client per profile with connection pooling, HTTP/2, keep-alive, explicit dial/TLS/header/idle timeouts, context propagation, and sanitized instrumentation. Advertise only approved response content encodings by profile and endpoint class. Use `gzip` as the compatibility baseline for large textual endpoints where Jenkins/proxies support it; qualify HTTP Zstandard or Brotli only through explicit interoperability and CPU measurements. Count encoded wire bytes before decompression and decoded bytes after decompression. Stream the decoder into the bounded response parser or independent-Zstandard-frame writer without a full plaintext staging buffer.",
+      "acceptance_criteria": [
+        "Repeated requests reuse connections under a fixture that supports it.",
+        "Cancellation closes active reads and decompression promptly.",
+        "Timeout and content-decoding failures map to stable error codes.",
+        "Transport and idle connections close on profile removal or process shutdown.",
+        "Benchmarks show fewer handshakes than per-request clients.",
+        "Metrics separately report encoded wire bytes, decoded bytes, compression ratio, decoder CPU, and endpoint/profile identity without secrets.",
+        "Each content encoding can be disabled per profile or endpoint class when a proxy/controller is incompatible.",
+        "A large text response can flow directly from the network decoder into Zstandard frame storage without an unbounded plaintext copy."
+      ],
+      "acceptance_criteria_count": 8,
+      "evidence_tests": [],
+      "source_line": 519,
+      "dependency_depth": 7,
+      "dependents": [
+        "NET-003",
+        "NET-004",
+        "TST-001"
+      ]
+    },
+    {
+      "id": "NET-003",
+      "title": "Add body limits, safe retries, throttling, and circuit breaking",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "NET-002"
+      ],
+      "dependency_text": "NET-002",
+      "parallel_safe": null,
+      "objective": "Bound resource use and avoid accidental duplicate side effects.",
+      "implementation": "- Limit encoded-wire and decoded response sizes independently by endpoint class; abort both compression bombs and oversized uncompressed bodies.\n- Retry only idempotent reads and explicitly safe polling.\n- Honor bounded `Retry-After`; add jittered backoff.\n- Add per-profile rate and concurrency limits plus a simple circuit breaker.\n- Never automatically retry a build trigger or stop operation.",
+      "acceptance_criteria": [
+        "Oversized encoded or decoded JSON/XML/text fails before unbounded allocation or disk use.",
+        "Compression-bomb and deceptive-header fixtures fail within configured CPU, time, and decoded-byte bounds.",
+        "Retry tests distinguish GET/read from POST/mutation.",
+        "A 429/503 storm does not create synchronized request amplification.",
+        "Circuit state is observable and recovers safely."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 545,
+      "dependency_depth": 8,
+      "dependents": [
+        "LOG-001",
+        "JEN-001",
+        "JEN-004",
+        "ART-001"
+      ]
+    },
+    {
+      "id": "NET-004",
+      "title": "Support custom CAs, proxies, and optional mTLS",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "NET-002",
+        "CFG-001"
+      ],
+      "dependency_text": "NET-002, CFG-001",
+      "parallel_safe": null,
+      "objective": "Operate in enterprise networks without weakening TLS.",
+      "implementation": "Support approved CA bundles/system store, proxy configuration, proxy bypass, and optional client certificate references. Avoid an `insecure-skip-verify` production mode; permit only an explicit diagnostic mode that cannot persist silently.",
+      "acceptance_criteria": [
+        "Custom CA and proxy integration tests pass.",
+        "mTLS key material is loaded through approved protected sources and never logged.",
+        "Proxy redirects cannot receive Jenkins credentials unexpectedly.",
+        "TLS diagnostics explain chain/hostname errors without suggesting permanent verification disablement."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 572,
+      "dependency_depth": 8,
+      "dependents": [
+        "OPS-001",
+        "OAUTH-001"
+      ]
+    },
+    {
+      "id": "POL-001",
+      "title": "Implement the global read-only kill switch",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-005",
+        "CFG-002"
+      ],
+      "dependency_text": "FND-005, CFG-002",
+      "parallel_safe": null,
+      "objective": "Make read-only a cross-layer safety invariant that can be enabled from Cursor and forced by enterprise policy.",
+      "implementation": "Classify tools and Jenkins requests by effect. Compute effective read-only with monotonic precedence. Omit mutations from discovery, deny direct handler/service calls, and block classified Jenkins mutation endpoints below the tool layer. Keep OAuth/token-exchange POSTs in a separate authentication class. Expose effective state and sources in `status`/`doctor`.",
+      "acceptance_criteria": [
+        "Default installation is read-only.",
+        "Cursor `args: [\"--read-only\"]` and `JENKINS_MCP_READ_ONLY=true` enable read-only.",
+        "No lower-precedence setting can disable enterprise-enforced read-only.",
+        "Unregistered, direct, aliased, crafted, redirected, and future-unclassified mutation attempts fail closed.",
+        "Authentication/token refresh continues to function in read-only mode.",
+        "Every tool and Jenkins request has an effect classification test."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 594,
+      "dependency_depth": 7,
+      "dependents": [
+        "POL-002"
+      ]
+    },
+    {
+      "id": "POL-002",
+      "title": "Define the deny-only MCP RBAC policy model",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "POL-001",
+        "AUTH-004"
+      ],
+      "dependency_text": "POL-001, AUTH-004",
+      "parallel_safe": null,
+      "objective": "Restrict users below their Jenkins permissions without creating an alternate privilege-granting authority.",
+      "implementation": "Define subjects, roles, bindings, tools/capabilities, profiles, job/folder/view/branch/node/artifact resources, actions, argument constraints, data-volume limits, cache/export controls, time/expiry, and explicit deny rules. The evaluator returns decision, matched rule IDs, constraints, and safe explanation. Default deny mutations.",
+      "acceptance_criteria": [
+        "Effective access is Jenkins allow AND global mode AND MCP policy.",
+        "No policy rule can synthesize a Jenkins credential or mark a Jenkins denial as allowed.",
+        "Resource patterns are canonicalized and tested against nested folders/branches and ambiguous encodings.",
+        "Limits returned by policy can only lower server hard limits.",
+        "Policy language is deterministic, bounded, and cannot execute arbitrary code or network calls."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 618,
+      "dependency_depth": 10,
+      "dependents": [
+        "POL-003",
+        "MGR-001"
+      ]
+    },
+    {
+      "id": "POL-003",
+      "title": "Bind RBAC subjects to verified identities",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "POL-002",
+        "AUTH-004"
+      ],
+      "dependency_text": "POL-002, AUTH-004",
+      "parallel_safe": null,
+      "objective": "Ensure policy evaluates trusted identity rather than caller-supplied usernames.",
+      "implementation": "For API-token mode bind OS user/profile and verified Jenkins principal. For OAuth bind validated issuer/tenant/subject plus verified Jenkins principal and approved groups. For AgentCore bind the validated gateway caller/workload identity and exchanged token subject. Define rename, missing-claim, group-overage, and identity-change behavior.",
+      "acceptance_criteria": [
+        "Tool input cannot choose or override the policy subject.",
+        "Unexpected anonymous/principal/subject changes invalidate the session.",
+        "Group/role removals take effect within the approved cache/revalidation window.",
+        "Identity metadata retained in cache/audit is minimized and profile-isolated."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 641,
+      "dependency_depth": 11,
+      "dependents": [
+        "POL-004",
+        "OAUTH-006",
+        "OAUTH-010",
+        "GWY-002"
+      ]
+    },
+    {
+      "id": "POL-004",
+      "title": "Enforce RBAC at registry, handler, service, cache, and network boundaries",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "POL-003",
+        "MCP-002",
+        "NET-001"
+      ],
+      "dependency_text": "POL-003, MCP-002, NET-001",
+      "parallel_safe": null,
+      "objective": "Prevent bypass through discovery gaps, direct calls, cached data, or new Jenkins endpoints.",
+      "implementation": "Add reusable authorization middleware at MCP registry/handler, domain service, LogStore/ArtifactStore reads, integration adapter, and Jenkins request classifier. Re-evaluate current policy for cached content. Fail closed for unclassified tools/actions/endpoints. Return bounded explanations and correlation IDs.",
+      "acceptance_criteria": [
+        "A denied tool is absent when policy permits omission and is still denied if invoked directly.",
+        "Cached content cannot be read after policy/resource access is removed.",
+        "A newly introduced tool/request class is denied until explicitly classified.",
+        "Policy checks are cancellation-aware and have measured low overhead.",
+        "Every denial is auditable without leaking sensitive policy internals."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 663,
+      "dependency_depth": 12,
+      "dependents": [
+        "POL-005",
+        "LOG-004",
+        "OAUTH-009",
+        "MUT-001"
+      ]
+    },
+    {
+      "id": "POL-005",
+      "title": "Add RBAC/read-only conformance and adversarial tests",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "POL-004",
+        "TST-001"
+      ],
+      "dependency_text": "POL-004, TST-001",
+      "parallel_safe": null,
+      "objective": "Prove global read-only and MCP RBAC cannot be bypassed and cannot elevate Jenkins access.",
+      "implementation": "Build a matrix across identities, groups, profiles, nested jobs, cached data, tool aliases, direct JSON-RPC, redirects, plugin endpoints, mutations, limits, policy updates, and role revocation. Include property tests showing effective decisions are monotonic as restrictions are added.",
+      "acceptance_criteria": [
+        "All bypass cases fail closed.",
+        "Jenkins-denied resources remain denied even under an MCP allow rule.",
+        "Adding a deny/restriction never increases effective access.",
+        "Policy reload/revocation races do not permit a stale mutation or cache read.",
+        "Performance overhead and decision-cache behavior meet the approved budget."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 686,
+      "dependency_depth": 13,
+      "dependents": []
+    },
+    {
+      "id": "MCP-001",
+      "title": "Enforce central result-size and pagination budgets",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-006",
+        "FND-005"
+      ],
+      "dependency_text": "FND-006, FND-005",
+      "parallel_safe": null,
+      "objective": "Prevent large MCP responses regardless of tool implementation.",
+      "implementation": "Add middleware and reusable pagers enforcing default 64 KiB target, 1 MiB hard maximum, item limits, excerpt limits, truncation metadata, and opaque continuations.",
+      "acceptance_criteria": [
+        "No tool can bypass the hard result limit.",
+        "Truncation is explicit and continuation is stable for the documented lifetime.",
+        "Pagination does not duplicate or skip items in deterministic fixtures.",
+        "Handles reveal no filesystem path, secret, or unapproved identifier."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 709,
+      "dependency_depth": 5,
+      "dependents": [
+        "SEC-003",
+        "JEN-002",
+        "TEST-001"
+      ]
+    },
+    {
+      "id": "MCP-002",
+      "title": "Replace URL/string inputs with typed references",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-005",
+        "NET-001"
+      ],
+      "dependency_text": "FND-005, NET-001",
+      "parallel_safe": null,
+      "objective": "Reduce malformed calls, SSRF risk, and model-side URL construction.",
+      "implementation": "Define JSON schemas for profile, job full name, build number, queue ID, stage ID, artifact path, and log evidence reference. Add compatibility adapters for old tool names where necessary.",
+      "acceptance_criteria": [
+        "Public tool schemas contain no arbitrary request URL or header field.",
+        "Validation errors identify the invalid field and allowed form.",
+        "Nested jobs and multibranch names work without manual URL encoding.",
+        "Compatibility aliases have a documented removal plan."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 731,
+      "dependency_depth": 7,
+      "dependents": [
+        "POL-004",
+        "JEN-002",
+        "MUT-001"
+      ]
+    },
+    {
+      "id": "LOG-001",
+      "title": "Correct log range acquisition and eliminate hidden over-download",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "NET-003",
+        "PERF-001"
+      ],
+      "dependency_text": "NET-003, PERF-001",
+      "parallel_safe": null,
+      "objective": "Ensure a small log request cannot read or transfer the full remaining console log.",
+      "implementation": "Replace unbounded body reads with a streaming, counting reader. Use Jenkins progressive offsets correctly. Separate remote mirror acquisition from tool range responses. Add transfer metrics.",
+      "acceptance_criteria": [
+        "Requesting 8 KiB from a 1 GiB fixture does not allocate or return the remaining 1 GiB.",
+        "Wire/decompressed byte limits are demonstrated in tests.",
+        "Partial responses do not advance the committed mirror offset incorrectly.",
+        "Cancellation terminates the read and leaves recoverable state.",
+        "Benchmark shows the measured over-download defect is removed."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 753,
+      "dependency_depth": 9,
+      "dependents": [
+        "LOG-002"
+      ]
+    },
+    {
+      "id": "LOG-002",
+      "title": "Implement the progressive log-generation state machine",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "LOG-001",
+        "STO-002"
+      ],
+      "dependency_text": "LOG-001, STO-002",
+      "parallel_safe": null,
+      "objective": "Mirror running and completed logs incrementally and detect rewrites/truncation.",
+      "implementation": "Track committed offset, reported next offset, more-data flag, build state, prefix/boundary fingerprints, poll schedule, and generation ID. Use adaptive polling and single-flight per log.",
+      "acceptance_criteria": [
+        "Each normal log byte is downloaded once per generation.",
+        "Concurrent readers do not trigger duplicate remote fetches.",
+        "Truncation/restart creates a new generation rather than corrupting offsets.",
+        "Completed logs stop polling.",
+        "Crash/restart resumes from the last committed offset."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 776,
+      "dependency_depth": 10,
+      "dependents": [
+        "STO-003",
+        "PIPE-002",
+        "QA-002"
+      ]
+    },
+    {
+      "id": "STO-001",
+      "title": "Create secure data directories and ACL validation",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "CFG-001",
+        "SEC-001"
+      ],
+      "dependency_text": "CFG-001, SEC-001",
+      "parallel_safe": null,
+      "objective": "Keep cached Jenkins data private to the current OS user.",
+      "implementation": "Choose per-user local application-data paths, create them with restrictive ACLs/modes, reject shared/cloud-synced paths by policy, and implement `cache path/status` diagnostics.",
+      "acceptance_criteria": [
+        "New directories are current-user-only on supported OSes.",
+        "Unsafe inherited permissions are detected and not silently accepted.",
+        "Path traversal and symlink/junction attacks are tested.",
+        "Cache paths never include credentials or raw sensitive parameters."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 799,
+      "dependency_depth": 6,
+      "dependents": [
+        "STO-002",
+        "ART-001"
+      ]
+    },
+    {
+      "id": "STO-002",
+      "title": "Implement versioned SQLite metadata store",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "STO-001",
+        "FND-005"
+      ],
+      "dependency_text": "STO-001, FND-005",
+      "parallel_safe": null,
+      "objective": "Persist profiles' non-secret cache metadata, log generations, chunks, and leases transactionally.",
+      "implementation": "Design normalized tables and migrations for controllers, jobs, builds, log generations, chunks, line checkpoints, archives, pins, leases, and maintenance journal. Configure WAL/checkpoint policy based on benchmark.",
+      "acceptance_criteria": [
+        "Schema version and migrations are explicit.",
+        "Transactions preserve offset/chunk consistency under injected crashes.",
+        "Corrupt database behavior is detected and documented.",
+        "No tokens or authorization headers are stored.",
+        "Concurrent read/write tests pass with the race detector."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 821,
+      "dependency_depth": 7,
+      "dependents": [
+        "LOG-002",
+        "STO-003",
+        "ARC-007",
+        "ARC-011"
+      ]
+    },
+    {
+      "id": "STO-003",
+      "title": "Implement immutable line-aware Zstandard frames",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "STO-002",
+        "LOG-002"
+      ],
+      "dependency_text": "STO-002, LOG-002",
+      "parallel_safe": null,
+      "objective": "Store incoming log bytes compactly without full raw-log staging and make the compressed payload reusable by the seekable TAR/Zstandard cold tier.",
+      "implementation": "Stream decoded Jenkins bytes directly into independent checksummed Zstandard payload frames, targeting an initial 8 MiB raw frame with a benchmarked 1-32 MiB range and newline-aware cut points. No payload frame may depend on data or entropy tables from another frame. Store raw/compressed offsets, line checkpoints, checksum, codec level, optional versioned dictionary ID, generation, and archive-reuse metadata. Dictionaries are optional, immutable, checksummed, retained for the full data lifetime, and may not create cross-frame decode dependency. Design the L1 payload format so the exact compressed payload-frame bytes can be copied between separately generated TAR header and padding frames during compatible L2 promotion; do not require the L1 payload to contain a TAR header.",
+      "acceptance_criteria": [
+        "No completed full raw log copy is required on disk.",
+        "Any payload frame can be decompressed independently under a strict output limit.",
+        "Line/raw-offset metadata round-trips across long lines and UTF-8/binary-like bytes.",
+        "Frame format, optional dictionary references, checksums, and archive-reuse metadata are versioned and corruption is detected.",
+        "A fixture promotes L1 payload frames into a valid seekable TAR/Zstandard pack without recompressing the log payload bytes.",
+        "Benchmarks cover compression levels, frame sizes, dictionaries, ingest CPU, decode latency, ratio, and write amplification."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 844,
+      "dependency_depth": 11,
+      "dependents": [
+        "STO-004",
+        "LOG-003",
+        "LOG-004",
+        "ARC-002",
+        "ARC-009",
+        "ARC-010"
+      ]
+    },
+    {
+      "id": "STO-004",
+      "title": "Make chunk commit and recovery crash-safe",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "STO-003"
+      ],
+      "dependency_text": "STO-003",
+      "parallel_safe": null,
+      "objective": "Guarantee that the cache is discoverably old or new after interruption, never half-committed.",
+      "implementation": "Use temporary files, fsync policy, atomic rename, SQLite transaction, and recovery journal. Implement startup cleanup of orphan temp files and verification of committed objects.",
+      "acceptance_criteria": [
+        "Fault injection at every commit step leaves recoverable state.",
+        "The logical offset never points past durable data.",
+        "Orphan files are reclaimed safely.",
+        "Recovery duration is bounded by metadata, not a full scan of all log bytes."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 868,
+      "dependency_depth": 12,
+      "dependents": [
+        "LOG-003",
+        "OPS-001",
+        "ARC-001",
+        "QA-002"
+      ]
+    },
+    {
+      "id": "LOG-003",
+      "title": "Build byte/line indexes and bounded local reads",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "STO-003",
+        "STO-004"
+      ],
+      "dependency_text": "STO-003, STO-004",
+      "parallel_safe": null,
+      "objective": "Serve byte ranges, line ranges, and tails locally without full decompression.",
+      "implementation": "Create line checkpoints per chunk and APIs for raw byte range, line range, tail-by-lines, and tail-by-bytes. Decompress only intersecting independent frames/windows and report requested versus decompressed bytes.",
+      "acceptance_criteria": [
+        "Reads across chunk boundaries are correct.",
+        "UTF-8 boundary behavior is documented; raw byte evidence remains authoritative.",
+        "Cached 64 KiB read meets the calibrated p95 target.",
+        "A tail read does not decompress all earlier chunks.",
+        "Returned evidence includes generation, ranges, and checksum."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 890,
+      "dependency_depth": 13,
+      "dependents": [
+        "LOG-004",
+        "SEARCH-001",
+        "SEC-002",
+        "SEC-003",
+        "PIPE-002"
+      ]
+    },
+    {
+      "id": "LOG-004",
+      "title": "Stream multi-log operations directly into compressed collections",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "LOG-003",
+        "STO-003",
+        "POL-004"
+      ],
+      "dependency_text": "LOG-003, STO-003, POL-004",
+      "parallel_safe": null,
+      "objective": "Keep fan-out diagnostics network/disk efficient and preserve semantic locality for later archive packing.",
+      "implementation": "Introduce bounded acquisition sessions/collection IDs. Deduplicate requested log generations, fetch concurrently under profile budgets, and stream every response directly into independent frames. Record build/stage/downstream relationships and collection membership. Do not pack running logs; seal them independently first.",
+      "acceptance_criteria": [
+        "A large multi-build operation never buffers or writes all logs raw.",
+        "Duplicate log requests share one acquisition and one stored generation.",
+        "Cancellation stops fetch/compression and leaves recoverable committed frames.",
+        "Collection fan-out, total remote bytes, CPU, memory, and disk are policy-bounded.",
+        "Related sealed logs can later be selected as one semantic pack without cross-profile mixing."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 913,
+      "dependency_depth": 14,
+      "dependents": [
+        "ARC-011"
+      ]
+    },
+    {
+      "id": "SEARCH-001",
+      "title": "Implement high-throughput literal search",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "LOG-003"
+      ],
+      "dependency_text": "LOG-003",
+      "parallel_safe": null,
+      "objective": "Find text locally with bounded context and minimal decompression.",
+      "implementation": "Support case-sensitive/insensitive literal search, match count limit, before/after lines, selected build/log scope, cancellation, and deterministic ordering. Add optional chunk-level token/Bloom summaries only if benchmarks justify them.",
+      "acceptance_criteria": [
+        "Search never returns more matches or bytes than policy permits.",
+        "1 GiB benchmark meets or calibrates the target with results documented.",
+        "Cancellation is checked frequently.",
+        "Matches include exact evidence references and sanitized excerpts.",
+        "False-negative behavior is impossible for the base literal path."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 936,
+      "dependency_depth": 14,
+      "dependents": [
+        "SEARCH-002"
+      ]
+    },
+    {
+      "id": "SEARCH-002",
+      "title": "Implement safe regular-expression search",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "SEARCH-001"
+      ],
+      "dependency_text": "SEARCH-001",
+      "parallel_safe": null,
+      "objective": "Provide expressive search without catastrophic backtracking.",
+      "implementation": "Use Go's RE2-compatible engine. Limit pattern size, matches, context, and scanned data. Reject unsupported constructs clearly.",
+      "acceptance_criteria": [
+        "Adversarial patterns cannot cause unbounded CPU or memory growth.",
+        "Scan and output limits are enforced server-side.",
+        "Results are consistent across chunk boundaries where pattern semantics allow it.",
+        "1 GiB benchmark and cancellation tests pass."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 959,
+      "dependency_depth": 15,
+      "dependents": [
+        "DIAG-001"
+      ]
+    },
+    {
+      "id": "SEC-002",
+      "title": "Implement layered secret and sensitive-data redaction",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "SEC-001",
+        "LOG-003"
+      ],
+      "dependency_text": "SEC-001, LOG-003",
+      "parallel_safe": null,
+      "objective": "Prevent credentials and configured sensitive patterns from reaching the model or telemetry.",
+      "implementation": "Add exact known-secret matchers, structured parameter redaction, built-in token/key/connection-string detectors, enterprise patterns, and optional customer-data rules. Redact after evidence selection and before MCP serialization.",
+      "acceptance_criteria": [
+        "Secret canaries are absent from MCP output, logs, metrics, errors, and support bundles.",
+        "Redaction reports category/count without revealing value.",
+        "Overlapping and split-across-buffer secrets are covered.",
+        "False-positive test corpus preserves useful diagnostic content.",
+        "Policy defines whether raw local cache remains unredacted or is redacted before persistence."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 981,
+      "dependency_depth": 14,
+      "dependents": [
+        "AUD-001",
+        "INT-003",
+        "QA-006"
+      ]
+    },
+    {
+      "id": "SEC-003",
+      "title": "Sanitize control sequences and label untrusted content",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "LOG-003",
+        "MCP-001"
+      ],
+      "dependency_text": "LOG-003, MCP-001",
+      "parallel_safe": null,
+      "objective": "Keep terminal escapes, hyperlinks, and prompt-like log content from manipulating clients or agents.",
+      "implementation": "Strip or encode ANSI CSI/OSC, control characters, bidi controls according to policy, and unsafe link schemes. Wrap excerpts in structured fields explicitly labeled as untrusted build output.",
+      "acceptance_criteria": [
+        "Terminal title/hyperlink/clipboard/control attacks are neutralized.",
+        "Malicious fake system/tool instructions remain data, not control fields.",
+        "Raw checksums/ranges allow forensic retrieval under authorized local tooling.",
+        "Sanitization is deterministic and fuzz-tested."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1004,
+      "dependency_depth": 14,
+      "dependents": [
+        "ART-002"
+      ]
+    },
+    {
+      "id": "AUD-001",
+      "title": "Add privacy-preserving local audit events",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-005",
+        "SEC-002"
+      ],
+      "dependency_text": "FND-005, SEC-002",
+      "parallel_safe": null,
+      "objective": "Provide attribution and operational evidence without recording content.",
+      "implementation": "Record version/profile startup, auth events, verified identity, tool name, hashed/opaque target, duration, result code, cache state, network/output bytes, policy denials, and maintenance actions. Rotate and protect audit files.",
+      "acceptance_criteria": [
+        "No prompt, full job parameter, excerpt, token, or artifact content is recorded by default.",
+        "Events have stable schema and correlation IDs.",
+        "Retention and optional export are policy-controlled.",
+        "Audit failures do not leak data or silently authorize mutations."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1026,
+      "dependency_depth": 15,
+      "dependents": [
+        "OBS-001",
+        "MUT-001"
+      ]
+    },
+    {
+      "id": "OBS-001",
+      "title": "Add structured diagnostic logging and core metrics",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "AUD-001",
+        "PERF-001"
+      ],
+      "dependency_text": "AUD-001, PERF-001",
+      "parallel_safe": null,
+      "objective": "Make performance and failures measurable locally.",
+      "implementation": "Instrument tool, Jenkins HTTP, cache, compression, search, OAuth, archive, and maintenance operations. Add private rotating logs and optional metrics exporter with low-cardinality labels.",
+      "acceptance_criteria": [
+        "Network bytes, MCP bytes, cache hits, duplicate bytes avoided, and latency are observable.",
+        "Sensitive names/content are excluded or pseudonymized by default.",
+        "Logging overhead is benchmarked and bounded.",
+        "Debug mode remains safe for normal support collection."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1048,
+      "dependency_depth": 16,
+      "dependents": [
+        "OPS-001",
+        "MGR-002"
+      ]
+    },
+    {
+      "id": "OPS-001",
+      "title": "Implement `doctor`, cache status, and safe support diagnostics",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "AUTH-004",
+        "NET-004",
+        "STO-004",
+        "OBS-001"
+      ],
+      "dependency_text": "AUTH-004, NET-004, STO-004, OBS-001",
+      "parallel_safe": null,
+      "objective": "Let users and support staff diagnose setup problems without exposing secrets.",
+      "implementation": "Check binary/version, config/policy, ACL/free space, keyring access, DNS/TLS/proxy, identity, permissions, capabilities, cache integrity sample, archive adapter, and slow/unsafe paths. Add a privacy-scrubbed support bundle with preview.",
+      "acceptance_criteria": [
+        "Common auth, TLS, proxy, permission, and disk failures produce actionable results.",
+        "Output passes secret-canary tests.",
+        "Support bundle lists included categories before creation.",
+        "Bundle generation is bounded and excludes raw logs by default."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1070,
+      "dependency_depth": 17,
+      "dependents": [
+        "PKG-001"
+      ]
+    },
+    {
+      "id": "PKG-001",
+      "title": "Produce signed Windows-first pilot packages",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-007",
+        "AUTH-003",
+        "OPS-001"
+      ],
+      "dependency_text": "FND-007, AUTH-003, OPS-001",
+      "parallel_safe": null,
+      "objective": "Deliver a trustworthy local executable that Cursor can launch without secrets in configuration.",
+      "implementation": "Build signed Windows x64 package, install/uninstall flow, per-user data paths, version metadata, SBOM, provenance, and secret-free Cursor configuration documentation. Add ARM64 only if required by the support matrix.",
+      "acceptance_criteria": [
+        "Installed binary signature validates.",
+        "Ordinary operation requires no administrator rights unless deployment policy mandates it.",
+        "Uninstall behavior for cache and credentials is explicit and user-controlled.",
+        "Cursor starts the MCP over stdio with profile-only arguments.",
+        "Endpoint-protection compatibility smoke tests pass."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1092,
+      "dependency_depth": 18,
+      "dependents": [
+        "GWY-004",
+        "UPD-001",
+        "REL-001"
+      ]
+    },
+    {
+      "id": "TST-001",
+      "title": "Create the disposable Jenkins integration-test and route matrix",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FND-007",
+        "NET-002"
+      ],
+      "dependency_text": "FND-007, NET-002",
+      "parallel_safe": null,
+      "objective": "Test real Jenkins behavior, identity, authorization, and every route used by the MCP rather than relying only on mocks.",
+      "implementation": "Automate disposable Jenkins LTS/plugin environments with freestyle, Pipeline, folders, views, parameters, queue, running/completed/truncated logs, stage/node logs, JUnit, artifacts, multibranch/matrix, upstream/downstream, permissions, reverse-proxy prefixes, API-token auth, OIDC UI realm where relevant, and JWT bearer filter/proxy variants. Generate a machine-readable route manifest for controller/job/build APIs, identity, progressive text, Pipeline/test endpoints, artifact bytes, crumbs, queue, and optional mutations.",
+      "acceptance_criteria": [
+        "CI/scheduled jobs cover the declared Jenkins/core/plugin/reverse-proxy matrix.",
+        "Tests use ephemeral credentials/tokens and destroy environments.",
+        "API-token, global read-only, MCP-RBAC, inaccessible-resource, and identity-attribution cases pass.",
+        "Fixtures deterministically produce large/growing/truncated and related root/stage/downstream/test logs.",
+        "Every route is classified as auth/read/mutation and linked to policy/auth positive and negative tests.",
+        "Adding an OAuth-required route without anti-fallback coverage fails CI."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 1115,
+      "dependency_depth": 8,
+      "dependents": [
+        "POL-005",
+        "OAUTH-005",
+        "OAUTH-008",
+        "OAUTH-009",
+        "JEN-001"
+      ]
+    },
+    {
+      "id": "OAUTH-001",
+      "title": "Add external-IdP OIDC profile and discovery validation",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "AUTH-000",
+        "AUTH-001",
+        "CFG-002",
+        "NET-004"
+      ],
+      "dependency_text": "AUTH-000, AUTH-001, CFG-002, NET-004",
+      "parallel_safe": null,
+      "objective": "Represent approved external identity-provider settings without treating Jenkins as an authorization server.",
+      "implementation": "Add issuer, tenant restrictions, public client ID, scopes, Jenkins resource/audience, redirect policy, token type, group policy, and optional RFC 9728 protected-resource discovery. Fetch discovery/JWKS through hardened origin-constrained transport. Explicitly reject configurations that point authorization/token endpoints at Jenkins unless a separately approved authorization-server plugin exists.",
+      "acceptance_criteria": [
+        "Issuer/discovery origins exactly match approved policy.",
+        "Local client has no embedded client secret.",
+        "Jenkins resource/audience and requested scopes are explicit.",
+        "Metadata cache honors expiry and key rotation without trusting unknown issuers.",
+        "Negative tests cover Jenkins UI-login endpoints falsely configured as OAuth token endpoints."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1141,
+      "dependency_depth": 9,
+      "dependents": [
+        "OAUTH-002"
+      ]
+    },
+    {
+      "id": "OAUTH-002",
+      "title": "Implement local Authorization Code with PKCE browser login",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "OAUTH-001",
+        "AUTH-002"
+      ],
+      "dependency_text": "OAUTH-001, AUTH-002",
+      "parallel_safe": null,
+      "objective": "Authenticate each local user through the corporate browser/IdP without collecting their password.",
+      "implementation": "Generate state, nonce, verifier/S256 challenge; bind a loopback callback; open the system browser; validate callback; exchange code with the external IdP; clean up listener/session state. Device flow is optional and separately approved.",
+      "acceptance_criteria": [
+        "Cryptographic state/nonce/verifier and exact redirect binding are used.",
+        "Replay, wrong state, duplicate callback, port race, cancellation, and timeout fail safely.",
+        "Corporate password never enters the MCP process.",
+        "Returned access token is requested for the Jenkins resource, not Graph or a generic audience."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1164,
+      "dependency_depth": 10,
+      "dependents": [
+        "OAUTH-003"
+      ]
+    },
+    {
+      "id": "OAUTH-003",
+      "title": "Validate access tokens and identity binding strictly",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "OAUTH-002"
+      ],
+      "dependency_text": "OAUTH-002",
+      "parallel_safe": null,
+      "objective": "Accept only access tokens intended for the approved Jenkins resource and bind them to a stable subject.",
+      "implementation": "Validate signature/algorithm, issuer/tenant, audience, token type/use, expiry/not-before, authorized party/client, nonce where applicable, and bounded clock skew. Distinguish ID tokens from API access tokens and never send an ID token to Jenkins. Normalize subject and approved group claims.",
+      "acceptance_criteria": [
+        "Wrong issuer/tenant/audience/algorithm/type/time/client tests fail closed.",
+        "An ID token or Graph token is rejected for Jenkins API authentication.",
+        "JWKS rotation succeeds without accepting unknown issuers.",
+        "Token contents are never logged or persisted outside approved keyring fields."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1186,
+      "dependency_depth": 11,
+      "dependents": [
+        "OAUTH-004",
+        "OAUTH-005"
+      ]
+    },
+    {
+      "id": "OAUTH-004",
+      "title": "Implement refresh-token persistence and single-flight refresh",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "OAUTH-003",
+        "AUTH-002"
+      ],
+      "dependency_text": "OAUTH-003, AUTH-002",
+      "parallel_safe": null,
+      "objective": "Maintain a usable browser-authenticated session without repeated prompts or token races.",
+      "implementation": "Persist refresh tokens only when policy allows, in the OS credential store. Keep access tokens in memory. Refresh early with jitter and single-flight coordination. Update keyring state atomically when refresh-token rotation occurs.",
+      "acceptance_criteria": [
+        "Concurrent calls trigger at most one refresh.",
+        "Rotated refresh tokens replace old values atomically.",
+        "Revoked/invalid refresh fails closed and requests re-login.",
+        "Process restart can restore a permitted session without exposing token data.",
+        "Logout removes all OAuth session material."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1208,
+      "dependency_depth": 12,
+      "dependents": [
+        "OAUTH-007",
+        "QA-002"
+      ]
+    },
+    {
+      "id": "OAUTH-005",
+      "title": "Integrate Jenkins bearer resource-server authentication",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "OAUTH-003",
+        "TST-001",
+        "OAUTH-008"
+      ],
+      "dependency_text": "OAUTH-003, TST-001, OAUTH-008",
+      "parallel_safe": null,
+      "objective": "Call Jenkins with an externally issued Jenkins-audience access token under the personal Jenkins identity.",
+      "implementation": "Configure/test `jwt-auth-filter`, an approved fork, or reverse proxy for audience, JWKS, protected API paths, principal/group mapping, and RFC 9728 metadata. Add bearer auth sessions. Detect invalid-bearer fallthrough, Basic/anonymous fallback, wrong principal, and missing protected paths.",
+      "acceptance_criteria": [
+        "Jenkins reports the expected individual principal and applies its RBAC.",
+        "Wrong/missing/expired bearer fails closed on OAuth-required paths.",
+        "Basic/API-token fallback behavior matches explicit policy, not accidental filter chaining.",
+        "Protected route coverage includes APIs plus progressive text, Pipeline/test endpoints, artifact-byte paths, identity/crumb/queue paths, and enabled mutations.",
+        "Audit attributes requests to the personal Jenkins principal."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1231,
+      "dependency_depth": 12,
+      "dependents": [
+        "OAUTH-006",
+        "OAUTH-007",
+        "OAUTH-009",
+        "OAUTH-010"
+      ]
+    },
+    {
+      "id": "OAUTH-006",
+      "title": "Test claims, groups, revocation, and MCP policy binding",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "OAUTH-005",
+        "POL-003"
+      ],
+      "dependency_text": "OAUTH-005, POL-003",
+      "parallel_safe": null,
+      "objective": "Prove identity and both authorization layers behave under enterprise edge cases.",
+      "implementation": "Test direct groups, Entra overage/reference behavior, large sets, renamed users, removed roles, disabled accounts, token expiry/revocation, key rotation, clock skew, and Jenkins principal mapping. Verify MCP policy subject/group bindings update within the approved window.",
+      "acceptance_criteria": [
+        "Jenkins and MCP policy permissions reflect role removal within the approved window.",
+        "Group overage cannot silently broaden access.",
+        "Identity changes invalidate incompatible sessions/cache bindings.",
+        "Effective permission remains the intersection of Jenkins and MCP policy."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1254,
+      "dependency_depth": 13,
+      "dependents": []
+    },
+    {
+      "id": "OAUTH-007",
+      "title": "Add OAuth logout, session diagnostics, and recovery",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "OAUTH-004",
+        "OAUTH-005"
+      ],
+      "dependency_text": "OAUTH-004, OAUTH-005",
+      "parallel_safe": null,
+      "objective": "Make session state understandable and safely removable.",
+      "implementation": "Add status fields for issuer, principal, expiry, refresh availability, and Jenkins identity; optional provider revocation when supported; local token removal; and safe recovery from corrupt keyring entries.",
+      "acceptance_criteria": [
+        "Status contains no token claims beyond approved identity metadata.",
+        "Logout immediately prevents further remote calls from the process.",
+        "Provider revocation is attempted only when supported and errors are clearly distinguished from local logout.",
+        "Corrupt/partial credentials do not crash startup."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1276,
+      "dependency_depth": 13,
+      "dependents": []
+    },
+    {
+      "id": "OAUTH-008",
+      "title": "Document and test the Jenkins OAuth capability matrix",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "AUTH-000",
+        "FND-003",
+        "TST-001"
+      ],
+      "dependency_text": "AUTH-000, FND-003, TST-001",
+      "parallel_safe": null,
+      "objective": "Prevent selection of plugins that do not provide delegated API bearer authentication.",
+      "implementation": "Create versioned capability tests/documentation for Jenkins core/API tokens, `oic-auth`, `oidc-provider`, `github-oauth`, `oauth-credentials`, `jwt-auth-filter`, and approved proxies. Classify each as browser security realm, outbound workload issuer, credential framework, bearer resource server, or authorization server.",
+      "acceptance_criteria": [
+        "No UI-login plugin is represented as an API authorization server.",
+        "Automated `doctor` output identifies detected plugins and supported auth modes.",
+        "The matrix cites exact tested versions and expected endpoints/headers.",
+        "A deployment with only `oic-auth` clearly falls back to the API-token provider rather than attempting bearer API calls."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1298,
+      "dependency_depth": 9,
+      "dependents": [
+        "OAUTH-005"
+      ]
+    },
+    {
+      "id": "OAUTH-009",
+      "title": "Qualify and harden `jwt-auth-filter` or its replacement",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "OAUTH-005",
+        "TST-001",
+        "POL-004"
+      ],
+      "dependency_text": "OAUTH-005, TST-001, POL-004",
+      "parallel_safe": null,
+      "objective": "Determine whether the current bearer resource-server control is production-ready and close its documented gaps.",
+      "implementation": "Inspect and measure invalid-token fallthrough, Basic/API-token/session/anonymous fallback, protected-path matching, non-API route coverage, claim configurability, groups/overage, scope enforcement, JWKS fetch/cache/outage/key rotation, audience matching, multiple issuers, performance, audit identity, and upgrades. Decide whether to contribute upstream, maintain an internal fork/companion filter, enforce at a reverse proxy, or replace it. The local MCP calls Jenkins REST routes; protecting only `/mcp/**` is insufficient.",
+      "acceptance_criteria": [
+        "A written go/no-go and exact JCasC/proxy/plugin configuration are approved.",
+        "OAuth-required routes fail closed for missing/malformed/expired/wrong-audience bearer tokens.",
+        "Progressive log and artifact download routes are protected, not only `/**/api/**`.",
+        "JWT failure cannot silently succeed through Basic/API-token/UI-session/anonymous authentication.",
+        "Claim/group/overage, JWKS cache/outage/rotation, and scope behavior meet requirements.",
+        "Security review, performance evidence, rollback, and emergency disable plans exist for any fork/proxy."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 1320,
+      "dependency_depth": 13,
+      "dependents": [
+        "OAUTH-011",
+        "GWY-003"
+      ]
+    },
+    {
+      "id": "OAUTH-010",
+      "title": "Prototype AgentCore per-user Jenkins 3LO/OBO token acquisition",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "OAUTH-005",
+        "POL-003",
+        "FND-005"
+      ],
+      "dependency_text": "OAUTH-005, POL-003, FND-005",
+      "parallel_safe": null,
+      "objective": "Confirm the real AgentCore provider contract and integrate the existing per-user identity pattern without a shared Jenkins identity.",
+      "implementation": "Obtain the approved AgentCore Identity/Gateway contract and prototype these paths in order:\n\n1. User-delegated Authorization Code (`AUTHORIZATION_CODE`/user federation) through an AgentCore `CustomOauth2` or approved Microsoft provider. Discovery, authorization, issuer, and token endpoints point to Entra ID or another approved authorization server; the requested resource/audience is the dedicated Jenkins API.\n2. Microsoft on-behalf-of or standards-based token exchange using the approved RFC 8693 or RFC 7523 profile to obtain a short-lived Jenkins-audience token.\n3. Direct JWT passthrough only when the inbound token was already issued for the exact Jenkins resource, both gateway and Jenkins validate it, and security approves the audience model.\n4. A narrow internal broker/filter only when the first three cannot satisfy a documented requirement.\n\nBind inbound gateway subject and workload identity to the downstream token subject, tenant, Jenkins resource, MCP policy subject, cache namespace, and audit correlation. Use AgentCore's user/workload-bound credential provider and token-vault semantics for access/refresh material. Stream an authorization URL to the caller when interactive consent is required. Keep Jira/Confluence VPC routing, Bitbucket Cloud consent implementation, and Jira automation PAT details outside Jenkins core code.",
+      "acceptance_criteria": [
+        "A compatibility matrix records which Authorization Code, OBO/token-exchange, and exact-audience passthrough paths work and the precise provider/resource configuration.",
+        "AgentCore issuer/authorization/token endpoints are Entra/approved authorization-server endpoints, never stock Jenkins, unless OAUTH-011 has an explicit go decision and the conditional plugin exists.",
+        "Authorization-code consent is session-bound and access/refresh material is stored under the correct user and workload identity.",
+        "One user cannot obtain/use another user's downstream token, cache entry, evidence handle, or archive namespace.",
+        "Token audience is Jenkins and Jenkins sees the expected individual principal.",
+        "Refresh/cache/vault storage is per-user, centrally revocable, and contains no user-pasted Jenkins key.",
+        "Direct passthrough rejects generic gateway, ID, Graph, wrong-tenant, and wrong-audience tokens.",
+        "No generic Jenkins account is used.",
+        "Local and gateway auth providers remain independent and testable."
+      ],
+      "acceptance_criteria_count": 9,
+      "evidence_tests": [],
+      "source_line": 1344,
+      "dependency_depth": 13,
+      "dependents": [
+        "OAUTH-011",
+        "GWY-001"
+      ]
+    },
+    {
+      "id": "OAUTH-011",
+      "title": "Run the decision gate for a Jenkins-hosted 3LO authorization server",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "OAUTH-009",
+        "OAUTH-010"
+      ],
+      "dependency_text": "OAUTH-009, OAUTH-010, security architecture approval",
+      "parallel_safe": null,
+      "objective": "Make the default decision **no-go** and approve a full Jenkins OAuth authorization-server plugin only when a concrete, funded requirement remains unsolved after external-IdP resource-server, AgentCore authorization-code, OBO/token-exchange, passthrough, proxy/filter, and narrow-broker prototypes.",
+      "implementation": "Document every unmet gateway/client requirement after the simpler prototypes, why each alternative fails, security and long-term maintenance ownership, client/scopes/consent requirements, key and token lifecycle, conformance obligations, migration impact, and exit strategy. A desire for Jenkins-branded OAuth endpoints or symmetry with another product is not sufficient justification.",
+      "acceptance_criteria": [
+        "Decision records explicit go/no-go criteria, evidence, approvers, owner, funding, and support horizon.",
+        "The default/no-evidence result is no-go and closes or deprioritizes the conditional JAS epic.",
+        "A go decision identifies a specific blocker that cannot be solved safely by Entra/AgentCore, a resource filter/proxy, token exchange, or a narrow broker.",
+        "A go decision funds separate threat modeling, key management, secure token storage, OAuth conformance, independent review, penetration testing, release engineering, and incident ownership.",
+        "The MCP core and local release do not depend on the plugin before or after this gate."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1378,
+      "dependency_depth": 14,
+      "dependents": [
+        "JAS-001"
+      ]
+    },
+    {
+      "id": "ARC-001",
+      "title": "Implement the `ArchiveStore` abstraction and object model",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ARC-000",
+        "STO-004"
+      ],
+      "dependency_text": "ARC-000, STO-004",
+      "parallel_safe": null,
+      "objective": "Decouple cold-storage policy from ratarmount implementation details.",
+      "implementation": "Define pack publish/open/range-read/verify/delete/list interfaces, archive references, entry metadata, health, and errors. Require opaque entry IDs, checksums, cancellation, and bounded reads.",
+      "acceptance_criteria": [
+        "L1 code depends only on `ArchiveStore`, not ratarmount APIs.",
+        "Fake store supports deterministic unit tests.",
+        "Range reads enforce policy limits.",
+        "Store implementations expose capabilities without leaking paths to MCP tools."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1401,
+      "dependency_depth": 13,
+      "dependents": [
+        "ARC-002"
+      ]
+    },
+    {
+      "id": "ARC-002",
+      "title": "Specify seekable TAR/Zstandard pack format v1",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ARC-001",
+        "STO-003",
+        "ARC-000"
+      ],
+      "dependency_text": "ARC-001, STO-003, ARC-000",
+      "parallel_safe": null,
+      "objective": "Define an immutable self-describing random-access format compatible with the native reader and the qualified `ratarmount-rs` adapter.",
+      "implementation": "Specify the opaque TAR namespace; semantic collection/affinity manifests; independent Zstandard frames; final seek-table/checkpoint frame; compressed/uncompressed frame offsets; TAR member offsets/sizes; line/evidence indexes; checksums; optional versioned dictionaries/encryption; rollover limits; and schema evolution. Initial raw payload-frame target is 8 MiB with a benchmarked 1-32 MiB range; initial physical pack target is 4-16 GiB. Define the preferred promotion representation as a deterministic sequence of small generated TAR-header frames, copied L1 compressed payload frames, optional small generated TAR-padding frames, TAR termination frames, and the final seek table. Define a compatibility repack writer for readers that reject this frame layout. Ban ordinary single-frame `.tar.zst`.",
+      "acceptance_criteria": [
+        "Fixtures cover related root/stage/downstream/test logs, small-member bundles, split large members, empty/long-line/binary-like data, generated header/padding frames, and corruption.",
+        "Validator confirms TAR termination, multiple frame bounds, seek table, manifests, offsets, limits, dictionaries, and checksums.",
+        "Member/range lookup requires no full-pack decompression.",
+        "Sequential standard Zstandard decompression recovers a standards-compliant TAR stream.",
+        "A fixture proves copied L1 payload-frame bytes are unchanged in the preferred L2 pack.",
+        "Native and qualified `ratarmount-rs` readers return byte-identical results for golden packs; incompatible readers use the measured compatibility repack path.",
+        "Format/version/endian/limits/migration policy are documented and fuzzable."
+      ],
+      "acceptance_criteria_count": 7,
+      "evidence_tests": [],
+      "source_line": 1423,
+      "dependency_depth": 14,
+      "dependents": [
+        "ARC-003",
+        "ARC-004",
+        "ARC-009",
+        "ARC-010",
+        "ARC-011"
+      ]
+    },
+    {
+      "id": "ARC-003",
+      "title": "Implement the native Go seekable TAR/Zstandard reader",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ARC-002",
+        "ARC-000"
+      ],
+      "dependency_text": "ARC-002, ARC-000",
+      "parallel_safe": null,
+      "objective": "Keep the product functional and recoverable without FUSE or `ratarmount-rs`.",
+      "implementation": "Parse and validate the selected seek table, map raw TAR/member ranges to independent frames, decompress only required frames under limits, verify checksums and optional dictionary identities, and expose `ArchiveStore.OpenRange`. Support catalog rebuild/inspection without extracting packs. Correctly span generated header, reused payload, and padding frame boundaries.",
+      "acceptance_criteria": [
+        "Reads return exact member/range bytes for every format fixture.",
+        "A 64 KiB range never triggers full-pack decompression and reports amplification.",
+        "Malformed frame/seek/TAR/dictionary metadata fails safely under fuzzing.",
+        "Windows works without FUSE/WinFsp.",
+        "Reader output matches the qualified `ratarmount-rs` adapter byte-for-byte when that adapter is available."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1448,
+      "dependency_depth": 15,
+      "dependents": [
+        "ARC-005",
+        "ARC-012"
+      ]
+    },
+    {
+      "id": "ARC-004",
+      "title": "Implement the qualified `ratarmount-rs` adapter",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ARC-000",
+        "ARC-002"
+      ],
+      "dependency_text": "ARC-000, ARC-002",
+      "parallel_safe": null,
+      "objective": "Use the preferred archive implementation without making it a single point of failure.",
+      "implementation": "Implement the approved direct Rust API or managed sidecar. Pin version, sandbox/lifecycle/limits, controlled index location, cancellation, health checks, and sanitized errors. Optional mount mode is diagnostic only.",
+      "acceptance_criteria": [
+        "Adapter opens/list/range-reads supported packs within limits.",
+        "No public listener or arbitrary user path traversal exists.",
+        "Sidecar/FFI failure degrades to native reader where possible.",
+        "Index corruption/mismatch is detected and recoverable.",
+        "Supply-chain/update/rollback process is documented."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1471,
+      "dependency_depth": 15,
+      "dependents": [
+        "ARC-005",
+        "ARC-006",
+        "ARC-012"
+      ]
+    },
+    {
+      "id": "ARC-005",
+      "title": "Build transactional L1-to-L2 packing and compaction",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ARC-003",
+        "ARC-004",
+        "ARC-010",
+        "ARC-011"
+      ],
+      "dependency_text": "ARC-003, ARC-004, ARC-010, ARC-011",
+      "parallel_safe": null,
+      "objective": "Publish semantic seekable packs without data loss or interactive stalls.",
+      "implementation": "Acquire packing leases, assemble/copy frames or use compatibility repack, finalize TAR and seek table, fsync, build indexes, verify through both readers, atomically publish catalog, then release L1. Journal every phase and bound compaction priority/concurrency.",
+      "acceptance_criteria": [
+        "Crash at every transition leaves either valid L1 or published L2 discoverable.",
+        "Source frames are not deleted before dual-reader verification/publish commit.",
+        "Interactive reads do not wait on index build/compaction.",
+        "Disk-full/cancel/corruption recovery is deterministic.",
+        "Compaction preserves collection, policy, retention, and checksum metadata."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1494,
+      "dependency_depth": 16,
+      "dependents": [
+        "ARC-006",
+        "ARC-007",
+        "PERF-002"
+      ]
+    },
+    {
+      "id": "ARC-006",
+      "title": "Add archive index lifecycle and corruption recovery",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ARC-004",
+        "ARC-005"
+      ],
+      "dependency_text": "ARC-004, ARC-005",
+      "parallel_safe": null,
+      "objective": "Keep archive indexes trustworthy and recoverable without synchronous full scans.",
+      "implementation": "Bind index metadata to pack checksum/size/schema, create indexes off the request path, detect stale/mismatched indexes, rebuild asynchronously, quarantine corrupt packs, and fall back to native reads when possible.",
+      "acceptance_criteria": [
+        "A stale or wrong index is never trusted.",
+        "MCP reads never trigger an unbounded synchronous index build.",
+        "Existing valid indexes load within the calibrated target.",
+        "Rebuild can be cancelled/resumed or restarted safely.",
+        "`cache verify/repair` reports exact affected objects."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1517,
+      "dependency_depth": 17,
+      "dependents": [
+        "ARC-008",
+        "PERF-002",
+        "QA-002"
+      ]
+    },
+    {
+      "id": "ARC-007",
+      "title": "Implement quota, retention, pinning, and eviction across L1/L2",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ARC-005",
+        "STO-002"
+      ],
+      "dependency_text": "ARC-005, STO-002",
+      "parallel_safe": null,
+      "objective": "Bound disk use while protecting active investigations and running builds.",
+      "implementation": "Track physical/logical bytes by tier/profile/type. Add configurable quotas, LRU/age/result rules, pins, active-reader leases, low-disk threshold, dry-run, and deterministic eviction order.",
+      "acceptance_criteria": [
+        "Default total quota is enforced without exhausting the volume.",
+        "Running/pinned/leased objects are not evicted.",
+        "Dry-run explains each candidate and reclaimed-byte estimate.",
+        "Metadata remains consistent after interrupted eviction.",
+        "Successful versus failed build retention can be configured separately."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1540,
+      "dependency_depth": 17,
+      "dependents": [
+        "ARC-008",
+        "QA-006"
+      ]
+    },
+    {
+      "id": "ARC-008",
+      "title": "Add full/sampled integrity verification and repair commands",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ARC-006",
+        "ARC-007"
+      ],
+      "dependency_text": "ARC-006, ARC-007",
+      "parallel_safe": null,
+      "objective": "Detect bit rot, tampering, orphaned catalog rows, and incomplete transitions.",
+      "implementation": "Implement fast metadata/sample verification and explicit full verification. Rebuild derived indexes, re-fetch from Jenkins when permitted/available, or mark data unavailable with reason.",
+      "acceptance_criteria": [
+        "Verification reports pack, entry, checksum, catalog, and index issues separately.",
+        "Repair never overwrites the only known-good copy without validation.",
+        "Full verification is cancellable and progress-aware.",
+        "Results are safe for support sharing."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1563,
+      "dependency_depth": 18,
+      "dependents": []
+    },
+    {
+      "id": "ARC-009",
+      "title": "Add optional application-level cache encryption",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "AUTH-002",
+        "ARC-002",
+        "STO-003"
+      ],
+      "dependency_text": "AUTH-002, ARC-002, STO-003, security approval",
+      "parallel_safe": null,
+      "objective": "Support environments requiring encryption beyond OS ACL/full-disk encryption.",
+      "implementation": "Select an approved AEAD, manage per-profile/versioned keys in the OS credential store, authenticate headers/metadata, stream encrypt independent chunks/entries, and define key rotation/recovery policy.",
+      "acceptance_criteria": [
+        "Tampering fails authentication before plaintext is returned.",
+        "Keys never enter config, logs, MCP, or pack manifests.",
+        "Rotation does not require all data to be rewritten synchronously.",
+        "Loss/revocation behavior is documented and tested.",
+        "Deduplication/equality leakage tradeoff is approved."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1585,
+      "dependency_depth": 15,
+      "dependents": []
+    },
+    {
+      "id": "ARC-010",
+      "title": "Implement zero-recompression TAR header/payload/padding frame assembly",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ARC-002",
+        "STO-003"
+      ],
+      "dependency_text": "ARC-002, STO-003",
+      "parallel_safe": null,
+      "objective": "Avoid decompressing or recompressing sealed log payload frames during normal L2 promotion.",
+      "implementation": "For each TAR member, generate a small independent frame containing the deterministic TAR header, copy the already-compressed L1 payload frames in member order, and generate a small independent padding frame only when TAR alignment requires it. Generate TAR end-of-archive frames, append the final seek-table/checkpoint frame, and compute manifests/checksums over both compressed and logical representations. Record frame roles and uncompressed offsets so readers can map ranges across header, payload, and padding frames. Keep a feature-gated compatibility path that streams decompressed L1 bytes through a conventional seekable-pack writer when the qualified adapter cannot consume the preferred layout.",
+      "acceptance_criteria": [
+        "Preferred assembled output sequentially decompresses to a standards-compliant TAR with correct headers, member sizes, padding, and termination.",
+        "Promotion copies compressed L1 payload-frame bytes byte-for-byte and does not invoke payload decompression/recompression.",
+        "Only generated header/padding/termination metadata is newly compressed in the preferred path.",
+        "Seek entries and member indexes map correctly across header, payload, padding, and frame boundaries.",
+        "Native and qualified `ratarmount-rs` readers pass identical random-read fixtures, or the compatibility path is selected automatically and explicitly measured.",
+        "Crash/cancel/disk-full tests never publish a partial pack.",
+        "Benchmarks quantify CPU, wall time, write amplification, and extra bytes versus compatibility recompression."
+      ],
+      "acceptance_criteria_count": 7,
+      "evidence_tests": [],
+      "source_line": 1608,
+      "dependency_depth": 15,
+      "dependents": [
+        "ARC-005",
+        "ARC-012"
+      ]
+    },
+    {
+      "id": "ARC-011",
+      "title": "Implement related-log affinity batching and pack rollover",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ARC-002",
+        "LOG-004",
+        "STO-002"
+      ],
+      "dependency_text": "ARC-002, LOG-004, STO-002",
+      "parallel_safe": null,
+      "objective": "Batch logs normally used by one diagnosis into the same bounded archive when policy, retention, and locality make sense.",
+      "implementation": "Plan packs by user/profile/controller, root job/build or investigation collection, pipeline/downstream graph, time, sensitivity, retention/encryption class, member count, raw/compressed size, and access heat. Co-locate root console, stage/node, discovered downstream/matrix-child logs, text test evidence, manifests, line maps, and diagnostic indexes. Split oversized collections deterministically with a shared collection ID/continuation metadata. Optionally co-pack tiny adjacent builds only when all policy/lifecycle dimensions match. Keep binary artifacts separate unless explicitly approved.",
+      "acceptance_criteria": [
+        "Related root/stage/downstream/test logs normally share one affinity pack until a bound requires rollover.",
+        "No pack mixes users, profiles/controllers, or incompatible sensitivity/retention/encryption classes.",
+        "Oversized fan-out splits deterministically while preserving relationship/evidence references.",
+        "Late members never mutate a published pack and do not block interactive reads indefinitely.",
+        "Evicting one collection avoids rewriting unrelated hot collections beyond thresholds.",
+        "Metrics quantify locality, packs touched per diagnosis, dead space, and expected read amplification."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 1633,
+      "dependency_depth": 15,
+      "dependents": [
+        "ARC-005"
+      ]
+    },
+    {
+      "id": "ARC-012",
+      "title": "Validate seek-table and ratarmount compatibility variants",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ARC-003",
+        "ARC-004",
+        "ARC-010"
+      ],
+      "dependency_text": "ARC-003, ARC-004, ARC-010",
+      "parallel_safe": null,
+      "objective": "Prove the exact Zstandard random-access representation works across supported readers and versions.",
+      "implementation": "Create a matrix for official seekable format, concatenated independent frames, checksummed seek entries, small-member bundling, split members, dictionaries/encryption, truncated tables, and index rebuild. Compare with an independently implemented seekable-Zstandard/t2sz-compatible writer where licensing and format compatibility allow.",
+      "acceptance_criteria": [
+        "Supported variants have versioned golden packs and byte-identical reads.",
+        "Single-frame and unsupported variants are rejected with actionable diagnostics.",
+        "Upgrade/downgrade behavior and reader version matrix are documented.",
+        "Corrupt/malicious seek tables cannot cause unbounded reads or wrong-member data."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1657,
+      "dependency_depth": 16,
+      "dependents": [
+        "PERF-002"
+      ]
+    },
+    {
+      "id": "PERF-002",
+      "title": "Qualify L2 seekable packs at enterprise scale",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ARC-005",
+        "ARC-006",
+        "ARC-012"
+      ],
+      "dependency_text": "ARC-005, ARC-006, ARC-012",
+      "parallel_safe": null,
+      "objective": "Prove the selected pack/reader design improves capacity without harming interactive latency or CPU.",
+      "implementation": "Benchmark multiple frame sizes, small-member bundle thresholds, pack sizes, compression levels, zero-recompression and compatibility repack paths on at least 100 GiB physical/logically larger data. Measure ratio, ingest/promotion throughput, index build/load, warm/cold range latency, amplification, concurrent reads, RSS, antivirus impact, corruption, and fallback.",
+      "acceptance_criteria": [
+        "No member/range read performs full-pack extraction/decompression.",
+        "Random-read amplification and p95 latency meet approved targets or are recalibrated with evidence.",
+        "Zero-recompression path has measured CPU/wall/disk benefits and no correctness loss.",
+        "Index/compaction work remains outside interactive latency.",
+        "A go/no-go for exact ratarmount-rs version and pack parameters is recorded."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1679,
+      "dependency_depth": 18,
+      "dependents": [
+        "QA-003"
+      ]
+    },
+    {
+      "id": "JEN-001",
+      "title": "Implement controller capability discovery and cache",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "NET-003",
+        "TST-001"
+      ],
+      "dependency_text": "NET-003, TST-001",
+      "parallel_safe": null,
+      "objective": "Discover supported Jenkins APIs/plugins and degrade cleanly.",
+      "implementation": "Capture Jenkins version, core endpoints, Pipeline REST API availability/version, test/artifact capabilities, permissions for representative endpoints, and optional plugin signals. Cache with TTL and invalidate on version change or explicit refresh.",
+      "acceptance_criteria": [
+        "Tools check capability objects rather than guessing from errors.",
+        "Missing optional plugins produce a clear capability error/fallback.",
+        "Capability discovery is bounded and does not require admin permission.",
+        "Results include freshness and source."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1704,
+      "dependency_depth": 9,
+      "dependents": [
+        "JEN-002",
+        "JEN-004",
+        "PIPE-001",
+        "TEST-001",
+        "SCM-001",
+        "HEALTH-001",
+        "HEALTH-002"
+      ]
+    },
+    {
+      "id": "JEN-002",
+      "title": "Harden jobs, folders, views, multibranch, and matrix discovery",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "JEN-001",
+        "MCP-001",
+        "MCP-002"
+      ],
+      "dependency_text": "JEN-001, MCP-001, MCP-002",
+      "parallel_safe": null,
+      "objective": "Provide efficient, typed job discovery across enterprise layouts.",
+      "implementation": "Use Jenkins tree/depth selectors, stable pagination, local filters, full folder names, views, disabled/buildable state, and last-build summaries. Add capability-aware multibranch/PR and matrix parent/child representation.",
+      "acceptance_criteria": [
+        "Large job trees are paginated and do not return full nested graphs by default.",
+        "Nested names containing spaces/special characters work.",
+        "Multibranch and matrix fixtures have stable typed references.",
+        "Network-byte benchmark demonstrates selective field retrieval."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1726,
+      "dependency_depth": 10,
+      "dependents": [
+        "JEN-003",
+        "DIAG-006",
+        "MUT-002"
+      ]
+    },
+    {
+      "id": "JEN-003",
+      "title": "Implement paginated build history and baseline resolution",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "JEN-002"
+      ],
+      "dependency_text": "JEN-002",
+      "parallel_safe": null,
+      "objective": "Retrieve only the builds needed for triage and comparison.",
+      "implementation": "Support filters for result, time, branch, commit, cause, and selected non-secret parameters. Resolve last successful/failed/unstable/completed and selected baseline. Stop scanning when limits/condition are met.",
+      "acceptance_criteria": [
+        "History scans have max builds/time/network limits.",
+        "Results distinguish cached versus refreshed metadata.",
+        "Secret parameter values are never returned or indexed.",
+        "Baseline resolution is deterministic in fixtures with aborted/running builds."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1748,
+      "dependency_depth": 11,
+      "dependents": [
+        "PIPE-001",
+        "TEST-002",
+        "SCM-001",
+        "GRAPH-001",
+        "ART-001",
+        "DIAG-004",
+        "DIAG-006"
+      ]
+    },
+    {
+      "id": "JEN-004",
+      "title": "Complete queue, running-build, and adaptive wait behavior",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "JEN-001",
+        "NET-003"
+      ],
+      "dependency_text": "JEN-001, NET-003",
+      "parallel_safe": null,
+      "objective": "Observe live work efficiently without aggressive polling.",
+      "implementation": "Provide queue list/item, running builds, executor placement, cancellation-aware waits, initial fast polling followed by backoff/jitter, and a maximum wait budget. Reuse shared state across concurrent waiters.",
+      "acceptance_criteria": [
+        "Multiple waiters do not multiply remote polls linearly.",
+        "Completed/cancelled items stop polling immediately.",
+        "Wait results include latest known state and timeout/cancellation distinction.",
+        "Poll schedule and request counts meet benchmark expectations."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1770,
+      "dependency_depth": 10,
+      "dependents": [
+        "HEALTH-001",
+        "DIAG-007",
+        "MUT-002",
+        "MUT-003"
+      ]
+    },
+    {
+      "id": "PIPE-001",
+      "title": "Add Pipeline REST stage graph support",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "JEN-001",
+        "JEN-003"
+      ],
+      "dependency_text": "JEN-001, JEN-003",
+      "parallel_safe": null,
+      "objective": "Expose stage status/timing/parallel structure when the Pipeline REST API is available.",
+      "implementation": "Model pipeline runs, stages, parallel branches, start/duration/result, and failed stage. Use version/capability adapters and bounded node retrieval.",
+      "acceptance_criteria": [
+        "Pipeline fixture stages match Jenkins UI/API data.",
+        "Parallel branches are represented without flattening ambiguity.",
+        "Missing plugin/API produces a documented fallback.",
+        "Large pipelines are paginated or summarized within MCP budgets."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1792,
+      "dependency_depth": 12,
+      "dependents": [
+        "PIPE-002",
+        "GRAPH-001",
+        "DIAG-002",
+        "DIAG-003"
+      ]
+    },
+    {
+      "id": "PIPE-002",
+      "title": "Mirror and index stage/node logs",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "PIPE-001",
+        "LOG-002",
+        "LOG-003"
+      ],
+      "dependency_text": "PIPE-001, LOG-002, LOG-003",
+      "parallel_safe": null,
+      "objective": "Apply the same efficient storage/search model to stage-specific logs.",
+      "implementation": "Create log keys for stage/node sources, progressive acquisition where supported, source labels, merged timeline metadata, and local line/search indexes. Avoid duplicating bytes already present in the console log unless APIs genuinely provide separate content.",
+      "acceptance_criteria": [
+        "Stage log reads use bounded local storage.",
+        "Duplicate-content policy and storage impact are measured.",
+        "Evidence identifies stage/node and source API.",
+        "Missing/partial stage logs do not corrupt the console generation."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1814,
+      "dependency_depth": 14,
+      "dependents": [
+        "DIAG-001"
+      ]
+    },
+    {
+      "id": "TEST-001",
+      "title": "Parse and expose JUnit test results",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "JEN-001",
+        "MCP-001"
+      ],
+      "dependency_text": "JEN-001, MCP-001",
+      "parallel_safe": null,
+      "objective": "Provide structured test summaries and bounded failure evidence.",
+      "implementation": "Retrieve Jenkins test result APIs where available; model suites/cases, status, age, duration, stdout/stderr references, and failure stack traces. Store large details in bounded local objects/handles.",
+      "acceptance_criteria": [
+        "Summary counts match Jenkins fixtures.",
+        "Very large test suites remain paginated and bounded.",
+        "Failure text passes redaction/sanitation.",
+        "Missing test plugin/data returns an empty/capability result, not an invented success."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1836,
+      "dependency_depth": 10,
+      "dependents": [
+        "TEST-002",
+        "DIAG-001"
+      ]
+    },
+    {
+      "id": "TEST-002",
+      "title": "Implement flaky, new-failure, and duration-regression analysis",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "TEST-001",
+        "JEN-003"
+      ],
+      "dependency_text": "TEST-001, JEN-003",
+      "parallel_safe": null,
+      "objective": "Analyze test history locally without repeatedly fetching full reports.",
+      "implementation": "Cache compact test outcomes, compute failure frequency/recency, distinguish new versus previously failing tests, and compare duration against configurable baselines.",
+      "acceptance_criteria": [
+        "Lookback and network/cache limits are enforced.",
+        "Classification includes sample size and confidence, not binary certainty alone.",
+        "Renamed/parameterized test identities have documented matching rules.",
+        "Historical queries use cached compact data after initial fetch."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1858,
+      "dependency_depth": 12,
+      "dependents": [
+        "DIAG-002",
+        "DIAG-003",
+        "DIAG-004"
+      ]
+    },
+    {
+      "id": "SCM-001",
+      "title": "Add SCM revision and changes-since-baseline correlation",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "JEN-003",
+        "JEN-001"
+      ],
+      "dependency_text": "JEN-003, JEN-001",
+      "parallel_safe": null,
+      "objective": "Show what changed between a failed build and a selected green/baseline build.",
+      "implementation": "Extract repository identity, branch, revision(s), Jenkins changesets, culprits, commit range, and modified-file summaries. Label culprit data as Jenkins-reported correlation, not proof.",
+      "acceptance_criteria": [
+        "Build-to-build change result is bounded and paginated.",
+        "Credentials embedded in repository URLs are stripped.",
+        "Multi-SCM builds are represented explicitly.",
+        "Missing change data is reported without guessing."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1880,
+      "dependency_depth": 12,
+      "dependents": [
+        "DIAG-002",
+        "DIAG-003",
+        "INT-004"
+      ]
+    },
+    {
+      "id": "GRAPH-001",
+      "title": "Build bounded upstream/downstream traversal",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "JEN-003",
+        "PIPE-001"
+      ],
+      "dependency_text": "JEN-003, PIPE-001",
+      "parallel_safe": null,
+      "objective": "Trace orchestration and component failures across related builds.",
+      "implementation": "Combine Jenkins causes/actions, upstream/downstream links, Pipeline build-step data where exposed, trigger-plugin data where accessible, and matrix children. Add cycle detection, node/depth/fan-out limits, and parallel fetch bounds.",
+      "acceptance_criteria": [
+        "Cyclic fixture terminates deterministically.",
+        "Permission-denied/missing nodes are represented safely.",
+        "Traversal returns a graph handle/summary under output limits.",
+        "Earliest failure time and first failing leaves are computed from evidence.",
+        "Network request limits are enforced per traversal."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1902,
+      "dependency_depth": 13,
+      "dependents": [
+        "DIAG-002",
+        "DIAG-005"
+      ]
+    },
+    {
+      "id": "ART-001",
+      "title": "Add artifact metadata and selective bounded download",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "JEN-003",
+        "NET-003",
+        "STO-001"
+      ],
+      "dependency_text": "JEN-003, NET-003, STO-001",
+      "parallel_safe": null,
+      "objective": "Let users inspect relevant artifacts without bulk download.",
+      "implementation": "List artifact relative paths/names/sizes when available. Stream selected downloads through size, time, checksum, content-type, quota, and cancellation limits into an isolated cache namespace.",
+      "acceptance_criteria": [
+        "No artifact is downloaded during list-only operations.",
+        "Download aborts before exceeding configured compressed/raw limits.",
+        "Paths cannot escape the artifact workspace.",
+        "Checksums and source build references are recorded.",
+        "Artifact quota is separate and enforceable."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1925,
+      "dependency_depth": 12,
+      "dependents": [
+        "ART-002"
+      ]
+    },
+    {
+      "id": "ART-002",
+      "title": "Implement safe artifact and archive inspection",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "ART-001",
+        "SEC-003"
+      ],
+      "dependency_text": "ART-001, SEC-003",
+      "parallel_safe": null,
+      "objective": "Read approved text/structured data and inventories without executing untrusted content.",
+      "implementation": "Support bounded text, JSON, XML, and archive inventory. Apply file-count, nesting, expansion-ratio, expanded-byte, symlink/device, path, CPU, and time limits. Prefer random inventory/read APIs over extraction.",
+      "acceptance_criteria": [
+        "Zip-slip, symlink, device, absolute path, and archive-bomb fixtures are blocked.",
+        "No artifact is executed or loaded as a dynamic library.",
+        "Parsing uses bounded readers and safe XML settings.",
+        "Temporary workspaces are private and cleaned after cancellation/crash recovery.",
+        "Returned content is redacted/sanitized and bounded."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 1948,
+      "dependency_depth": 15,
+      "dependents": []
+    },
+    {
+      "id": "HEALTH-001",
+      "title": "Add node, executor, label-demand, and queue-pressure tools",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "JEN-004",
+        "JEN-001"
+      ],
+      "dependency_text": "JEN-004, JEN-001",
+      "parallel_safe": null,
+      "objective": "Explain why builds are waiting or running slowly using authorized Jenkins data.",
+      "implementation": "Expose node online/offline state, labels, executors, busy/idle state, offline cause, queue demand by label, and saturation summaries. Avoid admin-only fields unless the user is authorized and policy permits them.",
+      "acceptance_criteria": [
+        "Queue-delay fixtures produce evidence-backed summaries.",
+        "Large node lists are paginated.",
+        "Sensitive environment/system properties are not returned.",
+        "Missing permissions are distinguished from no nodes/data."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1971,
+      "dependency_depth": 11,
+      "dependents": [
+        "DIAG-007"
+      ]
+    },
+    {
+      "id": "HEALTH-002",
+      "title": "Add controller version, plugin capability, and health summary",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "JEN-001"
+      ],
+      "dependency_text": "JEN-001",
+      "parallel_safe": null,
+      "objective": "Diagnose capability gaps and basic controller health without administrative mutation.",
+      "implementation": "Expose Jenkins version, selected plugin/version capabilities, safe monitor summaries, and compatibility warnings. Do not require full plugin inventory when a targeted capability probe suffices.",
+      "acceptance_criteria": [
+        "Capability report explains which product features are available/unavailable.",
+        "Admin-only data is omitted when inaccessible.",
+        "Plugin/controller changes invalidate stale capability cache.",
+        "No update/install/disable action is exposed."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 1993,
+      "dependency_depth": 10,
+      "dependents": []
+    },
+    {
+      "id": "DIAG-001",
+      "title": "Implement deterministic error extraction and signatures",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "SEARCH-002",
+        "TEST-001",
+        "PIPE-002"
+      ],
+      "dependency_text": "SEARCH-002, TEST-001, PIPE-002",
+      "parallel_safe": null,
+      "objective": "Reduce noisy logs into repeatable candidate failures before model interpretation.",
+      "implementation": "Add timestamp/severity parsing, stack-trace grouping, repeated-line folding, common build-tool adapters, first/last meaningful error, normalized signature hashes, and evidence ranges. Keep parsers pluggable and conservative.",
+      "acceptance_criteria": [
+        "Every extracted event maps to exact source evidence.",
+        "Parser failure falls back to raw literal rules without losing data.",
+        "Volatile values are normalized only through documented rules.",
+        "False-positive/negative corpus and performance benchmarks exist."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2015,
+      "dependency_depth": 16,
+      "dependents": [
+        "DIAG-002",
+        "DIAG-003",
+        "DIAG-004",
+        "DIAG-005",
+        "DIAG-006"
+      ]
+    },
+    {
+      "id": "DIAG-002",
+      "title": "Implement `jenkins_diagnose_build`",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "DIAG-001",
+        "PIPE-001",
+        "TEST-002",
+        "SCM-001",
+        "GRAPH-001"
+      ],
+      "dependency_text": "DIAG-001, PIPE-001, TEST-002, SCM-001, GRAPH-001",
+      "parallel_safe": null,
+      "objective": "Answer the primary triage question in one bounded call.",
+      "implementation": "Combine build result, failed stage, deterministic errors, test failures, changes since green, related build failures, and selected evidence. Add confidence and heuristic labels. Use local cache first and a request budget across remote sources.",
+      "acceptance_criteria": [
+        "Result stays under default response budget for enterprise fixtures.",
+        "Every conclusion cites evidence or states that evidence is unavailable.",
+        "Ambiguous fixtures return multiple candidates/low confidence rather than a fabricated root cause.",
+        "Repeated calls avoid duplicate log downloads.",
+        "End-to-end latency/network benchmarks are recorded."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 2037,
+      "dependency_depth": 17,
+      "dependents": [
+        "PERF-003",
+        "INT-002"
+      ]
+    },
+    {
+      "id": "DIAG-003",
+      "title": "Implement `jenkins_compare_builds`",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "DIAG-001",
+        "TEST-002",
+        "SCM-001",
+        "PIPE-001"
+      ],
+      "dependency_text": "DIAG-001, TEST-002, SCM-001, PIPE-001",
+      "parallel_safe": null,
+      "objective": "Compare a failing build with a selected baseline efficiently.",
+      "implementation": "Compare results, timing/stages, safe parameters, revisions/changes, tests, error signatures, related builds, and artifacts metadata. Return only differences by default.",
+      "acceptance_criteria": [
+        "Identical builds produce a compact no-material-difference result.",
+        "Secret parameters are excluded.",
+        "Large change/test sets paginate through handles.",
+        "Comparison uses cached summaries after first retrieval."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2060,
+      "dependency_depth": 17,
+      "dependents": [
+        "PERF-003"
+      ]
+    },
+    {
+      "id": "DIAG-004",
+      "title": "Implement `jenkins_find_regression_window`",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "DIAG-001",
+        "JEN-003",
+        "TEST-002"
+      ],
+      "dependency_text": "DIAG-001, JEN-003, TEST-002",
+      "parallel_safe": null,
+      "objective": "Find the first build exhibiting an error signature or test failure with minimal remote work.",
+      "implementation": "Use cached indexes and bounded search over build history; employ binary search only when monotonic assumptions are valid, otherwise scan with explicit limits. Return first-known good/bad and uncertainty gaps.",
+      "acceptance_criteria": [
+        "Algorithm never assumes monotonicity silently.",
+        "Missing/evicted builds create an explicit uncertain interval.",
+        "Maximum builds/network bytes/time are enforced.",
+        "Result cites the matching evidence in boundary builds."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2082,
+      "dependency_depth": 17,
+      "dependents": []
+    },
+    {
+      "id": "DIAG-005",
+      "title": "Implement `jenkins_trace_failure_graph`",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "GRAPH-001",
+        "DIAG-001"
+      ],
+      "dependency_text": "GRAPH-001, DIAG-001",
+      "parallel_safe": null,
+      "objective": "Identify the earliest/leaf failures in a bounded related-build graph.",
+      "implementation": "Traverse with limits, diagnose failed nodes in priority order, deduplicate shared descendants, and return a compact graph summary plus handles.",
+      "acceptance_criteria": [
+        "High-fan-out and cyclic graphs remain within request/network/output budgets.",
+        "Earliest failure and first failing leaf are distinguished.",
+        "Missing permission/data lowers confidence explicitly.",
+        "Shared descendant logs are mirrored once."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2104,
+      "dependency_depth": 17,
+      "dependents": [
+        "PERF-003"
+      ]
+    },
+    {
+      "id": "DIAG-006",
+      "title": "Implement `jenkins_survey_recent_failures`",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "DIAG-001",
+        "JEN-002",
+        "JEN-003"
+      ],
+      "dependency_text": "DIAG-001, JEN-002, JEN-003",
+      "parallel_safe": null,
+      "objective": "Summarize recurring failure signatures across an approved job scope.",
+      "implementation": "Select jobs/builds through explicit patterns and bounded time/lookback; fetch compact summaries first; mirror logs only for unresolved candidates; cluster exact/normalized signatures; report counts and examples.",
+      "acceptance_criteria": [
+        "Scope, job count, build count, bytes, and duration are policy-bounded.",
+        "Cached summaries prevent repeated broad downloads.",
+        "Clusters include representative evidence and normalization method.",
+        "Cross-job survey is disabled by default if policy requires explicit enablement."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2126,
+      "dependency_depth": 17,
+      "dependents": []
+    },
+    {
+      "id": "DIAG-007",
+      "title": "Implement `jenkins_explain_queue_delay`",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "HEALTH-001",
+        "JEN-004"
+      ],
+      "dependency_text": "HEALTH-001, JEN-004",
+      "parallel_safe": null,
+      "objective": "Explain queue wait using labels, executors, blockage reason, and recent demand.",
+      "implementation": "Combine queue item reason, required labels, matching nodes, executor utilization, quiet-down/offline states where authorized, and recent wait samples. Label estimates as heuristic.",
+      "acceptance_criteria": [
+        "Common no-executor, offline-label, throttling, blocked, and upstream-wait fixtures are differentiated.",
+        "Unauthorized admin data is not required for a useful result.",
+        "Result includes freshness and evidence endpoints.",
+        "No unsupported ETA is presented as fact."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2148,
+      "dependency_depth": 12,
+      "dependents": []
+    },
+    {
+      "id": "PERF-003",
+      "title": "Optimize high-level diagnostics under fixed budgets",
+      "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
+      "phase_order": 3,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "DIAG-002",
+        "DIAG-003",
+        "DIAG-005"
+      ],
+      "dependency_text": "DIAG-002, DIAG-003, DIAG-005",
+      "parallel_safe": null,
+      "objective": "Ensure triage tools reduce, rather than multiply, Jenkins calls and model tokens.",
+      "implementation": "Add shared request plans, deduplicated fetches, compact cached summaries, priority ordering, early stopping, and per-operation network/time/output budgets. Profile CPU and allocations.",
+      "acceptance_criteria": [
+        "Diagnose/compare/graph fixtures have recorded request and byte ceilings.",
+        "Repeated calls show high cache hit and near-zero repeated log bytes.",
+        "Cancellation stops dependent work.",
+        "Tool results meet response SLOs without omitting truncation indicators."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2170,
+      "dependency_depth": 18,
+      "dependents": [
+        "QA-003"
+      ]
+    },
+    {
+      "id": "MUT-001",
+      "title": "Implement mutation policy, preview, and confirmation framework",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "POL-004",
+        "AUD-001",
+        "MCP-002"
+      ],
+      "dependency_text": "POL-004, AUD-001, MCP-002, security approval",
+      "parallel_safe": null,
+      "objective": "Create a reusable safety gate before registering any mutating Jenkins tool.",
+      "implementation": "Define disabled/allowlisted modes, per-profile/job/action policy, parameter restrictions, dry-run preview, explicit human confirmation payload, cooldown, rate limit, correlation ID, and audit record. Confirmation must bind to the exact normalized action and expire quickly.",
+      "acceptance_criteria": [
+        "Default/global read-only policy registers no mutation tools and the request classifier blocks mutation endpoints.",
+        "Confirmation for one target/parameter set cannot authorize another.",
+        "Secret parameters are blocked or handled through an approved non-model path.",
+        "Denial, expiry, replay, and race tests pass.",
+        "Mutation policy cannot be weakened by user settings against enterprise policy."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 2194,
+      "dependency_depth": 16,
+      "dependents": [
+        "MUT-002",
+        "MUT-003"
+      ]
+    },
+    {
+      "id": "MUT-002",
+      "title": "Add safe parameterized build triggering",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "MUT-001",
+        "JEN-002",
+        "JEN-004"
+      ],
+      "dependency_text": "MUT-001, JEN-002, JEN-004",
+      "parallel_safe": null,
+      "objective": "Trigger approved builds without duplicate enqueues or hidden parameters.",
+      "implementation": "Fetch parameter definitions, validate names/types/choices, show preview, confirm, perform a single non-retried enqueue, and return queue reference. Add optional client-generated correlation parameter only when job policy explicitly supports it.",
+      "acceptance_criteria": [
+        "No automatic retry can create a duplicate build.",
+        "Unknown/secret/unsupported parameters are rejected.",
+        "Preview exactly matches executed request after normalization.",
+        "Jenkins permission is checked by the actual request and failures are attributable.",
+        "Audit event contains no secret values."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 2217,
+      "dependency_depth": 17,
+      "dependents": []
+    },
+    {
+      "id": "MUT-003",
+      "title": "Add queue cancellation and build stop",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "MUT-001",
+        "JEN-004"
+      ],
+      "dependency_text": "MUT-001, JEN-004",
+      "parallel_safe": null,
+      "objective": "Allow narrowly approved interruption actions with clear target state.",
+      "implementation": "Implement separate actions for queue cancellation and running build stop, each with fresh status, preview, confirmation, no automatic retry, and post-action verification.",
+      "acceptance_criteria": [
+        "Completed/wrong-state targets are not treated as successful stops.",
+        "Confirmation includes controller, full job, build/queue ID, and current state.",
+        "Repeated requests are idempotent only in their reported outcome, not blindly resent.",
+        "All actions are locally audited and Jenkins-attributed to the user."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2240,
+      "dependency_depth": 17,
+      "dependents": []
+    },
+    {
+      "id": "INT-001",
+      "title": "Create a capability-scoped integration adapter framework",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "FND-004",
+        "CFG-002"
+      ],
+      "dependency_text": "FND-004, CFG-002",
+      "parallel_safe": null,
+      "objective": "Add external systems without expanding the core process's default permissions.",
+      "implementation": "Define adapter lifecycle, auth isolation, capabilities, tool/resource registration, policy, rate limits, telemetry, and data classification. Load only explicitly enabled, signed/approved adapters.",
+      "acceptance_criteria": [
+        "Core Jenkins operation has no dependency on optional adapters.",
+        "Adapter failure cannot crash the core server.",
+        "Adapter credentials are separately namespaced.",
+        "Cross-system data movement is explicit in tool contracts and policy."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2262,
+      "dependency_depth": 7,
+      "dependents": [
+        "INT-002",
+        "INT-003",
+        "INT-004",
+        "GWY-001"
+      ]
+    },
+    {
+      "id": "INT-002",
+      "title": "Add optional OpenTelemetry correlation",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P3",
+      "dependencies": [
+        "INT-001",
+        "DIAG-002"
+      ],
+      "dependency_text": "INT-001, DIAG-002",
+      "parallel_safe": null,
+      "objective": "Correlate builds with approved traces/logs using identifiers already present in build metadata.",
+      "implementation": "Support explicit trace/span/service identifiers, bounded queries through an approved backend adapter, and evidence references. Do not send log text to telemetry services merely to search it.",
+      "acceptance_criteria": [
+        "Integration is disabled by default.",
+        "Queries are scoped to approved identifiers/time ranges.",
+        "Credentials and returned data follow separate policy/retention.",
+        "Diagnostics label external evidence source and freshness."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2284,
+      "dependency_depth": 18,
+      "dependents": []
+    },
+    {
+      "id": "INT-003",
+      "title": "Add optional external log-system adapters",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P3",
+      "dependencies": [
+        "INT-001",
+        "SEC-002"
+      ],
+      "dependency_text": "INT-001, SEC-002",
+      "parallel_safe": null,
+      "objective": "Retrieve logs that Jenkins links to but does not store, without weakening local bounds.",
+      "implementation": "Create adapters for approved systems only, with per-user auth, query allowlists, time/byte/result limits, redaction, local chunking, and source-specific evidence. Avoid arbitrary query-language passthrough to the model.",
+      "acceptance_criteria": [
+        "Model cannot submit unrestricted backend queries.",
+        "Returned external logs use the same storage/search/evidence controls.",
+        "Source credentials never cross into Jenkins requests or vice versa.",
+        "Network and data-volume budgets are measurable."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2306,
+      "dependency_depth": 15,
+      "dependents": []
+    },
+    {
+      "id": "INT-004",
+      "title": "Add optional work-item and source-host correlation",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P3",
+      "dependencies": [
+        "INT-001",
+        "SCM-001"
+      ],
+      "dependency_text": "INT-001, SCM-001",
+      "parallel_safe": null,
+      "objective": "Enrich triage with explicitly referenced Jira/Bitbucket/GitHub/GitLab objects.",
+      "implementation": "Resolve approved keys/commit/PR identifiers, retrieve minimal metadata, and return links/summaries. Avoid broad project scraping or automatic inclusion of private discussion content.",
+      "acceptance_criteria": [
+        "Correlation requires an explicit identifier or policy-approved extraction rule.",
+        "Access uses the current user's separate credentials.",
+        "Results remain bounded and source-labeled.",
+        "Failure of external correlation does not block Jenkins diagnosis."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2328,
+      "dependency_depth": 13,
+      "dependents": []
+    },
+    {
+      "id": "GWY-001",
+      "title": "Implement AgentCore per-user Jenkins 3LO/OBO credential provider",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "OAUTH-010",
+        "INT-001"
+      ],
+      "dependency_text": "OAUTH-010, INT-001",
+      "parallel_safe": null,
+      "objective": "Provide an optional gateway credential provider that obtains Jenkins-audience tokens for the validated caller through user-delegated authorization-code 3LO and/or OBO/token exchange.",
+      "implementation": "Integrate AgentCore workload identity and outbound OAuth credential retrieval. Support approved `AUTHORIZATION_CODE` user federation with an Entra-backed `MicrosoftOAuth2`/`CustomOauth2` provider and approved `TOKEN_EXCHANGE` or JWT authorization-grant OBO. When consent is needed, propagate the AgentCore authorization URL/session metadata to the caller without exposing tokens. Cache and refresh only through approved AgentCore Identity/Token Vault semantics keyed to user and workload. Never point provider authorization/token endpoints at stock Jenkins and never fall back to a shared Jenkins identity.",
+      "acceptance_criteria": [
+        "Each request is attributable to the validated caller, workload, and Jenkins principal.",
+        "Authorization-code consent and callback/session binding cannot be replayed across users/providers.",
+        "Token cache, refresh, force-reauthentication, and revocation behavior is isolated per user/workload.",
+        "Wrong subject, audience, tenant, provider, return URL, or session binding fails closed.",
+        "Provider exposes no token, client secret, or authorization code to MCP tools, logs, or support bundles.",
+        "Jenkins endpoints are never used as OAuth authorization/token endpoints unless the conditional JAS epic is deployed and approved."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 2350,
+      "dependency_depth": 14,
+      "dependents": [
+        "GWY-002"
+      ]
+    },
+    {
+      "id": "GWY-002",
+      "title": "Bind gateway identity and MCP RBAC policy",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "GWY-001",
+        "POL-003"
+      ],
+      "dependency_text": "GWY-001, POL-003",
+      "parallel_safe": null,
+      "objective": "Apply the same deny-only authorization model to gateway callers.",
+      "implementation": "Map trusted AgentCore/Entra subject, tenant, groups/roles, workload identity, and exchanged Jenkins subject into the policy subject. Define mismatch and group-overage behavior. Revalidate policy on each call or within an approved short cache.",
+      "acceptance_criteria": [
+        "Caller-supplied tool arguments cannot change identity.",
+        "Inbound and exchanged subjects must satisfy approved binding rules.",
+        "Role removal and emergency deny propagate within the approved window.",
+        "Gateway policy cannot grant Jenkins-denied access."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2374,
+      "dependency_depth": 15,
+      "dependents": [
+        "GWY-003"
+      ]
+    },
+    {
+      "id": "GWY-003",
+      "title": "Run gateway 3LO/OBO security and performance qualification",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "GWY-002",
+        "OAUTH-009"
+      ],
+      "dependency_text": "GWY-002, OAUTH-009",
+      "parallel_safe": null,
+      "objective": "Prove AgentCore mode meets identity, consent, latency, availability, isolation, and audit requirements across user-delegated 3LO and OBO/token exchange.",
+      "implementation": "Load/chaos-test authorization-code consent and session binding, OBO/token exchange, access/refresh-token vault hits/misses, force reauthentication, IdP/JWKS outages, revocation, concurrency, cross-user/workload isolation, gateway retries, Jenkins fallback behavior, and end-to-end audit. Compare user-delegated 3LO, OBO/token exchange, and exact-Jenkins-audience JWT passthrough. Document the selected production mode and why the alternatives are disabled or retained only for testing.",
+      "acceptance_criteria": [
+        "No cross-user/workload token reuse, consent replay, cache leakage, or shared-account behavior occurs.",
+        "P95/P99 token acquisition and cache-hit latency fit the tool SLO and include provider/vault/Jenkins breakdowns.",
+        "IdP, JWKS, vault, gateway, and Jenkins outages fail safely without identity downgrade.",
+        "Generic-token passthrough is disabled in production; exact-audience passthrough requires a specific approved exception and remains more restrictive than OBO.",
+        "Tests prove missing/invalid bearer cannot downgrade into Basic, API-token, session-cookie, anonymous, or shared-service authentication on OAuth-required routes.",
+        "Runbook covers consent/provider/vault/JWKS/Entra/Jenkins incidents and user reauthorization."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 2396,
+      "dependency_depth": 16,
+      "dependents": [
+        "GWY-004"
+      ]
+    },
+    {
+      "id": "GWY-004",
+      "title": "Package the optional AgentCore/managed gateway deployment",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "GWY-003",
+        "MGR-001",
+        "PKG-001"
+      ],
+      "dependency_text": "GWY-003, MGR-001, PKG-001",
+      "parallel_safe": null,
+      "objective": "Run the same MCP core near Jenkins for bandwidth efficiency while preserving personal identity, policy, and storage isolation.",
+      "implementation": "Produce a signed non-root Linux container/service with approved Streamable HTTP integration, AgentCore subject/credential provider, per-user/tenant/profile cache namespace, quotas, health/readiness, private ratarmount-rs sidecar/library, structured correlation/audit, and separate Jenkins-to-gateway versus gateway-to-client byte metrics. Apply the same global read-only default and deny-only MCP RBAC as local mode.",
+      "acceptance_criteria": [
+        "Every call is bound to an authenticated individual subject and verified Jenkins principal.",
+        "No shared/generic Jenkins credential exists for interactive users.",
+        "Tokens, cached content, continuations, and archive handles are isolated across users/policies.",
+        "Global read-only and MCP RBAC behavior matches local mode.",
+        "Image is minimal/non-root/signed with SBOM/provenance and bounded resources.",
+        "Near-source deployment demonstrates measurable bandwidth benefit without unacceptable auth/latency cost."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 2420,
+      "dependency_depth": 19,
+      "dependents": []
+    },
+    {
+      "id": "MGR-001",
+      "title": "Sign and enforce enterprise policy bundles",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "CFG-002",
+        "POL-002",
+        "FND-008"
+      ],
+      "dependency_text": "CFG-002, POL-002, FND-008",
+      "parallel_safe": null,
+      "objective": "Let security centrally constrain auth, tools, limits, storage, telemetry, and updates.",
+      "implementation": "Define versioned signed policy bundles, trusted keys, expiry/rollback rules, local cache, and safe bootstrap. Policies can disable features/lower limits but not include credentials.",
+      "acceptance_criteria": [
+        "Invalid, expired, downgraded, or untrusted policy fails according to documented safe mode.",
+        "User config cannot weaken enforced values.",
+        "Effective policy and source are explainable without leaking sensitive internal details.",
+        "Key rotation and emergency policy replacement are tested."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2444,
+      "dependency_depth": 11,
+      "dependents": [
+        "GWY-004",
+        "MGR-002",
+        "UPD-001"
+      ]
+    },
+    {
+      "id": "MGR-002",
+      "title": "Add privacy-preserving fleet health telemetry",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P3",
+      "dependencies": [
+        "OBS-001",
+        "MGR-001"
+      ],
+      "dependency_text": "OBS-001, MGR-001",
+      "parallel_safe": null,
+      "objective": "Measure adoption, errors, versions, performance, and security posture without centralizing Jenkins content.",
+      "implementation": "Export approved aggregate metrics/events with pseudonymous installation/profile identifiers, low cardinality, batching, backoff, and local queue limits. No logs, prompts, tokens, artifact content, or raw job parameters.",
+      "acceptance_criteria": [
+        "Export schema receives privacy/security approval.",
+        "Telemetry can be disabled or mandated only through policy.",
+        "Offline queue is bounded and encrypted/protected as required.",
+        "Network failures do not affect MCP operation.",
+        "A user/admin can inspect categories being exported."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 2466,
+      "dependency_depth": 17,
+      "dependents": [
+        "QA-006"
+      ]
+    },
+    {
+      "id": "UPD-001",
+      "title": "Implement managed release and update lifecycle",
+      "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
+      "phase_order": 4,
+      "conditional": false,
+      "priority": "P2",
+      "dependencies": [
+        "PKG-001",
+        "MGR-001"
+      ],
+      "dependency_text": "PKG-001, MGR-001",
+      "parallel_safe": null,
+      "objective": "Deliver signed upgrades with rollback/migration safety.",
+      "implementation": "Prefer existing enterprise software distribution. If self-update is approved, use signed metadata, staged channels, version pinning, rollback protection, preflight, last-known-good, and policy controls.",
+      "acceptance_criteria": [
+        "Unsigned/tampered update is rejected.",
+        "Storage/config migrations run only after verification and preflight.",
+        "Failed update can restore the previous binary when supported.",
+        "Emergency adapter/feature disable mechanism is documented and tested."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2489,
+      "dependency_depth": 19,
+      "dependents": []
+    },
+    {
+      "id": "JAS-001",
+      "title": "Create authorization-server threat model and protocol profile",
+      "phase": "Conditional epic - Jenkins-hosted OAuth authorization server (execute only after OAUTH-011 go decision)",
+      "phase_order": 5,
+      "conditional": true,
+      "priority": "P3",
+      "dependencies": [
+        "OAUTH-011"
+      ],
+      "dependency_text": "OAUTH-011 (go decision), security ownership",
+      "parallel_safe": null,
+      "objective": "Define the exact reason Jenkins must issue delegated tokens and the supported OAuth profile.",
+      "implementation": "Specify actors, clients, redirect types, grants, scopes, consent, audiences, token lifetimes, keys, revocation, incident ownership, Jenkins permission mapping, and excluded flows. Prefer OAuth 2.1 authorization code + PKCE and prohibit implicit/password grants.",
+      "acceptance_criteria": [
+        "Threat model and protocol profile receive security approval.",
+        "External IdP resource-server/proxy/broker alternatives are shown insufficient for the approved blocker.",
+        "Long-term plugin maintenance and emergency key/revocation ownership are assigned."
+      ],
+      "acceptance_criteria_count": 3,
+      "evidence_tests": [],
+      "source_line": 2513,
+      "dependency_depth": 15,
+      "dependents": [
+        "JAS-002"
+      ]
+    },
+    {
+      "id": "JAS-002",
+      "title": "Implement client registration, authorization, PKCE, and consent",
+      "phase": "Conditional epic - Jenkins-hosted OAuth authorization server (execute only after OAUTH-011 go decision)",
+      "phase_order": 5,
+      "conditional": true,
+      "priority": "P3",
+      "dependencies": [
+        "JAS-001"
+      ],
+      "dependency_text": "JAS-001",
+      "parallel_safe": null,
+      "objective": "Issue one-time authorization codes only to approved clients and exact redirects.",
+      "implementation": "Build client registry/admin controls, exact redirect validation, state/session/CSRF binding, PKCE S256, user consent, scope selection, Jenkins-permission checks, code expiry/single use, and audit. No model-visible client secrets for public clients.",
+      "acceptance_criteria": [
+        "Open redirect, code interception/replay, CSRF, consent confusion, and client mix-up tests fail safely.",
+        "Authorization cannot grant scopes beyond current Jenkins permissions and admin policy.",
+        "Codes are short-lived, one-time, and bound to client/redirect/PKCE/user."
+      ],
+      "acceptance_criteria_count": 3,
+      "evidence_tests": [],
+      "source_line": 2534,
+      "dependency_depth": 16,
+      "dependents": [
+        "JAS-003"
+      ]
+    },
+    {
+      "id": "JAS-003",
+      "title": "Implement token issuance, JWKS, scopes, and key rotation",
+      "phase": "Conditional epic - Jenkins-hosted OAuth authorization server (execute only after OAUTH-011 go decision)",
+      "phase_order": 5,
+      "conditional": true,
+      "priority": "P3",
+      "dependencies": [
+        "JAS-002"
+      ],
+      "dependency_text": "JAS-002",
+      "parallel_safe": null,
+      "objective": "Issue short-lived audience-bound access tokens that resource endpoints can validate.",
+      "implementation": "Create signed JWT access tokens, issuer metadata, JWKS, key rotation/overlap, audience/resource indicators, scope/subject claims, bounded clocks, and token endpoint client handling. Keep signing keys in approved Jenkins credentials/HSM integration.",
+      "acceptance_criteria": [
+        "Tokens validate across rotation and cannot be used for another audience/client.",
+        "Scopes map deterministically to Jenkins/MCP capability classes.",
+        "Signing keys never appear in logs/config/support bundles.",
+        "Metadata/JWKS endpoints have caching and availability tests."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2555,
+      "dependency_depth": 17,
+      "dependents": [
+        "JAS-004"
+      ]
+    },
+    {
+      "id": "JAS-004",
+      "title": "Implement refresh rotation, revocation, logout, and introspection policy",
+      "phase": "Conditional epic - Jenkins-hosted OAuth authorization server (execute only after OAUTH-011 go decision)",
+      "phase_order": 5,
+      "conditional": true,
+      "priority": "P3",
+      "dependencies": [
+        "JAS-003"
+      ],
+      "dependency_text": "JAS-003",
+      "parallel_safe": null,
+      "objective": "Support lifecycle controls expected from a production authorization server.",
+      "implementation": "Implement refresh-token rotation/reuse detection, per-user/client revocation, expiry, admin emergency revoke, logout/session coupling as approved, optional introspection for opaque tokens, storage encryption, cleanup, and audit.",
+      "acceptance_criteria": [
+        "Stolen/reused refresh token is detected and token family revoked.",
+        "User/client/admin revocation takes effect within the approved window.",
+        "Token records are encrypted/minimized and migrations are tested.",
+        "Failure/recovery does not resurrect revoked credentials."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2577,
+      "dependency_depth": 18,
+      "dependents": [
+        "JAS-005"
+      ]
+    },
+    {
+      "id": "JAS-005",
+      "title": "Run OAuth conformance, independent review, and staged rollout",
+      "phase": "Conditional epic - Jenkins-hosted OAuth authorization server (execute only after OAUTH-011 go decision)",
+      "phase_order": 5,
+      "conditional": true,
+      "priority": "P3",
+      "dependencies": [
+        "JAS-004",
+        "QA-005"
+      ],
+      "dependency_text": "JAS-004, QA-005",
+      "parallel_safe": null,
+      "objective": "Treat the plugin as a security product before any gateway dependency.",
+      "implementation": "Run protocol/conformance suites, fuzzing, penetration test, load/HA/upgrade tests, key-loss/rotation drills, compatibility matrix, documentation, SBOM/signing, incident runbook, canary, and rollback.",
+      "acceptance_criteria": [
+        "Independent security review has no unresolved critical/high findings.",
+        "Conformance and adversarial test evidence is retained.",
+        "Canary proves audit/latency/revocation and no Jenkins UI/API regressions.",
+        "MCP retains API-token/external-resource-server rollback paths."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2599,
+      "dependency_depth": 19,
+      "dependents": []
+    },
+    {
+      "id": "QA-001",
+      "title": "Fuzz parsers, URL/path handling, storage formats, and MCP inputs",
+      "phase": "Phase 5 - Hardening, validation, and production rollout",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [],
+      "dependency_text": "Core Phase 1-3 features",
+      "parallel_safe": null,
+      "objective": "Find panics, hangs, excessive allocation, and unsafe parsing behavior.",
+      "implementation": "Add persistent fuzz targets for job paths, Jenkins JSON/XML models, progressive headers/state, log sanitation/redaction, chunk/manifest/index parsers, artifact/archive parsing, OAuth callbacks/tokens/exchange, subject-bound policy handles, Zstandard frame/seek tables, and tool inputs.",
+      "acceptance_criteria": [
+        "Seed corpora include malformed and security fixtures.",
+        "Fuzz jobs have memory/time guards and retain crashing inputs.",
+        "No known panic/hang remains in supported parsing paths.",
+        "Security-relevant crashes receive tracked remediation."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2623,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "QA-002",
+      "title": "Add chaos and fault-injection suites",
+      "phase": "Phase 5 - Hardening, validation, and production rollout",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "LOG-002",
+        "STO-004",
+        "ARC-006",
+        "OAUTH-004"
+      ],
+      "dependency_text": "LOG-002, STO-004, ARC-006, OAUTH-004",
+      "parallel_safe": null,
+      "objective": "Validate recovery under partial failures rather than only clean errors.",
+      "implementation": "Inject network disconnects, slow reads, truncated bodies, wrong offsets, process kill, disk full, fsync/rename/database failures, corrupt frames/seek tables/TAR members/packs/indexes, sidecar crashes, OAuth revocation/JWKS outage/fallback attempts, policy replacement, clock skew, and Jenkins restart.",
+      "acceptance_criteria": [
+        "No fault creates an undetected logically valid but corrupt cache state.",
+        "Remote mutations are never duplicated by fault recovery.",
+        "Recovery time and behavior are documented.",
+        "Test suite can reproduce failures deterministically."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2645,
+      "dependency_depth": 18,
+      "dependents": []
+    },
+    {
+      "id": "QA-003",
+      "title": "Establish continuous performance regression testing",
+      "phase": "Phase 5 - Hardening, validation, and production rollout",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "PERF-001",
+        "PERF-002",
+        "PERF-003"
+      ],
+      "dependency_text": "PERF-001, PERF-002, PERF-003",
+      "parallel_safe": null,
+      "objective": "Prevent silent degradation in the product's highest-priority qualities.",
+      "implementation": "Run representative benchmarks on stable hardware or calibrated runners. Track p50/p95/p99, CPU, RSS, allocations, Jenkins/gateway/client network bytes, disk bytes, compression ratio, frames opened, read amplification, affinity locality, cache hits, and MCP output bytes. Define alert/fail thresholds.",
+      "acceptance_criteria": [
+        "More than approved regression thresholds block or alert with comparison data.",
+        "Cold/warm cache states are separated.",
+        "Windows endpoint-security-on measurements are included.",
+        "Results are retained and graphable by commit/release."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2667,
+      "dependency_depth": 19,
+      "dependents": []
+    },
+    {
+      "id": "QA-004",
+      "title": "Test configuration, database, chunk, and archive migrations",
+      "phase": "Phase 5 - Hardening, validation, and production rollout",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [],
+      "dependency_text": "Released schema candidates",
+      "parallel_safe": null,
+      "objective": "Ensure upgrades do not strand or corrupt locally cached investigations.",
+      "implementation": "Create fixtures from every supported prior schema/version, perform upgrade/downgrade or rollback where promised, inject interruption, and verify lazy rebuild of derived indexes.",
+      "acceptance_criteria": [
+        "Upgrade from every supported release passes.",
+        "Interrupted migration resumes or rolls back safely.",
+        "Large archives do not require full content rewrite solely for metadata migration unless explicitly approved.",
+        "Unsupported downgrade produces a clear, non-destructive message."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2689,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "QA-005",
+      "title": "Conduct independent security review and penetration test",
+      "phase": "Phase 5 - Hardening, validation, and production rollout",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [],
+      "dependency_text": "Secure read-only feature complete; OAuth and archive paths complete if shipping",
+      "parallel_safe": null,
+      "objective": "Validate the threat model and implementation with independent reviewers.",
+      "implementation": "Review auth/token lifecycle, Jenkins/gateway configuration, SSRF/redirects, local IPC, keyring, cache ACL/encryption, redaction, prompt injection, artifacts/archives, sidecar, update/supply chain, and mutation controls.",
+      "acceptance_criteria": [
+        "No unresolved critical/high finding remains at release.",
+        "Medium findings have owners and accepted timelines.",
+        "Retest verifies fixes.",
+        "Operational Jenkins-side OAuth guidance is included in scope."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2711,
+      "dependency_depth": 0,
+      "dependents": [
+        "JAS-005",
+        "REL-001"
+      ]
+    },
+    {
+      "id": "QA-006",
+      "title": "Complete privacy and data-retention review",
+      "phase": "Phase 5 - Hardening, validation, and production rollout",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "SEC-002",
+        "ARC-007",
+        "MGR-002"
+      ],
+      "dependency_text": "SEC-002, ARC-007, MGR-002 if shipping",
+      "parallel_safe": null,
+      "objective": "Approve what data is cached, exported, retained, purged, and included in support artifacts.",
+      "implementation": "Map fields/data flows, classify logs/artifacts/test data, define quotas/retention/purge, verify logout/uninstall behavior, review telemetry, and document user/admin controls.",
+      "acceptance_criteria": [
+        "Data inventory and retention matrix are approved.",
+        "Cache purge can remove profile/all local data without leaving catalog references.",
+        "Telemetry/support bundles match approved categories.",
+        "Known secure-erasure limitations on SSDs are documented accurately."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2734,
+      "dependency_depth": 18,
+      "dependents": []
+    },
+    {
+      "id": "DOC-001",
+      "title": "Write user, admin, security, and operator documentation",
+      "phase": "Phase 5 - Hardening, validation, and production rollout",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [],
+      "dependency_text": "Feature-complete release candidate",
+      "parallel_safe": null,
+      "objective": "Make installation, authentication, policy, troubleshooting, and maintenance unambiguous.",
+      "implementation": "Create guides for Cursor setup with `--read-only`, API-token login, local external-IdP OAuth and the no-native-Jenkins-3LO distinction, Jenkins JWT route protection, AgentCore user-delegated 3LO/OBO, MCP-side RBAC, profiles, proxy/CA/mTLS, HTTP content encoding and bandwidth metrics, seekable-Zstandard/`ratarmount-rs` affinity storage, quotas, `doctor`, read-only/mutations, support bundles, upgrades, and incident response.",
+      "acceptance_criteria": [
+        "A new pilot user completes setup without receiving a plaintext secret example.",
+        "Security guide explains no native Jenkins 3LO, external issuer/resource audience, AgentCore 3LO/OBO provider endpoints, complete route coverage, fallback-auth risk, and conditional plugin scope.",
+        "Cursor examples show `--read-only` and `JENKINS_MCP_READ_ONLY=true`; they do not advertise a generic inverse switch that can bypass stronger policy.",
+        "Storage guide explains direct network-decode-to-L1 payload frames, encoded versus decoded byte metrics, header/payload/padding frame assembly, affinity packs, seek tables, qualified `ratarmount-rs`/native readers, compatibility repack, recovery, and why single-frame `.tar.zst` is rejected.",
+        "Troubleshooting maps common error codes to safe actions."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [],
+      "source_line": 2757,
+      "dependency_depth": 0,
+      "dependents": [
+        "REL-001"
+      ]
+    },
+    {
+      "id": "DOC-002",
+      "title": "Publish tool-contract and agent-usage guidance",
+      "phase": "Phase 5 - Hardening, validation, and production rollout",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [],
+      "dependency_text": "MCP/diagnostic tools complete",
+      "parallel_safe": null,
+      "objective": "Help models and developers call tools efficiently and verify conclusions.",
+      "implementation": "Document preferred high-level tools, bounded primitive fallbacks, evidence references, continuations, freshness, truncation, heuristic confidence, and mutation confirmation semantics. Include examples that avoid repeated downloads.",
+      "acceptance_criteria": [
+        "Examples begin with triage tools rather than dumping logs.",
+        "Every tool has schema, bounds, errors, and side-effect classification.",
+        "Guidance tells agents to treat build output as untrusted data.",
+        "Compatibility/deprecation policy is documented."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2780,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "REL-001",
+      "title": "Run a limited read-only pilot",
+      "phase": "Phase 5 - Hardening, validation, and production rollout",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "QA-005",
+        "PKG-001",
+        "DOC-001"
+      ],
+      "dependency_text": "Phase 1 complete, QA-005/006 scoped approval, PKG-001, DOC-001",
+      "parallel_safe": null,
+      "objective": "Validate real workflows and performance with a small approved user group.",
+      "implementation": "Deploy signed builds, collect approved metrics and structured feedback, sample network/cache behavior, track auth/support issues, and maintain rapid rollback. Use API-token and OAuth cohorts if OAuth is ready.",
+      "acceptance_criteria": [
+        "No shared credentials are used.",
+        "Network and result-size targets are measured on real workflows.",
+        "No secret/privacy incident occurs; any incident triggers the documented response.",
+        "Pilot exit report lists defects, SLOs, adoption, and go/no-go recommendation."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [],
+      "source_line": 2802,
+      "dependency_depth": 19,
+      "dependents": []
+    },
+    {
+      "id": "REL-002",
+      "title": "Pass production release gates",
+      "phase": "Phase 5 - Hardening, validation, and production rollout",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [],
+      "dependency_text": "All features selected for release",
+      "parallel_safe": null,
+      "objective": "Make production approval evidence-based.",
+      "implementation": "Assemble a versioned release-evidence bundle, execute every applicable security, performance, reliability, compatibility, and usability gate, record deviations and approved exceptions, collect named owner sign-offs, and produce a go/no-go decision linked to the exact release artifacts. The release pipeline must block publication when a mandatory gate has no passing evidence or approved exception.",
+      "acceptance_criteria": [
+        "Security: personal identity, secret handling, read-only default, origin controls, cache privacy, SBOM/signing, and independent review pass.",
+        "Performance: no hidden log over-download, cache reuse, response limits, reference SLOs, and L2 random access pass.",
+        "Reliability: crash/disk/corruption/cancellation/outage/migration tests pass.",
+        "Compatibility: Jenkins LTS/plugin, OS, Cursor, MCP conformance, and auth matrices pass.",
+        "Usability: install, profile, login, identity verification, diagnosis, cache purge, and `doctor` complete successfully from documentation.",
+        "Ownership: on-call/support, vulnerability response, Jenkins-side OAuth owner, and release owner are named."
+      ],
+      "acceptance_criteria_count": 6,
+      "evidence_tests": [],
+      "source_line": 2824,
+      "dependency_depth": 0,
+      "dependents": []
+    }
+  ]
+}
