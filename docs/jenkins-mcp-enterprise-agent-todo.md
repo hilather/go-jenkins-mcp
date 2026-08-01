@@ -2648,10 +2648,11 @@ Safe placement behind site reverse-proxy (TLS, path prefix, Host/Origin).
 
 - [x] Documented allowed deployment shapes (no CORS wildcard). — `docs/gateway/deployment.md` §3; compose/README; wildcard origins fail closed in `ValidateHTTPConfig`
 - [x] Empty AllowedHosts / AllowedOrigins fail closed for non-local. — existing mcpserver tests + HOST-002 wildcard fixture
-- [ ] Path-prefix origin pin fixture/live matrix (NET-001 residual). — pure pin helpers exist; **live edge matrix residual**
-- [x] Health endpoints do not leak secrets or broad inventory without auth. — `/healthz` `/readyz` secret-free exact-path; unit canaries
+- [x] Path-prefix reverse-proxy support (app strip). — `HTTPConfig.PathPrefix` / `--http-path-prefix` / `JENKINS_MCP_HTTP_PATH_PREFIX`; MCP only under prefix; dual `/healthz`+`{prefix}/healthz`; fail-closed validation; offline unit tests
+- [ ] Path-prefix origin pin **live** matrix (NET-001 residual). — pure pin helpers + app prefix strip exist; **live edge Host/Origin/X-Forwarded matrix residual**
+- [x] Health endpoints do not leak secrets or broad inventory without auth. — `/healthz` `/readyz` secret-free exact-path (+ prefixed when PathPrefix set); unit canaries
 
-**Status:** **Partial / Done*** for docs + code fail-closed matrix. Live reverse-proxy path-prefix matrix remains residual.
+**Status:** **Partial / Done*** for docs + code fail-closed matrix + path-prefix strip. Live reverse-proxy origin pin matrix remains residual.
 
 ---
 

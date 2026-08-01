@@ -351,7 +351,7 @@ Replace “optional shared secret on loopback” as the multi-user story with **
 **Priority:** P1  
 **Dependencies:** HOST-001, NET-001 origin pin  
 **Maps to:** GWY-004 deployment  
-**Progress:** **Partial / Done*** — docs matrix + fail-closed tests; live path-prefix residual  
+**Progress:** **Partial / Done*** — docs matrix + fail-closed tests + `PathPrefix` strip/`--http-path-prefix`; live edge origin pin residual  
 
 **Objective**
 

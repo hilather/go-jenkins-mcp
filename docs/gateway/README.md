@@ -290,7 +290,7 @@ Missing identity env fields → bind fails closed at serve start.
 | Shared Jenkins service account for interactive users | **Never** |
 | Real client secret storage | keyring / vault (not profile JSON) |
 | Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT resolver, `Mcp-Session-Id`→`IdentityFingerprint` fail closed; residual: continuous JWKS rotation under load, live Entra |
-| Reverse-proxy non-local matrix | HOST-002 **docs Done***; live path-prefix residual; no CORS wildcards fail-closed |
+| Reverse-proxy non-local matrix | HOST-002 **Partial Done***: docs + `PathPrefix` strip + dual health; live edge origin pin residual; no CORS wildcards fail-closed |
 | Health/readiness envelope | HOST-005 **partial** — `/healthz` + `/readyz` + compose/k8s limits; Obtain Ready on `/readyz` when `--gateway` |
 | Multi-replica HA | HOST-008 Tier B residual (single-replica Tier A default) |
 | **Program path to team-hosted** | [roadmap/server-team-hosted.md](../roadmap/server-team-hosted.md) |
