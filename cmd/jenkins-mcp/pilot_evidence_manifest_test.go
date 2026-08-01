@@ -220,6 +220,19 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 			t.Fatalf("scripts/pilot-evidence.sh must assert %s honesty canary", key)
 		}
 	}
+	// HOST-006 residual lite: subject_limiter_max_subjects omit default + env canary.
+	if !strings.Contains(bodyStr, "subject_limiter_max_subjects") {
+		t.Fatal("scripts/pilot-evidence.sh must assert subject_limiter_max_subjects omit default")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS") {
+		t.Fatal("scripts/pilot-evidence.sh must canary SUBJECT_LIMITER_MAX_SUBJECTS → subject_limiter_max_subjects==N")
+	}
+	if !strings.Contains(bodyStr, "LIMITER_MAX_CANARY=64") {
+		t.Fatal("scripts/pilot-evidence.sh must canary SUBJECT_LIMITER_MAX_SUBJECTS with env=64")
+	}
+	if !strings.Contains(bodyStr, "gateway-residual-status-limiter-max.json") {
+		t.Fatal("scripts/pilot-evidence.sh must write gateway-residual-status-limiter-max.json canary artifact")
+	}
 	if !strings.Contains(bodyStr, "path must never dump") {
 		t.Fatal("scripts/pilot-evidence.sh must include path-not-dumped canaries for shared_*_file")
 	}
@@ -369,6 +382,24 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 				t.Fatalf("%s want false|absent on default pilot residual-status got %v", key, v)
 			}
 		}
+		// HOST-006 residual lite: subject_limiter_max_subjects omit when env unset (unlimited).
+		// Regression: pilot residual honesty weaker than residual-smoke without omit assert.
+		if v, ok := rs["subject_limiter_max_subjects"]; ok && v != nil {
+			switch n := v.(type) {
+			case float64:
+				if n != 0 {
+					t.Fatalf("subject_limiter_max_subjects want omit|0 on default pilot residual-status got %v", v)
+				}
+			case bool:
+				if n {
+					t.Fatalf("subject_limiter_max_subjects want omit|false on default pilot residual-status got %v", v)
+				}
+			default:
+				if s := fmt.Sprint(v); s != "" && s != "0" && s != "false" {
+					t.Fatalf("subject_limiter_max_subjects want omit|falsey on default pilot residual-status got %v", v)
+				}
+			}
+		}
 		// Path values must never appear in residual-status JSON (bool residual only).
 		for _, envKey := range []string{
 			"JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH",
@@ -391,6 +422,7 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 			"gateway-residual-status-rate-path.json",
 			"gateway-residual-status-principal-path.json",
 			"gateway-residual-status-jwks-path.json",
+			"gateway-residual-status-token-path.json",
 		} {
 			p := filepath.Join(evidDir, name)
 			rawPath, err := os.ReadFile(p)
@@ -406,6 +438,38 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 			}
 			if strings.Contains(strings.ToLower(string(rawPath)), "authorization: bearer") {
 				t.Fatalf("secret-shaped material in %s", name)
+			}
+		}
+		// SUBJECT_LIMITER_MAX_SUBJECTS canary artifact: env=64 → field 64 (when python3 ran).
+		limPath := filepath.Join(evidDir, "gateway-residual-status-limiter-max.json")
+		if limRaw, err := os.ReadFile(limPath); err == nil {
+			var lim map[string]any
+			if err := json.Unmarshal(limRaw, &lim); err != nil {
+				t.Fatalf("parse gateway-residual-status-limiter-max.json: %v\n%s", err, limRaw)
+			}
+			got, ok := lim["subject_limiter_max_subjects"]
+			if !ok {
+				t.Fatal("gateway-residual-status-limiter-max.json missing subject_limiter_max_subjects")
+			}
+			n, ok := got.(float64)
+			if !ok || int(n) != 64 {
+				t.Fatalf("subject_limiter_max_subjects want 64 when env canary set got %v", got)
+			}
+			// Path residual fields must not flip solely because limiter max is set.
+			for _, key := range []string{
+				"shared_subject_rate_file",
+				"shared_principal_cache_file",
+				"shared_jwks_file",
+				"shared_token_cache_file",
+			} {
+				if v, ok := lim[key]; ok {
+					if b, isBool := v.(bool); isBool && b {
+						t.Fatalf("%s must stay false without path env on limiter-max canary got true", key)
+					}
+				}
+			}
+			if strings.Contains(strings.ToLower(string(limRaw)), "authorization: bearer") {
+				t.Fatal("secret-shaped material in gateway-residual-status-limiter-max.json")
 			}
 		}
 	case "skip":
