@@ -128,7 +128,7 @@ localStorage.setItem("jenkins-mcp.admin.profile", "corp");
 
 ### Audit page (UI-006)
 
-- Filters: event **type** (text), **limit** (10/50/100/200), optional **before** (`datetime-local` and/or RFC3339 text). Wired to `fetchAudit` query params; react-query key includes filters.
+- Filters: event **type** (text), **limit** (10/50/100/200), optional **before** (`datetime-local` and/or RFC3339 text), optional **externalSubject** (BFF query `external_subject`, case-sensitive exact match). Wired to `fetchAudit` query params; react-query key includes filters. Client exact filter remains residual for older BFF.
 - **Detail drawer** for a selected row — only schema fields present on the event (no invented secret fields; secret-shaped extra keys filtered client-side as defense-in-depth).
 - **Load older** uses the last loaded event `time` as exclusive `before` cursor when the page is truncated; accumulates loaded events for export.
 - **Export loaded JSON** — client-side download of currently loaded events only (not the full JSONL file).

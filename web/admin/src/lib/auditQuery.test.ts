@@ -17,16 +17,27 @@ describe("buildAuditQueryString", () => {
     expect(buildAuditQueryString({})).toBe("");
   });
 
-  it("includes limit, type, before", () => {
+  it("includes limit, type, before, external_subject", () => {
     const qs = buildAuditQueryString({
       limit: 50,
       type: "tool_deny",
       before: "2026-01-01T00:00:00Z",
+      externalSubject: "alice@idp",
     });
     const params = new URLSearchParams(qs);
     expect(params.get("limit")).toBe("50");
     expect(params.get("type")).toBe("tool_deny");
     expect(params.get("before")).toBe("2026-01-01T00:00:00Z");
+    expect(params.get("external_subject")).toBe("alice@idp");
+  });
+
+  it("omits blank externalSubject; trims value", () => {
+    expect(buildAuditQueryString({ externalSubject: "  " })).toBe("");
+    expect(
+      new URLSearchParams(
+        buildAuditQueryString({ externalSubject: "  bob@idp  " }),
+      ).get("external_subject"),
+    ).toBe("bob@idp");
   });
 
   it("clamps limit to 1..200", () => {
@@ -147,14 +158,19 @@ describe("filterEventsByExternalSubject", () => {
     expect(filterEventsByExternalSubject(events, undefined)).toEqual(events);
   });
 
-  it("substring matches case-insensitively", () => {
-    const got = filterEventsByExternalSubject(events, "ALICE");
+  it("exact match case-sensitive (aligns with BFF external_subject)", () => {
+    const got = filterEventsByExternalSubject(events, "alice@corp");
     expect(got).toHaveLength(1);
     expect(got[0].externalSubject).toBe("alice@corp");
+    // Wrong case / substring must not match
+    expect(filterEventsByExternalSubject(events, "ALICE@corp")).toHaveLength(0);
+    expect(filterEventsByExternalSubject(events, "alice")).toHaveLength(0);
+    expect(filterEventsByExternalSubject(events, "corp")).toHaveLength(0);
   });
 
   it("excludes events without externalSubject when filter set", () => {
-    expect(filterEventsByExternalSubject(events, "corp")).toHaveLength(2);
+    expect(filterEventsByExternalSubject(events, "alice@corp")).toHaveLength(1);
+    expect(filterEventsByExternalSubject(events, "missing@idp")).toHaveLength(0);
   });
 });
 

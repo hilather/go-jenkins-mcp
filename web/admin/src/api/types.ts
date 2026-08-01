@@ -186,6 +186,11 @@ export interface AuditQuery {
   limit?: number;
   type?: string;
   before?: string;
+  /**
+   * Optional IdP subject label filter (BFF query param `external_subject`).
+   * Exact match, case-sensitive; empty skips. Never a token.
+   */
+  externalSubject?: string;
 }
 
 /** GET /admin/v1/me (UI-003). Never includes the token value. */
