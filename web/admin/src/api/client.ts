@@ -268,6 +268,10 @@ export function postGatewayConsentPurge(
   const sid = body.session_id?.trim();
   if (sid) payload.session_id = sid;
   if (body.clear_all === true) payload.clear_all = true;
+  // clear_all requires exact confirm:"CLEAR_ALL" (server-enforced; no trim).
+  if (body.confirm !== undefined && body.confirm !== "") {
+    payload.confirm = body.confirm;
+  }
   const path = body.path?.trim();
   if (path) payload.path = path;
   return adminFetch<GatewayConsentPurgeResponse>("/gateway/consent-purge", {

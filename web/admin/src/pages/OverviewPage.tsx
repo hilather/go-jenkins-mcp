@@ -20,6 +20,10 @@ import type {
 } from "../api/types";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
 import {
+  canSubmitConsentPurge,
+  CLEAR_ALL_CONFIRM_TOKEN,
+} from "../lib/consentPurge";
+import {
   formatPrincipalCacheHygiene,
   pickResidualRateCacheFields,
   PRINCIPAL_CACHE_HYGIENE_HONESTY,
@@ -558,9 +562,11 @@ export function OverviewPage() {
             <code>POST /admin/v1/gateway/consent-purge</code> requires{" "}
             <code>gateway_ops</code>. Mirrors CLI{" "}
             <code>gateway consent-purge</code> (TTL expire / session delete /
-            clear_all). Metadata only —{" "}
-            <strong>never</strong> tokens; same-host file reload-before-persist
-            lite; <strong>not</strong> multi-pod HA; browser 3LO not automated.
+            clear_all). Destructive clear_all requires exact{" "}
+            <code>confirm: &quot;CLEAR_ALL&quot;</code> (parity with cache{" "}
+            <code>EVICT</code>). Metadata only — <strong>never</strong> tokens;
+            same-host file reload-before-persist lite; <strong>not</strong>{" "}
+            multi-pod HA; browser 3LO not automated.
           </li>
           <li>
             BFF is loopback-only by default (ADR 0014). No Jenkins tokens in
@@ -578,6 +584,7 @@ function ConsentPurgeForm() {
     "purge_expired",
   );
   const [sessionId, setSessionId] = useState("");
+  const [confirmDraft, setConfirmDraft] = useState("");
   const [result, setResult] = useState<GatewayConsentPurgeResponse | null>(null);
 
   const mutate = useMutation({
@@ -588,23 +595,36 @@ function ConsentPurgeForm() {
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     setResult(null);
+    if (
+      !canSubmitConsentPurge({
+        action,
+        sessionId,
+        confirmDraft,
+      })
+    ) {
+      return;
+    }
     if (action === "delete_session") {
       const sid = sessionId.trim();
-      if (!sid) return;
       mutate.mutate({ action: "delete_session", session_id: sid });
       return;
     }
     if (action === "clear_all") {
-      mutate.mutate({ action: "clear_all", clear_all: true });
+      mutate.mutate({
+        action: "clear_all",
+        clear_all: true,
+        confirm: CLEAR_ALL_CONFIRM_TOKEN,
+      });
       return;
     }
     mutate.mutate({ action: "purge_expired" });
   }
 
-  const canSubmit =
-    action === "purge_expired" ||
-    action === "clear_all" ||
-    (action === "delete_session" && sessionId.trim().length > 0);
+  const canSubmit = canSubmitConsentPurge({
+    action,
+    sessionId,
+    confirmDraft,
+  });
 
   return (
     <div style={{ marginTop: "0.85rem" }}>
@@ -616,8 +636,11 @@ function ConsentPurgeForm() {
         <code>POST /admin/v1/gateway/consent-purge</code> mirrors CLI{" "}
         <code>gateway consent-purge</code>. Uses{" "}
         <code>JENKINS_MCP_CONSENT_STORE_PATH</code> / XDG file (same-host share
-        with serve). <strong>Never</strong> tokens; session_id not echoed;{" "}
-        <strong>not</strong> multi-pod HA; browser 3LO not automated.
+        with serve). Destructive clear_all requires typing{" "}
+        <code>{CLEAR_ALL_CONFIRM_TOKEN}</code> (server also checks{" "}
+        <code>confirm: &quot;CLEAR_ALL&quot;</code>). <strong>Never</strong>{" "}
+        tokens; session_id not echoed; <strong>not</strong> multi-pod HA;
+        browser 3LO not automated.
       </p>
       <form
         onSubmit={onSubmit}
@@ -627,16 +650,17 @@ function ConsentPurgeForm() {
           <span className="muted">action</span>
           <select
             value={action}
-            onChange={(e) =>
+            onChange={(e) => {
               setAction(
                 e.target.value as "purge_expired" | "delete_session" | "clear_all",
-              )
-            }
+              );
+              setConfirmDraft("");
+            }}
             style={{ width: "100%", display: "block", marginTop: "0.2rem" }}
           >
             <option value="purge_expired">purge_expired (default TTL)</option>
             <option value="delete_session">delete_session</option>
-            <option value="clear_all">clear_all (explicit)</option>
+            <option value="clear_all">clear_all (confirm CLEAR_ALL)</option>
           </select>
         </label>
         {action === "delete_session" ? (
@@ -655,10 +679,30 @@ function ConsentPurgeForm() {
           </label>
         ) : null}
         {action === "clear_all" ? (
-          <p className="muted" style={{ margin: 0 }}>
-            Clears <strong>all</strong> consent metadata on the store path
-            (requires explicit action; mirrors CLI <code>--all</code>).
-          </p>
+          <>
+            <p className="muted" style={{ margin: 0 }}>
+              Clears <strong>all</strong> consent metadata on the store path.
+              Type <strong>{CLEAR_ALL_CONFIRM_TOKEN}</strong> to enable submit
+              (mirrors CLI <code>--all --confirm=CLEAR_ALL</code>; parity with
+              cache <code>EVICT</code>).
+            </p>
+            <label htmlFor="consent-clear-confirm">
+              <span className="muted">
+                Confirm token (type {CLEAR_ALL_CONFIRM_TOKEN})
+              </span>
+              <input
+                id="consent-clear-confirm"
+                className="mono"
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                value={confirmDraft}
+                onChange={(e) => setConfirmDraft(e.target.value)}
+                placeholder={CLEAR_ALL_CONFIRM_TOKEN}
+                style={{ width: "100%", display: "block", marginTop: "0.2rem" }}
+              />
+            </label>
+          </>
         ) : null}
         <div>
           <button type="submit" disabled={!canSubmit || mutate.isPending}>

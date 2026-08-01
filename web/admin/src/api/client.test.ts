@@ -434,17 +434,20 @@ describe("postGatewayConsentPurge (HOST-007)", () => {
     expect(Object.keys(body).sort()).toEqual(["action", "session_id"]);
   });
 
-  it("sends clear_all explicit flag", async () => {
+  it("sends clear_all explicit flag + confirm CLEAR_ALL", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({ action: "clear_all", deleted_count: 2 }),
     });
     vi.stubGlobal("fetch", fetchMock);
-    await postGatewayConsentPurge({ clear_all: true });
+    await postGatewayConsentPurge({
+      clear_all: true,
+      confirm: "CLEAR_ALL",
+    });
     const body = JSON.parse(
       String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body),
     );
-    expect(body).toEqual({ clear_all: true });
+    expect(body).toEqual({ clear_all: true, confirm: "CLEAR_ALL" });
   });
 });

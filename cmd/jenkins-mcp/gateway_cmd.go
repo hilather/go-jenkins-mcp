@@ -291,6 +291,10 @@ func runGatewaySubjectInvalidate(args []string) error {
 	return nil
 }
 
+// consentClearAllConfirmToken is the exact --confirm value required with --all
+// (HOST-007 residual lite; parity with admin BFF confirm:"CLEAR_ALL" / cache EVICT).
+const consentClearAllConfirmToken = "CLEAR_ALL"
+
 // runGatewayConsentPurge expires/deletes process-local consent metadata
 // (OAUTH-010 residual). Metadata only — never tokens (store has none).
 //
@@ -298,21 +302,24 @@ func runGatewaySubjectInvalidate(args []string) error {
 //
 //	jenkins-mcp gateway consent-purge
 //	jenkins-mcp gateway consent-purge --session-id SESS
-//	jenkins-mcp gateway consent-purge --all
+//	jenkins-mcp gateway consent-purge --all --confirm=CLEAR_ALL
 //	jenkins-mcp gateway consent-expire   # alias
 //
 // Path: --path or JENKINS_MCP_CONSENT_STORE_PATH or XDG default.
 // Secret-free JSON summary: deleted_count, remaining_count, action, path residual.
+// Destructive --all requires --confirm=CLEAR_ALL (exact); purge_expired / --session-id unchanged.
 func runGatewayConsentPurge(args []string) error {
 	fs := flag.NewFlagSet("gateway consent-purge", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	all := fs.Bool("all", false, "Clear all consent metadata (requires explicit --all; not the default)")
+	all := fs.Bool("all", false, "Clear all consent metadata (requires --confirm=CLEAR_ALL; not the default)")
+	confirm := fs.String("confirm", "", `Required with --all; must be exactly CLEAR_ALL (parity with admin clear_all confirm)`)
 	sessionID := fs.String("session-id", "", "Delete one consent session by id (metadata only)")
 	pathFlag := fs.String("path", "", "Consent metadata file path (else JENKINS_MCP_CONSENT_STORE_PATH / XDG default)")
 	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		// --all is a bool flag (no value). session-id and path take values.
+		// --all is a bool flag (no value). session-id, path, and confirm take values.
 		"session-id": true,
 		"path":       true,
+		"confirm":    true,
 	})); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
@@ -320,6 +327,13 @@ func runGatewayConsentPurge(args []string) error {
 	if *all && sid != "" {
 		return apperr.New(apperr.CodeInvalidArgument,
 			"consent-purge: --all and --session-id are mutually exclusive")
+	}
+	// Destructive clear_all only: require exact confirm token (fail closed).
+	// Default TTL purge and --session-id delete do not need --confirm.
+	// Exact match (no trim) — same as admin body confirm:"CLEAR_ALL" / cache EVICT.
+	if *all && *confirm != consentClearAllConfirmToken {
+		return apperr.New(apperr.CodeInvalidArgument,
+			`consent-purge: --all requires --confirm=CLEAR_ALL`)
 	}
 
 	store, err := gateway.OpenConsentSessionStoreForPurge(strings.TrimSpace(*pathFlag), os.Getenv)

@@ -419,7 +419,13 @@ consent session store opened via `OpenConsentSessionStoreForPurge`:
 |--------|------|--------|
 | `purge_expired` | **default** (empty body or `action: "purge_expired"`) | Delete TTL-expired sessions; return counts |
 | `delete_session` | `action: "delete_session"` **or** `session_id` set | Delete one session by id (metadata only) |
-| `clear_all` | `clear_all: true` **or** `action: "clear_all"` (explicit) | Clear all entries; `deleted_count` = pre-clear `EntryCount` |
+| `clear_all` | `clear_all: true` **or** `action: "clear_all"` **plus** `confirm: "CLEAR_ALL"` (exact) | Clear all entries; `deleted_count` = pre-clear `EntryCount` |
+
+**Destructive confirm (HOST-007 residual lite):** `clear_all` requires body
+field `confirm` exactly equal to `"CLEAR_ALL"` (parity with cache
+`confirm: "EVICT"` and CLI `gateway consent-purge --all --confirm=CLEAR_ALL`).
+Missing, empty, or wrong token → **400** `invalid_argument` and **no** store
+mutation. `purge_expired` and `delete_session` do **not** require `confirm`.
 
 **Never** accepts or returns tokens, vault bytes, Authorization material, full
 store path values, or `session_id` echo. **Not** multi-pod HA (HOST-008 residual).
@@ -448,13 +454,15 @@ process is **not** cleared unless it shares the same file path.
 
 ```json
 {
-  "clear_all": true
+  "clear_all": true,
+  "confirm": "CLEAR_ALL"
 }
 ```
 
 ```json
 {
   "action": "clear_all",
+  "confirm": "CLEAR_ALL",
   "path": "/optional/override/consent_sessions.json"
 }
 ```
@@ -464,6 +472,7 @@ process is **not** cleared unless it shares the same file path.
 | `action` | optional | `purge_expired` (default) \| `delete_session` \| `clear_all` |
 | `session_id` | for delete | Consent session correlation id (metadata only; **not** echoed) |
 | `clear_all` | for clear | Explicit flag required for clear-all (mirrors CLI `--all`) |
+| `confirm` | for clear_all | Must be exact `"CLEAR_ALL"` (parity with cache `"EVICT"`). Missing/wrong → **400**. Ignored for other actions. |
 | `path` | optional | Absolute consent metadata file path under the configured store directory only (admin path jail). Relative / traversal / outside-dir → 400. Never echoed. |
 
 `clear_all` and `session_id` are **mutually exclusive** (400). Unknown body
@@ -495,15 +504,17 @@ credentials and never echoed.
 | HTTP | When |
 |------|------|
 | **200** | Purge attempted (counts describe outcome) |
-| **400** | Mutual exclusion, missing session_id, unknown action, path jail / unusable path |
+| **400** | Mutual exclusion, missing session_id, unknown action, clear_all missing/wrong `confirm`, path jail / unusable path |
 | **401** | Admin shared secret required and missing/wrong |
 | **403** | Role lacks `gateway_ops` (viewer) |
 | **405** | Method not POST |
 
 **SPA:** Overview “Progressive consent residual (Mode C)” card embeds a small
 consent-purge form when `/me` includes `gateway_ops` (shown when Mode C is on
-health **or** always for gateway_ops residual). Viewers see CLI-only residual.
-Never put tokens in the form; response never echoes `session_id`.
+health **or** always for gateway_ops residual). For **clear_all**, the form
+requires typing `CLEAR_ALL` before submit (server re-checks). Viewers see
+CLI-only residual. Never put tokens in the form; response never echoes
+`session_id`.
 
 **Same-host multi-process:** set the same `JENKINS_MCP_CONSENT_STORE_PATH` on
 admin BFF and MCP serve so purge reaches serve’s file-backed store. Multi-pod

@@ -365,10 +365,10 @@ live pin complete without lab evidence.
 | `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count + process note, JWKS file bool) | Env/static honesty; Mode B id `oauth009_offline`; `shared_subject_rate_file` / `shared_principal_cache_file` / `shared_jwks_file` path residual (path never dumped); `principal_cache_entries` **this process / file Len only** (CLI/admin ≠ serve); never tokens/subjects; **exercised by residual-smoke** |
 | Admin `GET /admin/v1/gateway/residual-status` | Same secret-free map as CLI (HOST-007 SPA Overview card) | Viewer read; 404 hides card on older BFF; never tokens |
 | `gateway consent-residual` | Progressive consent residual snapshot | Browser 3LO not automated; residual-smoke optional |
-| `gateway consent-purge` / `consent-expire` | Purge TTL-expired consent metadata (or `--session-id` / `--all`) | Metadata only; secret-free counts; same-host file reload-before-persist **Done\* lite** (no serve Put resurrection); not multi-replica HA |
+| `gateway consent-purge` / `consent-expire` | Purge TTL-expired consent metadata (or `--session-id` / `--all --confirm=CLEAR_ALL`) | Metadata only; secret-free counts; clear_all requires exact confirm token; same-host file reload-before-persist **Done\* lite** (no serve Put resurrection); not multi-replica HA |
 | `gateway subject-invalidate` | Force re-auth residual lite: process-local principal **or** FilePrincipalCache + optional FileTokenCache | Not live Entra revocation; multi-pod residual; share file paths for same-host CLI↔serve |
 | Admin `POST /admin/v1/gateway/subject-invalidate` | Same residual lite as CLI (HOST-007 SPA Overview form; `gateway_ops`) | Not live Entra; multi-pod residual; share file paths for same-host admin↔serve |
-| Admin `POST /admin/v1/gateway/consent-purge` | Same residual lite as CLI consent-purge (HOST-007 SPA Mode C form; `gateway_ops`) | Metadata only; never tokens; session_id not echoed; multi-pod residual; share `JENKINS_MCP_CONSENT_STORE_PATH` for same-host admin↔serve |
+| Admin `POST /admin/v1/gateway/consent-purge` | Same residual lite as CLI consent-purge (HOST-007 SPA Mode C form; `gateway_ops`; clear_all + `confirm: "CLEAR_ALL"`) | Metadata only; never tokens; session_id not echoed; multi-pod residual; share `JENKINS_MCP_CONSENT_STORE_PATH` for same-host admin↔serve |
 | `gateway qualify --offline` | Residual notes in JSON summary | Live residuals always listed |
 
 ```bash
@@ -381,7 +381,7 @@ jenkins-mcp gateway residual-status
 jenkins-mcp gateway consent-residual
 jenkins-mcp gateway consent-purge              # default: TTL expire
 jenkins-mcp gateway consent-purge --session-id SESS
-jenkins-mcp gateway consent-purge --all        # explicit clear-all
+jenkins-mcp gateway consent-purge --all --confirm=CLEAR_ALL   # explicit clear-all (confirm required)
 ```
 
 **Code residual (not done in this docs pass):** flipping any

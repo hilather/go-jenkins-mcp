@@ -4796,7 +4796,7 @@
       "dependency_text": "UI-003",
       "parallel_safe": null,
       "objective": "Operator admin for team gateway without multi-tenant SaaS control plane.",
-      "implementation": "Document non-loopback admin; no vault material in browser; residual multi-operator sessions; residual-status BFF/SPA (GET /admin/v1/gateway/residual-status); subject-invalidate BFF/SPA residual lite (POST /admin/v1/gateway/subject-invalidate, gateway_ops); consent-purge BFF/SPA residual lite (POST /admin/v1/gateway/consent-purge, gateway_ops).",
+      "implementation": "Document non-loopback admin; no vault material in browser; residual multi-operator sessions; residual-status BFF/SPA (GET /admin/v1/gateway/residual-status); subject-invalidate BFF/SPA residual lite (POST /admin/v1/gateway/subject-invalidate, gateway_ops); consent-purge BFF/SPA residual lite (POST /admin/v1/gateway/consent-purge, gateway_ops); clear_all requires confirm CLEAR_ALL (BFF/CLI/SPA, parity cache EVICT).",
       "acceptance_criteria": [
         "Non-loopback admin documented with token/mTLS residual.",
         "No Jenkins tokens/vault in browser responses.",
@@ -4805,9 +4805,10 @@
         "Enabled auth modes listed secret-free.",
         "Admin residual-status surface (BFF + SPA) parity with CLI gateway residual-status.",
         "Admin subject-invalidate residual lite (BFF + SPA) mirrors CLI; gateway_ops; multi-pod residual.",
-        "Admin consent-purge residual lite (BFF + SPA) mirrors CLI; gateway_ops; secret-free counts; multi-pod residual."
+        "Admin consent-purge residual lite (BFF + SPA) mirrors CLI; gateway_ops; secret-free counts; multi-pod residual.",
+        "Consent clear_all confirm token residual lite: exact CLEAR_ALL (BFF/CLI/SPA); purge_expired/delete_session unchanged."
       ],
-      "acceptance_criteria_count": 8,
+      "acceptance_criteria_count": 9,
       "evidence_tests": [],
       "source_line": 0,
       "dependency_depth": 0,

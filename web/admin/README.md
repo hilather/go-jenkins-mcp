@@ -113,6 +113,7 @@ localStorage.setItem("jenkins-mcp.admin.profile", "corp");
 
 - **Profiles:** list + detail (no secrets; `hasCredential` boolean only), offline security self-check, support-bundle preview/create when `/me` has `cache_destructive`.
 - **Cache:** quota/usage (`available:false` residual when store missing), non-destructive eviction plan for all roles, destructive evict only when role is operator — double-confirm modal (type `EVICT` twice); server also requires exact `confirm: "EVICT"`.
+- **Overview consent purge (HOST-007 Mode C):** `purge_expired` / `delete_session` as usual; destructive **clear_all** requires typing `CLEAR_ALL` (server also requires exact `confirm: "CLEAR_ALL"`; CLI `--all --confirm=CLEAR_ALL`).
 - **Doctor:** run button + offline toggle (online needs admin shared secret on the BFF).
 - **Residuals:** pin list UI, full cache repair/verify from SPA (use CLI); policy apply (UI-004).
 

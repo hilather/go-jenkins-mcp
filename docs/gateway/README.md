@@ -110,7 +110,7 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 | Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway residual-status`, admin `GET /admin/v1/gateway/residual-status`, `gateway consent-residual`, `gateway consent-purge`, `gateway subject-invalidate`) | **Done\*** (env/static honesty; subject-invalidate is force re-auth residual lite) |
 | Process-local consent metadata store (TTL; optional file under XDG data) | **Done\*** — auth URL + session id + timestamps only; never tokens |
 | Same-host multi-process file honesty (reload-under-flock before mutate/write) | **Done\* lite** — CLI `consent-purge` not resurrected by live serve `Put` of stale memory; reads resync for freshness |
-| Consent metadata purge/expire CLI (`gateway consent-purge` / `consent-expire`) | **Done\*** — TTL purge / `--session-id` / `--all`; secret-free summary; never tokens; same-host file lite |
+| Consent metadata purge/expire CLI (`gateway consent-purge` / `consent-expire`) | **Done\*** — TTL purge / `--session-id` / `--all --confirm=CLEAR_ALL`; secret-free summary; never tokens; same-host file lite |
 | Browser 3LO interactive UX automation | **Residual** — not automated; operator/agent opens `authorization_url` out-of-band |
 | AgentCore durable consent / token vault | **Residual** (not this process-local metadata store) |
 | Multi-replica / multi-pod consent correlation | **Residual** (HOST-008) — same-host file flock only; not multi-pod shared store |
@@ -134,8 +134,10 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
   authorize query dump in status maps).
 - Operator purge CLI: `jenkins-mcp gateway consent-purge` (alias `consent-expire`)
   defaults to TTL expire; `--session-id` deletes one entry; `--all` clears all
-  (explicit flag required). Summary: `deleted_count`, `remaining_count`, path
-  basename residual only — never tokens or full authorize URLs.
+  and **requires** exact `--confirm=CLEAR_ALL` (HOST-007 residual lite, parity
+  with admin BFF `confirm: "CLEAR_ALL"` / cache EVICT). Summary: `deleted_count`,
+  `remaining_count`, path basename residual only — never tokens or full
+  authorize URLs.
 - **Not** multi-replica / multi-pod shared store; sticky sessions / shared
   AgentCore vault remain residual (HOST-008).
 
@@ -143,7 +145,7 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 jenkins-mcp gateway residual-status    # unified secret-free residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count + process note)
 # same map on admin BFF (HOST-007 SPA Overview): GET /admin/v1/gateway/residual-status
 jenkins-mcp gateway consent-residual   # progressive consent residual + last consent_sessions if file present
-jenkins-mcp gateway consent-purge      # purge TTL-expired metadata (or --session-id / --all); secret-free counts
+jenkins-mcp gateway consent-purge      # purge TTL-expired metadata (or --session-id / --all --confirm=CLEAR_ALL); secret-free counts
 jenkins-mcp gateway subject-invalidate --subject-key tenant|sub|profile   # force re-auth residual lite (GWY-002/HOST-003)
 jenkins-mcp gateway qualify --offline  # includes progressive_consent_residual case + residual note
 jenkins-mcp doctor --profile <id> --offline [--json]  # gateway_status + gateway_residual_status embed (same map as residual-status; never live GO)
@@ -163,7 +165,7 @@ multi-pod fan-out.
 | `CredentialProvider.Invalidate` companion principal drop (AgentCore / Mode A / Mode B) | **Done\*** — token cache (Mode C) + `PrincipalCache`; durable vault entries **not** deleted (use `gateway vault delete`) |
 | CLI `jenkins-mcp gateway subject-invalidate` (alias `invalidate-subject`) | **Done\*** — process-local principal clear **or** same-host `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` + optional `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH`; never claims `principal_cleared` when file Delete fails |
 | Admin BFF `POST /admin/v1/gateway/subject-invalidate` + Overview SPA form | **Done\*** residual lite (HOST-007) — same cache semantics as CLI; requires `gateway_ops` (operator/policy_admin); secret-free StatusMap; multi-pod residual |
-| Admin BFF `POST /admin/v1/gateway/consent-purge` + Overview Mode C SPA form | **Done\*** residual lite (HOST-007) — same purge semantics as CLI; `gateway_ops`; secret-free counts; never tokens / session_id echo; multi-pod residual |
+| Admin BFF `POST /admin/v1/gateway/consent-purge` + Overview Mode C SPA form | **Done\*** residual lite (HOST-007) — same purge semantics as CLI; clear_all requires `confirm: "CLEAR_ALL"` (SPA type-to-confirm); `gateway_ops`; secret-free counts; never tokens / session_id echo; multi-pod residual |
 | Live IdP / AgentCore token revocation | **Residual** (OAUTH-010 / GWY-003) |
 | Multi-pod / multi-replica invalidate fan-out | **Residual** (HOST-008) |
 | Clear of a remote serve process memory-only caches without shared file paths | **Residual** — share `FilePrincipalCache` / `FileTokenCache` paths for same-host CLI/admin↔serve purge |
@@ -798,7 +800,7 @@ Process-local consent metadata store (optional XDG file) remembers metadata only
 when Obtain returns `ConsentRequired` — same-host reload-before-persist flock lite
 (**Done\***); not multi-replica / multi-pod shared store (HOST-008 residual).
 See §3 progressive consent residual table; CLI: `jenkins-mcp gateway consent-residual`,
-`jenkins-mcp gateway consent-purge` (TTL expire / `--session-id` / `--all`).
+`jenkins-mcp gateway consent-purge` (TTL expire / `--session-id` / `--all --confirm=CLEAR_ALL`).
 
 Token cache: in-memory, keyed by `(user, workload, profile)`, TTL-bounded.
 `String()` / errors / `Status` **never** include token bytes (canary tests).
