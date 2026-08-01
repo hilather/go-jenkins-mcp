@@ -173,7 +173,7 @@ export function AuditPage() {
 
   const canLoadOlder = Boolean(q.data?.truncated && olderBeforeCursor(loaded));
   const emptyMessage =
-    "No audit events. Missing audit file returns an empty list (not 500). Events are privacy-preserving schema fields only.";
+    "No audit events. Missing active file and rotated siblings returns an empty list (not 500). Events are privacy-preserving schema fields only.";
 
   const isSelected = (ev: AuditEvent) =>
     !!selected &&
@@ -188,7 +188,9 @@ export function AuditPage() {
       <p className="page-sub">
         Privacy-preserving audit tail for profile <code>{profileId}</code>{" "}
         (<code>GET /admin/v1/profiles/{"{id}"}/audit</code>). Cap limit ≤ 200.
-        Multi-user correlation columns:{" "}
+        Same-host lite: BFF merges active <code>audit.jsonl</code> with rotated
+        siblings (<code>audit.jsonl.N</code>). Multi-pod fleet aggregation remains
+        residual. Multi-user correlation columns:{" "}
         <code>externalSubject</code> / <code>subjectKeyHash</code> (opaque hash
         only — never tokens). No live SSE tail in v1.
       </p>

@@ -471,12 +471,20 @@ Events are `internal/audit.Event` JSON (secret-free). Optional multi-user correl
 fields when present: `externalSubject` (IdP label, redacted/clipped), `subjectKeyHash`
 (`HashOpaque(tenant|subject|profile)` only — never raw subject keys or vault material).
 SPA list columns surface those fields (truncated/muted); type filter includes
-`tool_deny` / `tool_error` / `tool_success` / `mutation_*`. **Residual:** no
-`externalSubject` query param on this BFF (SPA may client-filter the loaded page);
-multi-pod audit aggregation (central sink / fleet timeline) is not provided by
-admin; per-process JSONL only (HOST-008).
+`tool_deny` / `tool_error` / `tool_success` / `mutation_*`.
 
-Missing audit file → empty `events` (not 500). Path traversal on `{id}` rejected.
+**Same-host rotated merge (Done\* lite):** the BFF merges the active profile audit
+JSONL with numbered rotates produced by the File sink (`audit.jsonl.1` …
+`audit.jsonl.N`, default keep 3) and optional timestamp-like siblings next to the
+active path. Newest matching events first; `limit` / `type` / `before` apply across
+the merge set; corrupt lines are skipped. Memory stays bounded to `limit`.
+
+**Residual:** no `externalSubject` query param on this BFF (SPA may client-filter
+the loaded page); **multi-pod** audit aggregation (central sink / fleet timeline)
+is not provided — this is per-host profile path merge only (HOST-008).
+
+Missing audit file (and no rotated siblings) → empty `events` (not 500). Path
+traversal on `{id}` rejected.
 
 ## GET /admin/v1/profiles/{id}/doctor
 

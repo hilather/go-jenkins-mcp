@@ -70,13 +70,15 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
 | Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
 | Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; client-side externalSubject filter) | **Done\*** residual polish (BFF has no externalSubject query param; multi-pod aggregation still residual) |
-| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
+| Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **Done\*** lite — multi-user correlation more complete on one host after rotation |
+| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod / per-host JSONL only; no fleet merge |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
 
 ### Rotation / retention
 
 - Default max active file size: **8 MiB**, keep **3** rotated siblings (`audit.jsonl.1` …).
 - Retention is size-based for the pilot; enterprise export/retention policy is residual.
+- **Admin audit list (same-host lite):** `GET /admin/v1/profiles/{id}/audit` merges the active file with numbered rotates (`audit.jsonl.1` …) and optional timestamp-like siblings next to the active path; newest matching events first; corrupt lines skipped. **Not** multi-pod aggregation.
 
 ## Metrics & logging (OBS-001)
 
@@ -502,13 +504,15 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
 | Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
 | Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; client-side externalSubject filter) | **Done\*** residual polish (BFF has no externalSubject query param; multi-pod aggregation still residual) |
-| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
+| Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **Done\*** lite — multi-user correlation more complete on one host after rotation |
+| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod / per-host JSONL only; no fleet merge |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
 
 ### Rotation / retention
 
 - Default max active file size: **8 MiB**, keep **3** rotated siblings (`audit.jsonl.1` …).
 - Retention is size-based for the pilot; enterprise export/retention policy is residual.
+- **Admin audit list (same-host lite):** `GET /admin/v1/profiles/{id}/audit` merges the active file with numbered rotates (`audit.jsonl.1` …) and optional timestamp-like siblings next to the active path; newest matching events first; corrupt lines skipped. **Not** multi-pod aggregation.
 
 ## Metrics & logging (OBS-001)
 
@@ -761,7 +765,7 @@ Env enable path (`JENKINS_MCP_TELEMETRY`) remains separate from force-off.
 - Wire `DoctorOptions.Circuit` / metrics from serve into MCP `jenkins_doctor` when that tool is registered
 - Per-tool allowlisted counters (only if a closed seed name set is required; default is total ok/error/deny only)
 - Optional tool-success audit summaries (`JENKINS_MCP_AUDIT_TOOL_OK`, default off; metrics always on)
-- Multi-pod / multi-replica audit aggregation (central sink) — residual; per-pod JSONL only
+- Multi-pod / multi-replica audit aggregation (central sink) — residual; per-pod JSONL only. **Done\* lite:** same-host admin merge of rotated siblings (`audit.jsonl.N`) for a single profile path — not fleet timeline
 - Policy-controlled retention/export beyond size rotation
 - Support bundle: optional live capability attach from a running `serve` process; signed/encrypted export
 - Post-pack L1 release metrics: `cache_l1_released`, `cache_l1_release_bytes_reclaimed`
