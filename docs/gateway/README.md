@@ -163,6 +163,7 @@ multi-pod fan-out.
 | `CredentialProvider.Invalidate` companion principal drop (AgentCore / Mode A / Mode B) | **Done\*** — token cache (Mode C) + `PrincipalCache`; durable vault entries **not** deleted (use `gateway vault delete`) |
 | CLI `jenkins-mcp gateway subject-invalidate` (alias `invalidate-subject`) | **Done\*** — process-local principal clear **or** same-host `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` + optional `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH`; never claims `principal_cleared` when file Delete fails |
 | Admin BFF `POST /admin/v1/gateway/subject-invalidate` + Overview SPA form | **Done\*** residual lite (HOST-007) — same cache semantics as CLI; requires `gateway_ops` (operator/policy_admin); secret-free StatusMap; multi-pod residual |
+| Admin BFF `POST /admin/v1/gateway/consent-purge` + Overview Mode C SPA form | **Done\*** residual lite (HOST-007) — same purge semantics as CLI; `gateway_ops`; secret-free counts; never tokens / session_id echo; multi-pod residual |
 | Live IdP / AgentCore token revocation | **Residual** (OAUTH-010 / GWY-003) |
 | Multi-pod / multi-replica invalidate fan-out | **Residual** (HOST-008) |
 | Clear of a remote serve process memory-only caches without shared file paths | **Residual** — share `FilePrincipalCache` / `FileTokenCache` paths for same-host CLI/admin↔serve purge |

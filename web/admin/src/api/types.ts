@@ -514,3 +514,41 @@ export interface GatewaySubjectInvalidateResponse {
   principal_process_note?: string;
   [key: string]: unknown;
 }
+
+/**
+ * POST /admin/v1/gateway/consent-purge request (HOST-007 Mode C residual lite).
+ * Metadata purge only — never tokens. session_id is a correlation id (not echoed).
+ */
+export interface GatewayConsentPurgeRequest {
+  /** purge_expired (default) | delete_session | clear_all */
+  action?: "purge_expired" | "delete_session" | "clear_all" | string;
+  /** Required for delete_session (never returned in response). */
+  session_id?: string;
+  /** Explicit flag required for clear_all (mirrors CLI --all). */
+  clear_all?: boolean;
+  /** Optional path override (never returned in full; basename residual only). */
+  path?: string;
+}
+
+/**
+ * POST /admin/v1/gateway/consent-purge response (CLI secret-free summary + admin notes).
+ * Never tokens, session_id echo, or full path values.
+ */
+export interface GatewayConsentPurgeResponse {
+  action?: string;
+  deleted_count?: number;
+  remaining_count?: number;
+  metadata_only?: boolean;
+  stores_tokens?: boolean;
+  process_local?: boolean;
+  multi_replica_shared?: boolean;
+  browser_3lo_automated?: boolean;
+  durable_agentcore_vault_residual?: boolean;
+  file_backed?: boolean;
+  file_basename?: string;
+  consent_store_path_configured?: boolean;
+  residual_note?: string;
+  doc?: string;
+  admin_note?: string;
+  [key: string]: unknown;
+}

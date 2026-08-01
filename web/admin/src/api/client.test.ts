@@ -12,6 +12,7 @@ import {
   hasGatewayOps,
   hasPolicyWrite,
   parseDenyListText,
+  postGatewayConsentPurge,
   postGatewaySubjectInvalidate,
   setAdminToken,
   validatePolicyOverlay,
@@ -369,5 +370,81 @@ describe("postGatewaySubjectInvalidate (HOST-007)", () => {
       subject_id: "sub",
       profile: "corp",
     });
+  });
+});
+
+describe("postGatewayConsentPurge (HOST-007)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setAdminToken(null);
+  });
+
+  it("POSTs purge_expired by default with empty body fields only", async () => {
+    const canary = "planted-consent-token-never-in-body";
+    setAdminToken(canary);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        action: "purge_expired",
+        deleted_count: 0,
+        remaining_count: 0,
+        metadata_only: true,
+        stores_tokens: false,
+        residual_note: "never tokens; multi-replica residual",
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await postGatewayConsentPurge({});
+    expect(res.action).toBe("purge_expired");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/admin/v1/gateway/consent-purge");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(String(init.body));
+    expect(body).toEqual({});
+    expect(JSON.stringify(body)).not.toContain(canary);
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe(`Bearer ${canary}`);
+  });
+
+  it("sends delete_session + session_id only (never tokens)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        action: "delete_session",
+        deleted_count: 1,
+        remaining_count: 0,
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await postGatewayConsentPurge({
+      action: "delete_session",
+      session_id: "sess-abc",
+    });
+    const body = JSON.parse(
+      String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body),
+    );
+    expect(body).toEqual({
+      action: "delete_session",
+      session_id: "sess-abc",
+    });
+    expect(Object.keys(body).sort()).toEqual(["action", "session_id"]);
+  });
+
+  it("sends clear_all explicit flag", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ action: "clear_all", deleted_count: 2 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await postGatewayConsentPurge({ clear_all: true });
+    const body = JSON.parse(
+      String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body),
+    );
+    expect(body).toEqual({ clear_all: true });
   });
 });

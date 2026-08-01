@@ -16,6 +16,8 @@ import type {
   DoctorReport,
   EffectivePolicy,
   EvictionPlanResponse,
+  GatewayConsentPurgeRequest,
+  GatewayConsentPurgeResponse,
   GatewayResidualStatusResponse,
   GatewaySubjectInvalidateRequest,
   GatewaySubjectInvalidateResponse,
@@ -251,6 +253,30 @@ export function postGatewaySubjectInvalidate(
   );
 }
 
+/**
+ * POST /admin/v1/gateway/consent-purge — Mode C progressive consent metadata
+ * purge residual lite (HOST-007). Requires gateway_ops. Never sends tokens.
+ * Secret-free summary (same fields as CLI consent-purge); session_id not echoed.
+ */
+
+export function postGatewayConsentPurge(
+  body: GatewayConsentPurgeRequest = {},
+): Promise<GatewayConsentPurgeResponse> {
+  const payload: GatewayConsentPurgeRequest = {};
+  const action = body.action?.trim();
+  if (action) payload.action = action;
+  const sid = body.session_id?.trim();
+  if (sid) payload.session_id = sid;
+  if (body.clear_all === true) payload.clear_all = true;
+  const path = body.path?.trim();
+  if (path) payload.path = path;
+  return adminFetch<GatewayConsentPurgeResponse>("/gateway/consent-purge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 /** Process role + permissions (UI-003). Never returns the token value. */
 
 export function fetchMe(): Promise<MeResponse> {
@@ -383,7 +409,8 @@ export function hasCacheDestructive(me: MeResponse | null | undefined): boolean 
 
 /**
  * True when /me permissions include gateway_ops (operator or policy_admin).
- * Gates POST /admin/v1/gateway/subject-invalidate (HOST-007).
+ * Gates POST /admin/v1/gateway/subject-invalidate and
+ * POST /admin/v1/gateway/consent-purge (HOST-007).
  */
 
 export function hasGatewayOps(me: MeResponse | null | undefined): boolean {

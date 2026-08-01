@@ -365,6 +365,7 @@ live pin complete without lab evidence.
 | `gateway consent-purge` / `consent-expire` | Purge TTL-expired consent metadata (or `--session-id` / `--all`) | Metadata only; secret-free counts; same-host file reload-before-persist **Done\* lite** (no serve Put resurrection); not multi-replica HA |
 | `gateway subject-invalidate` | Force re-auth residual lite: process-local principal **or** FilePrincipalCache + optional FileTokenCache | Not live Entra revocation; multi-pod residual; share file paths for same-host CLI↔serve |
 | Admin `POST /admin/v1/gateway/subject-invalidate` | Same residual lite as CLI (HOST-007 SPA Overview form; `gateway_ops`) | Not live Entra; multi-pod residual; share file paths for same-host admin↔serve |
+| Admin `POST /admin/v1/gateway/consent-purge` | Same residual lite as CLI consent-purge (HOST-007 SPA Mode C form; `gateway_ops`) | Metadata only; never tokens; session_id not echoed; multi-pod residual; share `JENKINS_MCP_CONSENT_STORE_PATH` for same-host admin↔serve |
 | `gateway qualify --offline` | Residual notes in JSON summary | Live residuals always listed |
 
 ```bash

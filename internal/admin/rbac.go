@@ -35,9 +35,9 @@ const (
 	// PermCacheDestructive gates destructive cache eviction and support-bundle
 	// create (UI-007). Granted to operator only. Requires body confirm for evict.
 	PermCacheDestructive Permission = "cache_destructive"
-	// PermGatewayOps gates gateway force re-auth residual lite
-	// (POST /admin/v1/gateway/subject-invalidate; HOST-007). Granted to
-	// operator and policy_admin — not viewer. Never tokens.
+	// PermGatewayOps gates gateway operator residual lite writes
+	// (POST /admin/v1/gateway/subject-invalidate; POST /admin/v1/gateway/consent-purge;
+	// HOST-007). Granted to operator and policy_admin — not viewer. Never tokens.
 	PermGatewayOps Permission = "gateway_ops"
 )
 

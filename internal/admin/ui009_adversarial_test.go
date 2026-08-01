@@ -591,6 +591,13 @@ func TestUI009_SecretCanaryAbsentAcrossRoutes(t *testing.T) {
 		{http.MethodGet, "/admin/v1/profiles/corp/security-selfcheck", nil},
 		{http.MethodGet, "/admin/v1/profiles/corp/cache", nil},
 		{http.MethodPost, "/admin/v1/profiles/corp/cache/evict-plan", map[string]any{}},
+		// HOST-007 gateway residual lite writes (operator gateway_ops; secret-free).
+		{http.MethodPost, "/admin/v1/gateway/subject-invalidate", map[string]any{
+			"subject_key": "tenant|ui009-sub|corp",
+		}},
+		{http.MethodPost, "/admin/v1/gateway/consent-purge", map[string]any{
+			"action": "purge_expired",
+		}},
 		// 401 path (wrong token) also scrubbed
 	}
 	for _, rt := range routes {
