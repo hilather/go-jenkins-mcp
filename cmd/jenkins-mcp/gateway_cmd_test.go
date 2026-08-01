@@ -1046,6 +1046,77 @@ func TestGatewayConsentPurge_PathFlag(t *testing.T) {
 	}
 }
 
+// OAUTH-010 residual lite: consent-purge must not report success when file
+// persist fails (chmod parent → Clear/write error → non-zero exit path).
+func TestGatewayConsentPurge_PersistFailClosed(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "consent_sessions.json")
+	store, err := gateway.NewFileBackedConsentSessionStore(0, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(gateway.ConsentSessionRecord{
+		Info: gateway.ConsentInfo{
+			AuthorizationURL: "https://login.example/authorize?state=p",
+			SessionID:        "sess-fail-1",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(gateway.EnvConsentSessionStorePath, path)
+	t.Setenv("HOST009_FAKE_TOKEN", canaryCLIToken)
+
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	// Probe Put first so we skip if FS ignores chmod.
+	probe, err := gateway.NewFileBackedConsentSessionStore(0, path)
+	if err != nil {
+		// reopen may fail if reload under 0500 still works (read OK); only write fails.
+		// Open only needs read; continue if open works.
+		_ = probe
+	}
+	if probe != nil {
+		if putErr := probe.Put(gateway.ConsentSessionRecord{
+			Info: gateway.ConsentInfo{
+				AuthorizationURL: "https://login.example/authorize?state=probe",
+				SessionID:        "sess-probe",
+			},
+		}); putErr == nil {
+			t.Skip("parent chmod did not block consent store save; residual untested on this FS")
+		}
+	}
+
+	errRun := runGatewayConsentPurge([]string{"--all"})
+	if errRun == nil {
+		t.Fatal("Regression: consent-purge --all must return error when file persist fails")
+	}
+	msg := errRun.Error()
+	for _, bad := range []string{canaryCLIToken, "access_token=", "refresh_token=", "client_secret="} {
+		if strings.Contains(msg, bad) {
+			t.Fatalf("CLI error leaked %q: %s", bad, msg)
+		}
+	}
+	if apperr.CodeOf(errRun) == apperr.CodeInvalidArgument {
+		t.Fatalf("want internal/persist error, got invalid_argument: %v", errRun)
+	}
+
+	// Success path after restore still works.
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var out string
+	out = captureStdout(t, func() {
+		errRun = runGatewayConsentPurge([]string{"--all"})
+	})
+	if errRun != nil {
+		t.Fatalf("success after restore: %v\n%s", errRun, out)
+	}
+	assertConsentPurgeSecretFree(t, out)
+}
+
 func assertConsentPurgeSecretFree(t *testing.T, out string) {
 	t.Helper()
 	for _, bad := range []string{

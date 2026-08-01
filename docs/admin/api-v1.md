@@ -494,9 +494,10 @@ credentials and never echoed.
 
 | HTTP | When |
 |------|------|
-| **200** | Purge attempted (counts describe outcome) |
+| **200** | Purge persisted successfully (counts describe outcome) |
 | **400** | Mutual exclusion, missing session_id, unknown action, path jail / unusable path |
 | **401** | Admin shared secret required and missing/wrong |
+| **500** | File-backed consent store reload/persist failed (fail closed; secret-free `code`+`message`; never tokens or full path) — OAUTH-010 residual lite; not multi-pod |
 | **403** | Role lacks `gateway_ops` (viewer) |
 | **405** | Method not POST |
 

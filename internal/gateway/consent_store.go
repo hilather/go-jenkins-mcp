@@ -107,12 +107,18 @@ type ConsentSessionStore interface {
 	// List returns non-expired records (newest StoredAt first).
 	List() []ConsentSessionRecord
 	// Delete removes a session by id (no-op if missing).
-	Delete(sessionID string)
+	// File-backed: returns error when reload/persist fails (fail closed — do not
+	// claim durable delete). Memory-only returns nil.
+	Delete(sessionID string) error
 	// Clear drops all entries.
-	Clear()
+	// File-backed: returns error when reload/persist fails (fail closed).
+	// Memory-only returns nil.
+	Clear() error
 	// PurgeExpired removes expired sessions (TTL) and returns how many were deleted.
-	// Secret-free; never returns session payloads or tokens.
-	PurgeExpired() int
+	// Secret-free count only; never returns session payloads or tokens.
+	// File-backed: returns (0, err) when reload/persist fails (fail closed —
+	// do not claim durable purge). Memory-only returns (n, nil).
+	PurgeExpired() (int, error)
 	// StatusMap is secret-free store summary (counts / residual flags only).
 	StatusMap() map[string]any
 	// String is secret-free (entry count only).
@@ -348,30 +354,33 @@ func (s *MemoryConsentSessionStore) List() []ConsentSessionRecord {
 
 // Delete implements ConsentSessionStore.
 // File-backed: reload → delete → write under flock (disk truth wins).
-func (s *MemoryConsentSessionStore) Delete(sessionID string) {
+// Persist/reload failure returns a secret-free error (never tokens/paths with secrets).
+func (s *MemoryConsentSessionStore) Delete(sessionID string) error {
 	if s == nil {
-		return
+		return nil
 	}
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
-		return
+		return nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_ = s.mutateAndPersistLocked(func() {
+	return s.mutateAndPersistLocked(func() {
 		s.deleteLocked(sid)
 	})
 }
 
 // Clear implements ConsentSessionStore.
 // File-backed: reload is intentional then clear → write empty (CLI --all path).
-func (s *MemoryConsentSessionStore) Clear() {
+// Persist/reload failure returns a secret-free error (fail closed — CLI/admin
+// must not report success when disk write fails).
+func (s *MemoryConsentSessionStore) Clear() error {
 	if s == nil {
-		return
+		return nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_ = s.mutateAndPersistLocked(func() {
+	return s.mutateAndPersistLocked(func() {
 		s.bySession = make(map[string]ConsentSessionRecord)
 		s.bySubject = make(map[string]string)
 	})
@@ -380,44 +389,50 @@ func (s *MemoryConsentSessionStore) Clear() {
 // PurgeExpired implements ConsentSessionStore. Removes TTL-expired metadata
 // sessions and persists when file-backed. Returns deleted count only (never
 // session ids / URLs / tokens in the return path).
-// File-backed: reload → purge → write under flock.
-func (s *MemoryConsentSessionStore) PurgeExpired() int {
+// File-backed: reload → purge → write under flock. On persist/reload failure
+// returns (0, err) so operators do not claim durable purge (OAUTH-010 residual).
+func (s *MemoryConsentSessionStore) PurgeExpired() (int, error) {
 	if s == nil {
-		return 0
+		return 0, nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	n := 0
-	_ = s.mutateAndPersistLocked(func() {
+	if err := s.mutateAndPersistLocked(func() {
 		n = s.purgeExpiredLocked(s.clock())
-	})
-	return n
+	}); err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 // DeleteSession removes a session by id (expired or live). Returns true when an
 // entry was present and removed. Secret-free bool only — never returns payload.
 // Prefer over Delete when the caller needs a deleted_count summary (CLI purge).
-// File-backed: reload → delete → write under flock.
-func (s *MemoryConsentSessionStore) DeleteSession(sessionID string) bool {
+// File-backed: reload → delete → write under flock. On persist/reload failure
+// returns (false, err) — fail closed; do not claim durable delete.
+func (s *MemoryConsentSessionStore) DeleteSession(sessionID string) (bool, error) {
 	if s == nil {
-		return false
+		return false, nil
 	}
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
-		return false
+		return false, nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	deleted := false
-	_ = s.mutateAndPersistLocked(func() {
+	if err := s.mutateAndPersistLocked(func() {
 		_, ok := s.bySession[sid]
 		if !ok {
 			return
 		}
 		s.deleteLocked(sid)
 		deleted = true
-	})
-	return deleted
+	}); err != nil {
+		return false, err
+	}
+	return deleted, nil
 }
 
 // EntryCount returns total entries including expired (pre-purge).
