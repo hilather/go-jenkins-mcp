@@ -367,9 +367,9 @@ Obtain Ready and Streamable HTTP mTLS hardening remain residuals.
 | Control | Tier A posture |
 |---------|----------------|
 | Kustomize / compose | **`replicas: 1`** (`deploy/gateway/kustomize/deployment.yaml`) |
-| Token / JWT vault | Process-local file or memory (not multi-pod safe) |
+| Token / JWT vault | File vault: process-local mutex + **flock** on `path.lock` (HOST-008 **Done* lite** multi-process same host/shared FS). Memory vault process-local only. **Not multi-pod** without shared FS + remaining checklist |
 | Token Obtain cache | In-process `MemoryTokenCache` only |
-| Subject limiter | Process-local (`SubjectLimiter.StatusMap` → `ha_multi_replica: false`) |
+| Subject limiter / rate | Process-local (`SubjectLimiter` / `SubjectRateLimiter.StatusMap` → `ha_multi_replica: false`) |
 | Audit | Local file / sink per process |
 | Operator readiness | `GET /readyz` + `gateway_ready` on **this** process only |
 
@@ -394,13 +394,17 @@ Raise replicas **only** when every row is satisfied (org-owned design):
 
 | # | Requirement | Why | Status in this repo |
 |---|-------------|-----|---------------------|
-| 1 | **Durable shared token vault** (external / AgentCore Identity) | Process-memory and local file vaults are not multi-pod safe | **Residual** (HOST-008 / GWY-001) |
+| 1a | **Shared vault path + flock (same host / shared FS)** | CLI + serve (or multi-process lab) on one vault file without corrupt load-modify-save | **Done* lite** — `FileAPITokenVault` / `FileJWTVault` use process mutex + `syscall.Flock` on `path.lock` (unix/Tier-1 Linux). Not multi-pod alone |
+| 1b | **Durable shared token vault** (external / AgentCore Identity / multi-pod) | Memory vaults and emptyDir file vaults are not multi-pod safe | **Residual** (HOST-008 / GWY-001) |
 | 2 | **Session affinity** (sticky sessions) **or** shared session store | Subject bind / confirm tokens must not split-brain across pods | **Residual** |
 | 3 | **No reliance on memory token cache alone** | In-process Obtain cache must be shared or disabled under multi-replica | **Residual** (`MemoryTokenCache` only today) |
 | 4 | Shared or carefully partitioned **cache / archive** policy | Avoid cross-pod archive handle / pin confusion | **Residual** (STO / HOST-004) |
 | 5 | **Audit aggregation** (central sink) | Per-pod files are not a fleet audit plane | **Residual** |
 | 6 | Sticky or shared Obtain / consent correlation | Refresh/consent must not double-mint unsafely | **Residual** (Mode C progressive consent) |
 | 7 | JWKS / identity multi-instance behavior measured | Process-local JWKS refresh is not multi-region HA | **Residual** |
+| 8 | Shared subject rate / concurrency limiters | Process-local `SubjectRateLimiter` / `SubjectLimiter` only today | **Residual** (admin `rateEnabled` is env residual only) |
+
+**Honesty:** **Done* lite** (1a) is multi-process file safety on a **shared path**, not multi-replica HA. Do **not** raise `replicas` > 1 until **1b–8** are satisfied.
 
 ### Operator status surfaces (secret-free residual)
 
@@ -408,8 +412,8 @@ Raise replicas **only** when every row is satisfied (org-owned design):
 |---------|--------|---------|
 | `SubjectLimiter.StatusMap` | `ha_multi_replica: false` | Always false until multi-replica runtime exists |
 | Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `mode_a/b/c_enabled`, `mode_*_live_*_qualified=false`, `oauth009_offline_only`, `gateway_ready=false`, `ha_multi_replica=false`, `mode_matrix_residual` | Env parse only; Ready is serve `/readyz`; unified modes A/B/C residual honesty |
-| Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false` | Admin BFF ≠ MCP serve; Ready residual documented; SPA shows foundation residual (no rebuild required for BFF-only honesty) |
-| Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false` + mode matrix | Never tokens; multi-user residual note when env set |
+| Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false`, `rateEnabled` | Admin BFF ≠ MCP serve; Ready residual documented; `rateEnabled` = HOST-006 env parse only (process-local) |
+| Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false`, `rateEnabled` + mode matrix | Never tokens; multi-user residual note when env set; file vault flock is multi-process lite only |
 
 **Never** claim multi-replica Done from docs, kustomize `replicas: 1`, or these
 status fields. See [roadmap § HOST-008](../roadmap/server-team-hosted.md).

@@ -22,8 +22,8 @@ import (
 
 // healthResponse is GET /admin/v1/health.
 // enabledModes is a secret-free HOST-011 listing (mode ids only; no tokens).
-// multiUserEnabled / credentialMode / haMultiReplica / gatewayReady are
-// secret-free gateway residual posture (HOST-008); never tokens or subjects.
+// multiUserEnabled / credentialMode / haMultiReplica / gatewayReady / rateEnabled
+// are secret-free gateway residual posture (HOST-008); never tokens or subjects.
 type healthResponse struct {
 	Status       string   `json:"status"`
 	Version      string   `json:"version"`
@@ -40,6 +40,10 @@ type healthResponse struct {
 	GatewayReady bool `json:"gatewayReady"`
 	// HAMultiReplica is always false (HOST-008 Tier A single-replica default).
 	HAMultiReplica bool `json:"haMultiReplica"`
+	// RateEnabled is true when subject rate env would enable HOST-006 limiting
+	// (empty JENKINS_MCP_SUBJECT_RATE_PER_MINUTE = default on; 0 = disabled).
+	// Process-local residual only — not multi-replica shared rate (HOST-008).
+	RateEnabled bool `json:"rateEnabled"`
 	// Residual notes multi-user / HA honesty when relevant (secret-free).
 	Residual string `json:"residual,omitempty"`
 }
@@ -88,6 +92,7 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		mode = ""
 	}
 	multiUser := gateway.MultiUserEnabled(os.Getenv)
+	rateEnabled := gateway.SubjectRateEnabledFromEnviron(os.Getenv)
 	residual := ""
 	if multiUser {
 		// Secret-free honesty only (SPA reads residual; no SPA rebuild required for this string).
@@ -104,6 +109,7 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		MultiUserEnabled: multiUser,
 		GatewayReady:     false, // admin BFF ≠ MCP serve Ready probe
 		HAMultiReplica:   false, // HOST-008 Tier A default
+		RateEnabled:      rateEnabled,
 		Residual:         residual,
 	})
 }

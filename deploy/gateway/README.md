@@ -75,7 +75,8 @@ make build
 | Lab flag | Meaning | Residual |
 |----------|---------|----------|
 | `JENKINS_MCP_GATEWAY_MULTI_USER=1` | Per-request multi-user Obtain foundation | Not multi-replica HA (HOST-008) |
-| `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` / `_PROCESS_MAX_CONCURRENT` | Concurrency slots (not token-bucket rate yet) | HOST-006 residual for rate |
+| `JENKINS_MCP_SUBJECT_MAX_CONCURRENT` / `_PROCESS_MAX_CONCURRENT` | Concurrency slots | Process-local only |
+| `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` / `_RATE_BURST` | HOST-006 token-bucket rate (empty → default on; `0` disables) | Process-local; admin `rateEnabled` residual |
 | `JENKINS_MCP_HTTP_PATH_PREFIX` | MCP mount under reverse proxy | Live path-prefix matrix residual |
 | `JENKINS_MCP_HTTP_JWKS_MAX_STALE` | Process-local JWKS stale-if-error cap | Multi-instance shared JWKS residual |
 | `JENKINS_MCP_REQUIRE_SIGNED_POLICY=1` | Fail closed without trusted signed policy | Needs keys on volume; HSM residual |
@@ -88,7 +89,7 @@ make build
 | Image signing / SBOM attach | Org pipeline |
 | Streamable HTTP mTLS + non-local production pin | HOST-001 / HOST-002 |
 | Live reverse-proxy path-prefix matrix | HOST-002 / NET-001 |
-| Multi-replica HA | HOST-008 Tier B (docs residual only; replicas stay 1) |
+| Multi-replica HA | HOST-008 Tier B (file vault flock Done* lite same-host only; sticky sessions + multi-pod residual; replicas stay 1) |
 | Real Entra / jwt-auth-filter production pin | OAUTH-009 / OAUTH-010 |
 | Multi-user production GO | HOST multi-user foundation only (`MULTI_USER` ≠ production pin) |
 

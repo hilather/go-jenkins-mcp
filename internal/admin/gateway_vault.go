@@ -24,6 +24,9 @@ type gatewayVaultResponse struct {
 	MultiUserEnabled bool `json:"multiUserEnabled"`
 	// HAMultiReplica is always false (HOST-008 Tier A single-replica default).
 	HAMultiReplica bool `json:"haMultiReplica"`
+	// RateEnabled is secret-free HOST-006 residual (env parse only; process-local).
+	// Empty rate env → true (default); explicit 0 → false. Not multi-replica shared rate.
+	RateEnabled bool `json:"rateEnabled"`
 	// VaultConfigured is true when the Mode A vault file exists on disk.
 	VaultConfigured bool `json:"vaultConfigured"`
 	// EntryCount is the number of subject entries (0 when missing/unreadable).
@@ -59,6 +62,7 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 		EnabledModes:     []string{},
 		MultiUserEnabled: multiUser,
 		HAMultiReplica:   false, // HOST-008 Tier A; no multi-replica runtime
+		RateEnabled:      gateway.SubjectRateEnabledFromEnviron(os.Getenv),
 		Residual:         "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser)",
 	}
 	if multiUser {

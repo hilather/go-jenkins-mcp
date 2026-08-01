@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -78,6 +79,22 @@ func ResolveSubjectRateCaps(ratePerMinuteEnv, burstEnv string) (ratePerMinute, b
 		burst = v
 	}
 	return ratePerMinute, burst, nil
+}
+
+// SubjectRateEnabledFromEnviron reports whether subject rate limiting would be
+// enabled under gateway serve given env (secret-free residual for admin health).
+// Empty JENKINS_MCP_SUBJECT_RATE_PER_MINUTE → true (default on). Explicit 0 →
+// false. Invalid parse → false (fail closed; do not claim rate is active).
+// Process-local only — multi-replica shared rate is HOST-008 residual.
+func SubjectRateEnabledFromEnviron(getenv func(string) string) bool {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	rpm, _, err := ResolveSubjectRateCaps(getenv(EnvSubjectRatePerMinute), "")
+	if err != nil {
+		return false
+	}
+	return rpm > 0
 }
 
 // subjectBucket is one token bucket (subject or process).

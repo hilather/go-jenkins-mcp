@@ -60,6 +60,40 @@ func TestHealth_EnabledModesSecretFree(t *testing.T) {
 	if m["haMultiReplica"] != false {
 		t.Fatalf("HOST-008 haMultiReplica must be false: %v", m["haMultiReplica"])
 	}
+	// Default rate env empty → rateEnabled true (HOST-006 residual note).
+	if m["rateEnabled"] != true {
+		t.Fatalf("rateEnabled default want true got %v", m["rateEnabled"])
+	}
+}
+
+// HOST-008 residual: rateEnabled reflects JENKINS_MCP_SUBJECT_RATE_PER_MINUTE (secret-free).
+func TestHealth_RateEnabledFromEnv(t *testing.T) {
+	t.Setenv(gateway.EnvSubjectRatePerMinute, "0")
+	t.Setenv(gateway.EnvGatewayMultiUser, "")
+	t.Setenv(gateway.EnvGatewayVaultPath, filepath.Join(t.TempDir(), "unused.json"))
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleViewer
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/admin/v1/health", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), vaultCanaryToken) {
+		t.Fatal("canary in rate health")
+	}
+	var m map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["rateEnabled"] != false {
+		t.Fatalf("rateEnabled with env 0 want false got %v", m["rateEnabled"])
+	}
 }
 
 // HOST-008 residual: multi_user env surfaces residual note without tokens.
@@ -166,6 +200,13 @@ func TestGatewayVault_ViewerRead_NoTokenLeak(t *testing.T) {
 	residual, _ := body["residual"].(string)
 	if !strings.Contains(residual, "CLI") && !strings.Contains(residual, "vault put") {
 		t.Fatalf("want CLI residual: %q", residual)
+	}
+	if body["rateEnabled"] != true && body["rateEnabled"] != false {
+		t.Fatalf("rateEnabled must be bool, got %v", body["rateEnabled"])
+	}
+	// Secret-free: never tokens when rate residual is present.
+	if strings.Contains(rr.Body.String(), vaultCanaryToken) {
+		t.Fatal("canary after rateEnabled field")
 	}
 }
 
