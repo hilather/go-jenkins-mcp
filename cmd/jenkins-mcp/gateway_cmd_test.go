@@ -635,6 +635,59 @@ func TestGatewayResidualStatus_SharedSubjectRateFileEnv(t *testing.T) {
 	}
 }
 
+// shared_principal_cache_file flips true when PRINCIPAL_CACHE_PATH set; path never in JSON.
+// When file has entries, principal_cache_entries is secret-free Len only.
+func TestGatewayResidualStatus_SharedPrincipalCacheFileEnv(t *testing.T) {
+	marker := "cli-principal-cache-path-canary-NEVER"
+	path := filepath.Join(t.TempDir(), marker+".json")
+	seedSK := gateway.SubjectKeyParts("t1", "cli-seed-sub", "corp")
+	seedJP := "cli-seed-jenkins-principal-CANARY"
+	fpc, err := gateway.NewFilePrincipalCache(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fpc.Set(seedSK, seedJP)
+	fpc.Set(gateway.SubjectKeyParts("t1", "cli-seed-sub-2", "corp"), "cli-seed-jp-2")
+	if fpc.Len() != 2 {
+		t.Fatalf("seed Len=%d want 2", fpc.Len())
+	}
+
+	t.Setenv(gateway.EnvGatewayPrincipalCachePath, path)
+	t.Setenv("HOST009_FAKE_TOKEN", canaryCLIToken)
+
+	out := buildGatewayResidualStatus(os.Getenv)
+	if out["shared_principal_cache_file"] != true {
+		t.Fatalf("shared_principal_cache_file want true: %+v", out["shared_principal_cache_file"])
+	}
+	clear := buildGatewayResidualStatus(func(string) string { return "" })
+	if clear["shared_principal_cache_file"] != false {
+		t.Fatalf("shared_principal_cache_file default false: %+v", clear["shared_principal_cache_file"])
+	}
+	entries, ok := out["principal_cache_entries"].(int)
+	if !ok || entries != 2 {
+		t.Fatalf("principal_cache_entries want 2 (file Len): %T %v", out["principal_cache_entries"], out["principal_cache_entries"])
+	}
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: PRINCIPAL_CACHE_PATH leaked into residual-status")
+	}
+	if strings.Contains(s, seedSK) || strings.Contains(s, seedJP) || strings.Contains(s, "cli-seed-jp-2") {
+		t.Fatal("Regression: subject/principal inventory leaked into residual-status")
+	}
+	for _, bad := range []string{canaryCLIToken, "access_token=", "refresh_token=", "Bearer " + canaryCLIToken} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q", bad)
+		}
+	}
+	if _, ok := out["principal_cache_process_note"].(string); !ok {
+		t.Fatal("principal_cache_process_note required")
+	}
+}
+
 func TestGatewayResidualStatus_ViaDispatch(t *testing.T) {
 	old := os.Stdout
 	r, w, err := os.Pipe()

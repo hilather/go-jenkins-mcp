@@ -13,7 +13,9 @@
 #   3. jenkins-mcp release-evidence --offline (assert residual[] honesty)
 #   4. jenkins-mcp gateway residual-status (required Wave 8 honesty; JSON under OUT_DIR)
 #      - shared_subject_rate_file false by default; true when SUBJECT_RATE_PATH set (path never dumped)
-#      - principal_cache_process_note: principal_cache_entries is this-process only
+#      - shared_principal_cache_file false by default; true when PRINCIPAL_CACHE_PATH set (path never dumped)
+#      - optional: principal_cache_entries Len when file has entries (secret-free count only)
+#      - principal_cache_process_note: principal_cache_entries is this-process / file Len only
 #   5. Optional: gateway consent-residual when subcommand exists (progressive consent residual)
 #   6. Optional: doctor --offline residual fields when PROFILE= is set
 #
@@ -523,12 +525,20 @@ if ssrf is True:
 elif ssrf is not False and ssrf is not None:
     errors.append(f"shared_subject_rate_file={ssrf!r} want false|absent")
 
+# HOST-008 lite: shared_principal_cache_file default false (or absent-as-false).
+# Path value never appears; only boolean residual + secret-free count.
+spcf = data.get("shared_principal_cache_file")
+if spcf is True:
+    errors.append("shared_principal_cache_file=true without PRINCIPAL_CACHE_PATH (default must be false)")
+elif spcf is not False and spcf is not None:
+    errors.append(f"shared_principal_cache_file={spcf!r} want false|absent")
+
 # principal_cache_entries is this-process count only (CLI/admin ≠ remote serve).
 pc_note = str(data.get("principal_cache_process_note") or "")
 note_blob = pc_note + " " + str(data.get("residual_note") or "")
 if pc_note:
     low_pc = pc_note.lower()
-    if "this process" not in low_pc and "process only" not in low_pc:
+    if "this process" not in low_pc and "process only" not in low_pc and "process memory" not in low_pc:
         errors.append("principal_cache_process_note missing process-local honesty")
 elif "process" not in note_blob.lower() and "principal_cache" not in note_blob.lower():
     # Older binaries may omit the field; residual_note still carries honesty.
@@ -555,7 +565,8 @@ if errors:
 print(
     "PASS: gateway residual-status honesty "
     f"(oauth009_offline + ha_multi_replica=false + residual_ids={len(required)} + "
-    "progressive_consent + shared_subject_rate_file=false default + principal_cache process note)"
+    "progressive_consent + shared_subject_rate_file=false default + "
+    "shared_principal_cache_file=false default + principal_cache process note)"
 )
 sys.exit(0)
 PY
@@ -625,6 +636,102 @@ if errors:
         print(f"  - {e}", file=sys.stderr)
     sys.exit(1)
 print("PASS: residual-status shared_subject_rate_file=true when path set (path not dumped)")
+sys.exit(0)
+PY
+        then
+          :
+        else
+          fail=1
+        fi
+      fi
+
+      # Optional subtest: PRINCIPAL_CACHE_PATH set → shared_principal_cache_file=true
+      # (path never dumped). When file has entries, principal_cache_entries is Len only.
+      echo "== gateway residual-status (PRINCIPAL_CACHE_PATH canary) =="
+      PRINCIPAL_PATH_MARKER="principal-cache-path-CANARY-never-in-json-$$"
+      PRINCIPAL_TMP_MARKED="$OUT_DIR/${PRINCIPAL_PATH_MARKER}.json"
+      # Seed secret-free FilePrincipalCache doc (2 entries) to exercise file Len residual.
+      # Subject keys / principals must never appear in residual-status JSON — only count.
+      PRINCIPAL_SEED_SK="t1|seed-sub-canary|corp"
+      PRINCIPAL_SEED_JP="seed-jenkins-principal-CANARY-never-in-json"
+      cat >"$PRINCIPAL_TMP_MARKED" <<EOF
+{
+  "version": 1,
+  "entries": {
+    "${PRINCIPAL_SEED_SK}": {
+      "principal": "${PRINCIPAL_SEED_JP}",
+      "last_access": "2020-01-01T00:00:00Z"
+    },
+    "t1|seed-sub-canary-2|corp": {
+      "principal": "seed-jp-2-CANARY",
+      "last_access": "2020-01-01T00:00:01Z"
+    }
+  }
+}
+EOF
+      RESIDUAL_STATUS_PC_JSON="$OUT_DIR/gateway-residual-status-principal-path.json"
+      set +e
+      env JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH="$PRINCIPAL_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_PC_JSON" 2>"$OUT_DIR/gateway-residual-status-principal-path.stderr"
+      prc=$?
+      set -e
+      if [[ $prc -ne 0 ]]; then
+        fail_msg "gateway residual-status with PRINCIPAL_CACHE_PATH exit $prc"
+        if [[ -s "$OUT_DIR/gateway-residual-status-principal-path.stderr" ]]; then
+          head -n 20 "$OUT_DIR/gateway-residual-status-principal-path.stderr" >&2 || true
+        fi
+      else
+        assert_secret_free "$RESIDUAL_STATUS_PC_JSON" "gateway-residual-status-principal-path.json" || true
+        export GRS_PC_JSON="$RESIDUAL_STATUS_PC_JSON"
+        export GRS_PC_MARKER="$PRINCIPAL_PATH_MARKER"
+        export GRS_PC_SEED_SK="$PRINCIPAL_SEED_SK"
+        export GRS_PC_SEED_JP="$PRINCIPAL_SEED_JP"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["GRS_PC_JSON"]
+marker = os.environ["GRS_PC_MARKER"]
+seed_sk = os.environ.get("GRS_PC_SEED_SK", "")
+seed_jp = os.environ.get("GRS_PC_SEED_JP", "")
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_principal_cache_file") is not True:
+    errors.append(
+        f"shared_principal_cache_file={data.get('shared_principal_cache_file')!r} want true when PRINCIPAL_CACHE_PATH set"
+    )
+# File Len residual: seeded 2 secret-free entries → principal_cache_entries == 2.
+entries = data.get("principal_cache_entries")
+try:
+    n = int(entries)
+except (TypeError, ValueError):
+    errors.append(f"principal_cache_entries={entries!r} want int count when path set")
+else:
+    if n != 2:
+        errors.append(f"principal_cache_entries={n} want 2 (seeded file Len; secret-free count only)")
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("PRINCIPAL_CACHE_PATH / marker leaked into residual-status JSON (path must never dump)")
+if seed_sk and seed_sk in blob:
+    errors.append("subject key inventory leaked into residual-status JSON")
+if seed_jp and seed_jp in blob:
+    errors.append("jenkins principal value leaked into residual-status JSON")
+if "seed-jp-2-CANARY" in blob:
+    errors.append("second seed principal leaked into residual-status JSON")
+# secret-shaped canaries
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status PRINCIPAL_CACHE_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print(
+    "PASS: residual-status shared_principal_cache_file=true when path set "
+    "(path not dumped; principal_cache_entries=2 file Len)"
+)
 sys.exit(0)
 PY
         then

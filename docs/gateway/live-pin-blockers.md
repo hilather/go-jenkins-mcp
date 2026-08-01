@@ -302,7 +302,10 @@ jenkins-mcp gateway consent-residual  # optional progressive consent residual sn
 #   (gateway-qualify.json, release-evidence.json, gateway-residual-status.json, …)
 # residual-status canaries (residual lite): shared_subject_rate_file=false by default;
 #   with JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set → true (path never dumped);
-#   principal_cache_process_note: principal_cache_entries is this-process only
+#   shared_principal_cache_file=false by default;
+#   with JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH set → true (path never dumped);
+#   optional file Len: principal_cache_entries count when file has entries (secret-free only);
+#   principal_cache_process_note: principal_cache_entries is this-process / file Len only
 #   (CLI/admin ≠ remote serve MemoryTokenCache/PrincipalCache unless shared file caches)
 ```
 
@@ -327,7 +330,7 @@ That is an **honesty canary**, not a readiness badge.
 | Secret-free JSON surfaces (no tokens in qualify/evidence) | Production AgentCore Identity vault |
 | Doctor residual fields stay honest when profile/env set | Multi-pod shared vault safety |
 | Mode B/C “live qualified” flags remain **false** offline | Production multi-user GO |
-| residual-status: `shared_subject_rate_file` default false / true when path set (path never dumped); `principal_cache_process_note` this-process only | Live multi-pod shared rate or remote serve cache inventory |
+| residual-status: `shared_subject_rate_file` default false / true when path set (path never dumped); `shared_principal_cache_file` default false / true when path set (path never dumped); file Len `principal_cache_entries` when seeded; `principal_cache_process_note` this-process / file Len only | Live multi-pod shared rate/principal or remote serve cache inventory |
 | Mock oauth-lab wire (separate opt-in) | Production TLS edge / real plugin |
 
 ### 5.4 Operator rule
@@ -352,7 +355,7 @@ live pin complete without lab evidence.
 | `gateway_status` | `ha_multi_replica=false`, `oauth009_offline_only`, `mode_*_live_*_qualified=false`, `session_affinity_recommended`, `gateway_ready` | Env/parse + Ready honesty |
 | `security self-check` | item `rs_qualification` (OAUTH-009 residual summary) | Warn on `oidc_bearer` or Mode B |
 | Admin `GET /admin/v1/health` / `gateway/vault` | `haMultiReplica=false`, `sessionAffinityRecommended`, mode ids only | Never tokens |
-| `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count + process note) | Env/static honesty; Mode B id `oauth009_offline`; `shared_subject_rate_file` path residual; `principal_cache_entries` **this process only** (CLI/admin ≠ serve); never tokens; **exercised by residual-smoke** |
+| `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count + process note) | Env/static honesty; Mode B id `oauth009_offline`; `shared_subject_rate_file` / `shared_principal_cache_file` path residual (path never dumped); `principal_cache_entries` **this process / file Len only** (CLI/admin ≠ serve); never tokens/subjects; **exercised by residual-smoke** |
 | Admin `GET /admin/v1/gateway/residual-status` | Same secret-free map as CLI (HOST-007 SPA Overview card) | Viewer read; 404 hides card on older BFF; never tokens |
 | `gateway consent-residual` | Progressive consent residual snapshot | Browser 3LO not automated; residual-smoke optional |
 | `gateway consent-purge` / `consent-expire` | Purge TTL-expired consent metadata (or `--session-id` / `--all`) | Metadata only; secret-free counts; same-host file reload-before-persist **Done\* lite** (no serve Put resurrection); not multi-replica HA |

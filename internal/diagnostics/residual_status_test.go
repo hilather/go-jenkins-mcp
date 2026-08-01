@@ -115,6 +115,77 @@ func TestBuildGatewayResidualStatus_SharedSubjectRateFile(t *testing.T) {
 	}
 }
 
+// shared_principal_cache_file=true when PRINCIPAL_CACHE_PATH set; path never dumped.
+// When file has entries, principal_cache_entries is secret-free Len only.
+func TestBuildGatewayResidualStatus_SharedPrincipalCacheFile(t *testing.T) {
+	marker := "principal-cache-path-canary-NEVER-IN-JSON"
+	path := t.TempDir() + "/" + marker + ".json"
+	// Seed secret-free file entries so residual Len is exercised (not only empty open).
+	seedSK := "t1|residual-seed-sub|corp"
+	seedJP := "residual-seed-jenkins-principal-CANARY"
+	fpc, err := gateway.NewFilePrincipalCache(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fpc.Set(seedSK, seedJP)
+	fpc.Set(gateway.SubjectKeyParts("t1", "residual-seed-sub-2", "corp"), "seed-jp-2")
+	if fpc.Len() != 2 {
+		t.Fatalf("seed Len=%d want 2", fpc.Len())
+	}
+
+	t.Setenv(gateway.EnvGatewayPrincipalCachePath, path)
+	t.Setenv("HOST_RESIDUAL_CANARY", residualCanary)
+
+	out := diagnostics.BuildGatewayResidualStatus(nil)
+	if out["shared_principal_cache_file"] != true {
+		t.Fatalf("shared_principal_cache_file want true when path set: %+v", out["shared_principal_cache_file"])
+	}
+	// Default-path call without env must stay false.
+	clear := diagnostics.BuildGatewayResidualStatus(func(string) string { return "" })
+	if clear["shared_principal_cache_file"] != false {
+		t.Fatalf("shared_principal_cache_file default false: %+v", clear["shared_principal_cache_file"])
+	}
+
+	entries, ok := out["principal_cache_entries"].(int)
+	if !ok {
+		// accept numeric float from some paths
+		if f, okf := out["principal_cache_entries"].(float64); okf {
+			entries = int(f)
+			ok = true
+		}
+	}
+	if !ok || entries != 2 {
+		t.Fatalf("principal_cache_entries want 2 (file Len): %T %v", out["principal_cache_entries"], out["principal_cache_entries"])
+	}
+
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: PRINCIPAL_CACHE_PATH leaked into residual-status JSON")
+	}
+	if strings.Contains(s, seedSK) {
+		t.Fatal("Regression: subject key inventory leaked into residual-status JSON")
+	}
+	if strings.Contains(s, seedJP) || strings.Contains(s, "seed-jp-2") {
+		t.Fatal("Regression: jenkins principal value leaked into residual-status JSON")
+	}
+	for _, bad := range []string{residualCanary, "access_token=", "refresh_token=", "client_secret=", "Bearer " + residualCanary} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q in residual-status with principal path", bad)
+		}
+	}
+	if _, ok := out["principal_cache_process_note"].(string); !ok {
+		t.Fatal("principal_cache_process_note required")
+	}
+	// shared_subject_rate_file stays false when only principal path is set.
+	if out["shared_subject_rate_file"] != false {
+		t.Fatalf("shared_subject_rate_file must stay false without SUBJECT_RATE_PATH: %+v", out["shared_subject_rate_file"])
+	}
+}
+
 func TestBuildGatewayResidualStatus_MultiPodFromK8s(t *testing.T) {
 	t.Setenv("KUBERNETES_SERVICE_HOST", "10.96.0.1")
 	out := diagnostics.BuildGatewayResidualStatus(nil)
