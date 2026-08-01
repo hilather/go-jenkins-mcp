@@ -342,17 +342,17 @@ operator residual: **Cursor host stdio CI** still open — see
 | Cache status | `jenkins-mcp cache status --profile <id>` | L1 store schema / counts only |
 | Cache verify | `jenkins-mcp cache verify --profile <id> [--full] [--sample N]` | ARC-008 integrity; issue kinds pack/entry/checksum/catalog/index; support-safe |
 | Cache repair | `jenkins-mcp cache repair --profile <id> [--index-only]` | Rebuild sidecar indexes only after pack verify; never mutates pack body |
-| Support bundle | `jenkins-mcp support-bundle --profile <id> [--preview]` · `doctor --bundle` / `--bundle-preview` | Privacy-scrubbed zip under XDG cache (doctor.json includes `gateway_residual_status` when doctor ran) |
+| Support bundle | `jenkins-mcp support-bundle --profile <id> [--preview]` · `doctor --bundle` / `--bundle-preview` | Privacy-scrubbed zip under XDG cache. Always includes top-level **`gateway-residual-status.json`** (`BuildGatewayResidualStatus` + same sanitize as doctor) so residual honesty is present even when doctor fails or a prebuilt doctor report omits the nest. `doctor.json` also embeds `gateway_residual_status` when doctor ran successfully. Never tokens/subjects; live `mode_*_qualified` stay false; `ha_multi_replica` false; pointer to [gateway/live-pin-blockers.md](gateway/live-pin-blockers.md). |
 
 ### Support bundle path and redaction
 
 - **Default path:** `$XDG_CACHE_HOME/jenkins-mcp/support-bundles/<profileId>/support-bundle-<id>-<timestamp>.zip` (file mode **0600**, dir **0700**).
-- **Included (OPS-001 / Wave 23):** manifest, binary version/build, effective profile **without secrets**, doctor report, cache status, optional capability summary, metrics snapshot, recent error signature hashes (optional `ExtractCandidates` from a size-capped in-memory sample only — raw sample never zipped), `GOOS`/`GOARCH`/Go version, offline `security_self_check.json`, diagnostics-local `release_evidence_lite.json` (version/runtime only), offline `rs_qualification_summary.json`.
+- **Included (OPS-001 / Wave 23):** manifest, binary version/build, effective profile **without secrets**, doctor report, cache status, optional capability summary, metrics snapshot, recent error signature hashes (optional `ExtractCandidates` from a size-capped in-memory sample only — raw sample never zipped), `GOOS`/`GOARCH`/Go version, offline `security_self_check.json`, diagnostics-local `release_evidence_lite.json` (version/runtime only), offline `rs_qualification_summary.json`, always-on **`gateway-residual-status.json`** (unified residual honesty — same map as CLI `gateway residual-status` / doctor embed; independent of doctor success).
 - **Explicitly excluded:** API tokens, keyring material, full build logs, raw log samples, artifact bodies, cookies, `Authorization` headers, private keys, raw HTTP transcripts, cache encryption keys.
 - **Before write:** CLI prints included and excluded category lists (also with `--preview` / `--bundle-preview`, which write nothing).
-- **Scrubbing:** secret-like JSON keys dropped; string values pass `redact.Secrets`; canary tests plant a token in keyring + capability map (+ log sample) and assert it never appears in the zip.
+- **Scrubbing:** secret-like JSON keys dropped; string values pass `redact.Secrets`; canary tests plant a token in keyring + capability map (+ log sample) and assert it never appears in the zip. Residual status map is additionally sanitized via the same `sanitizeResidualStatusMap` path as doctor.
 - Doctor embedded in the bundle defaults to **offline** (no whoAmI) for the standalone `support-bundle` command.
-- Wave 23 offline members default **on**; callers may disable via `SupportBundleOptions` include flags (`IncludeSecuritySelfCheck`, `IncludeReleaseEvidenceLite`, `IncludeRSQualification`).
+- Wave 23 offline members default **on**; callers may disable via `SupportBundleOptions` include flags (`IncludeSecuritySelfCheck`, `IncludeReleaseEvidenceLite`, `IncludeRSQualification`). **`gateway-residual-status.json` is not optional** (always written for residual honesty).
 
 ### Health / queue diagnose tools (related)
 

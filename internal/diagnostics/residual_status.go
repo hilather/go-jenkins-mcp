@@ -12,7 +12,8 @@ import (
 // ResidualStatusHonestyNote is the unified operator residual honesty sentence
 // (never tokens/subjects). Points operators at the live pin runbook.
 // Shared by CLI `gateway residual-status`, admin GET /admin/v1/gateway/residual-status,
-// and doctor Report.gateway_residual_status (offline/online embed).
+// doctor Report.gateway_residual_status (offline/online embed), and support-bundle
+// top-level gateway-residual-status.json (always present even when doctor fails).
 const ResidualStatusHonestyNote = "unified gateway residual snapshot (env/static honesty only): offline Mode A/B/C foundations Done*; optional same-host FileSubjectRateLimiter / FileTokenCache / FilePrincipalCache / FileJWKS / vault flock lite when paths set; live Entra / jwt-auth-filter / AgentCore / multi-pod shared rate+vault+principal+JWKS HA residual — never production GO from this surface; see docs/gateway/live-pin-blockers.md"
 
 // ResidualStatusDoc is the primary operator pointer for residual honesty.
@@ -27,8 +28,10 @@ const PrincipalCacheProcessNote = "principal_cache_entries: file Len() when PRIN
 
 // BuildGatewayResidualStatus assembles the unified secret-free residual snapshot
 // used by `jenkins-mcp gateway residual-status`,
-// GET /admin/v1/gateway/residual-status (HOST-007), and doctor Report field
-// gateway_residual_status (OPS doctor residual embed — informational only).
+// GET /admin/v1/gateway/residual-status (HOST-007), doctor Report field
+// gateway_residual_status (OPS doctor residual embed — informational only),
+// and support-bundle member gateway-residual-status.json (always present even
+// when doctor fails or a prebuilt DoctorReport omits the nest).
 //
 // Env/static only — no Obtain, vault open, or browser. Never tokens, vault
 // bytes, Authorization material, or raw subjects. getenv nil → os.Getenv.
