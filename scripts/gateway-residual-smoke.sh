@@ -14,6 +14,7 @@
 #   4. jenkins-mcp gateway residual-status (required Wave 8 honesty; JSON under OUT_DIR)
 #      - shared_subject_rate_file false by default; true when SUBJECT_RATE_PATH set (path never dumped)
 #      - shared_principal_cache_file false by default; true when PRINCIPAL_CACHE_PATH set (path never dumped)
+#      - shared_jwks_file false by default; true when JENKINS_MCP_HTTP_JWKS_CACHE_PATH set (path never dumped)
 #      - optional: principal_cache_entries Len when file has entries (secret-free count only)
 #      - principal_cache_process_note: principal_cache_entries is this-process / file Len only
 #   5. Optional: gateway consent-residual when subcommand exists (progressive consent residual)
@@ -535,6 +536,14 @@ if spcf is True:
 elif spcf is not False and spcf is not None:
     errors.append(f"shared_principal_cache_file={spcf!r} want false|absent")
 
+# HOST-001 / HOST-008 lite: shared_jwks_file default false (or absent-as-false).
+# Path value never appears; only boolean residual (public JWKS snapshot only).
+sjwks = data.get("shared_jwks_file")
+if sjwks is True:
+    errors.append("shared_jwks_file=true without JWKS_CACHE_PATH (default must be false)")
+elif sjwks is not False and sjwks is not None:
+    errors.append(f"shared_jwks_file={sjwks!r} want false|absent")
+
 # principal_cache_entries is this-process count only (CLI/admin ≠ remote serve).
 pc_note = str(data.get("principal_cache_process_note") or "")
 note_blob = pc_note + " " + str(data.get("residual_note") or "")
@@ -568,7 +577,8 @@ print(
     "PASS: gateway residual-status honesty "
     f"(oauth009_offline + ha_multi_replica=false + residual_ids={len(required)} + "
     "progressive_consent + shared_subject_rate_file=false default + "
-    "shared_principal_cache_file=false default + principal_cache process note)"
+    "shared_principal_cache_file=false default + shared_jwks_file=false default + "
+    "principal_cache process note)"
 )
 sys.exit(0)
 PY
@@ -734,6 +744,62 @@ print(
     "PASS: residual-status shared_principal_cache_file=true when path set "
     "(path not dumped; principal_cache_entries=2 file Len)"
 )
+sys.exit(0)
+PY
+        then
+          :
+        else
+          fail=1
+        fi
+      fi
+
+      # Optional subtest: JWKS_CACHE_PATH set → shared_jwks_file=true (path never dumped).
+      # residual-status uses auth.JWKSCachePathConfiguredFromEnviron — empty path file is enough.
+      echo "== gateway residual-status (JWKS_CACHE_PATH canary) =="
+      JWKS_PATH_MARKER="jwks-cache-path-CANARY-never-in-json-$$"
+      JWKS_TMP_MARKED="$OUT_DIR/${JWKS_PATH_MARKER}.json"
+      : >"$JWKS_TMP_MARKED"
+      RESIDUAL_STATUS_JWKS_JSON="$OUT_DIR/gateway-residual-status-jwks-path.json"
+      set +e
+      env JENKINS_MCP_HTTP_JWKS_CACHE_PATH="$JWKS_TMP_MARKED" \
+        "$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_JWKS_JSON" 2>"$OUT_DIR/gateway-residual-status-jwks-path.stderr"
+      jrc=$?
+      set -e
+      if [[ $jrc -ne 0 ]]; then
+        fail_msg "gateway residual-status with JWKS_CACHE_PATH exit $jrc"
+        if [[ -s "$OUT_DIR/gateway-residual-status-jwks-path.stderr" ]]; then
+          head -n 20 "$OUT_DIR/gateway-residual-status-jwks-path.stderr" >&2 || true
+        fi
+      else
+        assert_secret_free "$RESIDUAL_STATUS_JWKS_JSON" "gateway-residual-status-jwks-path.json" || true
+        export GRS_JWKS_JSON="$RESIDUAL_STATUS_JWKS_JSON"
+        export GRS_JWKS_MARKER="$JWKS_PATH_MARKER"
+        if python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["GRS_JWKS_JSON"]
+marker = os.environ["GRS_JWKS_MARKER"]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("shared_jwks_file") is not True:
+    errors.append(
+        f"shared_jwks_file={data.get('shared_jwks_file')!r} want true when JWKS_CACHE_PATH set"
+    )
+blob = json.dumps(data)
+if marker in blob:
+    errors.append("JWKS_CACHE_PATH / marker leaked into residual-status JSON (path must never dump)")
+# secret-shaped canaries (public JWKS only — never tokens)
+low = blob.lower()
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in low:
+        errors.append(f"secret-shaped material {needle!r}")
+if errors:
+    print("FAIL: residual-status JWKS_CACHE_PATH canary:", file=sys.stderr)
+    for e in errors:
+        print(f"  - {e}", file=sys.stderr)
+    sys.exit(1)
+print("PASS: residual-status shared_jwks_file=true when path set (path not dumped)")
 sys.exit(0)
 PY
         then
