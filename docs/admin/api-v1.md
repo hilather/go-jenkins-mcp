@@ -89,9 +89,45 @@ Current process authentication state and console role. **Never includes the toke
   "status": "ok",
   "version": "v0.1.0",
   "commit": "abc1234",
-  "uiBuild": ""
+  "uiBuild": "",
+  "enabledModes": ["api_token_vault"]
 }
 ```
+
+| Field | Meaning |
+|-------|---------|
+| `status` | Always `ok` when the BFF process is up (liveness). |
+| `version` / `commit` / `uiBuild` | Secret-free binary / SPA build metadata |
+| `enabledModes` | **HOST-007 / HOST-011:** optional list of gateway credential mode **ids** from env (`JENKINS_MCP_GATEWAY_ENABLED_MODES` or primary-only default). **Never** tokens, vault bytes, or subjects. Omitted or empty when mode config is invalid (see `/gateway/vault` residual). |
+
+## GET /admin/v1/gateway/vault
+
+Secret-free HOST-011 mode matrix + Mode A vault **inventory** (HOST-009 residual).
+Requires console `read`. **Never** returns API tokens, raw vault file contents,
+Authorization headers, or raw subject keys.
+
+```json
+{
+  "mode": "api_token_vault",
+  "enabledModes": ["api_token_vault"],
+  "vaultConfigured": true,
+  "entryCount": 1,
+  "subjects": ["a1b2c3…"],
+  "residual": "vault write is CLI-only: jenkins-mcp gateway vault-put / vault-delete (never put tokens in the browser)"
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `mode` | Primary credential mode id |
+| `enabledModes` | Allow-list of mode ids (secret-free) |
+| `vaultConfigured` | Whether the Mode A vault file exists |
+| `entryCount` | Number of subject entries |
+| `subjects` | **SubjectKeyHash** values only (never raw keys or tokens) |
+| `residual` | Operator notes (CLI-only write; Mode B/C residuals) |
+
+Writes remain CLI-only. SPA Overview may display this status; provision/rotate/revoke
+is not available from the browser.
 
 ## GET /admin/v1/version
 

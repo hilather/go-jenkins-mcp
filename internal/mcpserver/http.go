@@ -130,12 +130,23 @@ type HTTPConfig struct {
 	// resolver returns empty. Never log resolver inputs (tokens).
 	IdentityResolver IdentityResolver
 
+	// ReadyCheck optionally reports whether gateway Obtain (or equivalent) is
+	// Ready for multi-user traffic (HOST-005). Used only by GET/HEAD /readyz.
+	// When nil, /readyz returns process-up {"status":"ok"} without gateway_ready
+	// (residual: provider probe not wired). When set and false → 503
+	// {"status":"not_ready","gateway_ready":false}. Must be secret-free.
+	ReadyCheck ReadyCheck
+
 	// Logger receives start/stop messages. Default: log.Default().
 	Logger *log.Logger
 
 	// ShutdownTimeout bounds graceful shutdown after ctx cancel. Default 5s.
 	ShutdownTimeout time.Duration
 }
+
+// ReadyCheck reports process readiness for /readyz (HOST-005). Must not
+// return secrets, inventory, subjects, or token material — only a bool.
+type ReadyCheck func() bool
 
 // DefaultHTTPConfig returns safe defaults (loopback-only, 4 MiB body).
 func DefaultHTTPConfig() HTTPConfig {
@@ -311,6 +322,7 @@ func NewHTTPHandler(server *mcp.Server, cfg HTTPConfig) (http.Handler, error) {
 		requireSubject:   HTTPSubjectRequired(cfg),
 		labIdentity:      cfg.LabIdentity,
 		identityResolver: cfg.IdentityResolver,
+		readyCheck:       cfg.ReadyCheck,
 	}, nil
 }
 
@@ -334,6 +346,11 @@ func validateHTTPHandlerPolicy(cfg HTTPConfig) error {
 			if o == "" {
 				return apperr.New(apperr.CodeInvalidArgument,
 					fmt.Sprintf("http allowed origin #%d is empty", i+1))
+			}
+			// HOST-002: never accept CORS-style wildcards (exact-match only).
+			if o == "*" || strings.Contains(o, "*") {
+				return apperr.New(apperr.CodeInvalidArgument,
+					fmt.Sprintf("http allowed origin %q must not use wildcards (exact-match only; no CORS *)", o))
 			}
 			if u, err := url.Parse(o); err != nil || u.Scheme == "" || u.Host == "" {
 				return apperr.New(apperr.CodeInvalidArgument,
@@ -470,6 +487,7 @@ type protectHandler struct {
 	requireSubject   bool
 	labIdentity      bool
 	identityResolver IdentityResolver
+	readyCheck       ReadyCheck
 }
 
 func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -479,8 +497,12 @@ func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Secret-free health/ready: no shared secret, no subject, no tool inventory.
-	// Exact path only (HOST-001 / HOST-002 residual for broader probe matrix).
+	// Exact path only (HOST-001 / HOST-002 / HOST-005).
 	if isHealthPath(r.URL.Path) && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		if r.URL.Path == ReadyzPath {
+			writeReadyz(w, h.readyCheck)
+			return
+		}
 		writeHealthOK(w)
 		return
 	}

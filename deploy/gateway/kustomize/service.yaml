@@ -1,4 +1,6 @@
 # GWY-004 MVP scaffold — ClusterIP service (no public LB by default).
+# Prefer reverse-proxy / mesh for TLS terminate (HOST-002). Do not expose NodePort
+# or LoadBalancer without non-local HTTP gates (AllowedHosts/Origins + secret + subject).
 apiVersion: v1
 kind: Service
 metadata:

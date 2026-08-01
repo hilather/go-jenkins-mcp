@@ -357,19 +357,19 @@ make pilot-evidence PROFILE= SKIP_GO_TEST=1
 # → dist/pilot-evidence/<timestamp>/MANIFEST.json (secret-free offline pack)
 ```
 
-## Optional managed gateway package (GWY-004 scaffold)
+## Optional managed gateway package (GWY-004 / HOST-005 scaffold)
 
-Near-source `jenkins-mcp serve --gateway` packaging is **scaffold only** — same
-MCP binary, no bundled live AgentCore sidecar, no signed production image from
-this repo.
+Near-source `jenkins-mcp serve --gateway` packaging is **scaffold + operator
+envelope** — same MCP binary, no bundled live AgentCore sidecar, no signed
+production image from this repo.
 
 | Artifact | Path | Notes |
 |----------|------|--------|
-| Deployment guide | [gateway/deployment.md](gateway/deployment.md) | Per-user isolation, env vars, Rocky/Ubuntu, no Windows |
-| Compose example | [deploy/gateway/docker-compose.yml](../deploy/gateway/docker-compose.yml) | Non-root, read-only root, env placeholders |
+| Deployment guide | [gateway/deployment.md](gateway/deployment.md) | HOST-002 reverse-proxy matrix, HOST-005 readiness, HOST-008 HA residual |
+| Compose example | [deploy/gateway/docker-compose.yml](../deploy/gateway/docker-compose.yml) | Non-root, read-only root, CPU/mem limits, secret-free env |
 | Env example | [deploy/gateway/.env.example](../deploy/gateway/.env.example) | **Non-secret vars only** |
 | Dockerfile | [deploy/gateway/Dockerfile](../deploy/gateway/Dockerfile) | Distroless nonroot; build from repo root |
-| Kustomize stub | [deploy/gateway/kustomize/](../deploy/gateway/kustomize/) | Deployment + ClusterIP Service |
+| Kustomize stub | [deploy/gateway/kustomize/](../deploy/gateway/kustomize/) | replicas:1; probes `/healthz` `/readyz`; limits |
 
 ```bash
 # Validate compose (when docker available); do not require secrets
@@ -377,8 +377,8 @@ docker compose -f deploy/gateway/docker-compose.yml config
 ```
 
 **Residuals (explicit):** live AgentCore sidecar/binary pin; image signing
-(cosign/registry provenance); Streamable HTTP mTLS hardening. See
-[gateway/deployment.md](gateway/deployment.md) §8.
+(cosign/registry provenance); Streamable HTTP mTLS hardening; multi-replica HA
+(HOST-008). See [gateway/deployment.md](gateway/deployment.md).
 
 ## User / admin / security docs
 

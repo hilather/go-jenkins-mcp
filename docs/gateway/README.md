@@ -185,12 +185,15 @@ Missing identity env fields → bind fails closed at serve start.
 | **Live Entra / AgentCore network acquisition pin** | GWY-003 / OAUTH-010 — offline mock + `HTTPTokenFetcher` only prove contracts |
 | AgentCore Identity/Token Vault (durable) | GWY-001 completion (process memory cache is not a vault) |
 | Serve wiring that injects `HTTPTokenFetcher` + Live | Operator config residual; default remains fail-closed (HOST-003) |
-| Packaging near-source gateway image (signed prod) | GWY-004 residual — scaffold in `deploy/gateway/` + [deployment.md](deployment.md) |
+| Packaging near-source gateway image (signed prod) | GWY-004 residual — scaffold hardened in `deploy/gateway/` + [deployment.md](deployment.md) (HOST-005 limits/probes; image signing residual) |
 | Live AgentCore sidecar pin | GWY-003 / GWY-004 residual |
 | Custom Jenkins authorization-server plugin | ADR 0011 / OAUTH-011 **default no-go** |
 | Shared Jenkins service account for interactive users | **Never** |
 | Real client secret storage | keyring / vault (not profile JSON) |
-| Streamable HTTP gateway transport hardening | GWY-004 residual (HOST-001 / HOST-002) |
+| Streamable HTTP gateway transport hardening | HOST-001 / HOST-002 matrix documented; live mTLS residual |
+| Reverse-proxy non-local matrix | HOST-002 **docs Done***; live path-prefix residual |
+| Health/readiness envelope | HOST-005 **partial** — `/healthz` + `/readyz` + compose/k8s limits; Obtain Ready on `/readyz` when `--gateway` |
+| Multi-replica HA | HOST-008 Tier B residual (single-replica Tier A default) |
 | **Program path to team-hosted** | [roadmap/server-team-hosted.md](../roadmap/server-team-hosted.md) |
 
 Until live AgentCore is pinned, local **API token + keyring** remains the Jenkins

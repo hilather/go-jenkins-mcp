@@ -15,6 +15,36 @@ import (
 
 const vaultCanaryToken = "admin-vault-canary-token-NEVER-IN-JSON"
 
+// HOST-007: health lists enabledModes secret-free (mode ids only; no vault tokens).
+func TestHealth_EnabledModesSecretFree(t *testing.T) {
+	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAPITokenVault))
+	t.Setenv(gateway.EnvGatewayEnabledModes, "api_token_vault,jwt_rs_bearer")
+	t.Setenv(gateway.EnvGatewayVaultPath, filepath.Join(t.TempDir(), "unused.json"))
+
+	cfg := admin.DefaultConfig()
+	cfg.Addr = "127.0.0.1:0"
+	cfg.Role = admin.RoleViewer
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/admin/v1/health", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if strings.Contains(body, vaultCanaryToken) {
+		t.Fatalf("canary leaked in health: %s", body)
+	}
+	if !strings.Contains(body, "api_token_vault") || !strings.Contains(body, "jwt_rs_bearer") {
+		t.Fatalf("health missing enabledModes: %s", body)
+	}
+	if !strings.Contains(body, `"enabledModes"`) {
+		t.Fatalf("health missing enabledModes field: %s", body)
+	}
+}
+
 func TestGatewayVault_ViewerRead_NoTokenLeak(t *testing.T) {
 	// Not parallel: uses process env for vault path + credential mode.
 	dir := t.TempDir()

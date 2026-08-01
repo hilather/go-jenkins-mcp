@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 	"github.com/simonfxr/go-jenkins-mcp/internal/config"
 	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
+	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
 	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
 	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
@@ -19,11 +21,13 @@ import (
 )
 
 // healthResponse is GET /admin/v1/health.
+// enabledModes is a secret-free HOST-011 listing (mode ids only; no tokens).
 type healthResponse struct {
-	Status  string `json:"status"`
-	Version string `json:"version"`
-	Commit  string `json:"commit"`
-	UIBuild string `json:"uiBuild"`
+	Status       string   `json:"status"`
+	Version      string   `json:"version"`
+	Commit       string   `json:"commit"`
+	UIBuild      string   `json:"uiBuild"`
+	EnabledModes []string `json:"enabledModes,omitempty"`
 }
 
 // versionResponse is GET /admin/v1/version (subset of jenkins-mcp version --json).
@@ -61,12 +65,30 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusMethodNotAllowed, "invalid_argument", "method not allowed")
 		return
 	}
+	// HOST-007: secret-free enabled auth modes (mode ids only). Full vault
+	// inventory remains on GET /admin/v1/gateway/vault (hash-only subjects).
+	modes := healthEnabledModes()
 	writeJSON(w, http.StatusOK, healthResponse{
-		Status:  "ok",
-		Version: s.cfg.Version,
-		Commit:  s.cfg.Commit,
-		UIBuild: s.cfg.UIBuild,
+		Status:       "ok",
+		Version:      s.cfg.Version,
+		Commit:       s.cfg.Commit,
+		UIBuild:      s.cfg.UIBuild,
+		EnabledModes: modes,
 	})
+}
+
+// healthEnabledModes returns HOST-011 enabled credential mode ids from env
+// (secret-free). Invalid config → empty slice (operators use /gateway/vault residual).
+func healthEnabledModes() []string {
+	mx, err := gateway.ModeMatrixFromEnviron(os.Getenv)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(mx.Enabled))
+	for _, m := range mx.Enabled {
+		out = append(out, m.String())
+	}
+	return out
 }
 
 // handleMe returns the process role and permissions (UI-003).

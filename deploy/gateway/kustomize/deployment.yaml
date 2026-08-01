@@ -1,5 +1,13 @@
-# GWY-004 MVP scaffold — per-user / isolated gateway Deployment stub.
+# GWY-004 / HOST-005 scaffold — per-user / isolated gateway Deployment stub.
 # Platforms: Linux nodes only (Rocky/Ubuntu workers). Windows nodes unsupported.
+#
+# Hardening notes:
+#   - replicas: 1 (HOST-008 Tier A default; multi-replica residual)
+#   - non-root, read-only root FS, drop ALL caps
+#   - resource requests/limits (pilot envelope)
+#   - HTTP probes on /healthz and /readyz (secret-free; no inventory)
+#   - env placeholders are non-secret only — inject real values via external
+#     Secret managers that never place token/client-secret values in git
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,6 +15,8 @@ metadata:
   labels:
     app.kubernetes.io/name: jenkins-mcp-gateway
 spec:
+  # HOST-008: single-replica Tier A default. Do not raise until durable vault +
+  # affinity checklist in docs/gateway/deployment.md §9 is complete.
   replicas: 1
   selector:
     matchLabels:
@@ -36,15 +46,15 @@ spec:
             - --read-only
             - --http
             # Loopback default matches mcpserver validator. All-interfaces + mesh
-            # requires --http-allow-non-local and --http-allowed-origin (residual).
+            # requires --http-allow-non-local, --http-allowed-host, and
+            # --http-allowed-origin (exact-match; no CORS wildcard) — residual.
             - 127.0.0.1:8081
           ports:
             - name: mcp-http
               containerPort: 8081
               protocol: TCP
           env:
-            # Non-secret only — inject real values via external Secret managers
-            # that never place token/client-secret values in git.
+            # Non-secret only — never put API tokens / client secrets here.
             - name: JENKINS_MCP_GATEWAY_MODE
               value: "1"
             - name: JENKINS_MCP_READ_ONLY
@@ -75,6 +85,7 @@ spec:
             capabilities:
               drop: ["ALL"]
           resources:
+            # HOST-005 pilot envelope (tune per site).
             requests:
               cpu: 100m
               memory: 128Mi
@@ -90,8 +101,26 @@ spec:
               mountPath: /home/nonroot/.cache/jenkins-mcp
             - name: tmp
               mountPath: /tmp
-          # Residual: real readiness when live AgentCore + HTTP health exist.
-          # readinessProbe / livenessProbe intentionally omitted in scaffold.
+          # HOST-005: secret-free probes (no tool inventory).
+          # /healthz = liveness; /readyz returns 503 when gateway_ready=false.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: mcp-http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: mcp-http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
       volumes:
         - name: config
           emptyDir: {}

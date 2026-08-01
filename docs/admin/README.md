@@ -59,7 +59,7 @@ jenkins-mcp admin serve \
 | `--require-token` | Fail start if no secret configured |
 | `--admin-role` | `viewer` (default) \| `operator` \| `policy_admin` (UI-003) |
 | `--assets-dir` | Optional SPA static root (overrides package/dev/embed defaults) |
-| `--admin-allow-non-local` | Residual non-loopback bind; **requires** token (not for production) |
+| `--admin-allow-non-local` | Residual non-loopback bind; **requires** token (HOST-007; not multi-tenant production) |
 
 #### SPA asset resolution (UI-008)
 
@@ -109,6 +109,23 @@ HTTP server timeouts (local admin, not multi-tenant gateway): `ReadHeaderTimeout
 | Destructive ops | Not yet (UI-007) |
 
 **Residuals:** loopback without token is pilot-only (any local process can call the API with the configured role); token-in-`localStorage` SPA UX is pilot-only; v1 Bearer/header auth (CSRF N/A); cookie sessions / OIDC not implemented; policy apply not exposed yet (UI-004); no CDN/SRI; multi-arch SPA packaging is the same static tree for all arches.
+
+### HOST-007 — Gateway operator admin residual (non-SaaS)
+
+The admin console is an **operator** surface for a single process / host — **not**
+a multi-tenant end-user control plane or SaaS console.
+
+| Topic | Guidance |
+|-------|----------|
+| Non-loopback bind | Only with **token required** (`--admin-allow-non-local` + `--require-token` / token env). Prefer reverse-proxy **mTLS or OIDC** residual design before exposing beyond loopback. |
+| Vault / Jenkins tokens | **Never** in browser JSON or SPA. Mode A vault inventory is hash-only subjects via `GET /admin/v1/gateway/vault`; writes remain CLI (`gateway vault-put` / `vault-delete`). |
+| Enabled auth modes | Secret-free mode **ids** on `GET /admin/v1/health` (`enabledModes`) and `GET /admin/v1/gateway/vault` (`mode` + `enabledModes`). No secrets, no vault material. |
+| Multi-operator sessions | **Residual: single process role** (`--admin-role`) for the whole BFF. No multi-user admin session table / CSRF cookies in v1. |
+| localStorage token UX | **Pilot / quarantine for non-pilot.** Prefer httpOnly cookie + CSRF or OS-broker residual before production multi-host. |
+| CSP under reverse-proxy | Prefer **same-origin** (SPA + `/admin/v1`). Do not strip CSP; re-apply if TLS terminates upstream. |
+| HA admin | Not multi-replica admin plane (HOST-008 Tier B). |
+
+See also [`api-v1.md`](api-v1.md) health + gateway/vault; [`../gateway/deployment.md`](../gateway/deployment.md).
 ---
 
 ## 1. Packaging (RPM / DEB / tar)
