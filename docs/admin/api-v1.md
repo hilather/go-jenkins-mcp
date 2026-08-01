@@ -104,6 +104,7 @@ Current process authentication state and console role. **Never includes the toke
   "sharedSubjectRateFile": false,
   "sharedPrincipalCacheFile": false,
   "sharedJwksFile": false,
+  "sharedTokenCacheFile": false,
   "progressiveConsentMetadataDoneStar": true,
   "progressiveConsentBrowser3loAutomated": false,
   "residual": "subject rate default process-local (HOST-006); optional same-host FileSubjectRateLimiter when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set (HOST-008 lite); multi-pod shared rate residual; multiPodVaultResidual=true; never tokens"
@@ -142,6 +143,7 @@ Mode C):
 | `sharedSubjectRateFile` | **HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is non-empty (same-host `FileSubjectRateLimiter`). **Not** multi-pod HA. Path value never returned. Never tokens. |
 | `sharedPrincipalCacheFile` | **HOST-007 / HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` is non-empty (same-host `FilePrincipalCache`). **Not** multi-pod HA. Path value never returned. Never tokens. |
 | `sharedJwksFile` | **HOST-001 / HOST-007 / HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` is non-empty (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path value never returned. Public keys only — never tokens. |
+| `sharedTokenCacheFile` | **HOST-007 / HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` is non-empty (same-host `FileTokenCache`). **Not** multi-pod Redis/HA. Path value never returned. Residual never opens the cache file — never tokens. CamelCase parity with residual-status `shared_token_cache_file`. |
 | `progressiveConsentMetadataDoneStar` | **OAUTH-010 / GWY-001 residual:** always **`true`**. ConsentRequired metadata path Done*. Static residual only — never embeds authorize URLs or secrets. |
 | `progressiveConsentBrowser3loAutomated` | **OAUTH-010 residual:** always **`false`** until browser 3LO is automated (GWY-003). |
 | `progressiveConsentResidual` | **OAUTH-010 residual note** when Mode C enabled. Omitted otherwise. Never tokens or authorize URL secrets. |
@@ -168,6 +170,7 @@ Authorization headers, or raw subject keys.
   "sharedSubjectRateFile": false,
   "sharedPrincipalCacheFile": false,
   "sharedJwksFile": false,
+  "sharedTokenCacheFile": false,
   "vaultConfigured": true,
   "entryCount": 1,
   "subjects": ["a1b2c3…"],
@@ -190,6 +193,7 @@ Authorization headers, or raw subject keys.
 | `sharedSubjectRateFile` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` set (same-host file rate). **Not** multi-pod HA. Path never returned. Never tokens. |
 | `sharedPrincipalCacheFile` | **HOST-007 / HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` set (same-host FilePrincipalCache). **Not** multi-pod HA. Path never returned. Never tokens. |
 | `sharedJwksFile` | **HOST-001 / HOST-007 / HOST-008 Done\* lite:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path never returned. Public keys only — never tokens. |
+| `sharedTokenCacheFile` | **HOST-007 / HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` set (same-host FileTokenCache). **Not** multi-pod Redis/HA. Path never returned. Residual never opens the cache file — never tokens. CamelCase parity with residual-status `shared_token_cache_file`. |
 | `vaultConfigured` | Whether the Mode A vault file exists |
 | `entryCount` | Number of subject entries |
 | `subjects` | **SubjectKeyHash** values only (never raw keys or tokens) |

@@ -26,9 +26,9 @@ import (
 // multiUserEnabled / credentialMode / haMultiReplica / gatewayReady /
 // sessionAffinityRecommended / multiPodVaultResidual / kubernetesEnvDetected /
 // rateEnabled / ratePerMinute / rateBurst / sharedSubjectRateFile /
-// sharedPrincipalCacheFile / sharedJwksFile / progressiveConsent* are
-// secret-free gateway residual posture (HOST-006 / HOST-007 / HOST-008 /
-// OAUTH-010); never tokens, subjects, or file path values.
+// sharedPrincipalCacheFile / sharedJwksFile / sharedTokenCacheFile /
+// progressiveConsent* are secret-free gateway residual posture (HOST-006 /
+// HOST-007 / HOST-008 / OAUTH-010); never tokens, subjects, or file path values.
 // progressiveConsent* reuses gateway.ProgressiveConsentResidual (static only).
 type healthResponse struct {
 	Status       string   `json:"status"`
@@ -77,6 +77,11 @@ type healthResponse struct {
 	// (HOST-001 / HOST-008 same-host public JWKS snapshot lite). Not multi-pod
 	// external JWKS HA. Path value is never returned (bool only; public keys only).
 	SharedJwksFile bool `json:"sharedJwksFile"`
+	// SharedTokenCacheFile is true when JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH is
+	// non-empty (HOST-008 same-host FileTokenCache lite). Not multi-pod Redis/HA.
+	// Path value is never returned (bool only; secret-free). Residual never opens
+	// the cache file — never tokens.
+	SharedTokenCacheFile bool `json:"sharedTokenCacheFile"`
 	// ProgressiveConsentMetadataDoneStar is always true (ConsentRequired →
 	// authorization_url + session_id only path Done*; OAUTH-010 / GWY-001).
 	// Static residual from gateway.NewProgressiveConsentResidual — never tokens.
@@ -140,10 +145,12 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	sharedSubjectRateFile := gateway.SubjectRatePathConfiguredFromEnviron(os.Getenv)
 	sharedPrincipalCacheFile := gateway.PrincipalCachePathConfiguredFromEnviron(os.Getenv)
 	sharedJwksFile := auth.JWKSCachePathConfiguredFromEnviron(os.Getenv)
+	sharedTokenCacheFile := gateway.TokenCachePathConfiguredFromEnviron(os.Getenv)
 	mp := diagnostics.MultiPodResidualFromEnviron(os.Getenv)
 	// HOST-006 residual honesty: default process-local rate; optional same-host
 	// file share when path set; multi-pod shared rate still residual (HOST-008).
 	// HOST-007 parity: shared*File bools only — never path values (HOST-008 lite).
+	// sharedTokenCacheFile never opens the token cache file.
 	residual := "subject rate default process-local (HOST-006); optional same-host FileSubjectRateLimiter when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set (HOST-008 lite); multi-pod shared rate residual; multiPodVaultResidual=true; never tokens"
 	if sharedSubjectRateFile {
 		residual = "sharedSubjectRateFile=true (same-host file rate lite only — not multi-pod HA); " + residual
@@ -153,6 +160,9 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	if sharedJwksFile {
 		residual = "sharedJwksFile=true (same-host public JWKS file lite only — not multi-pod external JWKS HA); " + residual
+	}
+	if sharedTokenCacheFile {
+		residual = "sharedTokenCacheFile=true (same-host FileTokenCache lite only — not multi-pod Redis/HA); " + residual
 	}
 	if multiUser {
 		// Secret-free honesty only (SPA reads residual; no SPA rebuild required for this string).
@@ -191,6 +201,7 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		SharedSubjectRateFile:                 sharedSubjectRateFile,
 		SharedPrincipalCacheFile:              sharedPrincipalCacheFile,
 		SharedJwksFile:                        sharedJwksFile,
+		SharedTokenCacheFile:                  sharedTokenCacheFile,
 		ProgressiveConsentMetadataDoneStar:    pc.MetadataPathDoneStar,
 		ProgressiveConsentBrowser3loAutomated: pc.Browser3LOAutomated,
 		ProgressiveConsentResidual:            pcResidual,

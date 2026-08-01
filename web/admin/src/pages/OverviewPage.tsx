@@ -234,6 +234,14 @@ export function OverviewPage() {
                 external JWKS HA — path never shown)
               </span>
             </dd>
+            <dt>sharedTokenCacheFile</dt>
+            <dd>
+              {health.data.sharedTokenCacheFile ? "yes" : "no"}{" "}
+              <span className="muted">
+                (HOST-008 same-host FileTokenCache lite when path set; not multi-pod Redis/HA —
+                path never shown; residual never opens cache file — never tokens)
+              </span>
+            </dd>
             {health.data.residual ? (
               <>
                 <dt>residual</dt>
@@ -510,6 +518,14 @@ export function OverviewPage() {
                   JWKS HA — path never shown)
                 </span>
               </dd>
+              <dt>sharedTokenCacheFile</dt>
+              <dd>
+                {vault.data.sharedTokenCacheFile ? "yes" : "no"}{" "}
+                <span className="muted">
+                  (HOST-008 same-host FileTokenCache lite; not multi-pod Redis/HA — path never
+                  shown; residual never opens cache file — never tokens)
+                </span>
+              </dd>
               <dt>vaultConfigured</dt>
               <dd>{vault.data.vaultConfigured ? "yes" : "no"}</dd>
               <dt>entryCount</dt>
@@ -575,8 +591,10 @@ export function OverviewPage() {
             multi-replica Done from k8s env alone.{" "}
             <code>sharedSubjectRateFile</code> /{" "}
             <code>sharedPrincipalCacheFile</code> /{" "}
-            <code>sharedJwksFile</code> are same-host lite only (paths never
-            shown; not multi-pod HA).
+            <code>sharedJwksFile</code> /{" "}
+            <code>sharedTokenCacheFile</code> are same-host lite only (paths
+            never shown; not multi-pod HA; token residual never opens cache
+            file).
           </li>
           <li>
             Gateway residual status (HOST-007):{" "}

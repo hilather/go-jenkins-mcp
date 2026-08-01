@@ -25,6 +25,7 @@ func TestHealth_EnabledModesSecretFree(t *testing.T) {
 	t.Setenv(gateway.EnvGatewaySubjectRatePath, "")
 	t.Setenv(gateway.EnvGatewayPrincipalCachePath, "")
 	t.Setenv(auth.EnvHTTPJWKSCachePath, "")
+	t.Setenv(gateway.EnvGatewayTokenCachePath, "")
 	t.Setenv("KUBERNETES_SERVICE_HOST", "")
 
 	cfg := admin.DefaultConfig()
@@ -94,6 +95,9 @@ func TestHealth_EnabledModesSecretFree(t *testing.T) {
 	if m["sharedJwksFile"] != false {
 		t.Fatalf("sharedJwksFile default want false: %v", m["sharedJwksFile"])
 	}
+	if m["sharedTokenCacheFile"] != false {
+		t.Fatalf("sharedTokenCacheFile default want false: %v", m["sharedTokenCacheFile"])
+	}
 	res, _ := m["residual"].(string)
 	if !strings.Contains(res, "process-local") {
 		t.Fatalf("want process-local rate residual note: %q", res)
@@ -105,18 +109,18 @@ func TestHealth_EnabledModesSecretFree(t *testing.T) {
 
 // HOST-007 residual parity: shared*File bools flip true when env paths set;
 // path values never appear in health JSON (secret-free; not multi-pod HA).
+// sharedTokenCacheFile never opens the token cache file (never tokens).
 func TestHealth_SharedFileResidualBools(t *testing.T) {
 	dir := t.TempDir()
-	ratePath := filepath.Join(dir, "subject-rate.json")
-	principalPath := filepath.Join(dir, "principal-cache.json")
-	jwksPath := filepath.Join(dir, "jwks-cache.json")
 	// Distinct path markers so we can canary for path leak.
 	const rateMarker = "canary-rate-path-NEVER-IN-JSON"
 	const principalMarker = "canary-principal-path-NEVER-IN-JSON"
 	const jwksMarker = "canary-jwks-path-NEVER-IN-JSON"
-	ratePath = filepath.Join(dir, rateMarker+".json")
-	principalPath = filepath.Join(dir, principalMarker+".json")
-	jwksPath = filepath.Join(dir, jwksMarker+".json")
+	const tokenMarker = "canary-token-cache-path-NEVER-IN-JSON"
+	ratePath := filepath.Join(dir, rateMarker+".json")
+	principalPath := filepath.Join(dir, principalMarker+".json")
+	jwksPath := filepath.Join(dir, jwksMarker+".json")
+	tokenPath := filepath.Join(dir, tokenMarker+".json")
 
 	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAPITokenVault))
 	t.Setenv(gateway.EnvGatewayVaultPath, filepath.Join(dir, "unused.json"))
@@ -125,6 +129,7 @@ func TestHealth_SharedFileResidualBools(t *testing.T) {
 	t.Setenv(gateway.EnvGatewaySubjectRatePath, ratePath)
 	t.Setenv(gateway.EnvGatewayPrincipalCachePath, principalPath)
 	t.Setenv(auth.EnvHTTPJWKSCachePath, jwksPath)
+	t.Setenv(gateway.EnvGatewayTokenCachePath, tokenPath)
 	t.Setenv("JENKINS_MCP_FAKE_TOKEN", vaultCanaryToken)
 
 	cfg := admin.DefaultConfig()
@@ -144,7 +149,7 @@ func TestHealth_SharedFileResidualBools(t *testing.T) {
 		t.Fatal("Regression: canary token leaked in health shared*File")
 	}
 	// Path values / markers must never appear in admin JSON.
-	for _, mark := range []string{ratePath, principalPath, jwksPath, rateMarker, principalMarker, jwksMarker} {
+	for _, mark := range []string{ratePath, principalPath, jwksPath, tokenPath, rateMarker, principalMarker, jwksMarker, tokenMarker} {
 		if strings.Contains(raw, mark) {
 			t.Fatalf("Regression: path/marker %q leaked into health JSON", mark)
 		}
@@ -162,6 +167,9 @@ func TestHealth_SharedFileResidualBools(t *testing.T) {
 	if m["sharedJwksFile"] != true {
 		t.Fatalf("sharedJwksFile want true: %v", m["sharedJwksFile"])
 	}
+	if m["sharedTokenCacheFile"] != true {
+		t.Fatalf("sharedTokenCacheFile want true: %v", m["sharedTokenCacheFile"])
+	}
 	res, _ := m["residual"].(string)
 	if !strings.Contains(res, "sharedSubjectRateFile=true") {
 		t.Fatalf("want sharedSubjectRateFile residual note: %q", res)
@@ -172,6 +180,9 @@ func TestHealth_SharedFileResidualBools(t *testing.T) {
 	if !strings.Contains(res, "sharedJwksFile=true") {
 		t.Fatalf("want sharedJwksFile residual note: %q", res)
 	}
+	if !strings.Contains(res, "sharedTokenCacheFile=true") {
+		t.Fatalf("want sharedTokenCacheFile residual note: %q", res)
+	}
 	// Honesty: residual notes must keep same-host lite / not multi-pod wording.
 	if !strings.Contains(res, "not multi-pod") {
 		t.Fatalf("want not multi-pod residual honesty: %q", res)
@@ -181,6 +192,7 @@ func TestHealth_SharedFileResidualBools(t *testing.T) {
 	t.Setenv(gateway.EnvGatewaySubjectRatePath, "")
 	t.Setenv(gateway.EnvGatewayPrincipalCachePath, "")
 	t.Setenv(auth.EnvHTTPJWKSCachePath, "")
+	t.Setenv(gateway.EnvGatewayTokenCachePath, "")
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, httptest.NewRequest(http.MethodGet, "/admin/v1/health", nil))
 	if rr2.Code != http.StatusOK {
@@ -198,6 +210,9 @@ func TestHealth_SharedFileResidualBools(t *testing.T) {
 	}
 	if clear["sharedJwksFile"] != false {
 		t.Fatalf("cleared sharedJwksFile want false: %v", clear["sharedJwksFile"])
+	}
+	if clear["sharedTokenCacheFile"] != false {
+		t.Fatalf("cleared sharedTokenCacheFile want false: %v", clear["sharedTokenCacheFile"])
 	}
 }
 
@@ -486,6 +501,7 @@ func TestGatewayVault_ViewerRead_NoTokenLeak(t *testing.T) {
 	t.Setenv(gateway.EnvGatewaySubjectRatePath, "")
 	t.Setenv(gateway.EnvGatewayPrincipalCachePath, "")
 	t.Setenv(auth.EnvHTTPJWKSCachePath, "")
+	t.Setenv(gateway.EnvGatewayTokenCachePath, "")
 
 	// Plant a secret entry via vault API.
 	v, err := gateway.NewFileAPITokenVault(vaultPath)
@@ -581,6 +597,9 @@ func TestGatewayVault_ViewerRead_NoTokenLeak(t *testing.T) {
 	if body["sharedJwksFile"] != false {
 		t.Fatalf("sharedJwksFile default want false: %v", body["sharedJwksFile"])
 	}
+	if body["sharedTokenCacheFile"] != false {
+		t.Fatalf("sharedTokenCacheFile default want false: %v", body["sharedTokenCacheFile"])
+	}
 	// Secret-free: never tokens when rate residual is present.
 	if strings.Contains(rr.Body.String(), vaultCanaryToken) {
 		t.Fatal("canary after rateEnabled field")
@@ -588,16 +607,19 @@ func TestGatewayVault_ViewerRead_NoTokenLeak(t *testing.T) {
 }
 
 // HOST-007 residual parity: vault shared*File bools when env paths set;
-// path values never in JSON (not multi-pod HA).
+// path values never in JSON (not multi-pod HA). sharedTokenCacheFile never
+// opens the token cache file (never tokens).
 func TestGatewayVault_SharedFileResidualBools(t *testing.T) {
 	dir := t.TempDir()
 	vaultPath := filepath.Join(dir, "apitoken_vault.json")
 	const rateMarker = "vault-canary-rate-path-NEVER"
 	const principalMarker = "vault-canary-principal-path-NEVER"
 	const jwksMarker = "vault-canary-jwks-path-NEVER"
+	const tokenMarker = "vault-canary-token-cache-path-NEVER"
 	ratePath := filepath.Join(dir, rateMarker+".json")
 	principalPath := filepath.Join(dir, principalMarker+".json")
 	jwksPath := filepath.Join(dir, jwksMarker+".json")
+	tokenPath := filepath.Join(dir, tokenMarker+".json")
 
 	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAPITokenVault))
 	t.Setenv(gateway.EnvGatewayVaultPath, vaultPath)
@@ -606,6 +628,7 @@ func TestGatewayVault_SharedFileResidualBools(t *testing.T) {
 	t.Setenv(gateway.EnvGatewaySubjectRatePath, ratePath)
 	t.Setenv(gateway.EnvGatewayPrincipalCachePath, principalPath)
 	t.Setenv(auth.EnvHTTPJWKSCachePath, jwksPath)
+	t.Setenv(gateway.EnvGatewayTokenCachePath, tokenPath)
 	t.Setenv("JENKINS_MCP_FAKE_TOKEN", vaultCanaryToken)
 
 	cfg := admin.DefaultConfig()
@@ -624,7 +647,7 @@ func TestGatewayVault_SharedFileResidualBools(t *testing.T) {
 	if strings.Contains(raw, vaultCanaryToken) {
 		t.Fatal("Regression: canary token leaked in vault shared*File")
 	}
-	for _, mark := range []string{ratePath, principalPath, jwksPath, rateMarker, principalMarker, jwksMarker} {
+	for _, mark := range []string{ratePath, principalPath, jwksPath, tokenPath, rateMarker, principalMarker, jwksMarker, tokenMarker} {
 		if strings.Contains(raw, mark) {
 			t.Fatalf("Regression: path/marker %q leaked into vault JSON", mark)
 		}
@@ -642,6 +665,9 @@ func TestGatewayVault_SharedFileResidualBools(t *testing.T) {
 	if body["sharedJwksFile"] != true {
 		t.Fatalf("sharedJwksFile want true: %v", body["sharedJwksFile"])
 	}
+	if body["sharedTokenCacheFile"] != true {
+		t.Fatalf("sharedTokenCacheFile want true: %v", body["sharedTokenCacheFile"])
+	}
 	res, _ := body["residual"].(string)
 	if !strings.Contains(res, "sharedSubjectRateFile=true") {
 		t.Fatalf("want sharedSubjectRateFile residual note: %q", res)
@@ -652,10 +678,17 @@ func TestGatewayVault_SharedFileResidualBools(t *testing.T) {
 	if !strings.Contains(res, "sharedJwksFile=true") {
 		t.Fatalf("want sharedJwksFile residual note: %q", res)
 	}
+	if !strings.Contains(res, "sharedTokenCacheFile=true") {
+		t.Fatalf("want sharedTokenCacheFile residual note: %q", res)
+	}
+	if !strings.Contains(res, "not multi-pod") {
+		t.Fatalf("want not multi-pod residual honesty: %q", res)
+	}
 
 	t.Setenv(gateway.EnvGatewaySubjectRatePath, "")
 	t.Setenv(gateway.EnvGatewayPrincipalCachePath, "")
 	t.Setenv(auth.EnvHTTPJWKSCachePath, "")
+	t.Setenv(gateway.EnvGatewayTokenCachePath, "")
 	rr2 := httptest.NewRecorder()
 	h.ServeHTTP(rr2, httptest.NewRequest(http.MethodGet, "/admin/v1/gateway/vault", nil))
 	if rr2.Code != http.StatusOK {
@@ -673,6 +706,9 @@ func TestGatewayVault_SharedFileResidualBools(t *testing.T) {
 	}
 	if clear["sharedJwksFile"] != false {
 		t.Fatalf("cleared sharedJwksFile want false: %v", clear["sharedJwksFile"])
+	}
+	if clear["sharedTokenCacheFile"] != false {
+		t.Fatalf("cleared sharedTokenCacheFile want false: %v", clear["sharedTokenCacheFile"])
 	}
 }
 
