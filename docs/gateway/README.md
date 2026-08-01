@@ -159,9 +159,9 @@ multi-pod fan-out.
 
 | Path | Status |
 |------|--------|
-| `gateway.InvalidateSubjectLocal(caller, principalCache, tokenCache?)` | **Done\*** — secret-free; drops `PrincipalStore` + optional `TokenCache` (subject-namespace purge when `DeleteBySubjectKey` available) |
+| `gateway.InvalidateSubjectLocal(caller, principalCache, tokenCache?)` | **Done\*** — secret-free; drops `PrincipalStore` + optional `TokenCache` (subject-namespace purge when `DeleteBySubjectKey` available). **Honesty:** `principal_cleared` only when `PrincipalStore.Delete` succeeds; `FilePrincipalCache` IO/corrupt/save failure → `principal_cleared=false` + residual note (parity with `FileTokenCache.DeleteBySubjectKey` `-1`) |
 | `CredentialProvider.Invalidate` companion principal drop (AgentCore / Mode A / Mode B) | **Done\*** — token cache (Mode C) + `PrincipalCache`; durable vault entries **not** deleted (use `gateway vault delete`) |
-| CLI `jenkins-mcp gateway subject-invalidate` (alias `invalidate-subject`) | **Done\*** — process-local principal clear **or** same-host `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` + optional `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` |
+| CLI `jenkins-mcp gateway subject-invalidate` (alias `invalidate-subject`) | **Done\*** — process-local principal clear **or** same-host `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` + optional `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH`; never claims `principal_cleared` when file Delete fails |
 | Live IdP / AgentCore token revocation | **Residual** (OAUTH-010 / GWY-003) |
 | Multi-pod / multi-replica invalidate fan-out | **Residual** (HOST-008) |
 | CLI clear of a remote serve process memory-only caches | **Residual** — CLI is another process; share `FilePrincipalCache` / `FileTokenCache` paths for same-host purge, or call `Invalidate` in-process (future admin path) |
@@ -177,8 +177,11 @@ jenkins-mcp gateway subject-invalidate --subject-key 'tenant|alice-sub|corp'
 ```
 
 **CLI JSON (secret-free):** `subject_key` (operator echo of typed key), `subject_key_hash`
-(`audit.HashOpaque`), `cleared.principal` / `cleared.token_cache`, `token_cache_note`,
-`residual_note`. Never tokens, vault material, or `Authorization` headers.
+(`audit.HashOpaque`), `principal_cleared` / `cleared.principal` / `cleared.token_cache`,
+`token_cache_note`, `residual_note`. Never tokens, vault material, or `Authorization`
+headers. **Durability honesty:** `principal_cleared=false` when `FilePrincipalCache.Delete`
+fails (IO/corrupt/save); `token_cache_cleared=false` when subject-namespace purge returns
+`-1` — CLI must not imply caches cleared while durable rows may remain.
 
 **Library:** after `provider.Invalidate(ctx, caller)`, both token material (Mode C) and
 `PrincipalCache` entry for `SubjectKey(caller)` are dropped so multi-user policy

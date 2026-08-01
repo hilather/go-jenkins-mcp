@@ -258,12 +258,16 @@ func (c *FilePrincipalCache) Get(subjectKey string) (principal string, ok bool) 
 }
 
 // Delete removes one subjectKey entry (logout / subject-invalidate companion).
-func (c *FilePrincipalCache) Delete(subjectKey string) {
+// Returns nil when the entry was removed (or was already absent) and the file
+// was persisted. IO/corrupt/save failures return a non-nil error — callers must
+// not claim principal_cleared when Delete fails (GWY-002 Invalidate honesty;
+// parity with FileTokenCache.DeleteBySubjectKey returning -1). Nil receiver → nil.
+func (c *FilePrincipalCache) Delete(subjectKey string) error {
 	if c == nil {
-		return
+		return nil
 	}
 	key := strings.TrimSpace(subjectKey)
-	_ = c.withLocked(func() error {
+	return c.withLocked(func() error {
 		doc, err := c.loadLocked()
 		if err != nil {
 			return err

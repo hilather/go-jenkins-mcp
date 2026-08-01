@@ -19,8 +19,10 @@ type SubjectInvalidateResult struct {
 	// SubjectKeyHash is audit.HashOpaque(SubjectKey) for correlation (never raw
 	// inventory dumps in aggregated telemetry).
 	SubjectKeyHash string
-	// PrincipalCleared is true when PrincipalCache.Delete ran for SubjectKey
-	// (entry may or may not have existed).
+	// PrincipalCleared is true when PrincipalStore.Delete succeeded for SubjectKey
+	// (entry may or may not have existed). False when principals was nil or
+	// Delete returned an error (e.g. FilePrincipalCache IO/corrupt/save — row may
+	// remain on disk). Never claim cleared without durable success.
 	PrincipalCleared bool
 	// TokenCacheCleared is true when at least one token-cache delete path ran
 	// successfully (exact CacheKey and/or subject-namespace purge).
@@ -32,6 +34,8 @@ type SubjectInvalidateResult struct {
 	// multi-pod, serve-process).
 	TokenCacheNote string
 	// ResidualNote is multi-process / multi-pod / live-revocation honesty.
+	// May include principal Delete failure residual when PrincipalCleared is false
+	// due to durable store IO.
 	ResidualNote string
 }
 
@@ -41,7 +45,8 @@ const subjectInvalidateResidualNote = "force re-auth residual lite (GWY-002/HOST
 // InvalidateSubjectLocal clears process-local multi-user caches for a validated
 // caller so the next Obtain / Binding path re-fetches (logout / revoke companion).
 //
-//   - principals: PrincipalStore.Delete(SubjectKey(caller)); nil → skip principal
+//   - principals: PrincipalStore.Delete(SubjectKey(caller)); nil → skip principal;
+//     Delete error → PrincipalCleared=false (FilePrincipalCache durability honesty)
 //   - tokens: prefer DeleteBySubjectKey when available (all workloads); else
 //     TokenCache.Delete(caller.CacheKey()); nil → residual note only
 //
@@ -60,8 +65,14 @@ func InvalidateSubjectLocal(caller Caller, principals PrincipalStore, tokens Tok
 	}
 
 	if principals != nil {
-		principals.Delete(sk)
-		res.PrincipalCleared = true
+		if err := principals.Delete(sk); err != nil {
+			// FilePrincipalCache IO/corrupt/save — do not claim cleared (parity with
+			// FileTokenCache DeleteBySubjectKey -1 honesty).
+			res.PrincipalCleared = false
+			res.ResidualNote = subjectInvalidateResidualNote + "; principal Delete failed (IO/corrupt residual); principal may remain on disk"
+		} else {
+			res.PrincipalCleared = true
+		}
 	}
 
 	if tokens == nil {

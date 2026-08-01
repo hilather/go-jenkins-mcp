@@ -60,10 +60,15 @@ type PrincipalCache struct {
 // Implemented by *PrincipalCache (memory) and *FilePrincipalCache (same-host file).
 // Never stores tokens. Used by AuthProviderCtx Obtain remember, policy/mutation
 // rebind, InvalidateSubjectLocal, and process singleton ProcessPrincipalCache.
+//
+// Delete returns an error when the durable store could not complete the removal
+// (FilePrincipalCache IO/corrupt/save). Memory always succeeds (nil). Callers
+// that claim principal_cleared (InvalidateSubjectLocal / CLI) must honor the
+// error — do not report cleared when the row may remain on disk.
 type PrincipalStore interface {
 	Get(subjectKey string) (principal string, ok bool)
 	Set(subjectKey, jenkinsPrincipal string)
-	Delete(subjectKey string)
+	Delete(subjectKey string) error
 	Clear()
 	Len() int
 	String() string
@@ -329,14 +334,16 @@ func (c *PrincipalCache) Get(subjectKey string) (principal string, ok bool) {
 }
 
 // Delete removes one subjectKey entry (logout / Invalidate companion).
-func (c *PrincipalCache) Delete(subjectKey string) {
+// Always succeeds for in-memory (returns nil); entry may or may not have existed.
+func (c *PrincipalCache) Delete(subjectKey string) error {
 	if c == nil {
-		return
+		return nil
 	}
 	key := strings.TrimSpace(subjectKey)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.entries, key)
+	return nil
 }
 
 // Clear drops all entries (emergency / test reset).

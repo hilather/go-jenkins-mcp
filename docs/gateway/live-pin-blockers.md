@@ -196,7 +196,7 @@ Fill during live lab; keep secrets out of git, tickets, and support bundles.
 | Per-user vault binding | Process memory cache / mock | **Durable AgentCore Identity vault** |
 | Wrong audience fail-closed | Unit + qualify | Live canary tokens (redacted evidence) |
 | Progressive consent tool path | `authorization_url` + `session_id` only | Operator runbook for reauth storms |
-| Force re-auth / revocation foundation | **Done\* lite:** `InvalidateSubjectLocal` + `gateway subject-invalidate` (process-local principal **or** same-host `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` + optional same-host `FileTokenCache`); provider `Invalidate` drops principal companion | **Live IdP/AgentCore revocation window** still residual (OAUTH-010); multi-pod fan-out residual (HOST-008); CLI does not clear remote serve memory-only caches without shared file paths |
+| Force re-auth / revocation foundation | **Done\* lite:** `InvalidateSubjectLocal` + `gateway subject-invalidate` (process-local principal **or** same-host `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` + optional same-host `FileTokenCache`); provider `Invalidate` drops principal companion; `principal_cleared` / `token_cache_cleared` honest on durable Delete fail | **Live IdP/AgentCore revocation window** still residual (OAUTH-010); multi-pod fan-out residual (HOST-008); CLI does not clear remote serve memory-only caches without shared file paths |
 | Graph group expansion | Fail-closed incomplete overage | Optional funded residual — not invented membership |
 | AgentCore sidecar / binary pin | None in-repo | Org AgentCore release + GWY-003/004 |
 
