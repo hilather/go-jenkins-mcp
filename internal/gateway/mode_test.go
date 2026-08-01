@@ -29,6 +29,7 @@ func TestModeEnabled(t *testing.T) {
 
 // HOST-008 residual lite: vault path configured only when env explicitly set
 // (not when VaultPathFromEnviron / JWTVaultPathFromEnviron returns default XDG).
+// Residual honesty uses *ConfiguredFromEnviron only — never open vault files.
 func TestVaultPathConfiguredFromEnviron(t *testing.T) {
 	t.Parallel()
 	if gateway.VaultPathConfiguredFromEnviron(func(string) string { return "" }) {
@@ -45,6 +46,23 @@ func TestVaultPathConfiguredFromEnviron(t *testing.T) {
 	if gateway.VaultPathConfiguredFromEnviron(func(string) string { return "" }) {
 		t.Fatal("default XDG vault path must not count as configured")
 	}
+	// XDG_DATA_HOME / HOME alone never count — only JENKINS_MCP_GATEWAY_VAULT_PATH.
+	xdgOnly := func(k string) string {
+		switch k {
+		case "XDG_DATA_HOME":
+			return "/tmp/xdg-data-vault-configured-canary"
+		case "HOME":
+			return "/tmp/home-vault-configured-canary"
+		default:
+			return ""
+		}
+	}
+	if defXDG := gateway.VaultPathFromEnviron(xdgOnly); defXDG == "" {
+		t.Fatal("VaultPathFromEnviron with XDG_DATA_HOME must resolve a path")
+	}
+	if gateway.VaultPathConfiguredFromEnviron(xdgOnly) {
+		t.Fatal("Regression: VaultPathConfiguredFromEnviron true with only XDG_DATA_HOME (no VAULT_PATH env)")
+	}
 	if !gateway.VaultPathConfiguredFromEnviron(func(k string) string {
 		if k == gateway.EnvGatewayVaultPath {
 			return "/tmp/shared-vault-canary.json"
@@ -52,6 +70,15 @@ func TestVaultPathConfiguredFromEnviron(t *testing.T) {
 		return ""
 	}) {
 		t.Fatal("non-empty VAULT_PATH must be true")
+	}
+	// getenv returning path → true; never requires opening the file (path need not exist).
+	if !gateway.VaultPathConfiguredFromEnviron(func(k string) string {
+		if k == gateway.EnvGatewayVaultPath {
+			return "/no/such/path/vault-configured-never-open.json"
+		}
+		return ""
+	}) {
+		t.Fatal("Configured must be true for non-empty path without opening file")
 	}
 }
 
@@ -67,6 +94,26 @@ func TestJWTVaultPathConfiguredFromEnviron(t *testing.T) {
 	if def == "" {
 		t.Fatal("JWTVaultPathFromEnviron always returns a default path")
 	}
+	if gateway.JWTVaultPathConfiguredFromEnviron(func(string) string { return "" }) {
+		t.Fatal("default XDG JWT vault path must not count as configured")
+	}
+	// XDG_DATA_HOME / HOME alone never count — only JENKINS_MCP_GATEWAY_JWT_VAULT_PATH.
+	xdgOnly := func(k string) string {
+		switch k {
+		case "XDG_DATA_HOME":
+			return "/tmp/xdg-data-jwt-vault-configured-canary"
+		case "HOME":
+			return "/tmp/home-jwt-vault-configured-canary"
+		default:
+			return ""
+		}
+	}
+	if defXDG := gateway.JWTVaultPathFromEnviron(xdgOnly); defXDG == "" {
+		t.Fatal("JWTVaultPathFromEnviron with XDG_DATA_HOME must resolve a path")
+	}
+	if gateway.JWTVaultPathConfiguredFromEnviron(xdgOnly) {
+		t.Fatal("Regression: JWTVaultPathConfiguredFromEnviron true with only XDG_DATA_HOME (no JWT_VAULT_PATH env)")
+	}
 	if !gateway.JWTVaultPathConfiguredFromEnviron(func(k string) string {
 		if k == gateway.EnvGatewayJWTVaultPath {
 			return "/tmp/shared-jwt-vault-canary.json"
@@ -74,6 +121,14 @@ func TestJWTVaultPathConfiguredFromEnviron(t *testing.T) {
 		return ""
 	}) {
 		t.Fatal("non-empty JWT_VAULT_PATH must be true")
+	}
+	if !gateway.JWTVaultPathConfiguredFromEnviron(func(k string) string {
+		if k == gateway.EnvGatewayJWTVaultPath {
+			return "/no/such/path/jwt-vault-configured-never-open.json"
+		}
+		return ""
+	}) {
+		t.Fatal("Configured must be true for non-empty path without opening file")
 	}
 }
 

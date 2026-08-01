@@ -209,8 +209,10 @@ func ModeMatrixResidualNote(primary CredentialMode, enabled []CredentialMode) st
 
 // VaultPathFromEnviron returns the Mode A vault file path from env or default
 // under XDG_DATA_HOME (or ~/.local/share) + DefaultAPITokenVaultRelPath.
-// Always returns a path (default when env empty). For residual honesty use
-// VaultPathConfiguredFromEnviron (env explicitly set) — never open vault for residual.
+// Always returns a path (default when env empty). Residual honesty must NOT use
+// this helper for shared_api_token_vault_file — use VaultPathConfiguredFromEnviron
+// (explicit JENKINS_MCP_GATEWAY_VAULT_PATH only; default XDG does not count) and
+// never open the vault file for residual-status / residual-smoke.
 func VaultPathFromEnviron(getenv func(string) string) string {
 	if getenv == nil {
 		getenv = os.Getenv
@@ -223,9 +225,11 @@ func VaultPathFromEnviron(getenv func(string) string) string {
 
 // VaultPathConfiguredFromEnviron reports whether JENKINS_MCP_GATEWAY_VAULT_PATH
 // is non-empty after trim (secret-free residual bool for Mode A shared vault file).
+// Requires the vault path env var to be explicitly set — default XDG resolution
+// from VaultPathFromEnviron / XDG_DATA_HOME / HOME alone does NOT count.
 // Does not validate path usability. Never returns the path value. Never opens the
 // vault file (tokens on disk — residual surfaces must not read it).
-// getenv nil → os.Getenv. Default XDG path alone does not count as configured.
+// getenv nil → os.Getenv.
 func VaultPathConfiguredFromEnviron(getenv func(string) string) bool {
 	if getenv == nil {
 		getenv = os.Getenv
@@ -235,8 +239,10 @@ func VaultPathConfiguredFromEnviron(getenv func(string) string) bool {
 
 // JWTVaultPathFromEnviron returns the Mode B JWT vault file path from env or
 // default under XDG data + DefaultJWTVaultRelPath.
-// Always returns a path (default when env empty). For residual honesty use
-// JWTVaultPathConfiguredFromEnviron (env explicitly set) — never open vault for residual.
+// Always returns a path (default when env empty). Residual honesty must NOT use
+// this helper for shared_jwt_vault_file — use JWTVaultPathConfiguredFromEnviron
+// (explicit JENKINS_MCP_GATEWAY_JWT_VAULT_PATH only; default XDG does not count)
+// and never open the vault file for residual-status / residual-smoke.
 func JWTVaultPathFromEnviron(getenv func(string) string) string {
 	if getenv == nil {
 		getenv = os.Getenv
@@ -249,9 +255,11 @@ func JWTVaultPathFromEnviron(getenv func(string) string) string {
 
 // JWTVaultPathConfiguredFromEnviron reports whether JENKINS_MCP_GATEWAY_JWT_VAULT_PATH
 // is non-empty after trim (secret-free residual bool for Mode B shared JWT vault file).
+// Requires the JWT vault path env var to be explicitly set — default XDG resolution
+// from JWTVaultPathFromEnviron / XDG_DATA_HOME / HOME alone does NOT count.
 // Does not validate path usability. Never returns the path value. Never opens the
 // vault file (tokens on disk — residual surfaces must not read it).
-// getenv nil → os.Getenv. Default XDG path alone does not count as configured.
+// getenv nil → os.Getenv.
 func JWTVaultPathConfiguredFromEnviron(getenv func(string) string) bool {
 	if getenv == nil {
 		getenv = os.Getenv

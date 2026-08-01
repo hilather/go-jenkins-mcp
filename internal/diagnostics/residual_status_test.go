@@ -3,6 +3,7 @@ package diagnostics_test
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -552,6 +553,112 @@ func TestBuildGatewayResidualStatus_SharedJWTVaultFile(t *testing.T) {
 		if strings.Contains(s, bad) {
 			t.Fatalf("forbidden %q in residual-status with jwt vault path", bad)
 		}
+	}
+}
+
+// Regression: ONLY default XDG vault paths (XDG_DATA_HOME / HOME set, no
+// JENKINS_MCP_GATEWAY_VAULT_PATH / JWT_VAULT_PATH) must keep shared_api_token_vault_file
+// and shared_jwt_vault_file false. Plant tokens at the resolved default paths so an
+// accidental VaultPathFromEnviron + open would leak — residual must never open vaults.
+// VaultPathConfiguredFromEnviron / JWTVaultPathConfiguredFromEnviron require explicit env.
+func TestBuildGatewayResidualStatus_DefaultXDGVaultDoesNotCountOrOpen(t *testing.T) {
+	xdg := t.TempDir()
+	apiSeed := "xdg-default-api-token-CANARY-never-in-residual-json"
+	jwtSeed := "xdg-default-jwt-CANARY-never-in-residual-json.eyJhbGciOiJub25lIn0."
+
+	apiDefault := gateway.VaultPathFromEnviron(func(k string) string {
+		if k == "XDG_DATA_HOME" {
+			return xdg
+		}
+		return ""
+	})
+	jwtDefault := gateway.JWTVaultPathFromEnviron(func(k string) string {
+		if k == "XDG_DATA_HOME" {
+			return xdg
+		}
+		return ""
+	})
+	if apiDefault == "" || jwtDefault == "" {
+		t.Fatal("default XDG vault paths must resolve non-empty")
+	}
+	if err := os.MkdirAll(filepath.Dir(apiDefault), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(jwtDefault), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(apiDefault, []byte(`{"version":1,"entries":{"k":"`+apiSeed+`"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(jwtDefault, []byte(`{"version":1,"entries":{"k":"`+jwtSeed+`"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// getenv: XDG present, vault path env keys empty (and other residual path envs empty).
+	getenv := func(k string) string {
+		switch k {
+		case "XDG_DATA_HOME":
+			return xdg
+		case "HOME":
+			return t.TempDir() // must not be used when XDG_DATA_HOME set
+		case gateway.EnvGatewayVaultPath, gateway.EnvGatewayJWTVaultPath,
+			gateway.EnvGatewayTokenCachePath, gateway.EnvGatewaySubjectRatePath,
+			gateway.EnvGatewayPrincipalCachePath, gateway.EnvConsentSessionStorePath,
+			auth.EnvHTTPJWKSCachePath:
+			return ""
+		default:
+			return ""
+		}
+	}
+
+	// Configured helpers themselves: empty vault env → false even with XDG set.
+	if gateway.VaultPathConfiguredFromEnviron(getenv) {
+		t.Fatal("Regression: VaultPathConfiguredFromEnviron true with only default XDG (no VAULT_PATH env)")
+	}
+	if gateway.JWTVaultPathConfiguredFromEnviron(getenv) {
+		t.Fatal("Regression: JWTVaultPathConfiguredFromEnviron true with only default XDG (no JWT_VAULT_PATH env)")
+	}
+
+	out := diagnostics.BuildGatewayResidualStatus(getenv)
+	if out["shared_api_token_vault_file"] != false {
+		t.Fatalf("Regression: shared_api_token_vault_file=true with only default XDG: %+v", out["shared_api_token_vault_file"])
+	}
+	if out["shared_jwt_vault_file"] != false {
+		t.Fatalf("Regression: shared_jwt_vault_file=true with only default XDG: %+v", out["shared_jwt_vault_file"])
+	}
+	// Empty getenv (no XDG either) must also stay false — fail-closed canary.
+	empty := diagnostics.BuildGatewayResidualStatus(func(string) string { return "" })
+	if empty["shared_api_token_vault_file"] != false || empty["shared_jwt_vault_file"] != false {
+		t.Fatalf("empty env vault shared_* must be false: api=%+v jwt=%+v",
+			empty["shared_api_token_vault_file"], empty["shared_jwt_vault_file"])
+	}
+
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, apiSeed) {
+		t.Fatal("Regression: default XDG Mode A vault contents leaked (residual must never open vault)")
+	}
+	if strings.Contains(s, jwtSeed) {
+		t.Fatal("Regression: default XDG Mode B JWT vault contents leaked (residual must never open vault)")
+	}
+	if strings.Contains(s, apiDefault) || strings.Contains(s, jwtDefault) || strings.Contains(s, xdg) {
+		t.Fatal("Regression: default XDG vault path leaked into residual-status JSON")
+	}
+	for _, bad := range []string{residualCanary, "access_token=", "refresh_token=", "client_secret=", "Bearer "} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q in residual-status with default XDG vaults planted", bad)
+		}
+	}
+	// Progressive consent honesty (stores_tokens-style secret canary).
+	pc, _ := out["progressive_consent"].(map[string]any)
+	if pc == nil {
+		t.Fatal("progressive_consent required")
+	}
+	if pc["stores_tokens"] != false {
+		t.Fatalf("progressive_consent.stores_tokens must be false: %+v", pc["stores_tokens"])
 	}
 }
 
