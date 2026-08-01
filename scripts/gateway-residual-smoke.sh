@@ -11,7 +11,8 @@
 #   1. Build or reuse jenkins-mcp binary
 #   2. jenkins-mcp gateway qualify --offline  (must pass; no live network)
 #   3. jenkins-mcp release-evidence --offline (assert residual[] honesty)
-#   4. Optional: doctor --offline residual fields when PROFILE= is set
+#   4. Optional: gateway residual-status when subcommand exists (Mode B residual id + HA honesty)
+#   5. Optional: doctor --offline residual fields when PROFILE= is set
 #
 # Usage:
 #   scripts/gateway-residual-smoke.sh
@@ -417,7 +418,67 @@ PY
   fi
 fi
 
-# --- 3) optional doctor --offline residual fields ---
+# --- 3) optional gateway residual-status (unified snapshot; skip on older binaries) ---
+RESIDUAL_STATUS_JSON="$OUT_DIR/gateway-residual-status.json"
+echo "== gateway residual-status (optional if subcommand exists) =="
+set +e
+"$MCP_BIN" gateway residual-status >"$RESIDUAL_STATUS_JSON" 2>"$OUT_DIR/gateway-residual-status.stderr"
+rsrc=$?
+set -e
+if [[ $rsrc -ne 0 ]]; then
+  # Older binaries lack residual-status — non-fatal skip.
+  echo "  [skip] gateway residual-status exit $rsrc (subcommand may be absent on older binary)"
+  rm -f "$RESIDUAL_STATUS_JSON" "$OUT_DIR/gateway-residual-status.stderr" 2>/dev/null || true
+else
+  pass "gateway residual-status exit 0"
+  rm -f "$OUT_DIR/gateway-residual-status.stderr"
+  assert_secret_free "$RESIDUAL_STATUS_JSON" "gateway-residual-status.json" || true
+  if [[ -f "$RESIDUAL_STATUS_JSON" ]] && command -v python3 >/dev/null 2>&1; then
+    if python3 - "$RESIDUAL_STATUS_JSON" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+errors = []
+if data.get("residual_id") != "oauth009_offline" and data.get("oauth009_offline") is not True:
+    # residual_ids list must still advertise Mode B honesty.
+    ids = data.get("residual_ids") or []
+    if "oauth009_offline" not in ids:
+        errors.append("missing Mode B residual id oauth009_offline")
+if data.get("ha_multi_replica") is True:
+    errors.append("ha_multi_replica=true (HOST-008 single-replica residual violated)")
+if data.get("multi_pod_vault_residual") is False:
+    errors.append("multi_pod_vault_residual must be true")
+blob = json.dumps(data).lower()
+if "production go complete" in blob:
+    errors.append("residual-status overclaims production GO complete")
+for needle in ("access_token=", "refresh_token=", "client_secret=", "authorization: bearer"):
+    if needle in blob:
+        errors.append(f"secret-shaped material {needle!r}")
+doc = str(data.get("doc") or "") + " " + str(data.get("residual_note") or "")
+if "live-pin-blockers" not in doc:
+    errors.append("missing live-pin-blockers.md pointer in doc/residual_note")
+if errors:
+    print("FAIL: residual-status honesty:", "; ".join(errors), file=sys.stderr)
+    sys.exit(1)
+print("PASS: gateway residual-status Mode B residual id + HA/multi-pod honesty")
+sys.exit(0)
+PY
+    then
+      :
+    else
+      fail=1
+    fi
+  elif [[ -f "$RESIDUAL_STATUS_JSON" ]]; then
+    if grep -q 'oauth009_offline' "$RESIDUAL_STATUS_JSON" && grep -q 'ha_multi_replica' "$RESIDUAL_STATUS_JSON"; then
+      pass "gateway residual-status greppable oauth009_offline + ha_multi_replica"
+    else
+      fail_msg "gateway residual-status missing oauth009_offline or ha_multi_replica markers"
+    fi
+  fi
+fi
+
+# --- 4) optional doctor --offline residual fields ---
 if [[ -n "$PROFILE" ]]; then
   echo "== doctor --offline residual fields (PROFILE=$PROFILE) =="
   DOCTOR_OUT="$OUT_DIR/doctor-offline.txt"

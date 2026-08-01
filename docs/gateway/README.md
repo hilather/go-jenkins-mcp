@@ -106,16 +106,24 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 | Path | Status |
 |------|--------|
 | `ConsentRequired` → auth URL + session id only (Obtain / AuthProvider / `mapToolErr`) | **Done\*** |
-| Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway consent-residual`) | **Done\*** (env/static honesty) |
+| Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway residual-status`, `gateway consent-residual`) | **Done\*** (env/static honesty) |
 | Browser 3LO interactive UX automation | **Residual** — not automated; operator/agent opens `authorization_url` out-of-band |
 | Durable consent session store | **Residual** (process-local metadata only) |
 | Multi-replica consent correlation | **Residual** (HOST-008) |
 
 ```bash
-jenkins-mcp gateway consent-residual   # secret-free JSON residual snapshot
+jenkins-mcp gateway residual-status    # unified secret-free residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count)
+jenkins-mcp gateway consent-residual   # progressive consent residual only (subset)
 jenkins-mcp gateway qualify --offline  # includes progressive_consent_residual case + residual note
 jenkins-mcp doctor --offline           # gateway_status progressive_consent_* fields when Mode C
 ```
+
+**`gateway residual-status`** combines mode-matrix residual, `multi_user_enabled`,
+`ha_multi_replica=false`, `session_affinity_recommended`, multi-pod residual fields,
+progressive consent residual, `rateEnabled` / `ratePerMinute` / `rateBurst`, and
+`principal_cache_entries` (count only). Always advertises Mode B residual id
+`oauth009_offline` and points at [live-pin-blockers.md](live-pin-blockers.md).
+Never tokens or subjects. Env/static only — not live Ready / production GO.
 
 **Honesty:** metadata propagation alone does **not** close full GWY-001/003 DoD.
 When Obtain would return `ConsentRequired`, surfaces never include tokens,

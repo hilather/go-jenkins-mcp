@@ -336,6 +336,7 @@ live pin complete without lab evidence.
 | `gateway_status` | `ha_multi_replica=false`, `oauth009_offline_only`, `mode_*_live_*_qualified=false`, `session_affinity_recommended`, `gateway_ready` | Env/parse + Ready honesty |
 | `security self-check` | item `rs_qualification` (OAUTH-009 residual summary) | Warn on `oidc_bearer` or Mode B |
 | Admin `GET /admin/v1/health` / `gateway/vault` | `haMultiReplica=false`, `sessionAffinityRecommended`, mode ids only | Never tokens |
+| `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count) | Env/static honesty; Mode B id `oauth009_offline`; never tokens |
 | `gateway consent-residual` | Progressive consent residual snapshot | Browser 3LO not automated |
 | `gateway qualify --offline` | Residual notes in JSON summary | Live residuals always listed |
 
@@ -344,6 +345,7 @@ jenkins-mcp doctor --profile <id> --offline
 jenkins-mcp security self-check --json --profile <id>
 jenkins-mcp oauth probe-rs --profile <id> --offline
 jenkins-mcp gateway qualify --offline
+jenkins-mcp gateway residual-status
 jenkins-mcp gateway consent-residual
 ```
 
