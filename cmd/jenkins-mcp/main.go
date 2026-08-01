@@ -1058,17 +1058,18 @@ func runServe(args []string) error {
 		log.Printf("Gateway mode enabled provider_configured=%v ready=%v mode=%s",
 			st.Configured, st.Ready, st.Mode)
 		if !st.Ready {
-			// Mode C / AgentCore: Live=false until TokenFetcher wire (GWY-001 residual).
-			// Local keyring/OIDC session remains the Jenkins HTTP path; Obtain stays
-			// fail-closed (capability_missing) so no shared SA is ever substituted.
-			log.Printf("Gateway credential obtain is not live (capability_missing until AgentCore pin); Jenkins HTTP uses local session")
+			// Mode C / AgentCore default: Live=false until opt-in Live wire
+			// (JENKINS_MCP_GATEWAY_LIVE=1 + token endpoint → HTTPTokenFetcher).
+			// Local keyring/OIDC session remains residual Jenkins HTTP path only
+			// when Obtain is not Ready; Obtain stays fail-closed so no shared SA.
+			log.Printf("Gateway credential obtain is not Ready (Live wire residual or Mode B HOST-010); Jenkins HTTP uses local session residual")
 		} else if st.Mode == gateway.ModeAPITokenVault {
 			// HOST-009 + HOST-003: Mode A Ready → per-request Obtain AuthProvider
 			// (Basic personal token; never shared SA / ambient keyring fallthrough).
-			log.Printf("Gateway mode A (api_token_vault) Obtain Ready; Jenkins HTTP will use per-request vault credentials")
+			log.Printf("Gateway mode A (api_token_vault) Obtain Ready; Jenkins HTTP will use per-request vault credentials only")
 		} else {
-			// Mode B/C Ready (mock/live Fetcher): Obtain → Bearer AuthProvider.
-			log.Printf("Gateway Obtain Ready mode=%s; Jenkins HTTP will use per-request Obtain credentials", st.Mode)
+			// Mode C Ready (HTTPTokenFetcher Live opt-in or test Fetcher): Obtain → Bearer.
+			log.Printf("Gateway Obtain Ready mode=%s; Jenkins HTTP will use per-request Obtain credentials only", st.Mode)
 		}
 	}
 
@@ -1223,8 +1224,9 @@ func runServe(args []string) error {
 	}
 
 	// Mid-serve credentials (HOST-003):
-	//   gateway + Ready → Obtain AuthProvider (Mode A Basic / B+C Bearer); never keyring fallthrough
-	//   gateway + !Ready → residual local session (Mode C AgentCore stub) via OIDC Live or static
+	//   gateway + Ready → Obtain AuthProvider only (Mode A Basic / C Bearer);
+	//     clear static local session; whoAmI re-verify via Obtain; never keyring fallthrough
+	//   gateway + !Ready → residual local session (Mode C default Live=false / Mode B residual)
 	//   non-gateway → OIDC LiveSessionSource refresh; api_token leaves provider nil
 	var subject policy.Subject
 	var gatewayObtainWired bool
@@ -1239,11 +1241,21 @@ func runServe(args []string) error {
 			subject.Tenant != "", subject.WorkloadID != "", subject.Verified)
 		if gatewayObtainReady(gatewayProv) {
 			caller := gateway.CallerFromBoundSubject(subject)
+			// Capture caller at attach time; mid-serve tool args cannot rebind.
 			attachGatewayObtainAuthProvider(client, gatewayProv, caller)
+			// Refuse residual local session path once Ready path is selected.
+			clearGatewayLocalSessionCredentials(client)
+			// Session-start whoAmI with Obtain credentials for the bound caller.
+			obtainWho, werr := verifyGatewayObtainWhoAmI(context.Background(), client, subject.JenkinsUserID)
+			if werr != nil {
+				return werr
+			}
 			gatewayObtainWired = true
-			log.Printf("Gateway Jenkins AuthProvider: Obtain mode=%s (no keyring fallthrough)", gatewayProv.Mode())
+			log.Printf("Gateway Jenkins AuthProvider: Obtain mode=%s principal=%s (no keyring fallthrough)",
+				gatewayProv.Mode(), obtainWho.ID)
 		} else {
-			// Mode C residual: Obtain not Ready; keep local keyring/OIDC path.
+			// Mode C residual (Live=false) / Mode B residual: Obtain not Ready;
+			// keep local keyring/OIDC path only while Ready remains false.
 			attachLiveAuthProvider(client, oidcSess.Live)
 			log.Printf("Gateway Obtain not Ready; Jenkins AuthProvider uses local session residual")
 		}
@@ -2074,9 +2086,12 @@ func reorderFlagArgs(args []string, valueFlags map[string]bool) []string {
 // (HOST-009 Mode A api_token_vault or Mode C AgentCore; Mode B residual).
 //
 // Mode A: Live vault provider (per-subject Obtain → Basic AuthProvider, HOST-003).
-// Mode C: AgentCore provider with Live=false until TokenFetcher wire; when not
-// Ready, serve keeps local keyring/OIDC Jenkins HTTP residual. Never falls back
-// to a shared SA. When Ready, attachGatewayObtainAuthProvider wires Obtain.
+// Mode C: AgentCore provider; default Live=false / Fetcher=nil. Opt-in Live wire:
+// JENKINS_MCP_GATEWAY_LIVE=1 + JENKINS_MCP_AGENTCORE_TOKEN_ENDPOINT →
+// HTTPTokenFetcher + Live=true (GWY-001 foundation; real Entra residual).
+// When not Ready, serve keeps local keyring/OIDC Jenkins HTTP residual.
+// Never falls back to a shared SA. When Ready, attachGatewayObtainAuthProvider
+// wires Obtain only (no keyring fallthrough).
 func requireGatewayProvider(jenkinsBaseURL string) (gateway.CredentialProvider, error) {
 	return gateway.CredentialProviderFromEnviron(jenkinsBaseURL, nil)
 }

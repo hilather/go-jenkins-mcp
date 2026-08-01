@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
@@ -255,5 +256,283 @@ func TestHttpAuthToJenkins_Schemes(t *testing.T) {
 	})
 	if err != nil || sch != jenkins.AuthSchemeBasic || u != "u1" || s != "tok2" {
 		t.Fatalf("basic: u=%q s=%q sch=%q err=%v", u, s, sch, err)
+	}
+}
+
+// Regression: HOST-003 Ready path clears static keyring material after attach.
+func TestClearGatewayLocalSessionCredentials(t *testing.T) {
+	t.Parallel()
+	c := &jenkins.Client{User: "stale", Token: host003WireCanary}
+	clearGatewayLocalSessionCredentials(c)
+	if c.User != "" || c.Token != "" {
+		t.Fatalf("static residual remains user=%q token_set=%v", c.User, c.Token != "")
+	}
+	clearGatewayLocalSessionCredentials(nil) // nil-safe
+}
+
+// Regression: Obtain failure for subject A never returns subject B's credential
+// even when B's token is cached / present in vault (HOST-003).
+func TestAttachGatewayObtainAuthProvider_ObtainFailDoesNotReturnOtherSubject(t *testing.T) {
+	t.Parallel()
+	v := gateway.NewMemoryAPITokenVault()
+	alice := host003Caller("alice-sub")
+	bob := host003Caller("bob-sub")
+	if err := v.Put(context.Background(), gateway.SubjectKey(alice), "alice-j", host003WireCanary+"-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Put(context.Background(), gateway.SubjectKey(bob), "bob-j", host003WireCanary+"-b"); err != nil {
+		t.Fatal(err)
+	}
+	p, err := gateway.RequireAPITokenVaultSetup(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Wire for a third subject with no vault entry; Obtain must fail closed.
+	missing := host003Caller("missing-sub")
+	c := &jenkins.Client{
+		User:  "bob-j",
+		Token: host003WireCanary + "-b", // must never be returned on Obtain fail
+	}
+	attachGatewayObtainAuthProvider(c, p, missing)
+	clearGatewayLocalSessionCredentials(c)
+	user, secret, _, err := c.AuthProvider()
+	if err == nil {
+		t.Fatalf("expected Obtain fail; got user=%q secret_set=%v", user, secret != "")
+	}
+	if user != "" || secret != "" {
+		t.Fatal("Obtain failure must not return any credential fields")
+	}
+	if strings.Contains(err.Error(), host003WireCanary) {
+		t.Fatalf("canary leak: %v", err)
+	}
+	// Static still empty after fail (no other-subject write-back).
+	if c.User != "" || c.Token != "" {
+		t.Fatalf("static after fail user=%q token_set=%v", c.User, c.Token != "")
+	}
+	// Bob's Obtain still works on a separate attach (isolation).
+	cBob := &jenkins.Client{}
+	attachGatewayObtainAuthProvider(cBob, p, bob)
+	u, s, sch, err := cBob.AuthProvider()
+	if err != nil || sch != jenkins.AuthSchemeBasic || u != "bob-j" || s != host003WireCanary+"-b" {
+		t.Fatalf("bob obtain: u=%q s_ok=%v sch=%q err=%v", u, s == host003WireCanary+"-b", sch, err)
+	}
+}
+
+// Regression: Mode C ConsentRequired surfaces auth URL metadata only through AuthProvider.
+func TestAttachGatewayObtainAuthProvider_ConsentRequiredMetadataOnly(t *testing.T) {
+	t.Parallel()
+	const (
+		authURL = "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?state=consent-test"
+		sessID  = "sess-host003-consent-1"
+	)
+	cfg := gateway.AgentCoreConfig{
+		AuthorizationServerBaseURL: "https://login.microsoftonline.com/t/v2.0",
+		Audience:                   "api://jenkins-api",
+		ClientID:                   "cid",
+		Mode:                       gateway.ModeAuthorizationCode,
+		JenkinsBaseURL:             "https://jenkins.example.com",
+		TokenEndpoint:              "https://login.microsoftonline.com/t/oauth2/v2.0/token",
+	}
+	p, err := gateway.NewAgentCoreProvider(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Live = true
+	p.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, caller gateway.Caller, c gateway.AgentCoreConfig) (gateway.Credential, error) {
+		return gateway.Credential{}, gateway.NewConsentRequired(gateway.ConsentInfo{
+			AuthorizationURL: authURL,
+			SessionID:        sessID,
+			Provider:         "agentcore",
+		})
+	})
+	if !gatewayObtainReady(p) {
+		t.Fatal("Live+Fetcher must be Ready")
+	}
+	c := &jenkins.Client{User: "stale", Token: host003WireCanary}
+	attachGatewayObtainAuthProvider(c, p, host003Caller("alice-sub"))
+	clearGatewayLocalSessionCredentials(c)
+	_, _, _, err = c.AuthProvider()
+	if err == nil {
+		t.Fatal("expected ConsentRequired")
+	}
+	cr, ok := gateway.AsConsentRequired(err)
+	if !ok || cr == nil {
+		t.Fatalf("want ConsentRequired got %T %v", err, err)
+	}
+	if cr.Info.AuthorizationURL != authURL || cr.Info.SessionID != sessID {
+		t.Fatalf("consent metadata: %+v", cr.Info)
+	}
+	if !cr.Info.Valid() {
+		t.Fatal("consent must be Valid")
+	}
+	// Metadata only — never tokens / canary.
+	blob := err.Error() + cr.Info.AuthorizationURL + cr.Info.SessionID + cr.Info.Provider
+	if strings.Contains(blob, host003WireCanary) {
+		t.Fatal("canary in consent surfaces")
+	}
+	sm := cr.Info.StatusMap()
+	if sm["has_authorization_url"] != true || sm["has_session_id"] != true {
+		t.Fatalf("status map: %+v", sm)
+	}
+}
+
+// Regression: Mode C Obtain failure (Fetcher auth error) does not yield another
+// caller's cached token via AuthProvider (HOST-003 / GWY-001).
+func TestAttachGatewayObtainAuthProvider_ModeCObtainFailNoOtherSubjectCache(t *testing.T) {
+	t.Parallel()
+	cfg := gateway.AgentCoreConfig{
+		AuthorizationServerBaseURL: "https://login.microsoftonline.com/t/v2.0",
+		Audience:                   "api://jenkins-api",
+		ClientID:                   "cid",
+		Mode:                       gateway.ModeTokenExchange,
+		JenkinsBaseURL:             "https://jenkins.example.com",
+		TokenEndpoint:              "https://login.microsoftonline.com/t/oauth2/v2.0/token",
+	}
+	cache := gateway.NewMemoryTokenCache(0)
+	// Poison-style: pre-cache bob only (non-expired entry).
+	bob := host003Caller("bob-sub")
+	cache.Set(bob.CacheKey(), gateway.CachedToken{
+		AccessToken:      host003WireCanary + "-bob-bearer",
+		ExpiresAt:        time.Now().Add(time.Hour),
+		JenkinsPrincipal: "bob-j",
+		Mode:             gateway.ModeTokenExchange,
+	})
+	p, err := gateway.NewAgentCoreProvider(cfg, cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Live = true
+	p.Fetcher = gateway.FuncTokenFetcher(func(ctx context.Context, caller gateway.Caller, c gateway.AgentCoreConfig) (gateway.Credential, error) {
+		// Alice is never issued a token.
+		if caller.Subject == "bob-sub" {
+			return gateway.Credential{
+				AccessToken:      host003WireCanary + "-bob-bearer",
+				JenkinsPrincipal: "bob-j",
+				Mode:             gateway.ModeTokenExchange,
+			}, nil
+		}
+		return gateway.Credential{}, apperr.New(apperr.CodeAuthentication, "fetch denied for subject")
+	})
+
+	c := &jenkins.Client{User: "bob-j", Token: host003WireCanary + "-bob-bearer"}
+	attachGatewayObtainAuthProvider(c, p, host003Caller("alice-sub"))
+	clearGatewayLocalSessionCredentials(c)
+	user, secret, _, err := c.AuthProvider()
+	if err == nil {
+		t.Fatalf("alice must fail closed; got user=%q secret_is_bob=%v", user, secret == host003WireCanary+"-bob-bearer")
+	}
+	if secret == host003WireCanary+"-bob-bearer" || user != "" || secret != "" {
+		t.Fatal("must not return bob cached credential for alice")
+	}
+	if strings.Contains(err.Error(), host003WireCanary) {
+		t.Fatalf("canary leak: %v", err)
+	}
+}
+
+// Regression: whoAmI via Obtain AuthProvider for bound caller (HOST-003 session start).
+func TestVerifyGatewayObtainWhoAmI_SuccessAndMismatch(t *testing.T) {
+	t.Parallel()
+	v := gateway.NewMemoryAPITokenVault()
+	caller := host003Caller("alice-sub")
+	if err := v.Put(context.Background(), gateway.SubjectKey(caller), "alice-j", host003WireCanary); err != nil {
+		t.Fatal(err)
+	}
+	p, err := gateway.RequireAPITokenVaultSetup(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var gotUser string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u, _, ok := r.BasicAuth()
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		gotUser = u
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"alice-j","anonymous":false,"authenticated":true}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	c := &jenkins.Client{
+		URL:    srv.URL,
+		User:   "stale-keyring",
+		Token:  "stale-keyring-token",
+		Client: srv.Client(),
+	}
+	attachGatewayObtainAuthProvider(c, p, caller)
+	clearGatewayLocalSessionCredentials(c)
+
+	who, err := verifyGatewayObtainWhoAmI(context.Background(), c, "alice-j")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if who.ID != "alice-j" || gotUser != "alice-j" {
+		t.Fatalf("who=%+v gotUser=%q", who, gotUser)
+	}
+	// Mismatch expected principal fails closed.
+	_, err = verifyGatewayObtainWhoAmI(context.Background(), c, "other-user")
+	if err == nil || apperr.CodeOf(err) != apperr.CodeAuthentication {
+		t.Fatalf("want mismatch authentication: %v", err)
+	}
+	if strings.Contains(err.Error(), host003WireCanary) {
+		t.Fatal("canary leak")
+	}
+}
+
+// Regression: whoAmI refuses local session when AuthProvider not installed.
+func TestVerifyGatewayObtainWhoAmI_RequiresAuthProvider(t *testing.T) {
+	t.Parallel()
+	c := &jenkins.Client{User: "u", Token: host003WireCanary}
+	_, err := verifyGatewayObtainWhoAmI(context.Background(), c, "u")
+	if err == nil || apperr.CodeOf(err) != apperr.CodeCapabilityMissing {
+		t.Fatalf("got %v", err)
+	}
+	if strings.Contains(err.Error(), host003WireCanary) {
+		t.Fatal("canary")
+	}
+}
+
+// Regression: Ready attach + clear means AuthProvider nil would not have static fallback material.
+func TestAttachGatewayObtainAuthProvider_ReadyClearsStaticNoFallthrough(t *testing.T) {
+	t.Parallel()
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		// If static fallthrough happened, Basic would be present with canary.
+		if u, p, ok := r.BasicAuth(); ok && p == host003WireCanary {
+			t.Errorf("static canary sent user=%q", u)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	// Provider always fails Obtain.
+	p := gateway.UnconfiguredProvider{Reason: "test not ready path simulation"}
+	// Actually Ready=false for Unconfigured — use Mode A missing entry instead.
+	v := gateway.NewMemoryAPITokenVault()
+	ready, err := gateway.RequireAPITokenVaultSetup(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = p
+	c := &jenkins.Client{
+		URL:    srv.URL,
+		User:   "stale",
+		Token:  host003WireCanary,
+		Client: srv.Client(),
+	}
+	attachGatewayObtainAuthProvider(c, ready, host003Caller("no-entry"))
+	clearGatewayLocalSessionCredentials(c)
+	_, err = c.CallJenkins(context.Background(), srv.Client(), http.MethodGet, jenkins.WhoAmIPath, nil, nil)
+	if err == nil {
+		t.Fatal("expected fail closed")
+	}
+	if hits.Load() != 0 {
+		t.Fatalf("hits=%d (must not send request on Obtain fail)", hits.Load())
+	}
+	if c.Token != "" || c.User != "" {
+		t.Fatal("static must remain cleared")
 	}
 }
