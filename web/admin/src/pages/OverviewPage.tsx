@@ -568,13 +568,30 @@ function ResidualStatusDl({ data }: { data: GatewayResidualStatusResponse }) {
         {rateCache.shared_subject_rate_file ? "yes" : "no"}{" "}
         <span className="muted">({SHARED_SUBJECT_RATE_FILE_HONESTY})</span>
       </dd>
+      {typeof rateCache.subject_rate_max_subjects === "number" ? (
+        <>
+          <dt>subject_rate_max_subjects</dt>
+          <dd>
+            {rateCache.subject_rate_max_subjects}{" "}
+            <span className="muted">(rate map hygiene; omit = unlimited)</span>
+          </dd>
+        </>
+      ) : null}
+      <dt>shared_principal_cache_file</dt>
+      <dd>
+        {rateCache.shared_principal_cache_file ? "yes" : "no"}{" "}
+        <span className="muted">
+          (same-host FilePrincipalCache lite when true; path never shown; not multi-pod)
+        </span>
+      </dd>
       <dt>principal_cache_entries</dt>
       <dd>
         {typeof rateCache.principal_cache_entries === "number"
           ? rateCache.principal_cache_entries
           : "—"}{" "}
         <span className="muted">
-          (count only; never subjects; {PRINCIPAL_CACHE_PROCESS_HONESTY})
+          (count only; never subjects;{" "}
+          {rateCache.principal_cache_process_note || PRINCIPAL_CACHE_PROCESS_HONESTY})
         </span>
       </dd>
       {hygiene ? (

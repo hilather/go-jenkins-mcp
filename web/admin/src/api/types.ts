@@ -447,10 +447,21 @@ export interface GatewayResidualStatusResponse {
    */
   shared_subject_rate_file?: boolean;
   /**
-   * Process-local principal cache entry count only (never subjects).
-   * Count is for the process serving residual-status (admin BFF), not necessarily MCP serve.
+   * HOST-008 Done* lite: true when JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH set
+   * (same-host FilePrincipalCache). Path never returned. Never tokens.
+   */
+  shared_principal_cache_file?: boolean;
+  /**
+   * Optional MaxSubjects for rate map hygiene when env > 0 (omit = unlimited).
+   */
+  subject_rate_max_subjects?: number;
+  /**
+   * Principal cache entry count (never subjects). When shared_principal_cache_file,
+   * BFF may open file for Len(); else this-process memory.
    */
   principal_cache_entries?: number;
+  /** Honesty sentence from BFF residual-status (process vs file Len). */
+  principal_cache_process_note?: string;
   /**
    * Optional PrincipalCache max_entries hygiene when env > 0 (omit = unlimited).
    * Snake_case; never subjects/tokens.

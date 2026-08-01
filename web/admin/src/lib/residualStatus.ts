@@ -24,8 +24,14 @@ export const PRINCIPAL_CACHE_HYGIENE_HONESTY =
 export interface ResidualRateCacheFields {
   /** Always present on residual-status (bool from Go map). */
   shared_subject_rate_file: boolean;
-  /** Process-local count only. */
+  /** HOST-008 FilePrincipalCache path configured (bool only; never path). */
+  shared_principal_cache_file: boolean;
+  /** Present when MaxSubjects env > 0. */
+  subject_rate_max_subjects?: number;
+  /** Process-local or file Len() count. */
   principal_cache_entries?: number;
+  /** BFF honesty sentence when present. */
+  principal_cache_process_note?: string;
   /** Present only when max_entries hygiene env > 0. */
   principal_cache_max_entries?: number;
   /** Present only when TTL hygiene env > 0. */
@@ -40,13 +46,20 @@ export function pickResidualRateCacheFields(
   data: GatewayResidualStatusResponse | null | undefined,
 ): ResidualRateCacheFields {
   if (!data) {
-    return { shared_subject_rate_file: false };
+    return { shared_subject_rate_file: false, shared_principal_cache_file: false };
   }
   const out: ResidualRateCacheFields = {
     shared_subject_rate_file: Boolean(data.shared_subject_rate_file),
+    shared_principal_cache_file: Boolean(data.shared_principal_cache_file),
   };
+  if (typeof data.subject_rate_max_subjects === "number") {
+    out.subject_rate_max_subjects = data.subject_rate_max_subjects;
+  }
   if (typeof data.principal_cache_entries === "number") {
     out.principal_cache_entries = data.principal_cache_entries;
+  }
+  if (typeof data.principal_cache_process_note === "string" && data.principal_cache_process_note) {
+    out.principal_cache_process_note = data.principal_cache_process_note;
   }
   if (typeof data.principal_cache_max_entries === "number") {
     out.principal_cache_max_entries = data.principal_cache_max_entries;

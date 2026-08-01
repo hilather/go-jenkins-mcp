@@ -12,30 +12,38 @@ import {
 } from "./residualStatus";
 
 describe("pickResidualRateCacheFields", () => {
-  it("defaults shared_subject_rate_file false when payload missing", () => {
+  it("defaults shared_* flags false when payload missing", () => {
     expect(pickResidualRateCacheFields(undefined)).toEqual({
       shared_subject_rate_file: false,
+      shared_principal_cache_file: false,
     });
     expect(pickResidualRateCacheFields(null)).toEqual({
       shared_subject_rate_file: false,
+      shared_principal_cache_file: false,
     });
   });
 
-  it("mirrors Wave 9 snake_case residual-status keys", () => {
+  it("mirrors Wave 10 snake_case residual-status keys", () => {
     const data: GatewayResidualStatusResponse = {
       shared_subject_rate_file: true,
+      shared_principal_cache_file: true,
+      subject_rate_max_subjects: 64,
       principal_cache_entries: 3,
       principal_cache_max_entries: 256,
       principal_cache_ttl_seconds: 7200,
+      principal_cache_process_note: "note",
       rateEnabled: true,
       ratePerMinute: 30,
       rateBurst: 10,
     };
     expect(pickResidualRateCacheFields(data)).toEqual({
       shared_subject_rate_file: true,
+      shared_principal_cache_file: true,
+      subject_rate_max_subjects: 64,
       principal_cache_entries: 3,
       principal_cache_max_entries: 256,
       principal_cache_ttl_seconds: 7200,
+      principal_cache_process_note: "note",
     });
   });
 
@@ -46,6 +54,7 @@ describe("pickResidualRateCacheFields", () => {
     };
     expect(pickResidualRateCacheFields(data)).toEqual({
       shared_subject_rate_file: false,
+      shared_principal_cache_file: false,
       principal_cache_entries: 0,
     });
   });
@@ -62,6 +71,7 @@ describe("pickResidualRateCacheFields", () => {
     const picked = pickResidualRateCacheFields(data);
     expect(picked).toEqual({
       shared_subject_rate_file: true,
+      shared_principal_cache_file: false,
       principal_cache_entries: 1,
     });
     expect(JSON.stringify(picked)).not.toMatch(/canary|alice|token|path/i);

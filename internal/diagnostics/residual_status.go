@@ -2,6 +2,7 @@ package diagnostics
 
 import (
 	"os"
+	"strings"
 	"time"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
@@ -16,10 +17,11 @@ const ResidualStatusHonestyNote = "unified gateway residual snapshot (env/static
 const ResidualStatusDoc = "docs/gateway/live-pin-blockers.md"
 
 // PrincipalCacheProcessNote is a secret-free honesty sentence for
-// principal_cache_entries: the count is for this process only (CLI residual-status
-// or admin BFF), not a remote MCP serve MemoryTokenCache/PrincipalCache unless
-// operators share file caches. Never subjects/tokens.
-const PrincipalCacheProcessNote = "principal_cache_entries is count for this process only (CLI/admin ≠ serve MemoryTokenCache/PrincipalCache unless shared file caches)"
+// principal_cache_entries. When PRINCIPAL_CACHE_PATH is set, residual-status
+// opens the file store for Len() only (same-host lite). When unset, count is
+// this process memory map (CLI/admin ≠ remote serve unless that process
+// installed the same file store). Never subjects/tokens/path values.
+const PrincipalCacheProcessNote = "principal_cache_entries: file Len() when PRINCIPAL_CACHE_PATH set (same-host lite); else this process memory only (CLI/admin ≠ serve unless same file path installed)"
 
 // BuildGatewayResidualStatus assembles the unified secret-free residual snapshot
 // used by `jenkins-mcp gateway residual-status` and
@@ -138,9 +140,8 @@ func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 		// Principal cache: entry count + optional hygiene knobs from env
 		// (never subjects/tokens/principal inventory/path value). Multi-pod residual.
 		// shared_principal_cache_file=true only when PRINCIPAL_CACHE_PATH set (HOST-008 lite).
-		// principal_cache_process_note: CLI/admin residual-status count is this
-		// process only — not remote serve unless operators share file caches.
-		"principal_cache_entries":      gateway.ProcessPrincipalCache().Len(),
+		// When path set, Len() is from FilePrincipalCache open (read/flock only).
+		"principal_cache_entries":      principalCacheEntriesForResidual(getenv),
 		"principal_cache_process_note": PrincipalCacheProcessNote,
 		"shared_principal_cache_file":  gateway.PrincipalCachePathConfiguredFromEnviron(getenv),
 		"residual_note":                ResidualStatusHonestyNote,
@@ -168,4 +169,30 @@ func BuildGatewayResidualStatus(getenv func(string) string) map[string]any {
 		out["progressive_consent_surfaces"] = pc.Surfaces
 	}
 	return out
+}
+
+// principalCacheEntriesForResidual returns a secret-free entry count for residual-status.
+// When JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH is set, opens FilePrincipalCache for
+// Len() only (same-host flock lite; never returns path). On open failure → 0
+// (fail soft for residual CLI; path residual still advertised via shared_* bool).
+// When path unset, uses ProcessPrincipalCache().Len() (this process memory).
+func principalCacheEntriesForResidual(getenv func(string) string) int {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	path := strings.TrimSpace(getenv(gateway.EnvGatewayPrincipalCachePath))
+	if path == "" {
+		return gateway.ProcessPrincipalCache().Len()
+	}
+	// Hygiene env optional for Len(); zero limits = unlimited on open.
+	maxEntries, ttl, err := gateway.PrincipalCacheConfigFromEnviron(getenv)
+	if err != nil {
+		// Invalid hygiene env: still try open with unlimited for residual Len.
+		maxEntries, ttl = 0, 0
+	}
+	fpc, err := gateway.NewFilePrincipalCacheWithLimits(path, maxEntries, ttl)
+	if err != nil {
+		return 0
+	}
+	return fpc.Len()
 }
