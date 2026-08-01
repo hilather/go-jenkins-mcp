@@ -17,6 +17,8 @@ import type {
   EffectivePolicy,
   EvictionPlanResponse,
   GatewayResidualStatusResponse,
+  GatewaySubjectInvalidateRequest,
+  GatewaySubjectInvalidateResponse,
   GatewayVaultResponse,
   HealthResponse,
   MeResponse,
@@ -219,6 +221,36 @@ export function fetchGatewayResidualStatus(): Promise<GatewayResidualStatusRespo
   return adminFetch<GatewayResidualStatusResponse>("/gateway/residual-status");
 }
 
+/**
+ * POST /admin/v1/gateway/subject-invalidate — force re-auth residual lite
+ * (HOST-007). Requires gateway_ops (operator|policy_admin). Never sends tokens.
+ * Secret-free StatusMap response (same fields as CLI subject-invalidate).
+ */
+
+export function postGatewaySubjectInvalidate(
+  body: GatewaySubjectInvalidateRequest,
+): Promise<GatewaySubjectInvalidateResponse> {
+  // Only identity key parts — never tokens / Authorization material.
+  const payload: GatewaySubjectInvalidateRequest = {};
+  const sk = body.subject_key?.trim();
+  if (sk) {
+    payload.subject_key = sk;
+  } else {
+    if (body.tenant?.trim()) payload.tenant = body.tenant.trim();
+    if (body.subject_id?.trim()) payload.subject_id = body.subject_id.trim();
+    if (body.profile?.trim()) payload.profile = body.profile.trim();
+  }
+  if (body.workload?.trim()) payload.workload = body.workload.trim();
+  return adminFetch<GatewaySubjectInvalidateResponse>(
+    "/gateway/subject-invalidate",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 /** Process role + permissions (UI-003). Never returns the token value. */
 
 export function fetchMe(): Promise<MeResponse> {
@@ -347,6 +379,15 @@ export function fetchSecuritySelfCheck(
 
 export function hasCacheDestructive(me: MeResponse | null | undefined): boolean {
   return Boolean(me?.permissions?.includes("cache_destructive"));
+}
+
+/**
+ * True when /me permissions include gateway_ops (operator or policy_admin).
+ * Gates POST /admin/v1/gateway/subject-invalidate (HOST-007).
+ */
+
+export function hasGatewayOps(me: MeResponse | null | undefined): boolean {
+  return Boolean(me?.permissions?.includes("gateway_ops"));
 }
 
 /** Format AdminApiError (or unknown) for UI — never includes tokens. */

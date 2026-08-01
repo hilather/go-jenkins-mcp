@@ -1,13 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState, type FormEvent } from "react";
 import {
   AdminApiError,
   fetchGatewayResidualStatus,
   fetchGatewayVault,
   fetchHealth,
+  fetchMe,
   fetchVersion,
+  formatApiError,
   getProfileId,
+  hasGatewayOps,
+  postGatewaySubjectInvalidate,
 } from "../api/client";
-import type { GatewayResidualStatusResponse } from "../api/types";
+import type {
+  GatewayResidualStatusResponse,
+  GatewaySubjectInvalidateResponse,
+} from "../api/types";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
 import {
   formatPrincipalCacheHygiene,
@@ -32,6 +40,15 @@ export function OverviewPage() {
     retry: 1,
     enabled: health.isSuccess,
   });
+
+  const me = useQuery({
+    queryKey: ["me"],
+    queryFn: fetchMe,
+    retry: 1,
+    staleTime: 30_000,
+    enabled: health.isSuccess,
+  });
+  const canGatewayOps = hasGatewayOps(me.data);
 
   const vault = useQuery({
     queryKey: ["gateway-vault"],
@@ -322,6 +339,23 @@ export function OverviewPage() {
         </div>
       )}
 
+      {canGatewayOps ? (
+        <SubjectInvalidateCard />
+      ) : (
+        health.isSuccess &&
+        me.isSuccess && (
+          <div className="card">
+            <h2>Subject invalidate (force re-auth)</h2>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Requires <code>gateway_ops</code> (
+              <code>operator</code> or <code>policy_admin</code>). Current role{" "}
+              <code>{me.data.role}</code> is read-only for this action. CLI:{" "}
+              <code>jenkins-mcp gateway subject-invalidate</code>.
+            </p>
+          </div>
+        )
+      )}
+
       {!vaultMissing && (
         <div className="card">
           <h2>Gateway vault</h2>
@@ -481,12 +515,187 @@ export function OverviewPage() {
             GO from admin JSON.
           </li>
           <li>
+            Subject invalidate (HOST-007 force re-auth residual lite):{" "}
+            <code>POST /admin/v1/gateway/subject-invalidate</code> requires{" "}
+            <code>gateway_ops</code> (operator/policy_admin). Clears process or
+            same-host file principal/token caches when env paths set —{" "}
+            <strong>not</strong> live Entra revocation,{" "}
+            <strong>not</strong> multi-pod fan-out. Never tokens in request or
+            response.
+          </li>
+          <li>
             BFF is loopback-only by default (ADR 0014). No Jenkins tokens in
             this SPA.
           </li>
         </ul>
       </div>
     </>
+  );
+}
+
+/** HOST-007 force re-auth residual lite form (operator / policy_admin). */
+function SubjectInvalidateCard() {
+  const [subjectKey, setSubjectKey] = useState("");
+  const [tenant, setTenant] = useState("");
+  const [subjectId, setSubjectId] = useState("");
+  const [profile, setProfile] = useState("");
+  const [result, setResult] = useState<GatewaySubjectInvalidateResponse | null>(
+    null,
+  );
+
+  const mutate = useMutation({
+    mutationFn: postGatewaySubjectInvalidate,
+    onSuccess: (data) => setResult(data),
+  });
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setResult(null);
+    const sk = subjectKey.trim();
+    if (sk) {
+      mutate.mutate({ subject_key: sk });
+      return;
+    }
+    const sid = subjectId.trim();
+    if (!sid) {
+      return;
+    }
+    mutate.mutate({
+      tenant: tenant.trim() || undefined,
+      subject_id: sid,
+      profile: profile.trim() || undefined,
+    });
+  }
+
+  const canSubmit =
+    subjectKey.trim().length > 0 || subjectId.trim().length > 0;
+
+  return (
+    <div className="card">
+      <h2>Subject invalidate (force re-auth)</h2>
+      <p className="muted" style={{ marginTop: 0 }}>
+        HOST-007 residual lite —{" "}
+        <code>POST /admin/v1/gateway/subject-invalidate</code> mirrors CLI{" "}
+        <code>gateway subject-invalidate</code>. Clears principal cache (process
+        or <code>JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH</code> file) and optional
+        FileTokenCache when path set.{" "}
+        <strong>Not</strong> live Entra/AgentCore revocation;{" "}
+        <strong>not</strong> multi-pod fan-out. Never send tokens here.
+      </p>
+      <form onSubmit={onSubmit} style={{ display: "grid", gap: "0.6rem", maxWidth: "36rem" }}>
+        <label>
+          <span className="muted">subject_key (tenant|subject|profile)</span>
+          <input
+            className="mono"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            value={subjectKey}
+            onChange={(e) => setSubjectKey(e.target.value)}
+            placeholder="tenant|alice-sub|corp"
+            style={{ width: "100%", display: "block", marginTop: "0.2rem" }}
+          />
+        </label>
+        <p className="muted" style={{ margin: 0 }}>
+          Or compose parts when subject_key is empty:
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+          <label style={{ flex: "1 1 8rem" }}>
+            <span className="muted">tenant</span>
+            <input
+              className="mono"
+              type="text"
+              autoComplete="off"
+              value={tenant}
+              onChange={(e) => setTenant(e.target.value)}
+              style={{ width: "100%", display: "block", marginTop: "0.2rem" }}
+            />
+          </label>
+          <label style={{ flex: "1 1 8rem" }}>
+            <span className="muted">subject_id</span>
+            <input
+              className="mono"
+              type="text"
+              autoComplete="off"
+              value={subjectId}
+              onChange={(e) => setSubjectId(e.target.value)}
+              style={{ width: "100%", display: "block", marginTop: "0.2rem" }}
+            />
+          </label>
+          <label style={{ flex: "1 1 8rem" }}>
+            <span className="muted">profile</span>
+            <input
+              className="mono"
+              type="text"
+              autoComplete="off"
+              value={profile}
+              onChange={(e) => setProfile(e.target.value)}
+              style={{ width: "100%", display: "block", marginTop: "0.2rem" }}
+            />
+          </label>
+        </div>
+        <div>
+          <button type="submit" disabled={!canSubmit || mutate.isPending}>
+            {mutate.isPending ? "Invalidating…" : "Invalidate subject"}
+          </button>
+        </div>
+      </form>
+      {mutate.isError && (
+        <div style={{ marginTop: "0.75rem" }}>
+          <ErrorBanner error={mutate.error} />
+          <p className="muted">
+            {formatApiError(mutate.error).code}:{" "}
+            {formatApiError(mutate.error).message}
+          </p>
+        </div>
+      )}
+      {result ? (
+        <dl className="dl" style={{ marginTop: "0.75rem" }}>
+          <dt>subject_key</dt>
+          <dd className="mono">{result.subject_key || "—"}</dd>
+          <dt>subject_key_hash</dt>
+          <dd className="mono">
+            {result.subject_key_hash
+              ? `${result.subject_key_hash.slice(0, 16)}…`
+              : "—"}
+          </dd>
+          <dt>principal_cleared</dt>
+          <dd>{result.principal_cleared ? "yes" : "no"}</dd>
+          <dt>token_cache_cleared</dt>
+          <dd>{result.token_cache_cleared ? "yes" : "no"}</dd>
+          {typeof result.token_cache_entries_deleted === "number" ? (
+            <>
+              <dt>token_cache_entries_deleted</dt>
+              <dd>{result.token_cache_entries_deleted}</dd>
+            </>
+          ) : null}
+          {result.token_cache_note ? (
+            <>
+              <dt>token_cache_note</dt>
+              <dd className="muted">{result.token_cache_note}</dd>
+            </>
+          ) : null}
+          {result.principal_process_note ? (
+            <>
+              <dt>principal_process_note</dt>
+              <dd className="muted">{result.principal_process_note}</dd>
+            </>
+          ) : null}
+          {result.token_cache_admin_note ? (
+            <>
+              <dt>token_cache_admin_note</dt>
+              <dd className="muted">{result.token_cache_admin_note}</dd>
+            </>
+          ) : null}
+          {result.residual_note ? (
+            <>
+              <dt>residual_note</dt>
+              <dd className="muted">{result.residual_note}</dd>
+            </>
+          ) : null}
+        </dl>
+      ) : null}
+    </div>
   );
 }
 

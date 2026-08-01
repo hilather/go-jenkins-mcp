@@ -476,3 +476,41 @@ export interface GatewayResidualStatusResponse {
   /** Pointer e.g. docs/gateway/live-pin-blockers.md */
   doc?: string;
 }
+
+/**
+ * POST /admin/v1/gateway/subject-invalidate request (HOST-007).
+ * Identity key parts only — never tokens.
+ */
+export interface GatewaySubjectInvalidateRequest {
+  /** Preferred: tenant|subject|profile */
+  subject_key?: string;
+  tenant?: string;
+  subject_id?: string;
+  profile?: string;
+  /** Optional exact CacheKey fallback (usually unused with FileTokenCache purge). */
+  workload?: string;
+}
+
+/**
+ * POST /admin/v1/gateway/subject-invalidate response (CLI StatusMap + admin notes).
+ * Secret-free forever: never tokens, vault bytes, or path values.
+ */
+export interface GatewaySubjectInvalidateResponse {
+  subject_key?: string;
+  subject_key_hash?: string;
+  principal_cleared?: boolean;
+  token_cache_cleared?: boolean;
+  token_cache_entries_deleted?: number;
+  token_cache_note?: string;
+  residual_note?: string;
+  cleared?: {
+    principal?: boolean;
+    token_cache?: boolean;
+  };
+  doc?: string;
+  token_cache_path_configured?: boolean;
+  principal_cache_path_configured?: boolean;
+  token_cache_admin_note?: string;
+  principal_process_note?: string;
+  [key: string]: unknown;
+}

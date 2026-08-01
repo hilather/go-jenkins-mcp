@@ -41,8 +41,8 @@ Console roles are **separate** from MCP deny-only subjects (ADR 0004). They neve
 | Role | Name | Permissions | Writes |
 |------|------|-------------|--------|
 | `viewer` | Read-only operator | `read` (GET routes) | none |
-| `operator` | Day-2 ops | `read` + `cache_destructive` | cache/doctor destructive (UI-007) |
-| `policy_admin` | Policy apply | `read` + `policy_write` | policy validate/apply (UI-004) |
+| `operator` | Day-2 ops | `read` + `cache_destructive` + `gateway_ops` | cache/doctor destructive (UI-007); subject-invalidate (HOST-007) |
+| `policy_admin` | Policy apply | `read` + `policy_write` + `gateway_ops` | policy validate/apply (UI-004); subject-invalidate (HOST-007) |
 
 - Invalid `--admin-role` → **fail start**.
 - **UI-004** ships `POST /admin/v1/policy/validate` and `POST /admin/v1/policy/apply` (require `policy_write`).
@@ -78,7 +78,7 @@ Current process authentication state and console role. **Never includes the toke
 |-------|---------|
 | `authenticated` | `true` when token configured **and** matched, **or** when no token is required (loopback residual). Middleware returns 401 before this handler when token is required and missing/wrong. |
 | `role` | `viewer` \| `operator` \| `policy_admin` |
-| `permissions` | e.g. `["read"]`, `["read","cache_destructive"]`, `["read","policy_write"]` |
+| `permissions` | e.g. `["read"]`, `["read","cache_destructive","gateway_ops"]`, `["read","policy_write","gateway_ops"]` |
 | `tokenConfigured` | Whether the server was started with a non-empty shared secret |
 | `residual` | Present when loopback pilot mode has no token (role still applies) |
 
@@ -306,6 +306,93 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 card** on older BFF builds. SPA shows `shared_subject_rate_file`, principal_cache
 count, and optional max/ttl with honesty (same-host rate lite; admin BFF process
 for cache count). Operators may also run CLI `gateway residual-status`.
+
+## POST /admin/v1/gateway/subject-invalidate
+
+**HOST-007 force re-auth residual lite.** Mirrors CLI
+`jenkins-mcp gateway subject-invalidate` (alias `invalidate-subject`).
+
+Requires console permission **`gateway_ops`** (`operator` or `policy_admin`).
+Viewer → **403** `permission_denied`.
+
+Clears multi-user caches for one subject so the next Obtain re-fetches:
+
+| Cache | Behavior |
+|-------|----------|
+| Principal | `FilePrincipalCache` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` is set (same-host flock lite shared with MCP serve); otherwise `ProcessPrincipalCache` in **this admin process only** |
+| Token | `FileTokenCache` subject-namespace purge when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` is set; otherwise residual note only (serve `MemoryTokenCache` not reachable from admin BFF) |
+
+**Never** accepts or returns tokens, vault bytes, Authorization material, or
+cache path values. **Not** live Entra/AgentCore revocation. **Not** multi-pod
+fan-out (HOST-008 residual).
+
+### Request body
+
+Provide **`subject_key`** *or* compose parts (`subject_id` required when key omitted):
+
+```json
+{
+  "subject_key": "tenant|alice-sub|corp"
+}
+```
+
+```json
+{
+  "tenant": "tenant",
+  "subject_id": "alice-sub",
+  "profile": "corp",
+  "workload": ""
+}
+```
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `subject_key` | preferred | `tenant\|subject\|profile` (exactly three pipe fields) |
+| `tenant` | optional | Used when composing |
+| `subject_id` | when no key | Subject (user) id |
+| `profile` | optional | Profile id when composing |
+| `workload` | optional | Exact `CacheKey` fallback only (usually unused with FileTokenCache purge) |
+
+Unknown body fields (e.g. `token`, `access_token`) are **ignored** — never treated
+as credentials and never echoed.
+
+### Response (secret-free; CLI `StatusMap` + admin notes)
+
+```json
+{
+  "subject_key": "tenant|alice-sub|corp",
+  "subject_key_hash": "…",
+  "principal_cleared": true,
+  "token_cache_cleared": false,
+  "token_cache_entries_deleted": -1,
+  "token_cache_note": "token_cache not provided (…)",
+  "residual_note": "force re-auth residual lite … multi-pod …",
+  "cleared": {
+    "principal": true,
+    "token_cache": false
+  },
+  "doc": "docs/gateway/README.md § force re-auth residual lite",
+  "token_cache_path_configured": false,
+  "principal_cache_path_configured": false,
+  "token_cache_admin_note": "JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH unset — serve MemoryTokenCache not reachable from admin BFF",
+  "principal_process_note": "PrincipalCache clear is process-local to this admin serve process; set JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH to share with MCP serve (HOST-008 lite)"
+}
+```
+
+| HTTP | When |
+|------|------|
+| **200** | Invalidate attempted (principal/token flags describe outcome) |
+| **400** | Missing/malformed subject key or unusable cache path |
+| **401** | Admin shared secret required and missing/wrong |
+| **403** | Role lacks `gateway_ops` (viewer) |
+| **405** | Method not POST |
+
+**SPA:** Overview “Subject invalidate (force re-auth)” form when `/me` includes
+`gateway_ops`; viewers see a residual note only. Never put tokens in the form.
+
+**Same-host multi-process:** set the same principal/token cache path env on
+admin BFF and MCP serve so invalidate reaches serve’s caches. Multi-pod external
+shared map remains residual (HOST-008).
 
 ## GET /admin/v1/version
 
