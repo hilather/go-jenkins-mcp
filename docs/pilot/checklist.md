@@ -34,7 +34,7 @@ Gateway residual accepted (ticket/notes): _____________
 See [release gates](../release/gates.md) residuals section.  
 Optional honesty automation (not default `make test` / `make ci`):  
 `make residual-smoke` (alias `make gateway-residual-smoke`) → runs `gateway qualify --offline` + `release-evidence --offline` + `gateway residual-status` (honesty canaries) and **fails** if those residual ids are missing or residual-status honesty fields fail. Artifacts: `dist/residual-smoke/<ts>/` (includes `gateway-residual-status.json`).  
-**Pilot evidence residual lite:** `make pilot-evidence` also captures `gateway-residual-status.json` (+ optional `gateway-consent-residual.json`) into the pack with residual-id / `ha_multi_replica=false` honesty canaries — no separate residual-smoke required for residual presence in pilot kits (deeper path canaries still on residual-smoke).  
+**Pilot evidence residual lite:** `make pilot-evidence` also captures `gateway-residual-status.json` (+ optional `gateway-consent-residual.json`) into the pack with residual-id / `ha_multi_replica=false` / `shared_*_file` default-false (+ lightweight path-not-dumped) honesty canaries — no separate residual-smoke required for residual presence in pilot kits (fuller residual-smoke suite still optional).  
 **Live production GO residual checklists** (what still blocks Mode B/C multi-user and multi-pod): [gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) — residual-smoke / pilot residual-status prove honesty **not** live Done.
 
 ## 1. Install

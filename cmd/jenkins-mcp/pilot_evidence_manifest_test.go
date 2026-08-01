@@ -209,6 +209,28 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 	if !strings.Contains(bodyStr, "ha_multi_replica") {
 		t.Fatal("scripts/pilot-evidence.sh must assert ha_multi_replica honesty")
 	}
+	// Wave 13: shared_*_file residual-status honesty (align residual-smoke).
+	for _, key := range []string{
+		"shared_subject_rate_file",
+		"shared_principal_cache_file",
+		"shared_jwks_file",
+	} {
+		if !strings.Contains(bodyStr, key) {
+			t.Fatalf("scripts/pilot-evidence.sh must assert %s honesty canary", key)
+		}
+	}
+	if !strings.Contains(bodyStr, "path must never dump") {
+		t.Fatal("scripts/pilot-evidence.sh must include path-not-dumped canaries for shared_*_file")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary SUBJECT_RATE_PATH → shared_subject_rate_file=true")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary PRINCIPAL_CACHE_PATH → shared_principal_cache_file=true")
+	}
+	if !strings.Contains(bodyStr, "JENKINS_MCP_HTTP_JWKS_CACHE_PATH") {
+		t.Fatal("scripts/pilot-evidence.sh must canary JWKS_CACHE_PATH → shared_jwks_file=true")
+	}
 	if !strings.Contains(bodyStr, "gateway consent-residual") {
 		t.Fatal("scripts/pilot-evidence.sh must optionally capture gateway consent-residual")
 	}
@@ -326,11 +348,59 @@ func TestPilotEvidenceScriptShellAndOfflineBundle(t *testing.T) {
 				t.Fatalf("residual_ids missing %q in pilot pack residual-status", need)
 			}
 		}
+		// shared_*_file default false (or absent) when pilot pack runs without path env.
+		// Regression: residual-status honesty weaker than residual-smoke without these.
+		for _, key := range []string{
+			"shared_subject_rate_file",
+			"shared_principal_cache_file",
+			"shared_jwks_file",
+		} {
+			v, ok := rs[key]
+			if !ok || v == nil {
+				continue // absent-as-false acceptable
+			}
+			b, ok := v.(bool)
+			if !ok || b {
+				t.Fatalf("%s want false|absent on default pilot residual-status got %v", key, v)
+			}
+		}
+		// Path values must never appear in residual-status JSON (bool residual only).
+		for _, envKey := range []string{
+			"JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH",
+			"JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH",
+			"JENKINS_MCP_HTTP_JWKS_CACHE_PATH",
+		} {
+			if strings.Contains(string(rsRaw), envKey) {
+				t.Fatalf("path env name %q must not appear in gateway-residual-status.json", envKey)
+			}
+		}
 		// Secret-shaped material must not appear in residual-status artifact.
 		low := strings.ToLower(string(rsRaw))
 		for _, needle := range []string{"access_token=", "refresh_token=", "client_secret=", "authorization: bearer"} {
 			if strings.Contains(low, needle) {
 				t.Fatalf("secret-shaped material %q in gateway-residual-status.json", needle)
+			}
+		}
+		// Path canary artifacts (when produced) must not dump markers / secrets.
+		for _, name := range []string{
+			"gateway-residual-status-rate-path.json",
+			"gateway-residual-status-principal-path.json",
+			"gateway-residual-status-jwks-path.json",
+		} {
+			p := filepath.Join(evidDir, name)
+			rawPath, err := os.ReadFile(p)
+			if err != nil {
+				// Optional when python3 path canaries skipped; default honesty already checked.
+				if os.IsNotExist(err) {
+					continue
+				}
+				t.Fatalf("read %s: %v", name, err)
+			}
+			if strings.Contains(string(rawPath), "CANARY-never-in-json") {
+				t.Fatalf("path marker leaked into %s", name)
+			}
+			if strings.Contains(strings.ToLower(string(rawPath)), "authorization: bearer") {
+				t.Fatalf("secret-shaped material in %s", name)
 			}
 		}
 	case "skip":
