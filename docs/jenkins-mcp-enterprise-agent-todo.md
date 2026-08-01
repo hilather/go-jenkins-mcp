@@ -2796,14 +2796,16 @@ JenkinsUserID from HTTP JenkinsPrincipal/lab header; else Caller +
 `PrincipalCache` Obtain principal when set, else process principal) so Alice
 preview cannot confirm as Bob on ExternalSubject **or** PrincipalID; cooldown
 keys and audit use effective binding. **Done\*** Obtain→Binding principal via
-process-local `PrincipalCache` (Mode A vault username; Binding-only). **Serve
-wire Done*:** `tools.SubjectSlotLimiter` + `tools.SubjectRateLimiter`; `addTool`
-Allow then Hold under `--gateway`; env concurrent + rate/burst
-(`JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` 0 = rate disabled).
+process-local `PrincipalCache` (Mode A vault username; Binding-only when
+PolicySubject Valid prefers HTTP claim). **Done\*** Obtain→policy RBAC
+JenkinsUserID via `policySubjectFromGatewayCtx` + PrincipalCache (prefer cache
+after Obtain, else HTTP claim). **Serve wire Done*:** `tools.SubjectSlotLimiter`
++ `tools.SubjectRateLimiter`; `addTool` Allow then Hold under `--gateway`; env
+concurrent + rate/burst (`JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` 0 = rate disabled).
 **Policy rate reduction Done\* foundation:** overlay optional
 `max_tools_per_minute` / `max_tools_burst` → `SubjectRateLimiter.LowerRate`
 (lower only). **Residual:** multi-replica (HOST-008); admin SPA subject-rate
-knobs; Obtain does not rewrite `policy.Subject` on request ctx mid-call.
+knobs.
 
 ---
 

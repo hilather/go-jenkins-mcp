@@ -76,7 +76,8 @@ type RegisterOptions struct {
 	// Multi-user: process default; per-request rebind via SubjectFromContext.
 	Subject policy.Subject
 	// SubjectFromContext optionally derives policy.Subject per tool/list request
-	// (multi-user: gateway.PolicySubjectFromContext after HTTP AfterIdentity).
+	// (multi-user: cmd policySubjectFromGatewayCtx — PrincipalCache after Obtain
+	// preferred over HTTP/lab PolicySubject claim; tools never imports gateway).
 	// When nil or returns ok=false, Subject process default is used.
 	// When ok=true, the returned subject is used even if !Valid (fail closed at
 	// Evaluate — never elevates to process default for a partial identity).

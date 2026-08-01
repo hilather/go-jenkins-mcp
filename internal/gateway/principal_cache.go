@@ -10,9 +10,9 @@ import (
 // principal (HOST multi-user / MUT-001).
 //
 // AuthProviderCtx cannot write onto request context after Obtain; this cache
-// lets mutation Binding prefer the per-subject Obtain principal (Mode A vault
-// username / Credential.JenkinsPrincipal) over the process session principal
-// when policy.Subject is missing or !Valid.
+// lets multi-user policy SubjectFromContext (cmd policySubjectFromGatewayCtx)
+// and mutation Binding prefer the per-subject Obtain principal (Mode A vault
+// username / Credential.JenkinsPrincipal) over HTTP claim / process principal.
 //
 // Keys are SubjectKey (tenant|subject|profile) — never tokens or secrets.
 // Values are non-secret Jenkins user ids only. String/Status never include

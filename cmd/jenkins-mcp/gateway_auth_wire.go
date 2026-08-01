@@ -58,9 +58,10 @@ func attachGatewayObtainAuthProvider(client *jenkins.Client, prov gateway.Creden
 //   - does not write secrets onto Client.User/Token (AuthProviderCtx path)
 //
 // On successful Obtain, records the non-secret Jenkins principal in the process
-// PrincipalCache (SubjectKey → principal) so mutation Binding can prefer it
-// when policy.Subject is missing/!Valid. AuthProviderCtx still cannot write
-// onto request context (policy.Subject mid-call residual remains).
+// PrincipalCache (SubjectKey → principal) so mutation Binding and multi-user
+// policy SubjectFromContext (policySubjectFromGatewayCtx) can prefer it after
+// Obtain. AuthProviderCtx still cannot write onto request context; the process
+// PrincipalCache is the mid-call rewrite path for JenkinsUserID / Binding.
 //
 // No-op when client or provider is nil. defaultCaller is captured at attach
 // for session-start whoAmI and stdio residual when context has no Caller.

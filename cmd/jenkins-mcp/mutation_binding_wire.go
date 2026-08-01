@@ -20,8 +20,8 @@ import (
 //     PrincipalID prefers PrincipalCache (SubjectKey → Obtain/Mode A vault
 //     username recorded by AuthProviderCtx) when non-empty, else processPrincipal
 //     (session-start / process Jenkins user). AuthProviderCtx cannot write onto
-//     request context — policy.Subject mid-call still uses HTTP claim for
-//     JenkinsUserID; the process-local principal cache is Binding-only.
+//     request context; PrincipalCache is the mid-call rewrite path (Binding here;
+//     policy RBAC via policySubjectFromGatewayCtx prefers cache after Obtain).
 //
 // ok is false when neither trusted source is usable.
 func mutationBindingFromGatewayCtx(ctx context.Context, processPrincipal string) (mutation.Binding, bool) {
