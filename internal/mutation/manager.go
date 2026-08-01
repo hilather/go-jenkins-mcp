@@ -33,11 +33,12 @@ const DefaultTokenTTL = 2 * time.Minute
 const DefaultMaxPreviewsPerMinute = 30
 
 // DefaultConfirmCooldown is the minimum wait after a successful Confirm before
-// another Confirm for the same (profile, action, targetHash) is allowed when
+// another Confirm for the same (binding, action, targetHash) is allowed when
 // Config.ConfirmCooldown is 0 and no process live ConfirmCooldown() is set
-// (MUT-001 cooldown). Operator resolve path: empty/0/"0s" → default; cannot
-// disable via 0 (see ResolveConfirmCooldown / MinConfirmCooldown /
-// AbsoluteMaxConfirmCooldown).
+// (MUT-001 cooldown). Binding includes profile+principal+external+tenant so
+// multi-user cooldowns do not cross subjects. Operator resolve path:
+// empty/0/"0s" → default; cannot disable via 0 (see ResolveConfirmCooldown /
+// MinConfirmCooldown / AbsoluteMaxConfirmCooldown).
 const DefaultConfirmCooldown = 5 * time.Second
 
 // Audit event types (AUD-001 privacy-preserving).
@@ -103,15 +104,62 @@ type BoundIntent struct {
 	RequestID  string
 }
 
+// Binding is the non-secret identity fingerprint bound into confirmation tokens
+// (MUT-001 / HOST-006 multi-user). Tokens must not replay across distinct
+// bindings. Fields are labels only — never tokens or secrets.
+//
+// Stdio / single-user: ProfileID + PrincipalID (Jenkins user). Gateway multi-user:
+// also ExternalSubject (IdP sub) and Tenant so two principals sharing a process
+// Manager cannot confirm each other's preview tokens.
+type Binding struct {
+	ProfileID       string
+	PrincipalID     string // Jenkins principal label (non-secret)
+	ExternalSubject string // validated IdP sub when multi-user; empty for API-token
+	Tenant          string // IdP tenant when multi-user; empty for API-token / stdio
+}
+
+// Equal reports whether two bindings are identical for confirm-token matching.
+func (b Binding) Equal(o Binding) bool {
+	return b.ProfileID == o.ProfileID &&
+		b.PrincipalID == o.PrincipalID &&
+		b.ExternalSubject == o.ExternalSubject &&
+		b.Tenant == o.Tenant
+}
+
+// normalizeBinding trims binding label fields.
+func normalizeBinding(b Binding) Binding {
+	return Binding{
+		ProfileID:       strings.TrimSpace(b.ProfileID),
+		PrincipalID:     strings.TrimSpace(b.PrincipalID),
+		ExternalSubject: strings.TrimSpace(b.ExternalSubject),
+		Tenant:          strings.TrimSpace(b.Tenant),
+	}
+}
+
+// bindingKey is a stable map/cooldown key for a binding (includes external+tenant).
+func (b Binding) bindingKey() string {
+	return b.ProfileID + "\x00" + b.PrincipalID + "\x00" + b.ExternalSubject + "\x00" + b.Tenant
+}
+
 // Config configures a Manager.
 type Config struct {
 	// Gate is the POL-001 read-only kill switch. Nil ⇒ fail-closed read-only.
 	Gate *policy.ReadOnlyGate
 	// Audit is optional (AUD-001).
 	Audit audit.Sink
-	// ProfileID / PrincipalID bind tokens (non-secret).
+	// ProfileID / PrincipalID bind tokens (non-secret). Process-default binding
+	// when BindingFromContext is unset or returns ok=false.
 	ProfileID   string
 	PrincipalID string
+	// ExternalSubject / Tenant extend the confirm-token fingerprint for multi-user
+	// gateway (IdP sub + tenant). Empty for stdio / API-token single-user.
+	ExternalSubject string
+	Tenant          string
+	// BindingFromContext optionally supplies a per-request binding (multi-user
+	// gateway: CallerFromContext → Binding). When set and ok=true, Preview/
+	// Confirm/audit use that binding instead of Config process defaults.
+	// Never derived from tool arguments. Nil ⇒ always Config defaults.
+	BindingFromContext func(ctx context.Context) (Binding, bool)
 	// TTL for confirmation tokens. 0 or negative ⇒ process live TokenTTL()
 	// when positive (serve SetTokenTTL after Resolve), else DefaultTokenTTL.
 	// Operator ResolveTokenTTL never yields 0/disable (0 → default).
@@ -122,7 +170,7 @@ type Config struct {
 	// operator ResolveMaxPreviewsPerMinute never yields unlimited).
 	MaxPreviewsPerMinute int
 	// ConfirmCooldown is the minimum time after a successful Confirm before
-	// another Confirm for the same (profile, action, targetHash) may succeed.
+	// another Confirm for the same (binding, action, targetHash) may succeed.
 	// 0 ⇒ process live ConfirmCooldown() when positive (serve SetConfirmCooldown
 	// after Resolve), else DefaultConfirmCooldown; negative ⇒ off (library/test
 	// escape hatch — operator ResolveConfirmCooldown cannot set 0/disable).
@@ -132,16 +180,17 @@ type Config struct {
 }
 
 // Manager is the process-local preview/confirm gate (MUT-001).
-// Safe for concurrent use.
+// Safe for concurrent use. Multi-user: one shared Manager + BindingFromContext
+// so Alice preview tokens cannot be confirmed by Bob.
 type Manager struct {
-	gate              *policy.ReadOnlyGate
-	audit             audit.Sink
-	profileID         string
-	principalID       string
-	ttl               time.Duration
-	maxPreviewsPerMin int           // negative ⇒ unlimited
-	confirmCooldown   time.Duration // ≤0 ⇒ off
-	now               func() time.Time
+	gate               *policy.ReadOnlyGate
+	audit              audit.Sink
+	defaultBinding     Binding
+	bindingFromContext func(ctx context.Context) (Binding, bool)
+	ttl                time.Duration
+	maxPreviewsPerMin  int           // negative ⇒ unlimited
+	confirmCooldown    time.Duration // ≤0 ⇒ off
+	now                func() time.Time
 
 	mu           sync.Mutex
 	tokens       map[string]*tokenRecord
@@ -151,8 +200,7 @@ type Manager struct {
 
 type tokenRecord struct {
 	id         string
-	profileID  string
-	principal  string
+	binding    Binding
 	action     Action
 	toolName   string
 	jobName    string
@@ -221,17 +269,36 @@ func NewManager(cfg Config) *Manager {
 		gate = policy.NewDefaultReadOnlyGate()
 	}
 	return &Manager{
-		gate:              gate,
-		audit:             cfg.Audit,
-		profileID:         strings.TrimSpace(cfg.ProfileID),
-		principalID:       strings.TrimSpace(cfg.PrincipalID),
-		ttl:               ttl,
-		maxPreviewsPerMin: maxPrev,
-		confirmCooldown:   cooldown,
-		now:               now,
-		tokens:            make(map[string]*tokenRecord),
-		cooldowns:         make(map[string]time.Time),
+		gate:  gate,
+		audit: cfg.Audit,
+		defaultBinding: normalizeBinding(Binding{
+			ProfileID:       cfg.ProfileID,
+			PrincipalID:     cfg.PrincipalID,
+			ExternalSubject: cfg.ExternalSubject,
+			Tenant:          cfg.Tenant,
+		}),
+		bindingFromContext: cfg.BindingFromContext,
+		ttl:                ttl,
+		maxPreviewsPerMin:  maxPrev,
+		confirmCooldown:    cooldown,
+		now:                now,
+		tokens:             make(map[string]*tokenRecord),
+		cooldowns:          make(map[string]time.Time),
 	}
+}
+
+// effectiveBinding returns the per-request binding when BindingFromContext is
+// set and ok, else the Manager process-default binding (HOST-006 multi-user).
+func (m *Manager) effectiveBinding(ctx context.Context) Binding {
+	if m == nil {
+		return Binding{}
+	}
+	if m.bindingFromContext != nil && ctx != nil {
+		if b, ok := m.bindingFromContext(ctx); ok {
+			return normalizeBinding(b)
+		}
+	}
+	return m.defaultBinding
 }
 
 // Preview validates the intent, creates a short-lived confirmation token, and
@@ -261,7 +328,8 @@ func (m *Manager) Preview(ctx context.Context, intent Intent) (*PreviewResult, e
 		m.emitDeny(ctx, tool, string(norm.Action), ReasonPreviewRateLimited, th, start)
 		return nil, err
 	}
-	tok, exp, err := m.issueToken(norm, th, start)
+	bind := m.effectiveBinding(ctx)
+	tok, exp, err := m.issueToken(norm, th, start, bind)
 	if err != nil {
 		m.emitDeny(ctx, tool, string(norm.Action), ReasonInvalidIntent, th, start)
 		return nil, err
@@ -269,8 +337,8 @@ func (m *Manager) Preview(ctx context.Context, intent Intent) (*PreviewResult, e
 	m.emit(ctx, audit.Event{
 		Time:        start,
 		Type:        TypePreview,
-		ProfileID:   m.profileID,
-		PrincipalID: m.principalID,
+		ProfileID:   bind.ProfileID,
+		PrincipalID: bind.PrincipalID,
 		Tool:        tool,
 		Action:      string(norm.Action),
 		Decision:    audit.DecisionAllow,
@@ -330,6 +398,7 @@ func (m *Manager) Confirm(ctx context.Context, token string, expected Intent) (*
 	}
 	paramFP := ParamFingerprint(norm.Parameters)
 	wantHash := TargetHash(norm.Action, norm.JobName, norm.BuildNumber, norm.QueueID, paramFP)
+	bind := m.effectiveBinding(ctx)
 
 	m.mu.Lock()
 	rec, ok := m.tokens[token]
@@ -351,7 +420,10 @@ func (m *Manager) Confirm(ctx context.Context, token string, expected Intent) (*
 		m.emitDeny(ctx, tool, string(norm.Action), ReasonTokenExpired, rec.targetHash, start)
 		return nil, apperr.New(apperr.CodePolicyDenial, "confirmation token has expired; request a new preview")
 	}
-	if rec.profileID != m.profileID || rec.principal != m.principalID {
+	// HOST-006: compare stored token binding to effective request subject
+	// (BindingFromContext when multi-user; else process defaults). Prevents
+	// Alice preview tokens from being confirmed by Bob on a shared Manager.
+	if !rec.binding.Equal(bind) {
 		m.mu.Unlock()
 		m.emitDeny(ctx, tool, string(norm.Action), ReasonBindingMismatch, rec.targetHash, start)
 		return nil, apperr.New(apperr.CodePolicyDenial, "confirmation token is not bound to this profile/subject")
@@ -361,9 +433,9 @@ func (m *Manager) Confirm(ctx context.Context, token string, expected Intent) (*
 		m.emitDeny(ctx, tool, string(norm.Action), ReasonTargetMismatch, rec.targetHash, start)
 		return nil, apperr.New(apperr.CodePolicyDenial, "confirmation token does not match the requested target/parameters")
 	}
-	// MUT-001: cooldown after successful confirm for same (profile, action, targetHash).
+	// MUT-001: cooldown after successful confirm for same (binding, action, targetHash).
 	// Checked before single-use consume so a denied confirm leaves the token usable.
-	cdKey := m.cooldownKey(norm.Action, wantHash)
+	cdKey := cooldownKey(bind, norm.Action, wantHash)
 	if m.confirmCooldown > 0 {
 		if until, ok := m.cooldowns[cdKey]; ok && start.Before(until) {
 			m.mu.Unlock()
@@ -400,8 +472,8 @@ func (m *Manager) Confirm(ctx context.Context, token string, expected Intent) (*
 	m.emit(ctx, audit.Event{
 		Time:        start,
 		Type:        TypeConfirm,
-		ProfileID:   m.profileID,
-		PrincipalID: m.principalID,
+		ProfileID:   bind.ProfileID,
+		PrincipalID: bind.PrincipalID,
 		Tool:        tool,
 		Action:      string(bound.Action),
 		Decision:    audit.DecisionAllow,
@@ -418,11 +490,12 @@ func (m *Manager) EmitExecuteFail(ctx context.Context, tool, action, reason, tar
 	if m == nil {
 		return
 	}
+	bind := m.effectiveBinding(ctx)
 	m.emit(ctx, audit.Event{
 		Time:        m.now(),
 		Type:        TypeDeny,
-		ProfileID:   m.profileID,
-		PrincipalID: m.principalID,
+		ProfileID:   bind.ProfileID,
+		PrincipalID: bind.PrincipalID,
 		Tool:        tool,
 		Action:      action,
 		Decision:    audit.DecisionFail,
@@ -436,11 +509,12 @@ func (m *Manager) EmitExecuteOK(ctx context.Context, tool, action, targetHash, r
 	if m == nil {
 		return
 	}
+	bind := m.effectiveBinding(ctx)
 	m.emit(ctx, audit.Event{
 		Time:        m.now(),
 		Type:        audit.TypeToolSuccess,
-		ProfileID:   m.profileID,
-		PrincipalID: m.principalID,
+		ProfileID:   bind.ProfileID,
+		PrincipalID: bind.PrincipalID,
 		Tool:        tool,
 		Action:      action,
 		Decision:    audit.DecisionSuccess,
@@ -474,12 +548,13 @@ func (m *Manager) reservePreview(now time.Time) error {
 	return nil
 }
 
-func (m *Manager) cooldownKey(action Action, targetHash string) string {
-	// Include profile so a shared process store cannot cross profile boundaries.
-	return m.profileID + "\x00" + string(action) + "\x00" + targetHash
+func cooldownKey(bind Binding, action Action, targetHash string) string {
+	// Full binding (profile+principal+external+tenant) so multi-user cooldown
+	// and token isolation cannot cross subjects on a shared Manager.
+	return bind.bindingKey() + "\x00" + string(action) + "\x00" + targetHash
 }
 
-func (m *Manager) issueToken(norm Intent, targetHash string, now time.Time) (token string, exp time.Time, err error) {
+func (m *Manager) issueToken(norm Intent, targetHash string, now time.Time, bind Binding) (token string, exp time.Time, err error) {
 	raw := make([]byte, 24)
 	if _, err := rand.Read(raw); err != nil {
 		return "", time.Time{}, apperr.Wrap(apperr.CodeInternal, "failed to mint confirmation token", err)
@@ -489,8 +564,7 @@ func (m *Manager) issueToken(norm Intent, targetHash string, now time.Time) (tok
 	id := token[:16]
 	rec := &tokenRecord{
 		id:         id,
-		profileID:  m.profileID,
-		principal:  m.principalID,
+		binding:    bind,
 		action:     norm.Action,
 		toolName:   norm.ToolName,
 		jobName:    norm.JobName,
@@ -536,11 +610,12 @@ func (m *Manager) purgeCooldownsLocked(now time.Time) {
 }
 
 func (m *Manager) emitDeny(ctx context.Context, tool, action, reason, targetHash string, start time.Time) {
+	bind := m.effectiveBinding(ctx)
 	m.emit(ctx, audit.Event{
 		Time:        start,
 		Type:        TypeDeny,
-		ProfileID:   m.profileID,
-		PrincipalID: m.principalID,
+		ProfileID:   bind.ProfileID,
+		PrincipalID: bind.PrincipalID,
 		Tool:        tool,
 		Action:      action,
 		Decision:    audit.DecisionDeny,

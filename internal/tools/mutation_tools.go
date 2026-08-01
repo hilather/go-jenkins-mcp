@@ -264,15 +264,11 @@ func loadCancellableQueueItem(ctx context.Context, client *jenkins.Client, queue
 // only for force-registered RO deny-path tests (tokens will not span calls).
 // Zero rate/cooldown fields take MUT-001 production defaults (process live
 // after serve Resolve+Set when positive, else 30 previews/min and 5s confirm
-// cooldown per target); see mutation.NewManager.
+// cooldown per target); see mutation.NewManager. Multi-user BindingFromContext
+// and ExternalSubject/Tenant are included when present on regState.
 func ensureMutationManager(st regState) *mutation.Manager {
 	if st.mutations != nil {
 		return st.mutations
 	}
-	return mutation.NewManager(mutation.Config{
-		Gate:        st.gate,
-		Audit:       st.audit,
-		ProfileID:   st.profileID,
-		PrincipalID: st.principalID,
-	})
+	return newMutationManager(st)
 }

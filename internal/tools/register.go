@@ -108,8 +108,14 @@ type RegisterOptions struct {
 	ProfileID   string
 	PrincipalID string
 	// Mutations is the MUT-001 preview/confirm gate. When nil and mutations are
-	// registered, handlers create a default manager bound to Gate/Audit/identity.
+	// registered, handlers create a default manager bound to Gate/Audit/identity
+	// (including ExternalSubject/Tenant from Subject and MutationBindingFromContext).
 	Mutations *mutation.Manager
+	// MutationBindingFromContext optionally supplies per-request mutation confirm
+	// binding (multi-user: gateway.CallerFromContext → mutation.Binding). When
+	// nil, the Manager uses process ProfileID/PrincipalID/Subject external+tenant.
+	// Never tool args. Wired into NewManager when Mutations is nil.
+	MutationBindingFromContext func(ctx context.Context) (mutation.Binding, bool)
 	// DiagCache is the PERF-003 shared fetch cache for diagnose/compare/graph.
 	// Nil ⇒ a new per-Register cache (process-scoped for a single MCP serve).
 	DiagCache *FetchCache
@@ -199,6 +205,8 @@ type regState struct {
 
 	// Multi-user: per-request policy.Subject from trusted context (gateway wire).
 	subjectFromContext func(ctx context.Context) (policy.Subject, bool)
+	// MUT-001 multi-user: optional per-request confirm-token binding.
+	mutationBindingFromContext func(ctx context.Context) (mutation.Binding, bool)
 }
 
 // effectiveSubjectKey returns per-request SubjectKey when SubjectKeyFromContext
@@ -271,21 +279,40 @@ func resolveRegisterOptions(opts *RegisterOptions) regState {
 	st.subjectKeyFromContext = opts.SubjectKeyFromContext
 	st.subjectLimiter = opts.SubjectLimiter
 	st.subjectFromContext = opts.SubjectFromContext
+	st.mutationBindingFromContext = opts.MutationBindingFromContext
 	// MUT-001: process-scoped manager so preview tokens survive until confirm.
 	// Create once when mutations may register and caller did not inject one.
 	// Wave 30: also create under AllowMutations opt-in while Effective RO so
 	// force-clear can use the same manager once ListTools re-exposes tools.
 	// Rate/cooldown zeros → production defaults (process live after serve
 	// Resolve+Set when positive, else 30 previews/min and 5s confirm cooldown).
+	// Binding includes ExternalSubject/Tenant from Subject + optional multi-user
+	// BindingFromContext so confirm tokens cannot replay across subjects.
 	if st.mutations == nil && st.gate != nil && st.gate.ShouldRegisterMutations() {
-		st.mutations = mutation.NewManager(mutation.Config{
-			Gate:        st.gate,
-			Audit:       st.audit,
-			ProfileID:   st.profileID,
-			PrincipalID: st.principalID,
-		})
+		st.mutations = newMutationManager(st)
 	}
 	return st
+}
+
+// newMutationManager builds the process-scoped MUT-001 gate from regState identity.
+func newMutationManager(st regState) *mutation.Manager {
+	profileID := strings.TrimSpace(st.profileID)
+	if profileID == "" {
+		profileID = strings.TrimSpace(string(st.subject.ProfileID))
+	}
+	principalID := strings.TrimSpace(st.principalID)
+	if principalID == "" {
+		principalID = strings.TrimSpace(st.subject.JenkinsUserID)
+	}
+	return mutation.NewManager(mutation.Config{
+		Gate:               st.gate,
+		Audit:              st.audit,
+		ProfileID:          profileID,
+		PrincipalID:        principalID,
+		ExternalSubject:    strings.TrimSpace(st.subject.ExternalSubject),
+		Tenant:             strings.TrimSpace(st.subject.Tenant),
+		BindingFromContext: st.mutationBindingFromContext,
+	})
 }
 
 // effectiveBudget returns budgets for EnforceBudget, applying LiveHardMax when set.

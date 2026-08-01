@@ -190,6 +190,7 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 | Token cache (`MemoryTokenCache`) | `CacheKey{Tenant,User,Workload,Profile}` via `Caller.CacheKey()` | Cross-user / cross-tenant Get is a miss |
 | Vault (`APITokenVault` / JWT vault) | `SubjectKey` = `tenant\|subject\|profile` | Cross-subject Get → not found |
 | List `page_token` | Filter fingerprint **bound** with subject via `jenkins.BindSubjectToPageFilter` / `*WithSubject` helpers | Alice's token rejected for Bob (`invalid_argument`) |
+| Mutation `confirmation_token` | `mutation.Binding` = profile + principal + ExternalSubject + tenant | Alice preview rejected for Bob confirm (`binding_mismatch`) |
 
 Stable namespace: `gateway.SubjectKey(Caller)` / `Caller.SubjectKey()` /
 `SubjectKeyHash` for filesystem-safe names. **Never** derive keys from tool args.
@@ -201,8 +202,12 @@ mode should always pass a non-empty subject key.
 `tools.RegisterOptions.SubjectKey` from `gateway.SubjectKey(CallerFromBoundSubject)`.
 List tools (`jenkins_list_jobs`, `jenkins_get_jobs`, `jenkins_list_builds`) resolve
 and mint page tokens with `*WithSubject` helpers. Empty `SubjectKey` (stdio)
-skips binding. **Residual:** per-HTTP-request `SubjectKey` swap when multi-user
-ctx lands; durable L1/L2 archive namespace (STO / HOST-008).
+skips binding. **Multi-user (`JENKINS_MCP_GATEWAY_MULTI_USER`):**
+`SubjectKeyFromContext` + `MutationBindingFromContext` from
+`gateway.CallerFromContext`. **Residual:** durable L1/L2 archive namespace
+(STO / HOST-008); per-request Jenkins principal on mutation Binding (still
+process `JenkinsUserID` until Obtain principal is context-carried — ExternalSubject
+isolation is Done*).
 
 ### HOST-006 — per-subject concurrent budgets
 
@@ -211,6 +216,7 @@ ctx lands; durable L1/L2 archive namespace (STO / HOST-008).
 | `SubjectLimiter` | Per-`subjectKey` concurrent slots under a process ceiling |
 | `Hold` / `WithSubjectSlot` | Acquire → work → Release (prefer over bare Acquire) |
 | `StatusMap` | Non-secret doctor summary (`ha_multi_replica: false` — HOST-008 residual) |
+| Mutation confirm Binding | Profile + Principal + ExternalSubject + Tenant; cooldown keys include full binding |
 
 Defaults: **8** concurrent per subject, **64** process-wide (abs ceilings **64** / **256**).
 Excess → `CodeQuota`.
@@ -218,7 +224,10 @@ Excess → `CodeQuota`.
 **Serve wire (Done*):** `tools.RegisterOptions.SubjectLimiter` is a
 `tools.SubjectSlotLimiter` interface (implemented by `*gateway.SubjectLimiter`;
 tools does not import gateway). `addTool` Holds a slot when both limiter and
-non-empty `SubjectKey` are set. Optional env:
+non-empty `SubjectKey` are set. Mutation Manager uses
+`MutationBindingFromContext` (multi-user) so confirm tokens and cooldowns cannot
+cross subjects; audit ProfileID/PrincipalID prefer the effective binding.
+Optional env:
 
 | Env | Role |
 |-----|------|
@@ -226,7 +235,7 @@ non-empty `SubjectKey` are set. Optional env:
 | `JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT` | Process-wide slots (empty → 64) |
 
 **Residual:** token-bucket rate (not only concurrency); multi-replica (HOST-008);
-per-request subject rebind.
+per-request Jenkins principal on Binding (ExternalSubject isolation Done*).
 
 ---
 
