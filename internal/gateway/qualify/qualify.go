@@ -19,6 +19,7 @@ import (
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
 	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
+	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 )
 
@@ -79,6 +80,9 @@ func RunOffline(ctx context.Context) Summary {
 			"OAUTH-010: HTTPTokenFetcher https mock AS covered in package tests (TestOAUTH010_* / TestHTTPTokenFetcher_*); do not claim live Entra Done",
 			"Opt-in residual lab: testdata/oauth-lab + make live-oauth-* (HOST-012…015); go test -tags=live_oauth Mode C Obtain vs mock-token via TLS test shim (HTTPTokenFetcher https-only; lab is HTTP loopback — TLS residual; not production Entra / jwt-auth-filter / AgentCore vault)",
 			"Cross-link: docs/auth/oauth-capability-matrix.md §4 + docs/auth/jwt-auth-filter-qualification.md + docs/gateway/qualification.md (GWY-003 / OAUTH-010)",
+			// Residual-status honesty case (BuildGatewayResidualStatus / CLI residual-status) is offline Done*.
+			// Live mode pins / multi-pod shared rate+vault+principal+JWKS HA remain residual — never production GO.
+			"gateway residual-status offline honesty Done* (gateway_residual_status_offline_honesty): residual_ids + ha_multi_replica=false + live mode pins false + oauth009_offline + shared_*_file default false; no secrets — live Entra/AgentCore pin residual",
 			"P95/P99 live token acquisition SLOs require production pin evidence",
 			"Generic-token passthrough remains disabled; exact-audience exception is residual approval",
 		},
@@ -127,6 +131,9 @@ func RunOffline(ctx context.Context) Summary {
 	run("oauth010_mode_c_offline_matrix", "security", caseOAUTH010ModeCOfflineMatrix)
 	// Progressive consent residual honesty (metadata Done*; browser 3LO residual).
 	run("progressive_consent_residual", "security", caseProgressiveConsentResidual)
+	// Unified residual-status snapshot honesty (BuildGatewayResidualStatus / CLI residual-status).
+	// Env-empty: residual_ids, live pins false, ha_multi_replica false, shared_*_file false; no secrets.
+	run("gateway_residual_status_offline_honesty", "security", caseGatewayResidualStatusOfflineHonesty)
 
 	// --- Performance cases (mock) ---
 	run("concurrent_obtain_stub_under_budget", "performance", caseConcurrentObtain)
@@ -356,6 +363,146 @@ func caseConsentURLNoToken(ctx context.Context) error {
 	// only at the application layer; harness documents the rule.
 	if strings.Contains(info.AuthorizationURL, CanaryToken) {
 		return fmt.Errorf("authorization URL must not embed canary token")
+	}
+	return nil
+}
+
+// caseGatewayResidualStatusOfflineHonesty runs diagnostics.BuildGatewayResidualStatus
+// (same map as CLI `gateway residual-status` / doctor embed / admin BFF) with an
+// empty environ and asserts residual honesty for GWY-003 lite:
+// residual_ids present, ha_multi_replica false, live mode pins false,
+// oauth009_offline, shared_*_file false by default, no secrets.
+// Not live Entra / AgentCore / multi-pod HA Done.
+func caseGatewayResidualStatusOfflineHonesty(ctx context.Context) error {
+	_ = ctx
+	// Empty environ → default residual honesty (no same-host shared file paths).
+	getenv := func(string) string { return "" }
+	out := diagnostics.BuildGatewayResidualStatus(getenv)
+	if out == nil {
+		return fmt.Errorf("BuildGatewayResidualStatus returned nil")
+	}
+
+	// residual_ids must be present and include REL/GWY residual honesty ids.
+	wantIDs := []string{
+		"multi_user_offline",
+		"oauth009_offline",
+		"oauth010_offline",
+		"progressive_consent_offline",
+		"host008_single_replica",
+		"gateway_modes_live",
+	}
+	rawIDs, ok := out["residual_ids"]
+	if !ok {
+		return fmt.Errorf("residual_ids missing")
+	}
+	idSet := map[string]bool{}
+	switch ids := rawIDs.(type) {
+	case []string:
+		if len(ids) == 0 {
+			return fmt.Errorf("residual_ids empty")
+		}
+		for _, id := range ids {
+			idSet[id] = true
+		}
+	case []any:
+		if len(ids) == 0 {
+			return fmt.Errorf("residual_ids empty")
+		}
+		for _, id := range ids {
+			s, _ := id.(string)
+			if s != "" {
+				idSet[s] = true
+			}
+		}
+	default:
+		return fmt.Errorf("residual_ids type %T", rawIDs)
+	}
+	for _, want := range wantIDs {
+		if !idSet[want] {
+			return fmt.Errorf("residual_ids missing %q: %+v", want, rawIDs)
+		}
+	}
+
+	// Mode B residual id + oauth009_offline flag always advertised offline.
+	if rid, _ := out["residual_id"].(string); rid != "oauth009_offline" {
+		return fmt.Errorf("residual_id=%v want oauth009_offline", out["residual_id"])
+	}
+	if out["oauth009_offline"] != true {
+		return fmt.Errorf("oauth009_offline=%v want true", out["oauth009_offline"])
+	}
+	if out["oauth009_offline_only"] != true {
+		return fmt.Errorf("oauth009_offline_only=%v want true", out["oauth009_offline_only"])
+	}
+
+	// Live mode pins stay false (never production GO from residual-status).
+	for _, k := range []string{
+		"mode_a_live_obtain_qualified",
+		"mode_b_live_rs_qualified",
+		"mode_c_live_agentcore_qualified",
+	} {
+		if out[k] != false {
+			return fmt.Errorf("%s must be false (live pin residual): %+v", k, out[k])
+		}
+	}
+
+	// HOST-008 Tier A: single-replica default; Ready only on serve /readyz.
+	if out["ha_multi_replica"] != false {
+		return fmt.Errorf("ha_multi_replica must be false: %+v", out["ha_multi_replica"])
+	}
+	if out["gateway_ready"] != false {
+		return fmt.Errorf("gateway_ready must be false on residual-status: %+v", out["gateway_ready"])
+	}
+	if out["multi_pod_vault_residual"] != true {
+		return fmt.Errorf("multi_pod_vault_residual always true: %+v", out["multi_pod_vault_residual"])
+	}
+
+	// shared_*_file default false when paths unset (HOST-008 lite residual).
+	for _, k := range []string{
+		"shared_subject_rate_file",
+		"shared_principal_cache_file",
+		"shared_jwks_file",
+	} {
+		if out[k] != false {
+			return fmt.Errorf("%s default false when path unset: %+v", k, out[k])
+		}
+	}
+
+	// Progressive consent residual object: browser 3LO not automated.
+	pc, ok := out["progressive_consent"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("progressive_consent object required: %+v", out["progressive_consent"])
+	}
+	if pc["browser_3lo_automated"] != false {
+		return fmt.Errorf("browser_3lo_automated must be false: %+v", pc["browser_3lo_automated"])
+	}
+
+	// Secret-free: canary + token markers never appear in residual map JSON.
+	blob, err := json.Marshal(out)
+	if err != nil {
+		return fmt.Errorf("marshal residual-status: %w", err)
+	}
+	s := string(blob)
+	for _, bad := range []string{
+		CanaryToken,
+		"access_token=",
+		"refresh_token=",
+		"client_secret=",
+		"Bearer " + CanaryToken,
+		"Authorization: Bearer",
+	} {
+		if strings.Contains(s, bad) {
+			return fmt.Errorf("residual-status surface contained %q", bad)
+		}
+	}
+	if strings.Contains(strings.ToLower(s), "production go complete") {
+		return fmt.Errorf("must not claim production GO complete")
+	}
+
+	// Operator pointer to live pin runbook.
+	note, _ := out["residual_note"].(string)
+	doc, _ := out["doc"].(string)
+	if !strings.Contains(note, "live-pin-blockers") && !strings.Contains(doc, "live-pin-blockers") {
+		return fmt.Errorf("want live-pin-blockers pointer: note=%q doc=%q", note, doc)
 	}
 	return nil
 }
