@@ -34,6 +34,11 @@ const AbsoluteMaxBodyBytes int64 = 16 << 20 // 16 MiB
 // AbsoluteMaxBodyBytes fail closed at serve start.
 const EnvHTTPMaxBodyBytes = "JENKINS_MCP_HTTP_MAX_BODY_BYTES"
 
+// EnvHTTPPathPrefix is the serve env for the optional Streamable HTTP path
+// prefix (HOST-002 reverse-proxy). CLI --http-path-prefix overrides when set.
+// Empty → no prefix (MCP served at root path space as today).
+const EnvHTTPPathPrefix = "JENKINS_MCP_HTTP_PATH_PREFIX"
+
 // HeaderJenkinsMCPToken is an alternate client header for the optional shared
 // secret (exact match). Prefer Authorization: Bearer when both are usable.
 const HeaderJenkinsMCPToken = "X-Jenkins-MCP-Token"
@@ -64,12 +69,18 @@ const HeaderJenkinsMCPToken = "X-Jenkins-MCP-Token"
 //     alone never satisfies subject requirements (HOST-001).
 //   - When RequireSubject is on, Mcp-Session-Id (when present) is bound to the
 //     first request's IdentityFingerprint; mid-session subject change → 401.
+//   - PathPrefix (HOST-002): optional reverse-proxy mount path (e.g. "/mcp").
+//     When set, MCP Streamable endpoints are served only under that prefix
+//     (prefix stripped before the SDK handler). /healthz and /readyz remain
+//     at root and are also available at {prefix}/healthz and {prefix}/readyz.
+//     Origin/Host/body/token/subject checks are unchanged after strip.
 //
 // Residual: empty BearerToken on loopback without RequireToken still leaves the
 // socket open to any local process (KD-008 pilot residual, non-gateway only).
 // Production multi-user JWT/OIDC validation is partial (lab header + resolver
 // hook foundation; continuous JWKS rotation under load residual HOST-001 /
-// HOST-014). Prefer stdio for pilot (ADR 0002).
+// HOST-014). Live path-prefix origin pin matrix remains residual (HOST-002 /
+// NET-001). Prefer stdio for pilot (ADR 0002).
 type HTTPConfig struct {
 	// Addr is the listen address (e.g. "127.0.0.1:8765", "localhost:0").
 	Addr string
@@ -86,6 +97,15 @@ type HTTPConfig struct {
 	// Negative disables the cap (not recommended; tests only).
 	// Operator path: ResolveHTTPMaxBodyBytes → positive value ≤ AbsoluteMaxBodyBytes.
 	MaxBodyBytes int64
+
+	// PathPrefix is an optional URL path prefix for Streamable HTTP MCP routes
+	// (HOST-002 reverse-proxy). Empty (default) serves MCP in the root path
+	// space as today. When set (e.g. "/mcp"), only requests under that prefix
+	// reach the MCP handler; the prefix is stripped before the SDK. Health
+	// endpoints stay at root and also at {prefix}/healthz|{prefix}/readyz.
+	// Wire as --http-path-prefix / JENKINS_MCP_HTTP_PATH_PREFIX. Validated:
+	// must start with "/", no "//", no ".." segments; trailing slash normalized.
+	PathPrefix string
 
 	// AllowedOrigins, when non-empty, is an exact-match allow list for the
 	// Origin header on non-GET requests. When empty (default), only loopback
@@ -133,9 +153,10 @@ type HTTPConfig struct {
 	IdentityResolver IdentityResolver
 
 	// ReadyCheck optionally reports whether gateway Obtain (or equivalent) is
-	// Ready for multi-user traffic (HOST-005). Used only by GET/HEAD /readyz.
-	// When nil, /readyz returns process-up {"status":"ok"} without gateway_ready
-	// (residual: provider probe not wired). When set and false → 503
+	// Ready for multi-user traffic (HOST-005). Used only by GET/HEAD /readyz
+	// (and {prefix}/readyz when PathPrefix is set). When nil, /readyz returns
+	// process-up {"status":"ok"} without gateway_ready (residual: provider
+	// probe not wired). When set and false → 503
 	// {"status":"not_ready","gateway_ready":false}. Must be secret-free.
 	ReadyCheck ReadyCheck
 
@@ -225,11 +246,111 @@ func parseHTTPMaxBodyBytesValue(raw, source string) (int64, error) {
 	return v, nil
 }
 
+// ResolveHTTPPathPrefix resolves the optional Streamable HTTP path prefix
+// (HOST-002). Precedence: flagVal wins over envVal; empty at both → no prefix.
+// Invalid values fail closed (never clamp/silently rewrite beyond trailing-slash
+// normalization). See ValidateHTTPPathPrefix for rules.
+func ResolveHTTPPathPrefix(flagVal, envVal string) (string, error) {
+	raw := strings.TrimSpace(flagVal)
+	source := "flag --http-path-prefix"
+	if raw == "" {
+		raw = strings.TrimSpace(envVal)
+		source = "env " + EnvHTTPPathPrefix
+	}
+	if raw == "" {
+		return "", nil
+	}
+	norm, err := ValidateHTTPPathPrefix(raw)
+	if err != nil {
+		return "", apperr.New(apperr.CodeInvalidArgument,
+			"invalid http path prefix from "+source+": "+err.Error())
+	}
+	return norm, nil
+}
+
+// ValidateHTTPPathPrefix fails closed on unsafe reverse-proxy path prefixes
+// (HOST-002). Empty / whitespace → no prefix (""). Bare "/" is treated as no
+// prefix. Rules when non-empty after trim:
+//   - must start with "/"
+//   - must not contain "//"
+//   - must not contain ".." path segments (or a lone "..")
+//   - must not contain backslash or control characters
+//   - trailing slash is stripped (except when result would be empty → no prefix)
+// Normalized form is returned (leading slash, no trailing slash).
+func ValidateHTTPPathPrefix(raw string) (string, error) {
+	p := strings.TrimSpace(raw)
+	if p == "" || p == "/" {
+		return "", nil
+	}
+	if !strings.HasPrefix(p, "/") {
+		return "", fmt.Errorf("must start with '/'")
+	}
+	if strings.Contains(p, "//") {
+		return "", fmt.Errorf("must not contain '//'")
+	}
+	if strings.Contains(p, "\\") {
+		return "", fmt.Errorf("must not contain backslash")
+	}
+	for _, r := range p {
+		if r < 0x20 || r == 0x7f {
+			return "", fmt.Errorf("must not contain control characters")
+		}
+	}
+	// Strip a single trailing slash for stable prefix matching.
+	for strings.HasSuffix(p, "/") && p != "/" {
+		p = strings.TrimSuffix(p, "/")
+	}
+	if p == "" || p == "/" {
+		return "", nil
+	}
+	// Reject "." / ".." path segments (and empty after split on accidental //).
+	parts := strings.Split(p, "/")
+	// First part is empty because p starts with "/".
+	for i, seg := range parts {
+		if i == 0 {
+			continue
+		}
+		if seg == "" {
+			return "", fmt.Errorf("must not contain empty path segments")
+		}
+		if seg == "." || seg == ".." {
+			return "", fmt.Errorf("must not contain '.' or '..' path segments")
+		}
+	}
+	return p, nil
+}
+
+// stripHTTPPathPrefix reports whether path is under prefix and returns the
+// residual path for the MCP handler. When prefix is empty, path is returned
+// unchanged. path == prefix → "/"; path == prefix+"/foo" → "/foo".
+// Non-boundary matches (e.g. prefix "/mcp" vs path "/mcpfoo") do not match.
+func stripHTTPPathPrefix(path, prefix string) (stripped string, ok bool) {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		if path == "" {
+			return "/", true
+		}
+		return path, true
+	}
+	if path == prefix {
+		return "/", true
+	}
+	if strings.HasPrefix(path, prefix+"/") {
+		rest := path[len(prefix):]
+		if rest == "" {
+			return "/", true
+		}
+		return rest, true
+	}
+	return "", false
+}
+
 // ValidateHTTPConfig fails closed on unsafe HTTP serve configuration.
 // AllowNonLocal requires non-empty AllowedOrigins and AllowedHosts so browser
 // Origin and Host are never "any host" by default (Wave 16 / Wave 35), and
 // always requires a non-empty BearerToken (non-loopback without a shared secret
 // is too open). RequireToken (CLI/env) forces the same secret check on loopback.
+// PathPrefix is validated (HOST-002).
 func ValidateHTTPConfig(cfg HTTPConfig) error {
 	if err := ValidateListenAddr(cfg.Addr, cfg.AllowNonLocal); err != nil {
 		return err
@@ -325,6 +446,11 @@ func NewHTTPHandler(server *mcp.Server, cfg HTTPConfig) (http.Handler, error) {
 	if err := validateHTTPHandlerPolicy(cfg); err != nil {
 		return nil, err
 	}
+	// Normalize PathPrefix (empty / bare "/" → none). Policy already validated.
+	pathPrefix, err := ValidateHTTPPathPrefix(cfg.PathPrefix)
+	if err != nil {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "invalid http path prefix: "+err.Error())
+	}
 	maxBody := cfg.MaxBodyBytes
 	if maxBody == 0 {
 		maxBody = DefaultMaxBodyBytes
@@ -336,6 +462,7 @@ func NewHTTPHandler(server *mcp.Server, cfg HTTPConfig) (http.Handler, error) {
 	h := &protectHandler{
 		inner:                   inner,
 		maxBody:                 maxBody,
+		pathPrefix:              pathPrefix,
 		allowNonLocal:           cfg.AllowNonLocal,
 		allowedOrigins:          append([]string(nil), cfg.AllowedOrigins...),
 		allowedHosts:            append([]string(nil), cfg.AllowedHosts...),
@@ -365,6 +492,9 @@ func validateHTTPHandlerPolicy(cfg HTTPConfig) error {
 	if cfg.MaxBodyBytes > AbsoluteMaxBodyBytes {
 		return apperr.New(apperr.CodeInvalidArgument,
 			"http MaxBodyBytes exceeds absolute max "+strconv.FormatInt(AbsoluteMaxBodyBytes, 10)+" bytes (fail closed)")
+	}
+	if _, err := ValidateHTTPPathPrefix(cfg.PathPrefix); err != nil {
+		return apperr.New(apperr.CodeInvalidArgument, "invalid http path prefix: "+err.Error())
 	}
 	if cfg.AllowNonLocal {
 		if len(cfg.AllowedOrigins) == 0 {
@@ -473,8 +603,9 @@ func RunHTTP(ctx context.Context, server *mcp.Server, cfg HTTPConfig) error {
 	errCh := make(chan error, 1)
 	go func() {
 		// Never log BearerToken or access-token values — only bools.
-		logger.Printf("Starting MCP HTTP server on %s (loopback_enforced=%v max_body=%d http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v)",
-			ln.Addr().String(), !cfg.AllowNonLocal, effectiveMaxBody(cfg),
+		pathPrefix, _ := ValidateHTTPPathPrefix(cfg.PathPrefix)
+		logger.Printf("Starting MCP HTTP server on %s (loopback_enforced=%v max_body=%d path_prefix=%q http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v)",
+			ln.Addr().String(), !cfg.AllowNonLocal, effectiveMaxBody(cfg), pathPrefix,
 			HTTPTokenRequired(cfg), cfg.BearerToken != "",
 			HTTPSubjectRequired(cfg), cfg.LabIdentity)
 		errCh <- srv.Serve(ln)
@@ -506,11 +637,13 @@ func effectiveMaxBody(cfg HTTPConfig) int64 {
 }
 
 // protectHandler applies optional shared-secret, subject identity, body size,
-// Host, and Origin checks around the SDK handler (HOST-001 + KD-008).
+// Host, Origin, and path-prefix checks around the SDK handler
+// (HOST-001 + HOST-002 + KD-008).
 type protectHandler struct {
-	inner            http.Handler
-	maxBody          int64
-	allowNonLocal    bool
+	inner         http.Handler
+	maxBody       int64
+	pathPrefix    string // normalized; empty = no prefix (MCP at root path space)
+	allowNonLocal bool
 	allowedOrigins   []string
 	allowedHosts     []string
 	bearerToken      string
@@ -535,14 +668,22 @@ func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Secret-free health/ready: no shared secret, no subject, no tool inventory.
-	// Exact path only (HOST-001 / HOST-002 / HOST-005).
-	if isHealthPath(r.URL.Path) && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
-		if r.URL.Path == ReadyzPath {
-			writeReadyz(w, h.readyCheck)
+	// Exact path only at root, and at {prefix}/healthz|{prefix}/readyz when a
+	// path prefix is configured (HOST-001 / HOST-002 / HOST-005).
+	if h.tryHealth(w, r) {
+		return
+	}
+
+	// HOST-002: when PathPrefix is set, MCP routes live only under that prefix.
+	// Strip before Origin/Host/token/SDK so handlers see root-relative paths.
+	// Non-prefix non-health paths → 404 (do not fall through to SDK at "/").
+	if h.pathPrefix != "" {
+		stripped, ok := stripHTTPPathPrefix(r.URL.Path, h.pathPrefix)
+		if !ok {
+			http.NotFound(w, r)
 			return
 		}
-		writeHealthOK(w)
-		return
+		r = cloneRequestWithPath(r, stripped)
 	}
 
 	// Optional shared-secret gate (KD-008 lite / transport only). Fail closed
@@ -630,6 +771,64 @@ func (h *protectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.inner.ServeHTTP(w, r)
+}
+
+// tryHealth handles secret-free GET/HEAD /healthz and /readyz at root, and
+// under PathPrefix when configured. Returns true when the request was handled.
+func (h *protectHandler) tryHealth(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	path := ""
+	if r.URL != nil {
+		path = r.URL.Path
+	}
+	// Root health always available (probe-friendly even when MCP is mounted
+	// under a reverse-proxy path prefix).
+	if isHealthPath(path) {
+		if path == ReadyzPath {
+			writeReadyz(w, h.readyCheck)
+			return true
+		}
+		writeHealthOK(w)
+		return true
+	}
+	// Prefixed health: {prefix}/healthz and {prefix}/readyz (HOST-002).
+	if h.pathPrefix != "" {
+		stripped, ok := stripHTTPPathPrefix(path, h.pathPrefix)
+		if ok && isHealthPath(stripped) {
+			if stripped == ReadyzPath {
+				writeReadyz(w, h.readyCheck)
+				return true
+			}
+			writeHealthOK(w)
+			return true
+		}
+	}
+	return false
+}
+
+// cloneRequestWithPath returns a shallow clone of r with URL.Path set to path.
+// Host, headers, body, and context are preserved. Used after path-prefix strip
+// so the SDK and protect checks see root-relative paths.
+func cloneRequestWithPath(r *http.Request, path string) *http.Request {
+	if r == nil {
+		return r
+	}
+	if path == "" {
+		path = "/"
+	}
+	r2 := r.Clone(r.Context())
+	if r2.URL == nil {
+		r2.URL = &url.URL{Path: path}
+		return r2
+	}
+	u := *r2.URL
+	u.Path = path
+	// RawPath is a hint for escaped forms; clear so Path is authoritative.
+	u.RawPath = ""
+	r2.URL = &u
+	return r2
 }
 
 // requestHasValidToken reports whether r presents the shared secret via

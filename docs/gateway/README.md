@@ -357,8 +357,8 @@ env-wired); live Entra JWKS under load / multi-replica session store (HOST-008).
 | Custom Jenkins authorization-server plugin | ADR 0011 / OAUTH-011 **default no-go** |
 | Shared Jenkins service account for interactive users | **Never** |
 | Real client secret storage | keyring / vault (not profile JSON) |
-| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT resolver, `Mcp-Session-Id`→`IdentityFingerprint` fail closed; **JWKS refresh foundation** (`auth.RefreshingJWKS`, TTL env `JENKINS_MCP_HTTP_JWKS_REFRESH_TTL`, stale-if-error, per-validation `Get`); residual: multi-instance/under-load JWKS HA, optional max-stale fail-closed operator wire, live Entra |
-| Reverse-proxy non-local matrix | HOST-002 **docs Done***; live path-prefix residual; no CORS wildcards fail-closed |
+| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT, session fingerprint, JWKS TTL refresh, multi-user Obtain opt-in; residual: multi-instance JWKS HA, live Entra, policy.Subject hot-swap |
+| Reverse-proxy non-local matrix | HOST-002 **Partial Done***: docs + `PathPrefix` strip + dual health; live edge origin pin residual; no CORS wildcards fail-closed |
 | Health/readiness envelope | HOST-005 **partial** — `/healthz` + `/readyz` + compose/k8s limits; Obtain Ready on `/readyz` when `--gateway` |
 | Multi-replica HA | HOST-008 Tier B residual (single-replica Tier A default) |
 | **Program path to team-hosted** | [roadmap/server-team-hosted.md](../roadmap/server-team-hosted.md) |

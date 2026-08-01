@@ -234,6 +234,7 @@ Usage:
   jenkins-mcp serve --profile <id> [--http ADDR] [--http-token-env=VAR | --http-token-file=PATH]
   jenkins-mcp serve --profile <id> [--http ADDR] [--http-require-token]
   jenkins-mcp serve --profile <id> [--http ADDR] [--http-max-body-bytes N]
+  jenkins-mcp serve --profile <id> [--http ADDR] [--http-path-prefix=/mcp]
   jenkins-mcp serve --profile <id> [--enable-adapter=ID]... [--adapter-allowlist PATH]
   jenkins-mcp serve --profile <id> [--ca-bundle PATH] [--proxy URL]
   jenkins-mcp serve --profile <id> [--identity-reverify-ttl=30s]
@@ -286,9 +287,13 @@ JENKINS_MCP_HTTP_JWKS_REFRESH_TTL, min 30s max 1h) with stale-if-error.
 Shared transport secret is never treated as subject.
 Request body cap defaults to
 4 MiB; raise with --http-max-body-bytes / JENKINS_MCP_HTTP_MAX_BODY_BYTES
-(absolute fail-closed 16 MiB). Mid-session subject change on the same
-Mcp-Session-Id fails closed (HOST-001). Residual: multi-instance JWKS cache /
-under-load HA; live Entra; prefer stdio for pilot (ADR 0002).
+(absolute fail-closed 16 MiB). Optional reverse-proxy path prefix:
+--http-path-prefix / JENKINS_MCP_HTTP_PATH_PREFIX (e.g. /mcp; must start with
+/; no // or ..; flag wins). When set, MCP Streamable routes are under the
+prefix only (stripped before the SDK); /healthz and /readyz stay at root and
+also at {prefix}/healthz|{prefix}/readyz. Mid-session subject change on the same
+Mcp-Session-Id fails closed (HOST-001). Residual: multi-instance JWKS HA; live
+Entra; live path-prefix origin pin matrix; prefer stdio for pilot (ADR 0002).
 
 TLS/proxy (NET-004): profile may set caBundlePath, proxyURL, noProxy, clientCertFile,
 clientKeyFile (paths only — never private keys in profile JSON). CLI --ca-bundle /
@@ -867,6 +872,8 @@ func runServe(args []string) error {
 	httpRequireSubject := fs.Bool("http-require-subject", false, "Fail closed if HTTP requests lack trusted subject identity (also --gateway, JENKINS_MCP_HTTP_REQUIRE_SUBJECT=1; always on with --http-allow-non-local; transport secret alone is not identity)")
 	// Wave 44 Track C: Streamable HTTP request body cap (absolute fail-closed 16 MiB).
 	httpMaxBodyBytesFlag := fs.String("http-max-body-bytes", "", "Streamable HTTP request body cap in bytes (empty/0=default 4MiB; env JENKINS_MCP_HTTP_MAX_BODY_BYTES fallback; flag wins; max 16MiB absolute fail-closed)")
+	// HOST-002: reverse-proxy path prefix for Streamable HTTP MCP routes.
+	httpPathPrefixFlag := fs.String("http-path-prefix", "", "Optional Streamable HTTP path prefix for reverse-proxy mounts (e.g. /mcp; empty=root; env JENKINS_MCP_HTTP_PATH_PREFIX fallback; flag wins; must start with /; no // or ..; MCP only under prefix; /healthz|/readyz at root and {prefix})")
 	var httpAllowedOrigins multiString
 	fs.Var(&httpAllowedOrigins, "http-allowed-origin", "Exact Origin allow-list entry for non-GET when using --http (repeatable; required with --http-allow-non-local)")
 	var httpAllowedHosts multiString
@@ -954,7 +961,7 @@ func runServe(args []string) error {
 		"adapter-otel-export-backend": true, "adapter-otel-export-base-url": true,
 		"enable-adapter": true, "http-allowed-origin": true, "http-allowed-host": true,
 		"http-token-env": true, "http-token-file": true,
-		"http-max-body-bytes": true,
+		"http-max-body-bytes": true, "http-path-prefix": true,
 	})); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
@@ -1957,6 +1964,12 @@ func runServe(args []string) error {
 			return err
 		}
 		cfg.MaxBodyBytes = maxBody
+		// HOST-002: reverse-proxy path prefix (flag wins over env; fail closed on invalid).
+		pathPrefix, err := mcpserver.ResolveHTTPPathPrefix(*httpPathPrefixFlag, os.Getenv(mcpserver.EnvHTTPPathPrefix))
+		if err != nil {
+			return err
+		}
+		cfg.PathPrefix = pathPrefix
 		token, err := loadHTTPServeToken(*httpTokenEnv, *httpTokenFile)
 		if err != nil {
 			return err
@@ -2024,11 +2037,11 @@ func runServe(args []string) error {
 				return gatewayObtainReady(prov)
 			}
 		}
-		// Never log token values — only required/configured bools and body cap.
-		log.Printf("http serve token policy: http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v http_jwt_configured=%v http_jwt_required=%v max_body_bytes=%d gateway_ready_probe=%v expected_subject_pin=%v multi_user=%v",
+		// Never log token values — only required/configured bools, body cap, path prefix.
+		log.Printf("http serve token policy: http_token_required=%v http_token_configured=%v http_subject_required=%v lab_identity=%v http_jwt_configured=%v http_jwt_required=%v max_body_bytes=%d path_prefix=%q gateway_ready_probe=%v expected_subject_pin=%v multi_user=%v",
 			mcpserver.HTTPTokenRequired(cfg), cfg.BearerToken != "",
 			mcpserver.HTTPSubjectRequired(cfg), cfg.LabIdentity,
-			jwtEnv.Configured(), jwtEnv.Required, cfg.MaxBodyBytes, useGateway,
+			jwtEnv.Configured(), jwtEnv.Required, cfg.MaxBodyBytes, cfg.PathPrefix, useGateway,
 			cfg.ExpectedExternalSubject != "", gatewayMultiUser)
 		if err := mcpserver.RunHTTP(serveCtx, server, cfg); err != nil {
 			return err
@@ -2054,6 +2067,10 @@ func runServe(args []string) error {
 	if strings.TrimSpace(*httpMaxBodyBytesFlag) != "" {
 		return apperr.New(apperr.CodeInvalidArgument,
 			"--http-max-body-bytes require --http")
+	}
+	if strings.TrimSpace(*httpPathPrefixFlag) != "" || strings.TrimSpace(os.Getenv(mcpserver.EnvHTTPPathPrefix)) != "" {
+		return apperr.New(apperr.CodeInvalidArgument,
+			"--http-path-prefix / JENKINS_MCP_HTTP_PATH_PREFIX require --http")
 	}
 	if *useStdio {
 		log.Printf("Starting MCP server over stdio")

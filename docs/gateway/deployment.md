@@ -97,6 +97,7 @@ shared Jenkins token.
 | CORS wildcard (`*`, `https://*.example`, path `/*`) | **Reject at start** — exact-match origins only |
 | Host header (non-local) | Must exact-match AllowedHosts (DNS rebinding defense) |
 | Origin on non-GET | Exact-match AllowedOrigins (or loopback when allow-list empty on loopback-only) |
+| `--http-path-prefix` / `JENKINS_MCP_HTTP_PATH_PREFIX` | Optional MCP mount prefix (e.g. `/mcp`); invalid prefix **reject at start**; see below |
 
 ```bash
 # Non-local residual (tests / advanced) — never ship bare :8081 alone
@@ -109,30 +110,72 @@ jenkins-mcp serve --profile corp --gateway --read-only \
   --http-require-subject
 ```
 
-### Path-prefix residual (NET-001)
+### Path-prefix reverse-proxy (HOST-002)
 
-Jenkins and the MCP gateway may sit behind a reverse-proxy **path prefix**
-(e.g. `https://edge.example.corp/jenkins/…`). Origin pin helpers exist offline
-(`NormalizeBaseURL` / same-origin pure contracts). A full **live path-prefix
-origin pin matrix** (edge strips/rewrites `Host`/`Origin`/`X-Forwarded-*`) remains
-**residual** — document site proxy config in pilot evidence; do not claim
-automatic multi-prefix production support from this scaffold.
+Streamable HTTP can be mounted under a site reverse-proxy **path prefix** so the
+public MCP base URL is e.g. `https://edge.example.corp/mcp` while the process
+still listens on loopback or a private port.
+
+| Control | Behavior |
+|---------|----------|
+| CLI | `--http-path-prefix=/mcp` |
+| Env | `JENKINS_MCP_HTTP_PATH_PREFIX` (flag wins when both set) |
+| Config | `HTTPConfig.PathPrefix` |
+| Validation (fail closed) | Must start with `/`; no `//`; no `.` / `..` segments; no backslash; trailing `/` normalized away; bare `/` = no prefix |
+| MCP routes when prefix set | **Only** under `{prefix}` (and `{prefix}/…`); prefix stripped before SDK |
+| MCP routes when prefix empty | Unchanged: root path space (as today) |
+| Health | `GET /healthz` and `GET /readyz` **always** at root; also at `{prefix}/healthz` and `{prefix}/readyz` when prefix set |
+| Origin / Host | Unchanged after strip (exact `AllowedOrigins` / `AllowedHosts`; no CORS wildcards) |
+
+```bash
+# App: loopback MCP under /mcp (proxy terminates TLS and forwards /mcp/*)
+jenkins-mcp serve --profile corp --gateway --read-only \
+  --http 127.0.0.1:8081 \
+  --http-path-prefix=/mcp \
+  --http-require-subject \
+  --http-token-env MCP_HTTP_TOKEN
+
+# Example nginx shape (illustrative — site-owned TLS and auth remain residual)
+# location /mcp/ {
+#   proxy_pass http://127.0.0.1:8081/mcp/;   # keep prefix; app strips
+#   proxy_set_header Host $host;
+#   proxy_set_header Origin $http_origin;  # do not invent *
+#   proxy_http_version 1.1;
+#   proxy_buffering off;                   # SSE / streamable
+# }
+# Probes may hit app root or prefixed health:
+#   GET /healthz  or  GET /mcp/healthz
+#   GET /readyz   or  GET /mcp/readyz
+```
+
+**Clients** must use the public base including the prefix
+(e.g. Streamable endpoint `https://edge.example.corp/mcp`). Do not configure a
+CORS `*` allow-list on the proxy for browser agents.
+
+**Residual (NET-001 / HOST-002 live matrix):** a full **live path-prefix origin
+pin matrix** (edge strips/rewrites `Host`/`Origin`/`X-Forwarded-*`, multi-prefix
+Jenkins vs MCP edge) is **not** automated here. Document site proxy config in
+pilot evidence; Origin pin pure helpers remain offline. Do not claim automatic
+multi-prefix production support beyond the strip + dual health surface above.
 
 ### Health endpoints — secret-free (HOST-002 / HOST-005)
 
 | Path | Auth | Body | Notes |
 |------|------|------|-------|
-| `GET /healthz` | None | `{"status":"ok"}` | Liveness only |
+| `GET /healthz` | None | `{"status":"ok"}` | Liveness only (always) |
 | `GET /readyz` | None | Process-up: `{"status":"ok"}`; gateway wired: `{"status":"ok\|not_ready","gateway_ready":bool}` | **503** when `gateway_ready=false` |
+| `GET {prefix}/healthz` | None | Same as `/healthz` | When `--http-path-prefix` / `PathPrefix` set |
+| `GET {prefix}/readyz` | None | Same as `/readyz` | When prefix set |
 
 - Unauthenticated by design (probes must not require tokens).  
 - **Never** include tool inventory, subjects, tokens, vault material, or Jenkins
   job lists.  
-- Exact path match only (no prefix that could open MCP routes).  
+- Exact path match only (no open prefix that could expose MCP tool inventory as
+  “health”).  
 - When `--gateway` is set, serve wires `ReadyCheck` from Obtain Ready; when
   Obtain is not Ready, **readiness fails (503)** while liveness stays ok.
 
-Regression tests: `go test ./internal/mcpserver -run 'Health|Readyz|AllowedHosts|Wildcard'`.
+Regression tests: `go test ./internal/mcpserver -run 'Health|Readyz|PathPrefix|AllowedHosts|Wildcard'`.
 
 ---
 
@@ -165,6 +208,15 @@ Regression tests: `go test ./internal/mcpserver -run 'Health|Readyz|AllowedHosts
 |----------|---------|---------|
 | `JENKINS_MCP_GATEWAY_CREDENTIAL_MODE` | Primary: `api_token_vault` \| `jwt_rs_bearer` \| `agentcore_3lo_obo` | No |
 | `JENKINS_MCP_GATEWAY_ENABLED_MODES` | Optional comma allow-list of mode ids | No |
+
+### Streamable HTTP (optional; not pilot default)
+
+| Variable | Meaning | Secret? |
+|----------|---------|---------|
+| `JENKINS_MCP_HTTP_PATH_PREFIX` | MCP mount path prefix (e.g. `/mcp`); flag `--http-path-prefix` wins | No |
+| `JENKINS_MCP_HTTP_MAX_BODY_BYTES` | Request body cap (bytes); flag wins; max 16 MiB absolute | No |
+| `JENKINS_MCP_HTTP_REQUIRE_TOKEN` / `JENKINS_MCP_HTTP_DENY_ANONYMOUS` | Require shared secret on loopback | No (bool) |
+| `JENKINS_MCP_HTTP_REQUIRE_SUBJECT` | Require per-request subject (HOST-001) | No (bool) |
 
 ### General serve / policy (shared with local)
 
