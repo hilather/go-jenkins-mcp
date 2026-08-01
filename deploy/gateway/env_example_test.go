@@ -53,6 +53,8 @@ func TestEnvExample_ListsGatewayLabFlags(t *testing.T) {
 		"JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT",
 		"JENKINS_MCP_SUBJECT_RATE_PER_MINUTE",
 		"JENKINS_MCP_SUBJECT_RATE_BURST",
+		"JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_MAX",
+		"JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_TTL",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing env name %s in .env.example", want)

@@ -324,9 +324,16 @@ func TestGatewayResidualStatus(t *testing.T) {
 		t.Fatalf("rateBurst: %+v", payload["rateBurst"])
 	}
 
-	// principal_cache_entries is count only (number).
+	// principal_cache_entries is count only (number); never subjects/tokens.
 	if _, ok := payload["principal_cache_entries"].(float64); !ok {
 		t.Fatalf("principal_cache_entries: %+v", payload["principal_cache_entries"])
+	}
+	// Empty hygiene env → omit max/ttl (unlimited residual default).
+	if _, ok := payload["principal_cache_max_entries"]; ok {
+		t.Fatalf("unlimited default must omit principal_cache_max_entries: %+v", payload["principal_cache_max_entries"])
+	}
+	if _, ok := payload["principal_cache_ttl_seconds"]; ok {
+		t.Fatalf("no TTL default must omit principal_cache_ttl_seconds: %+v", payload["principal_cache_ttl_seconds"])
 	}
 
 	// Honesty note + live-pin-blockers pointer.
@@ -364,6 +371,34 @@ func TestGatewayResidualStatus_ViaDispatch(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "ha_multi_replica") {
 		t.Fatalf("stdout missing ha_multi_replica: %s", buf.String())
+	}
+}
+
+func TestGatewayResidualStatus_PrincipalCacheHygieneEnv(t *testing.T) {
+	// Optional MaxEntries + TTL knobs surface as secret-free residual fields only.
+	t.Setenv(gateway.EnvGatewayPrincipalCacheMax, "256")
+	t.Setenv(gateway.EnvGatewayPrincipalCacheTTL, "2h")
+	out := buildGatewayResidualStatus(os.Getenv)
+	if out["principal_cache_max_entries"] != 256 {
+		t.Fatalf("principal_cache_max_entries: %+v", out["principal_cache_max_entries"])
+	}
+	if out["principal_cache_ttl_seconds"] != 7200 {
+		t.Fatalf("principal_cache_ttl_seconds: %+v", out["principal_cache_ttl_seconds"])
+	}
+	// buildGatewayResidualStatus uses Len() → int (never subjects dump).
+	if _, ok := out["principal_cache_entries"].(int); !ok {
+		t.Fatalf("principal_cache_entries type: %T %v", out["principal_cache_entries"], out["principal_cache_entries"])
+	}
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	// Must not dump subject inventory or tokens.
+	for _, bad := range []string{canaryCLIToken, "alice-j", "tenant|subject", "access_token="} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q in residual-status with hygiene env", bad)
+		}
 	}
 }
 

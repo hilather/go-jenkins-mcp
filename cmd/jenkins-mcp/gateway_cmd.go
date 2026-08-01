@@ -209,10 +209,20 @@ func buildGatewayResidualStatus(getenv func(string) string) map[string]any {
 		"rateEnabled":   rateEnabled,
 		"ratePerMinute": ratePerMinute,
 		"rateBurst":     rateBurst,
-		// Process-local principal cache entry count only (never subjects/tokens).
+		// Process-local principal cache: entry count + optional hygiene knobs from env
+		// (never subjects/tokens/principal inventory). Multi-pod shared residual.
 		"principal_cache_entries": gateway.ProcessPrincipalCache().Len(),
 		"residual_note":           residualStatusHonestyNote,
 		"doc":                     residualStatusDoc,
+	}
+	// Optional PrincipalCache hygiene residual lite (env/static; empty = unlimited / no TTL).
+	if pcMax, pcTTL, err := gateway.PrincipalCacheConfigFromEnviron(getenv); err == nil {
+		if pcMax > 0 {
+			out["principal_cache_max_entries"] = pcMax
+		}
+		if pcTTL > 0 {
+			out["principal_cache_ttl_seconds"] = int(pcTTL / time.Second)
+		}
 	}
 	if mp.Checklist != "" {
 		out["multi_pod_residual_checklist"] = mp.Checklist
