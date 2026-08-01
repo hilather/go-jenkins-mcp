@@ -121,6 +121,20 @@ export function OverviewPage() {
                 (HOST-008 sticky Service scaffold when multi-user; not multi-replica Done)
               </span>
             </dd>
+            <dt>multiPodVaultResidual</dt>
+            <dd>
+              {health.data.multiPodVaultResidual !== false ? "yes" : "no"}{" "}
+              <span className="muted">
+                (HOST-008 multi-pod durable vault residual honesty — not multi-replica Done)
+              </span>
+            </dd>
+            <dt>kubernetesEnvDetected</dt>
+            <dd>
+              {health.data.kubernetesEnvDetected ? "yes" : "no"}{" "}
+              <span className="muted">
+                (KUBERNETES_SERVICE_HOST; in-cluster residual only)
+              </span>
+            </dd>
             <dt>rateEnabled</dt>
             <dd>
               {health.data.rateEnabled ? "yes" : "no"}{" "}
@@ -157,6 +171,39 @@ export function OverviewPage() {
           )
         )}
       </div>
+
+      {health.isSuccess && health.data.kubernetesEnvDetected && (
+        <div className="card">
+          <h2>Multi-pod residual checklist (HOST-008)</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            <code>kubernetesEnvDetected=true</code> (
+            <code>KUBERNETES_SERVICE_HOST</code>). Secret-free honesty only —
+            not multi-replica Done. Doctor parity:{" "}
+            <code>gateway_status.multi_pod_vault_residual</code>. See{" "}
+            <code>docs/gateway/deployment.md</code> §9.
+          </p>
+          <ul className="muted" style={{ margin: 0, paddingLeft: "1.2rem" }}>
+            <li>
+              Sticky sessions or shared session store (
+              <code>sessionAffinityRecommended</code> when multi-user)
+            </li>
+            <li>
+              Durable shared vault (not emptyDir) —{" "}
+              <code>multiPodVaultResidual=true</code>
+            </li>
+            <li>Shared subject rate (process-local rate residual today)</li>
+            <li>Shared Obtain / token cache across pods</li>
+            <li>
+              <code>haMultiReplica=false</code> until runtime HA
+            </li>
+          </ul>
+          {health.data.residual ? (
+            <p className="muted" style={{ marginBottom: 0 }}>
+              <strong>health residual:</strong> {health.data.residual}
+            </p>
+          ) : null}
+        </div>
+      )}
 
       {modeC && health.isSuccess && (
         <div className="card">
@@ -264,6 +311,16 @@ export function OverviewPage() {
                 {vault.data.sessionAffinityRecommended ? "yes" : "no"}{" "}
                 <span className="muted">(sticky scaffold honesty; not multi-replica Done)</span>
               </dd>
+              <dt>multiPodVaultResidual</dt>
+              <dd>
+                {vault.data.multiPodVaultResidual !== false ? "yes" : "no"}{" "}
+                <span className="muted">(HOST-008 multi-pod vault residual; not multi-replica Done)</span>
+              </dd>
+              <dt>kubernetesEnvDetected</dt>
+              <dd>
+                {vault.data.kubernetesEnvDetected ? "yes" : "no"}{" "}
+                <span className="muted">(in-cluster residual; not HA Done)</span>
+              </dd>
               <dt>rateEnabled</dt>
               <dd>
                 {vault.data.rateEnabled ? "yes" : "no"}{" "}
@@ -343,6 +400,13 @@ export function OverviewPage() {
             Mode C progressive consent: metadata path Done* on health; browser
             3LO not automated (OAUTH-010). Admin never returns authorize URLs
             with secrets.
+          </li>
+          <li>
+            Multi-pod / HA (HOST-008): health and vault always surface{" "}
+            <code>multiPodVaultResidual</code> (honest residual, not Done).
+            When <code>kubernetesEnvDetected</code>, Overview shows the multi-pod
+            residual checklist (sticky, shared vault, rate, Obtain cache). Never
+            multi-replica Done from k8s env alone.
           </li>
           <li>
             BFF is loopback-only by default (ADR 0014). No Jenkins tokens in

@@ -28,6 +28,16 @@ export interface HealthResponse {
   haMultiReplica?: boolean;
   /** True when multi-user env set (HOST-008 sticky Service scaffold honesty; not multi-replica Done). */
   sessionAffinityRecommended?: boolean;
+  /**
+   * Always true (HOST-008 multi-pod durable vault residual honesty).
+   * Parity with doctor gateway_status.multi_pod_vault_residual. Not multi-replica Done.
+   */
+  multiPodVaultResidual?: boolean;
+  /**
+   * True when KUBERNETES_SERVICE_HOST is set (in-cluster residual).
+   * When true, residual / SPA checklist covers sticky, shared vault, rate, Obtain cache.
+   */
+  kubernetesEnvDetected?: boolean;
   /** HOST-006 rate env residual (process-local; not multi-replica shared rate). */
   rateEnabled?: boolean;
   /** Resolved bootstrap tools/min (default or env); 0 when disabled. Never tokens. */
@@ -345,6 +355,15 @@ export interface GatewayVaultResponse {
   haMultiReplica?: boolean;
   /** True when multi-user env set (HOST-008 sticky scaffold honesty; not multi-replica Done). */
   sessionAffinityRecommended?: boolean;
+  /**
+   * Always true (HOST-008 multi-pod vault residual; parity with doctor multi_pod_vault_residual).
+   * Not multi-replica Done.
+   */
+  multiPodVaultResidual?: boolean;
+  /**
+   * True when KUBERNETES_SERVICE_HOST set; residual notes multi-pod checklist (not HA Done).
+   */
+  kubernetesEnvDetected?: boolean;
   /** HOST-006 rate env residual (process-local only). */
   rateEnabled?: boolean;
   /** Resolved bootstrap tools/min; 0 when disabled. Never tokens. */
