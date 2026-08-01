@@ -66,6 +66,29 @@ export interface HealthResponse {
    */
   sharedTokenCacheFile?: boolean;
   /**
+   * HOST-007 / OAUTH-010 Done* lite: true when JENKINS_MCP_CONSENT_STORE_PATH set
+   * (same-host consent metadata file). Not multi-pod HA. Path never returned.
+   * Residual never opens the consent file. CamelCase parity with residual-status
+   * progressive_consent.file_backed.
+   */
+  progressiveConsentFileBacked?: boolean;
+  /**
+   * True only when file-backed (reload-before-persist flock lite). Same condition
+   * as residual-status progressive_consent.same_host_reload_before_persist.
+   * Not multi-pod HA. Path never returned.
+   */
+  progressiveConsentSameHostReload?: boolean;
+  /**
+   * Always false — consent metadata store never holds tokens. CamelCase honesty
+   * with residual-status progressive_consent.stores_tokens.
+   */
+  progressiveConsentStoresTokens?: boolean;
+  /**
+   * Always false — not multi-pod shared consent store. CamelCase honesty with
+   * residual-status progressive_consent.multi_replica_shared.
+   */
+  progressiveConsentMultiReplicaShared?: boolean;
+  /**
    * OAUTH-010 / GWY-001: ConsentRequired → authorization_url + session_id only
    * path Done* (always true). Static residual; never tokens or authorize query.
    */

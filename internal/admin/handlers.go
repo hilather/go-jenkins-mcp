@@ -29,7 +29,9 @@ import (
 // sharedPrincipalCacheFile / sharedJwksFile / sharedTokenCacheFile /
 // progressiveConsent* are secret-free gateway residual posture (HOST-006 /
 // HOST-007 / HOST-008 / OAUTH-010); never tokens, subjects, or file path values.
-// progressiveConsent* reuses gateway.ProgressiveConsentResidual (static only).
+// progressiveConsentMetadata*/Browser*/Residual reuse gateway.ProgressiveConsentResidual
+// (static only). progressiveConsentFileBacked/SameHostReload use
+// gateway.ConsentStorePathConfiguredFromEnviron (path never returned; never opens file).
 type healthResponse struct {
 	Status       string   `json:"status"`
 	Version      string   `json:"version"`
@@ -82,6 +84,25 @@ type healthResponse struct {
 	// Path value is never returned (bool only; secret-free). Residual never opens
 	// the cache file — never tokens.
 	SharedTokenCacheFile bool `json:"sharedTokenCacheFile"`
+	// ProgressiveConsentFileBacked is true when JENKINS_MCP_CONSENT_STORE_PATH is
+	// non-empty (HOST-007 / OAUTH-010 same-host consent metadata file lite).
+	// Not multi-pod HA. Path value is never returned. Residual never opens the
+	// consent file (no session inventory). CamelCase parity with residual-status
+	// progressive_consent.file_backed via gateway.ConsentStorePathConfiguredFromEnviron.
+	ProgressiveConsentFileBacked bool `json:"progressiveConsentFileBacked"`
+	// ProgressiveConsentSameHostReload is true only when file-backed (reload-
+	// before-persist flock lite). Same condition as residual-status
+	// progressive_consent.same_host_reload_before_persist. Not multi-pod HA.
+	// Path never returned; residual never opens the consent file.
+	ProgressiveConsentSameHostReload bool `json:"progressiveConsentSameHostReload"`
+	// ProgressiveConsentStoresTokens is always false (consent metadata store
+	// never holds tokens). CamelCase honesty parity with residual-status
+	// progressive_consent.stores_tokens.
+	ProgressiveConsentStoresTokens bool `json:"progressiveConsentStoresTokens"`
+	// ProgressiveConsentMultiReplicaShared is always false (not multi-pod shared
+	// consent store). CamelCase honesty parity with residual-status
+	// progressive_consent.multi_replica_shared.
+	ProgressiveConsentMultiReplicaShared bool `json:"progressiveConsentMultiReplicaShared"`
 	// ProgressiveConsentMetadataDoneStar is always true (ConsentRequired →
 	// authorization_url + session_id only path Done*; OAUTH-010 / GWY-001).
 	// Static residual from gateway.NewProgressiveConsentResidual — never tokens.
@@ -146,11 +167,15 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	sharedPrincipalCacheFile := gateway.PrincipalCachePathConfiguredFromEnviron(os.Getenv)
 	sharedJwksFile := auth.JWKSCachePathConfiguredFromEnviron(os.Getenv)
 	sharedTokenCacheFile := gateway.TokenCachePathConfiguredFromEnviron(os.Getenv)
+	// HOST-007 progressive consent store path residual (same helper residual-status uses).
+	// Never open consent file; never return path value.
+	progressiveConsentFileBacked := gateway.ConsentStorePathConfiguredFromEnviron(os.Getenv)
 	mp := diagnostics.MultiPodResidualFromEnviron(os.Getenv)
 	// HOST-006 residual honesty: default process-local rate; optional same-host
 	// file share when path set; multi-pod shared rate still residual (HOST-008).
 	// HOST-007 parity: shared*File bools only — never path values (HOST-008 lite).
 	// sharedTokenCacheFile never opens the token cache file.
+	// progressiveConsent* never opens the consent store file.
 	residual := "subject rate default process-local (HOST-006); optional same-host FileSubjectRateLimiter when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set (HOST-008 lite); multi-pod shared rate residual; multiPodVaultResidual=true; never tokens"
 	if sharedSubjectRateFile {
 		residual = "sharedSubjectRateFile=true (same-host file rate lite only — not multi-pod HA); " + residual
@@ -163,6 +188,9 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	if sharedTokenCacheFile {
 		residual = "sharedTokenCacheFile=true (same-host FileTokenCache lite only — not multi-pod Redis/HA); " + residual
+	}
+	if progressiveConsentFileBacked {
+		residual = "progressiveConsentFileBacked=true (same-host consent store lite only — not multi-pod HA; path never shown; residual never opens consent file); " + residual
 	}
 	if multiUser {
 		// Secret-free honesty only (SPA reads residual; no SPA rebuild required for this string).
@@ -202,6 +230,10 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		SharedPrincipalCacheFile:              sharedPrincipalCacheFile,
 		SharedJwksFile:                        sharedJwksFile,
 		SharedTokenCacheFile:                  sharedTokenCacheFile,
+		ProgressiveConsentFileBacked:          progressiveConsentFileBacked,
+		ProgressiveConsentSameHostReload:      progressiveConsentFileBacked, // same as residual-status
+		ProgressiveConsentStoresTokens:        false,                         // always; never tokens
+		ProgressiveConsentMultiReplicaShared:  false,                         // not multi-pod HA
 		ProgressiveConsentMetadataDoneStar:    pc.MetadataPathDoneStar,
 		ProgressiveConsentBrowser3loAutomated: pc.Browser3LOAutomated,
 		ProgressiveConsentResidual:            pcResidual,

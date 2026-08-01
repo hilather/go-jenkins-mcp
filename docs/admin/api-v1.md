@@ -105,6 +105,10 @@ Current process authentication state and console role. **Never includes the toke
   "sharedPrincipalCacheFile": false,
   "sharedJwksFile": false,
   "sharedTokenCacheFile": false,
+  "progressiveConsentFileBacked": false,
+  "progressiveConsentSameHostReload": false,
+  "progressiveConsentStoresTokens": false,
+  "progressiveConsentMultiReplicaShared": false,
   "progressiveConsentMetadataDoneStar": true,
   "progressiveConsentBrowser3loAutomated": false,
   "residual": "subject rate default process-local (HOST-006); optional same-host FileSubjectRateLimiter when JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH set (HOST-008 lite); multi-pod shared rate residual; multiPodVaultResidual=true; never tokens"
@@ -119,6 +123,10 @@ Mode C):
 {
   "credentialMode": "agentcore_3lo_obo",
   "enabledModes": ["agentcore_3lo_obo"],
+  "progressiveConsentFileBacked": false,
+  "progressiveConsentSameHostReload": false,
+  "progressiveConsentStoresTokens": false,
+  "progressiveConsentMultiReplicaShared": false,
   "progressiveConsentMetadataDoneStar": true,
   "progressiveConsentBrowser3loAutomated": false,
   "progressiveConsentResidual": "Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; process-local consent metadata store Done* (optional file; never tokens; same-host reload-before-persist flock lite; not multi-replica shared store); multi-pod consent correlation residual (HOST-008)"
@@ -144,10 +152,14 @@ Mode C):
 | `sharedPrincipalCacheFile` | **HOST-007 / HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` is non-empty (same-host `FilePrincipalCache`). **Not** multi-pod HA. Path value never returned. Never tokens. |
 | `sharedJwksFile` | **HOST-001 / HOST-007 / HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` is non-empty (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path value never returned. Public keys only — never tokens. |
 | `sharedTokenCacheFile` | **HOST-007 / HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` is non-empty (same-host `FileTokenCache`). **Not** multi-pod Redis/HA. Path value never returned. Residual never opens the cache file — never tokens. CamelCase parity with residual-status `shared_token_cache_file`. |
+| `progressiveConsentFileBacked` | **HOST-007 / OAUTH-010 Done\* lite residual:** `true` when `JENKINS_MCP_CONSENT_STORE_PATH` is non-empty (same-host consent metadata file). **Not** multi-pod HA. Path value never returned. Residual never opens the consent file (no session inventory). CamelCase parity with residual-status `progressive_consent.file_backed` via `gateway.ConsentStorePathConfiguredFromEnviron`. **SPA Overview** Mode C progressive consent card. |
+| `progressiveConsentSameHostReload` | **HOST-007 / OAUTH-010 Done\* lite residual:** `true` only when file-backed (same condition as residual-status `progressive_consent.same_host_reload_before_persist`). Reload-before-persist flock lite — **not** multi-pod HA. Path never returned. |
+| `progressiveConsentStoresTokens` | Always **`false`** (consent metadata store never holds tokens). CamelCase honesty parity with residual-status `progressive_consent.stores_tokens`. |
+| `progressiveConsentMultiReplicaShared` | Always **`false`** (not multi-pod shared consent store). CamelCase honesty parity with residual-status `progressive_consent.multi_replica_shared`. |
 | `progressiveConsentMetadataDoneStar` | **OAUTH-010 / GWY-001 residual:** always **`true`**. ConsentRequired metadata path Done*. Static residual only — never embeds authorize URLs or secrets. |
 | `progressiveConsentBrowser3loAutomated` | **OAUTH-010 residual:** always **`false`** until browser 3LO is automated (GWY-003). |
 | `progressiveConsentResidual` | **OAUTH-010 residual note** when Mode C enabled. Omitted otherwise. Never tokens or authorize URL secrets. |
-| `residual` | Secret-free honesty note (never tokens). Process-local rate + HOST-008 multi-pod residual; multi-user/k8s notes as applicable. |
+| `residual` | Secret-free honesty note (never tokens). Process-local rate + HOST-008 multi-pod residual; multi-user/k8s notes as applicable; consent file-backed note when path set (path never embedded). |
 
 ## GET /admin/v1/gateway/vault
 
