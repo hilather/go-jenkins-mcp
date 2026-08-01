@@ -168,6 +168,7 @@ func RunSecuritySelfCheck(ctx context.Context, opts SelfCheckOptions) (SelfCheck
 	rep.Items = append(rep.Items, checkFleetTelemetryForceOffResidual())
 	rep.Items = append(rep.Items, checkUpdateLKGResidual())
 	rep.Items = append(rep.Items, checkMutationConfirmCooldownResidual())
+	rep.Items = append(rep.Items, checkGatewayResidualStatusHonesty(opts.Getenv))
 
 	// Final canary: planted secret must not appear anywhere in serialized report.
 	if leak := reportContainsCanary(rep, securityCanary); leak {
