@@ -323,6 +323,26 @@ Missing identity env fields → bind fails closed at serve start.
 
 ---
 
+## 5b. HOST-001 JWKS refresh foundation (process-local)
+
+Streamable HTTP JWT subject validation uses a **refreshable JWKS source**
+(`internal/auth.RefreshingJWKS` via `cmd/jenkins-mcp` `newHTTPJWKSSource`):
+
+| Behavior | Detail |
+|----------|--------|
+| Initial fetch | Fail-closed at serve start |
+| Refresh TTL | Default **5m**; env `JENKINS_MCP_HTTP_JWKS_REFRESH_TTL` (Go duration; min **30s**, max **1h**; fail closed out of bounds) |
+| On demand + background | `Get(ctx)` refreshes when TTL elapsed (singleflight); optional ticker also started for serve |
+| Refresh failure | **Stale-if-error** (keep last good); non-secret log line only |
+| Validation | IdentityResolver calls `jwksSource.Get` **each** request so rotated `kid`s work after refresh |
+| Secret-free | JWKS URL must not embed credentials; never log tokens / key material |
+
+**Residual (do not claim multi-region HA):** multi-instance shared JWKS cache;
+fail-closed max-stale age operator wiring (`MaxStaleAge` exists in library, not
+env-wired); live Entra JWKS under load / multi-replica session store (HOST-008).
+
+---
+
 ## 6. Residuals (explicit non-goals of this foundation)
 
 | Residual | Track |
@@ -337,7 +357,7 @@ Missing identity env fields → bind fails closed at serve start.
 | Custom Jenkins authorization-server plugin | ADR 0011 / OAUTH-011 **default no-go** |
 | Shared Jenkins service account for interactive users | **Never** |
 | Real client secret storage | keyring / vault (not profile JSON) |
-| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT resolver, `Mcp-Session-Id`→`IdentityFingerprint` fail closed; residual: continuous JWKS rotation under load, live Entra |
+| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT resolver, `Mcp-Session-Id`→`IdentityFingerprint` fail closed; **JWKS refresh foundation** (`auth.RefreshingJWKS`, TTL env `JENKINS_MCP_HTTP_JWKS_REFRESH_TTL`, stale-if-error, per-validation `Get`); residual: multi-instance/under-load JWKS HA, optional max-stale fail-closed operator wire, live Entra |
 | Reverse-proxy non-local matrix | HOST-002 **docs Done***; live path-prefix residual; no CORS wildcards fail-closed |
 | Health/readiness envelope | HOST-005 **partial** — `/healthz` + `/readyz` + compose/k8s limits; Obtain Ready on `/readyz` when `--gateway` |
 | Multi-replica HA | HOST-008 Tier B residual (single-replica Tier A default) |

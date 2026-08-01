@@ -48,7 +48,8 @@ type JWK struct {
 }
 
 // FetchJWKS retrieves a JWKS document from jwksURI via the injected HTTP client
-// (use httptest in unit tests). Does not cache; durable JWKS caching is residual.
+// (use httptest in unit tests). One-shot; for TTL refresh + stale-if-error use
+// RefreshingJWKS (HOST-001 foundation). Multi-instance shared cache remains residual.
 func FetchJWKS(ctx context.Context, client *http.Client, jwksURI string) (*JWKS, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, apperr.Wrap(apperr.CodeCancelled, "jwks fetch cancelled", err)

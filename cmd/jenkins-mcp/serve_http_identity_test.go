@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -164,6 +165,215 @@ func TestFetchHTTPJWKS_HTTPTest(t *testing.T) {
 	}
 }
 
+func TestParseHTTPJWKSRefreshTTL(t *testing.T) {
+	t.Parallel()
+	d, err := parseHTTPJWKSRefreshTTL(func(string) string { return "" })
+	if err != nil || d != auth.DefaultJWKSRefreshTTL {
+		t.Fatalf("default: %v err=%v", d, err)
+	}
+	d, err = parseHTTPJWKSRefreshTTL(func(k string) string {
+		if k == EnvHTTPJWKSRefreshTTL {
+			return "45s"
+		}
+		return ""
+	})
+	if err != nil || d != 45*time.Second {
+		t.Fatalf("45s: %v err=%v", d, err)
+	}
+	_, err = parseHTTPJWKSRefreshTTL(func(k string) string {
+		if k == EnvHTTPJWKSRefreshTTL {
+			return "1s"
+		}
+		return ""
+	})
+	if err == nil {
+		t.Fatal("below min must fail closed")
+	}
+}
+
+func TestNewHTTPJWKSSource_RefreshRotateKid(t *testing.T) {
+	t.Parallel()
+	key1, err := authlab.GenerateLabKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	key1.Kid = "wire-kid-1"
+	key2, err := authlab.GenerateLabKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	key2.Kid = "wire-kid-2"
+	doc1, err := key1.JWKS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc2, err := key2.JWKS()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var mu sync.Mutex
+	cur := doc1
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		d := cur
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(d)
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := httpJWTEnv{
+		JWKSURL:  srv.URL,
+		Issuer:   "https://issuer.example",
+		Audience: "jenkins-api",
+	}
+	// Short TTL; use ForceRefresh path via Get after advancing is internal —
+	// newHTTPJWKSSource starts background; we ForceRefresh after swapping doc.
+	src, err := newHTTPJWKSSource(context.Background(), srv.Client(), cfg, 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(src.StopBackground)
+
+	const secret = "transport"
+	now := time.Now()
+	params := auth.AccessTokenParams{
+		Issuer:   cfg.Issuer,
+		Audience: cfg.Audience,
+		Now:      func() time.Time { return now },
+	}
+	res := newHTTPIdentityResolver(false, secret, src, params)
+
+	// Token signed by key1 accepted.
+	tok1, err := key1.MintAccessToken(authlab.MintParams{
+		Issuer:   cfg.Issuer,
+		Subject:  "alice",
+		Audience: cfg.Audience,
+		TTL:      time.Hour,
+		Now:      func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", nil)
+	req.Header.Set("Authorization", "Bearer "+tok1)
+	id, err := res(req)
+	if err != nil || id.ExternalSubject != "alice" {
+		t.Fatalf("kid1: id=%+v err=%v", id, err)
+	}
+
+	// Rotate JWKS to key2 only; refresh source.
+	mu.Lock()
+	cur = doc2
+	mu.Unlock()
+	if err := src.ForceRefresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	tok2, err := key2.MintAccessToken(authlab.MintParams{
+		Issuer:   cfg.Issuer,
+		Subject:  "bob",
+		Audience: cfg.Audience,
+		TTL:      time.Hour,
+		Now:      func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req2 := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", nil)
+	req2.Header.Set("Authorization", "Bearer "+tok2)
+	id, err = res(req2)
+	if err != nil || id.ExternalSubject != "bob" {
+		t.Fatalf("after rotate kid2: id=%+v err=%v", id, err)
+	}
+
+	// Old kid1 token must fail closed after key removed from JWKS.
+	reqOld := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", nil)
+	reqOld.Header.Set("Authorization", "Bearer "+tok1)
+	_, err = res(reqOld)
+	if err == nil {
+		t.Fatal("stale kid after rotation must fail closed")
+	}
+	if strings.Contains(err.Error(), tok1) {
+		t.Fatalf("Regression: token in error after rotation: %v", err)
+	}
+
+	// Unconfigured → nil source.
+	nilSrc, err := newHTTPJWKSSource(context.Background(), srv.Client(), httpJWTEnv{}, 30*time.Second)
+	if err != nil || nilSrc != nil {
+		t.Fatalf("unconfigured: %v err=%v", nilSrc, err)
+	}
+}
+
+func TestNewHTTPJWKSSource_FailedRefreshKeepsOldViaResolver(t *testing.T) {
+	t.Parallel()
+	key, err := authlab.GenerateLabKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	key.Kid = "stable-kid"
+	doc, err := key.JWKS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	fail := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		shouldFail := fail
+		mu.Unlock()
+		if shouldFail {
+			http.Error(w, "down", http.StatusBadGateway)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(doc)
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := httpJWTEnv{
+		JWKSURL:  srv.URL,
+		Issuer:   "https://issuer.example",
+		Audience: "jenkins-api",
+	}
+	src, err := auth.NewRefreshingJWKS(context.Background(), auth.RefreshingJWKSConfig{
+		Client: srv.Client(),
+		URI:    cfg.JWKSURL,
+		TTL:    30 * time.Second,
+		Logf:   func(string, ...any) {},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	res := newHTTPIdentityResolver(false, "sec", src, auth.AccessTokenParams{
+		Issuer:   cfg.Issuer,
+		Audience: cfg.Audience,
+		Now:      func() time.Time { return now },
+	})
+	tok, err := key.MintAccessToken(authlab.MintParams{
+		Issuer:   cfg.Issuer,
+		Subject:  "carol",
+		Audience: cfg.Audience,
+		TTL:      time.Hour,
+		Now:      func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	fail = true
+	mu.Unlock()
+	if err := src.ForceRefresh(context.Background()); err == nil {
+		t.Fatal("expected refresh failure")
+	}
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	id, err := res(req)
+	if err != nil || id.ExternalSubject != "carol" {
+		t.Fatalf("stale-if-error must still validate with last good: id=%+v err=%v", id, err)
+	}
+}
+
 func TestNewLabHTTPIdentityResolver(t *testing.T) {
 	t.Parallel()
 	if newLabHTTPIdentityResolver(false, "secret") != nil {
@@ -210,7 +420,7 @@ func TestNewHTTPIdentityResolver_JWTAcceptReject(t *testing.T) {
 		Audience: aud,
 		Now:      func() time.Time { return now },
 	}
-	res := newHTTPIdentityResolver(false, secret, jwks, params)
+	res := newHTTPIdentityResolver(false, secret, auth.NewStaticJWKS(jwks), params)
 	if res == nil {
 		t.Fatal("JWKS configured → non-nil resolver")
 	}
@@ -301,7 +511,7 @@ func TestNewHTTPIdentityResolver_TransportSecretNotIdentity(t *testing.T) {
 		Issuer:   "https://issuer.example",
 		Audience: "jenkins-api",
 	}
-	res := newHTTPIdentityResolver(false, secret, jwks, params)
+	res := newHTTPIdentityResolver(false, secret, auth.NewStaticJWKS(jwks), params)
 	if res == nil {
 		t.Fatal("resolver")
 	}
@@ -353,7 +563,7 @@ func TestNewHTTPIdentityResolver_JWTThenLabFallback(t *testing.T) {
 		Audience: "jenkins-api",
 	}
 	// Lab on + JWKS: no Bearer → lab header works.
-	res := newHTTPIdentityResolver(true, secret, jwks, params)
+	res := newHTTPIdentityResolver(true, secret, auth.NewStaticJWKS(jwks), params)
 	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", nil)
 	req.Header.Set("X-Jenkins-MCP-Lab-Subject", "lab-only")
 	id, err := res(req)
@@ -364,7 +574,7 @@ func TestNewHTTPIdentityResolver_JWTThenLabFallback(t *testing.T) {
 		t.Fatalf("%+v", id)
 	}
 	// Lab off: same header ignored.
-	resOff := newHTTPIdentityResolver(false, secret, jwks, params)
+	resOff := newHTTPIdentityResolver(false, secret, auth.NewStaticJWKS(jwks), params)
 	id, err = resOff(req)
 	if err != nil || id.Present() {
 		t.Fatalf("lab off must ignore headers: %+v err=%v", id, err)
@@ -373,7 +583,7 @@ func TestNewHTTPIdentityResolver_JWTThenLabFallback(t *testing.T) {
 	if newHTTPIdentityResolver(false, secret, nil, params) != nil {
 		t.Fatal("nil jwks + lab off → nil")
 	}
-	if newHTTPIdentityResolver(false, secret, &auth.JWKS{}, params) != nil {
+	if newHTTPIdentityResolver(false, secret, auth.NewStaticJWKS(&auth.JWKS{}), params) != nil {
 		t.Fatal("empty jwks + lab off → nil")
 	}
 }
@@ -404,7 +614,7 @@ func TestHTTPHandler_InvalidJWT_NoTokenEcho(t *testing.T) {
 	}
 	// Corrupt signature.
 	bad := tok + "x"
-	res := newHTTPIdentityResolver(false, secret, jwks, auth.AccessTokenParams{
+	res := newHTTPIdentityResolver(false, secret, auth.NewStaticJWKS(jwks), auth.AccessTokenParams{
 		Issuer:   iss,
 		Audience: aud,
 		Now:      func() time.Time { return now },

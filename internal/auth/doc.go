@@ -42,6 +42,11 @@
 // both call it for JWT-shaped access tokens; opaque tokens skip JWT parse and rely
 // on whoAmI. Live RS lab remains OAUTH-005/009 residual.
 //
+// HOST-001 JWKS refresh foundation: JWKSSource / RefreshingJWKS (TTL refresh,
+// stale-if-error, per-validation Get). Env JENKINS_MCP_HTTP_JWKS_REFRESH_TTL
+// (default 5m, min 30s max 1h). Residual: multi-instance cache, max-stale operator
+// wire, live Entra under load.
+//
 // OAUTH-009 (offline expand): rs_qualification fallthrough classifier (status +
 // WWW-Authenticate + body class), JWKS outage fail-closed pure contracts,
 // RequiredMCPRoutes inventory completeness, RFC 9728 protected-resource metadata

@@ -342,7 +342,7 @@ Replace “optional shared secret on loopback” as the multi-user story with **
 - [x] Tokens never appear in logs, errors, metrics labels, or support bundles (canary tests).
 - [x] Regression: loopback pilot without gateway may keep KD-008 residual **explicitly documented**; gateway mode cannot enable anonymous multi-user.
 
-**Residual (do not claim Done):** continuous JWKS rotation under load (serve fetches JWKS once); live Entra / jwt-auth-filter production pin; multi-replica durable session store (HOST-008).
+**Residual (do not claim Done):** multi-instance / under-load JWKS HA (process-local `RefreshingJWKS` TTL refresh + stale-if-error foundation landed); optional operator max-stale fail-closed; live Entra / jwt-auth-filter production pin; multi-replica durable session store (HOST-008).
 
 ---
 
