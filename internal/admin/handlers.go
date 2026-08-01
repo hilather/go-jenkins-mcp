@@ -23,8 +23,9 @@ import (
 // healthResponse is GET /admin/v1/health.
 // enabledModes is a secret-free HOST-011 listing (mode ids only; no tokens).
 // multiUserEnabled / credentialMode / haMultiReplica / gatewayReady /
-// sessionAffinityRecommended / rateEnabled / ratePerMinute / rateBurst are
-// secret-free gateway residual posture (HOST-006 / HOST-008); never tokens or subjects.
+// sessionAffinityRecommended / multiPodVaultResidual / kubernetesEnvDetected /
+// rateEnabled / ratePerMinute / rateBurst are secret-free gateway residual
+// posture (HOST-006 / HOST-008); never tokens or subjects.
 type healthResponse struct {
 	Status       string   `json:"status"`
 	Version      string   `json:"version"`
@@ -45,6 +46,11 @@ type healthResponse struct {
 	// sticky Service scaffold honesty). Not multi-replica Done — kustomize
 	// sessionAffinity alone is packaging residual.
 	SessionAffinityRecommended bool `json:"sessionAffinityRecommended"`
+	// MultiPodVaultResidual is always true (HOST-008 multi-pod durable vault residual).
+	// Not multi-replica Done — doctor gateway_status multi_pod_vault_residual parity.
+	MultiPodVaultResidual bool `json:"multiPodVaultResidual"`
+	// KubernetesEnvDetected is true when KUBERNETES_SERVICE_HOST is set (in-cluster residual).
+	KubernetesEnvDetected bool `json:"kubernetesEnvDetected"`
 	// RateEnabled is true when subject rate env would enable HOST-006 limiting
 	// (empty JENKINS_MCP_SUBJECT_RATE_PER_MINUTE = default on; 0 = disabled).
 	// Process-local residual only — not multi-replica shared rate (HOST-008).
@@ -55,7 +61,7 @@ type healthResponse struct {
 	// RateBurst is the resolved bootstrap burst capacity (default or env).
 	// 0 when rate is disabled (burst ignored when rate off). Never tokens.
 	RateBurst int `json:"rateBurst"`
-	// Residual notes multi-user / HA / rate honesty when relevant (secret-free).
+	// Residual notes multi-user / HA / rate / k8s honesty when relevant (secret-free).
 	Residual string `json:"residual,omitempty"`
 }
 
@@ -104,12 +110,18 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	multiUser := gateway.MultiUserEnabled(os.Getenv)
 	rateEnabled, ratePerMinute, rateBurst := gateway.SubjectRateConfigFromEnviron(os.Getenv)
+	mp := diagnostics.MultiPodResidualFromEnviron(os.Getenv)
 	// HOST-006 residual honesty: process-local rate knobs only (not multi-replica shared).
-	residual := "subject rate knobs are process-local (HOST-006); multi-replica shared rate residual (HOST-008); never tokens"
+	residual := "subject rate knobs are process-local (HOST-006); multi-replica shared rate residual (HOST-008); multiPodVaultResidual=true (multi-pod vault residual); never tokens"
 	if multiUser {
 		// Secret-free honesty only (SPA reads residual; no SPA rebuild required for this string).
 		// multi_user_offline + host008_single_replica residual ids: release-evidence --offline.
 		residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO; haMultiReplica always false / HOST-008 single-replica; sessionAffinityRecommended=true scaffold only — multi-replica residual; no tokens in health); " + residual
+	}
+	if mp.KubernetesEnvDetected {
+		// In-cluster residual: sticky / shared vault / rate / Obtain cache still residual (HOST-008).
+		// Secret-free; never embed vault paths or tokens.
+		residual = "kubernetes env detected (KUBERNETES_SERVICE_HOST): multi-pod residual checklist — sticky sessions or shared session store; durable shared vault (not emptyDir); shared subject rate; shared Obtain/token cache; haMultiReplica=false (HOST-008 / deployment.md §9); " + residual
 	}
 	writeJSON(w, http.StatusOK, healthResponse{
 		Status:                     "ok",
@@ -122,6 +134,8 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		GatewayReady:               false, // admin BFF ≠ MCP serve Ready probe
 		HAMultiReplica:             false, // HOST-008 Tier A default
 		SessionAffinityRecommended: multiUser,
+		MultiPodVaultResidual:      true, // HOST-008 multi-pod vault residual honesty
+		KubernetesEnvDetected:      mp.KubernetesEnvDetected,
 		RateEnabled:                rateEnabled,
 		RatePerMinute:              ratePerMinute,
 		RateBurst:                  rateBurst,

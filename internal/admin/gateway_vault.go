@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
 )
 
@@ -27,6 +28,10 @@ type gatewayVaultResponse struct {
 	// SessionAffinityRecommended is true when multi-user env is set (HOST-008
 	// sticky Service scaffold honesty). Not multi-replica Done.
 	SessionAffinityRecommended bool `json:"sessionAffinityRecommended"`
+	// MultiPodVaultResidual is always true (HOST-008 multi-pod durable vault residual).
+	MultiPodVaultResidual bool `json:"multiPodVaultResidual"`
+	// KubernetesEnvDetected is true when KUBERNETES_SERVICE_HOST is set.
+	KubernetesEnvDetected bool `json:"kubernetesEnvDetected"`
 	// RateEnabled is secret-free HOST-006 residual (env parse only; process-local).
 	// Empty rate env → true (default); explicit 0 → false. Not multi-replica shared rate.
 	RateEnabled bool `json:"rateEnabled"`
@@ -65,21 +70,27 @@ func (s *server) gatewayVaultStatus(ctx context.Context) gatewayVaultResponse {
 	}
 	multiUser := gateway.MultiUserEnabled(os.Getenv)
 	rateEnabled, ratePerMinute, rateBurst := gateway.SubjectRateConfigFromEnviron(os.Getenv)
+	mp := diagnostics.MultiPodResidualFromEnviron(os.Getenv)
 	resp := gatewayVaultResponse{
 		Subjects:                   []string{},
 		EnabledModes:               []string{},
 		MultiUserEnabled:           multiUser,
 		HAMultiReplica:             false, // HOST-008 Tier A; no multi-replica runtime
 		SessionAffinityRecommended: multiUser,
+		MultiPodVaultResidual:      true, // HOST-008 multi-pod vault residual honesty
+		KubernetesEnvDetected:      mp.KubernetesEnvDetected,
 		RateEnabled:                rateEnabled,
 		RatePerMinute:              ratePerMinute,
 		RateBurst:                  rateBurst,
 		// HOST-006 rate knobs are process-local residual (not multi-replica shared).
-		Residual: "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser); subject rate knobs process-local (HOST-006); multi-replica shared rate residual (HOST-008)",
+		Residual: "vault write is CLI-only: jenkins-mcp gateway vault put|delete (never put tokens in the browser); subject rate knobs process-local (HOST-006); multi-replica shared rate residual (HOST-008); multiPodVaultResidual=true",
 	}
 	if multiUser {
 		// Secret-free; SPA residual banner (no embed rebuild). host008_single_replica honesty.
 		resp.Residual = "JENKINS_MCP_GATEWAY_MULTI_USER is set (foundation residual; not production multi-user GO; haMultiReplica=false HOST-008; sessionAffinityRecommended=true scaffold only); " + resp.Residual
+	}
+	if mp.KubernetesEnvDetected {
+		resp.Residual = "kubernetes env detected (KUBERNETES_SERVICE_HOST): multi-pod residual (sticky, shared vault, rate, Obtain cache — HOST-008; haMultiReplica=false); " + resp.Residual
 	}
 
 	mx, err := gateway.ModeMatrixFromEnviron(os.Getenv)

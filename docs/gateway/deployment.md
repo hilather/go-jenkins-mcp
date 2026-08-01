@@ -428,12 +428,23 @@ When (and only if) org design closes 1b–8 and operators set `replicas` > 1:
 | Surface | Fields | Honesty |
 |---------|--------|---------|
 | `SubjectLimiter.StatusMap` | `ha_multi_replica: false` | Always false until multi-replica runtime exists |
-| Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `mode_a/b/c_enabled`, `mode_*_live_*_qualified=false`, `oauth009_offline_only`, `gateway_ready=false`, `ha_multi_replica=false`, `session_affinity_recommended`, `mode_matrix_residual`, `progressive_consent_*` (browser 3LO not automated; metadata Done*) | Env parse only; Ready is serve `/readyz`; sticky + progressive consent residual honesty, not HA Done |
-| Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst` | Admin BFF ≠ MCP serve; rate knobs process-local HOST-006 |
-| Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst` + mode matrix | Never tokens; multi-user residual note when env set; file vault flock multi-process lite only |
+| Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `mode_a/b/c_enabled`, `mode_*_live_*_qualified=false`, `oauth009_offline_only`, `gateway_ready=false`, `ha_multi_replica=false`, `session_affinity_recommended`, **`multi_pod_vault_residual=true` (always)**, `kubernetes_env_detected`, `vault_path_emptydir_heuristic`, `replicas_env_residual`, `multi_pod_residual_checklist` (when any multi-pod signal), `mode_matrix_residual`, `progressive_consent_*` (browser 3LO not automated; metadata Done*) | Env/heuristic only; Ready is serve `/readyz`; sticky + progressive consent residual honesty, **not** HA Done. When `KUBERNETES_SERVICE_HOST` is set (or emptyDir-ish vault path / residual replicas env >1), doctor **warns** with multi-pod checklist summary (sticky, shared vault, rate, Obtain cache) — secret-free, never vault path contents or tokens. |
+| Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false`, `sessionAffinityRecommended`, **`multiPodVaultResidual=true`**, `kubernetesEnvDetected`, `rateEnabled`/`ratePerMinute`/`rateBurst`, `residual` | Admin BFF ≠ MCP serve; rate knobs process-local HOST-006; k8s residual string when `KUBERNETES_SERVICE_HOST` set (parity with doctor checklist) |
+| Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false`, `sessionAffinityRecommended`, **`multiPodVaultResidual=true`**, `kubernetesEnvDetected`, `rateEnabled`/`ratePerMinute`/`rateBurst` + mode matrix | Never tokens; multi-user / k8s residual notes when env set; file vault flock multi-process lite only |
+
+**Doctor multi-pod residual fields (HOST-008 honesty — not multi-replica Done):**
+
+| Detail field | Meaning |
+|--------------|---------|
+| `multi_pod_vault_residual` | Always **`true`**. Multi-pod durable vault is residual; never claim Done from flock lite or sticky Service scaffold. |
+| `kubernetes_env_detected` | `true` when `KUBERNETES_SERVICE_HOST` is non-empty (in-cluster residual). Elevates `gateway_status` to **warn** + checklist. |
+| `vault_path_emptydir_heuristic` | `true` when Mode A/B vault path shape looks emptyDir-ish (`/tmp`, `/var/run`, `/dev/shm`, or path segment `emptydir`). Heuristic only — does **not** inspect volume types. |
+| `replicas_env_residual` | `true` when residual env `JENKINS_MCP_GATEWAY_REPLICAS` or `REPLICAS` parses as integer **> 1** (not a product scale knob). |
+| `multi_pod_residual_checklist` | Secret-free summary when any of the above multi-pod signals fire: sticky / shared vault / rate / Obtain cache residual. Cross-links this §9 runbook. |
 
 **Never** claim multi-replica Done from docs, kustomize `replicas: 1`, Service
-`sessionAffinity`, or these status fields. See [roadmap § HOST-008](../roadmap/server-team-hosted.md).
+`sessionAffinity`, k8s env detection, emptyDir heuristics, or these status fields.
+See [roadmap § HOST-008](../roadmap/server-team-hosted.md).
 
 ### Explicit non-goal until durable vault exists
 

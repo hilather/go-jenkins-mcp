@@ -28,6 +28,12 @@ func TestRunDoctor_OfflineNoSecrets(t *testing.T) {
 	t.Setenv(update.EnvUpdateLKGPath, "")
 	t.Setenv(gateway.EnvGatewayMultiUser, "")
 	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAPITokenVault))
+	// HOST-008: clear multi-pod signals so gateway_status stays OK (default vault under HOME).
+	t.Setenv("KUBERNETES_SERVICE_HOST", "")
+	t.Setenv("JENKINS_MCP_GATEWAY_REPLICAS", "")
+	t.Setenv("REPLICAS", "")
+	t.Setenv(gateway.EnvGatewayVaultPath, "")
+	t.Setenv(gateway.EnvGatewayJWTVaultPath, "")
 	root := t.TempDir()
 	paths := config.Paths{
 		ConfigDir: filepath.Join(root, "cfg"),
@@ -111,6 +117,13 @@ func TestRunDoctor_OfflineNoSecrets(t *testing.T) {
 			}
 			if c.Details["ha_multi_replica"] != false {
 				t.Fatalf("HOST-008 residual must report ha_multi_replica=false: %+v", c.Details)
+			}
+			// HOST-008 multi-pod residual honesty: always true; not multi-replica Done.
+			if c.Details["multi_pod_vault_residual"] != true {
+				t.Fatalf("multi_pod_vault_residual must always be true: %+v", c.Details)
+			}
+			if c.Details["kubernetes_env_detected"] != false {
+				t.Fatalf("kubernetes_env_detected want false offline: %+v", c.Details)
 			}
 			if c.Details["session_affinity_recommended"] != false {
 				t.Fatalf("session_affinity_recommended want false when multi_user off: %+v", c.Details)
