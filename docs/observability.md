@@ -66,14 +66,10 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Surface | Status |
 |---------|--------|
 | Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
-<<<<<<< HEAD
 | Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
 | Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
-| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
-=======
 | Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
-| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only; mutation events do not cross pods |
->>>>>>> integrate/mutation-audit-subject
+| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
 
 ### Rotation / retention
@@ -501,14 +497,10 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Surface | Status |
 |---------|--------|
 | Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
-<<<<<<< HEAD
 | Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
 | Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
-| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
-=======
 | Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
-| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only; mutation events do not cross pods |
->>>>>>> integrate/mutation-audit-subject
+| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
 
 ### Rotation / retention
