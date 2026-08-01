@@ -13,7 +13,8 @@
 #      - assert case gateway_residual_status_offline_honesty present + passed
 #      - assert case name (or residual-status honesty) in residuals[]
 #      - assert passed >= 20 and residual_count >= MIN (Wave 13 suite floor)
-#   3. jenkins-mcp release-evidence --offline (assert residual[] honesty)
+#   3. jenkins-mcp release-evidence --offline (assert residual[] honesty + nested
+#      gateway_residual_status map from BuildGatewayResidualStatus — REL residual lite)
 #   4. jenkins-mcp gateway residual-status (required Wave 8 honesty; JSON under OUT_DIR)
 #      - shared_subject_rate_file false by default; true when SUBJECT_RATE_PATH set (path never dumped)
 #      - shared_principal_cache_file false by default; true when PRINCIPAL_CACHE_PATH set (path never dumped)
@@ -452,6 +453,46 @@ if gq is not None:
     if st not in ("pass", "skip"):
         errors.append(f"gateway_qualify_offline status={st!r} want pass|skip")
 
+# REL residual lite: nested gateway_residual_status map (same as CLI residual-status).
+# Optional on very old binaries: only hard-fail honesty when the nest is present as a
+# non-object, or when missing on modern packs that already have residual[].
+# Prefer assert present — release-evidence embeds BuildGatewayResidualStatus offline.
+grs = data.get("gateway_residual_status")
+if grs is None:
+    errors.append("gateway_residual_status missing (REL residual lite embed; same map as gateway residual-status)")
+elif not isinstance(grs, dict):
+    errors.append(f"gateway_residual_status type={type(grs).__name__} want object")
+else:
+    if grs.get("residual_id") != "oauth009_offline":
+        errors.append(f"gateway_residual_status.residual_id={grs.get('residual_id')!r} want oauth009_offline")
+    if grs.get("oauth009_offline") is not True:
+        errors.append(f"gateway_residual_status.oauth009_offline={grs.get('oauth009_offline')!r} want true")
+    if grs.get("ha_multi_replica") is not False:
+        errors.append(f"gateway_residual_status.ha_multi_replica={grs.get('ha_multi_replica')!r} want false")
+    if grs.get("gateway_ready") is True:
+        errors.append("gateway_residual_status.gateway_ready=true (Ready only on serve /readyz)")
+    if grs.get("multi_pod_vault_residual") is not True:
+        errors.append(f"gateway_residual_status.multi_pod_vault_residual={grs.get('multi_pod_vault_residual')!r} want true")
+    rids = grs.get("residual_ids")
+    if not isinstance(rids, list):
+        errors.append("gateway_residual_status.residual_ids is not a list")
+    else:
+        rid_set = {str(x) for x in rids}
+        for rid in required:
+            if rid not in rid_set:
+                errors.append(f"gateway_residual_status.residual_ids missing {rid!r}")
+    for k in (
+        "mode_a_live_obtain_qualified",
+        "mode_b_live_rs_qualified",
+        "mode_c_live_agentcore_qualified",
+    ):
+        if grs.get(k) is True:
+            errors.append(f"gateway_residual_status.{k}=true (live pin must stay residual)")
+    note = str(grs.get("residual_note") or "")
+    doc = str(grs.get("doc") or "")
+    if "live-pin-blockers" not in note and "live-pin-blockers" not in doc:
+        errors.append("gateway_residual_status missing live-pin-blockers.md pointer")
+
 if errors:
     print("FAIL: release-evidence residual honesty:", file=sys.stderr)
     for e in errors:
@@ -462,6 +503,11 @@ if errors:
 
 print(f"PASS: release-evidence residual ids present ({len(required)} required): {', '.join(required)}")
 print(f"      schema={schema} overall={overall} residual_count={len(by_id)}")
+if isinstance(grs, dict):
+    print(
+        "PASS: release-evidence gateway_residual_status nest honesty "
+        f"(residual_id={grs.get('residual_id')!r} ha_multi_replica={grs.get('ha_multi_replica')!r})"
+    )
 sys.exit(0)
 PY
     then

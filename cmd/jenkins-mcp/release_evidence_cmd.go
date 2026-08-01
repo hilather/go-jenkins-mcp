@@ -41,10 +41,15 @@ type releaseEvidence struct {
 	SecuritySelfCheck *securitySelfCheckSnap `json:"security_self_check,omitempty"`
 	UpdateLKG         *updateLKGSnap         `json:"update_lkg,omitempty"`
 	GatewayQualify    *gatewayQualifySnap    `json:"gateway_qualify,omitempty"`
-	Doctor            *doctorSnap            `json:"doctor,omitempty"`
-	CacheStatus       *cacheSnap             `json:"cache_status,omitempty"`
-	Checks            []releaseCheck         `json:"checks"`
-	Notes             []string               `json:"notes,omitempty"`
+	// GatewayResidualStatus is the unified secret-free map from
+	// diagnostics.BuildGatewayResidualStatus (same as CLI `gateway residual-status`
+	// and doctor Report.gateway_residual_status). Offline honesty embed so evidence
+	// packs need no second CLI; informational only — not live multi-user / Entra GO.
+	GatewayResidualStatus map[string]any `json:"gateway_residual_status,omitempty"`
+	Doctor                *doctorSnap    `json:"doctor,omitempty"`
+	CacheStatus           *cacheSnap     `json:"cache_status,omitempty"`
+	Checks                []releaseCheck `json:"checks"`
+	Notes                 []string       `json:"notes,omitempty"`
 	// Residual is structured known residuals (never claim production GO from lite alone).
 	Residual []releaseResidual `json:"residual"`
 }
@@ -120,6 +125,9 @@ type releaseEvidenceOptions struct {
 	GoModContent string
 	// Paths optional XDG paths; when nil, config.Resolve is used.
 	Paths *config.Paths
+	// Getenv optional; when nil, BuildGatewayResidualStatus uses os.Getenv.
+	// Tests inject a closed getenv to prove residual embed honesty without process env.
+	Getenv func(string) string
 	// Version/Commit/BuildTime override package ldflags vars when non-empty (tests set via package vars).
 }
 
@@ -285,8 +293,13 @@ func buildReleaseEvidence(ctx context.Context, opts releaseEvidenceOptions) (*re
 		Notes: []string{
 			"REL-002 lite offline evidence only — not production sign-off",
 			"Map check.gate_id and residual.gate_ids to docs/release/gates.md",
+			"gateway_residual_status embeds CLI gateway residual-status map (offline honesty; not live GO)",
 		},
 	}
+
+	// Unified residual-status map (same as gateway residual-status CLI / doctor embed).
+	// Always present on offline lite packs — no second CLI required.
+	ev.GatewayResidualStatus = diagnostics.BuildGatewayResidualStatus(opts.Getenv)
 
 	// --- Always-on offline checks ---
 	appendVersionChecks(ev)
@@ -794,6 +807,54 @@ func scrubReleaseEvidence(ev *releaseEvidence) {
 	if ev.MCPSDK != nil {
 		ev.MCPSDK.Version = redact.Secrets(ev.MCPSDK.Version)
 		ev.MCPSDK.Source = redact.Secrets(ev.MCPSDK.Source)
+	}
+	// Defense-in-depth: residual-status map is already secret-free from builder;
+	// walk string values anyway (never dump Authorization / private keys).
+	if len(ev.GatewayResidualStatus) > 0 {
+		ev.GatewayResidualStatus = scrubResidualStatusMap(ev.GatewayResidualStatus)
+	}
+}
+
+// scrubResidualStatusMap redacts string leaves in the gateway residual-status embed.
+// Drops secret-shaped keys; never elevates residual honesty to live GO.
+func scrubResidualStatusMap(in map[string]any) map[string]any {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		lk := strings.ToLower(k)
+		if strings.Contains(lk, "token") || strings.Contains(lk, "password") ||
+			strings.Contains(lk, "secret") || strings.Contains(lk, "cookie") ||
+			strings.Contains(lk, "authorization") || strings.Contains(lk, "private_key") ||
+			strings.Contains(lk, "privatekey") || lk == "auth" {
+			continue
+		}
+		out[k] = scrubResidualStatusValue(v)
+	}
+	return out
+}
+
+func scrubResidualStatusValue(v any) any {
+	switch t := v.(type) {
+	case string:
+		return redact.Secrets(t)
+	case map[string]any:
+		return scrubResidualStatusMap(t)
+	case []any:
+		out := make([]any, len(t))
+		for i := range t {
+			out[i] = scrubResidualStatusValue(t[i])
+		}
+		return out
+	case []string:
+		out := make([]string, len(t))
+		for i := range t {
+			out[i] = redact.Secrets(t[i])
+		}
+		return out
+	default:
+		return v
 	}
 }
 

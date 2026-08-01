@@ -12,8 +12,9 @@ import (
 // ResidualStatusHonestyNote is the unified operator residual honesty sentence
 // (never tokens/subjects). Points operators at the live pin runbook.
 // Shared by CLI `gateway residual-status`, admin GET /admin/v1/gateway/residual-status,
-// doctor Report.gateway_residual_status (offline/online embed), and support-bundle
-// top-level gateway-residual-status.json (always present even when doctor fails).
+// doctor Report.gateway_residual_status (offline/online embed), support-bundle
+// top-level gateway-residual-status.json (always present even when doctor fails),
+// and release-evidence --offline JSON field gateway_residual_status (REL residual lite).
 const ResidualStatusHonestyNote = "unified gateway residual snapshot (env/static honesty only): offline Mode A/B/C foundations Done*; optional same-host FileSubjectRateLimiter / FileTokenCache / FilePrincipalCache / FileJWKS / vault flock lite when paths set; live Entra / jwt-auth-filter / AgentCore / multi-pod shared rate+vault+principal+JWKS HA residual — never production GO from this surface; see docs/gateway/live-pin-blockers.md"
 
 // ResidualStatusDoc is the primary operator pointer for residual honesty.
@@ -30,8 +31,10 @@ const PrincipalCacheProcessNote = "principal_cache_entries: file Len() when PRIN
 // used by `jenkins-mcp gateway residual-status`,
 // GET /admin/v1/gateway/residual-status (HOST-007), doctor Report field
 // gateway_residual_status (OPS doctor residual embed — informational only),
-// and support-bundle member gateway-residual-status.json (always present even
-// when doctor fails or a prebuilt DoctorReport omits the nest).
+// support-bundle member gateway-residual-status.json (always present even
+// when doctor fails or a prebuilt DoctorReport omits the nest), and
+// release-evidence --offline JSON field gateway_residual_status (REL residual
+// lite — offline evidence packs embed the map without a second CLI).
 //
 // Env/static only — no Obtain, vault open, or browser. Never tokens, vault
 // bytes, Authorization material, or raw subjects. getenv nil → os.Getenv.
