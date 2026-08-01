@@ -23,10 +23,11 @@
 // (HTTPConfig.TrustedProxy residual, default false — fail closed).
 // AfterIdentity (optional) enriches request context after trusted identity for
 // multi-user gateway (Caller + policy.Subject injection by serve). Contract
-// tests: multi_user_http_test.go + NewHTTPProtectHandler mock-inner path.
+// tests: multi_user_http_test.go (protect→inner) + multi_user_tools_call_test.go
+// (Streamable tools/call Alice/Bob AuthProviderCtx, session-scoped Connect ctx).
 // Residual: loopback without require-token/subject still open to local processes;
 // continuous JWKS rotation under load incomplete; live Entra residual; live
-// edge reverse-proxy origin pin residual; full tools/call JSON-RPC multi-user
-// e2e depends on MCP SDK r.Context() propagation into tool handlers; prefer
+// edge reverse-proxy origin pin residual; per-POST (intra-session) handler-ctx
+// rebind not the multi-user model (session-scoped Connect context is); prefer
 // stdio for pilot (ADR 0002).
 package mcpserver

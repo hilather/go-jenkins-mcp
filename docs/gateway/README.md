@@ -184,19 +184,26 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
   residual (OAUTH-010 / GWY-003): no Graph call; overage references do not invent membership.
 - **Live Entra / JWKS rotation / Mode C 3LO browser UX** remain GWY-003 /
   OAUTH-010 residuals.
-- **MCP SDK context flow:** AuthProviderCtx / SubjectFromContext only see the
-  request Caller/Subject when CallJenkins/tool handlers receive the HTTP
-  request context. Unit tests cover ContextWithCaller + PolicySubjectFromContext
-  + tools `SubjectFromContext`. **Protect-layer multi-user contract (Done\* offline):**
-  `internal/mcpserver/multi_user_http_test.go` proves `RequireSubject` + lab
+- **MCP SDK context flow / tools/call multi-user (Done\* offline, session-scoped):**
+  AuthProviderCtx / SubjectFromContext only see Caller/Subject when tool handlers
+  receive a context that carries them. **Protect-layer contract**
+  (`multi_user_http_test.go` + `NewHTTPProtectHandler`): `RequireSubject` + lab
   identity + `AfterIdentity` injects `gateway.Caller` + `policy.Subject` into
-  `r.Context()`, a mock next hop (AuthProviderCtx stand-in) sees Alice then Bob
-  on independent `Mcp-Session-Id`s, mid-session subject swap still 401s with
-  secret-free bodies, and `NewHTTPProtectHandler` documents the protect→inner
-  boundary. **Residual:** full `tools/call` JSON-RPC multi-user e2e through the
-  MCP Streamable HTTP SDK harness is **not** closed offline — that path still
-  depends on the SDK propagating `r.Context()` into tool handlers; heavy SDK
-  protocol harness is out of scope for HOST foundation contract tests.
+  `r.Context()`; mock next hop sees Alice then Bob on independent sessions;
+  mid-session subject swap 401s with secret-free bodies.
+  **tools/call JSON-RPC e2e (Done\* offline):**
+  `TestMultiUserHTTP_ToolsCall_JSONRPC_AliceBobAuthProviderCtx` drives a real MCP
+  Streamable HTTP client against `NewHTTPHandler` with lab identity headers,
+  two sessions (Alice/Bob), and `CallTool` that exercises Mode A vault
+  `AuthProviderCtx` Obtain + `WhoAmI` — Alice/Bob token isolation and secret
+  canaries pass. **Session model:** go-sdk v1.1.0 `server.Connect(req.Context())`
+  on the session-creating request (initialize) preserves context Values for
+  subsequent tool handlers (`jsonrpc2` `notDone`); multi-user is therefore
+  **session-scoped** (identity at Connect), not per-`tools/call` rebind from a
+  later POST’s `r.Context()`. Mid-session fingerprint still fail-closes subject
+  swaps at the protect layer. **Residual:** live Entra/JWKS HA; per-request
+  (intra-session) Caller rebind if a future SDK exposes per-POST handler ctx;
+  production multi-user GO remains gateway live pins.
 
 ## 3c. Multi-tenant isolation foundations (HOST-004 / HOST-006)
 
@@ -424,7 +431,7 @@ session store (HOST-008).
 | Custom Jenkins authorization-server plugin | ADR 0011 / OAUTH-011 **default no-go** |
 | Shared Jenkins service account for interactive users | **Never** |
 | Real client secret storage | keyring / vault (not profile JSON) |
-| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT, session fingerprint, JWKS TTL refresh + MaxStaleAge, multi-user Obtain + **policy.Subject rebind foundation** + **protect→inner Alice/Bob context contract tests** (`multi_user_http_test.go`, `NewHTTPProtectHandler`); residual: full tools/call JSON-RPC multi-user e2e (SDK `r.Context()` prop), multi-instance JWKS HA, live Entra groups claim completeness |
+| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT, session fingerprint, JWKS TTL refresh + MaxStaleAge, multi-user Obtain + **policy.Subject rebind foundation** + **protect→inner Alice/Bob** (`multi_user_http_test.go`) + **tools/call JSON-RPC Alice/Bob AuthProviderCtx e2e** (`multi_user_tools_call_test.go`, session-scoped Connect ctx); residual: multi-instance JWKS HA, live Entra groups claim completeness, per-POST (intra-session) handler-ctx rebind if SDK adds it |
 | Reverse-proxy non-local matrix | HOST-002 **Partial Done***: docs + `PathPrefix` strip + dual health + offline origin pin fixtures + `TrustedProxy` default false; live edge residual; no CORS wildcards |
 | Health/readiness envelope | HOST-005 **partial** — `/healthz` + `/readyz` + compose/k8s limits; Obtain Ready on `/readyz` when `--gateway` |
 | Multi-replica HA | HOST-008 Tier B residual (single-replica Tier A default) |
@@ -453,9 +460,11 @@ errors/Status/String; cancelled context; HTTPS-only HTTPTokenFetcher + mock AS;
 `oauth010_mode_c_offline_matrix` — not live Entra Done); offline qualify vault
 hit/miss, IdP outage chaos, JWKS kid-lite (see [qualification.md](qualification.md));
 HOST-001 `RequireSubject` + shared-secret not identity; mid-session
-`Mcp-Session-Id` subject swap 401; HOST-004 two-user token-cache + page_token
-subject isolation; HOST-006 SubjectLimiter + SubjectRateLimiter fair-share.
-Opt-in Mode C mock peer: `make live-oauth-*` (HOST-015).
+`Mcp-Session-Id` subject swap 401; multi-user tools/call JSON-RPC Alice/Bob
+AuthProviderCtx isolation (`TestMultiUserHTTP_ToolsCall_JSONRPC_*`, session-scoped);
+HOST-004 two-user token-cache + page_token subject isolation; HOST-006
+SubjectLimiter + SubjectRateLimiter fair-share. Opt-in Mode C mock peer:
+`make live-oauth-*` (HOST-015).
 
 ---
 
