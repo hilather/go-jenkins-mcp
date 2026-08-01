@@ -45,6 +45,11 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
   SubjectKey / ExternalSubject are available. Metrics tool_ok / tool_deny /
   tool_error remain separate (OBS-001); audit still focuses on denials by default
   (`tool_success` optional residual).
+- **Mutation Manager** (`mutation_preview` / `mutation_confirm` / `mutation_deny`):
+  ProfileID/PrincipalID from effective `mutation.Binding`; when Binding has
+  ExternalSubject also `externalSubject` + `subjectKeyHash` =
+  `audit.HashOpaque(tenant|external|profile)` (preview OK, confirm OK/deny,
+  including Alice/Bob `binding_mismatch`). Never confirmation tokens or raw keys.
 - Mid-serve **identity re-verify** fail-closed (`IdentityReverifyGate`, AUTH-004 / Wave 28):
   - `type=auth_fail`, `action=identity_reverify`, `decision=fail`
   - `reasonCode`: `identity_principal_drift` | `identity_reverify_fail` | `identity_unbound`
@@ -58,7 +63,8 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Surface | Status |
 |---------|--------|
 | Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
-| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
+| Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only; mutation events do not cross pods |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
 
 ### Rotation / retention
@@ -465,6 +471,11 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
   SubjectKey / ExternalSubject are available. Metrics tool_ok / tool_deny /
   tool_error remain separate (OBS-001); audit still focuses on denials by default
   (`tool_success` optional residual).
+- **Mutation Manager** (`mutation_preview` / `mutation_confirm` / `mutation_deny`):
+  ProfileID/PrincipalID from effective `mutation.Binding`; when Binding has
+  ExternalSubject also `externalSubject` + `subjectKeyHash` =
+  `audit.HashOpaque(tenant|external|profile)` (preview OK, confirm OK/deny,
+  including Alice/Bob `binding_mismatch`). Never confirmation tokens or raw keys.
 - Mid-serve **identity re-verify** fail-closed (`IdentityReverifyGate`, AUTH-004 / Wave 28):
   - `type=auth_fail`, `action=identity_reverify`, `decision=fail`
   - `reasonCode`: `identity_principal_drift` | `identity_reverify_fail` | `identity_unbound`
@@ -478,7 +489,8 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 | Surface | Status |
 |---------|--------|
 | Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
-| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
+| Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only; mutation events do not cross pods |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
 
 ### Rotation / retention

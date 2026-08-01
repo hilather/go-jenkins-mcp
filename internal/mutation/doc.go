@@ -17,7 +17,11 @@
 // Audit events are emitted for preview, confirm, and deny (AUD-001), including
 // rate-limit and cooldown denials (reason codes only; no secrets). Audit
 // ProfileID/PrincipalID prefer the effective Binding (BindingFromContext when
-// multi-user) over process defaults.
+// multi-user) over process defaults. When Binding carries ExternalSubject,
+// events also include ExternalSubject and SubjectKeyHash =
+// audit.HashOpaque(tenant|external|profile) for multi-user correlation — never
+// raw subject keys, confirmation tokens, or vault material. Multi-pod / fleet
+// audit aggregation remains residual (per-process JSONL only).
 //
 // # Subject binding (HOST-006 multi-user foundation)
 //
