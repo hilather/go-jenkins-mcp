@@ -281,12 +281,14 @@ Lab-only subject header X-Jenkins-MCP-Lab-Subject when JENKINS_MCP_LAB_IDENTITY=
 (fail closed otherwise; not default). Production JWT subject path (HOST-001):
 JENKINS_MCP_HTTP_JWKS_URL + JENKINS_MCP_HTTP_JWT_ISSUER +
 JENKINS_MCP_HTTP_JWT_AUDIENCE (secret-free); optional JENKINS_MCP_HTTP_JWT_REQUIRED=1
-implies require-subject. Shared transport secret is never treated as subject.
+implies require-subject. JWKS refreshes on TTL (default 5m;
+JENKINS_MCP_HTTP_JWKS_REFRESH_TTL, min 30s max 1h) with stale-if-error.
+Shared transport secret is never treated as subject.
 Request body cap defaults to
 4 MiB; raise with --http-max-body-bytes / JENKINS_MCP_HTTP_MAX_BODY_BYTES
 (absolute fail-closed 16 MiB). Mid-session subject change on the same
-Mcp-Session-Id fails closed (HOST-001). Residual: continuous JWKS rotation
-under load; live Entra; prefer stdio for pilot (ADR 0002).
+Mcp-Session-Id fails closed (HOST-001). Residual: multi-instance JWKS cache /
+under-load HA; live Entra; prefer stdio for pilot (ADR 0002).
 
 TLS/proxy (NET-004): profile may set caBundlePath, proxyURL, noProxy, clientCertFile,
 clientKeyFile (paths only — never private keys in profile JSON). CLI --ca-bundle /
@@ -1925,15 +1927,24 @@ func runServe(args []string) error {
 			return err
 		}
 		cfg.BearerToken = token
-		var jwks *auth.JWKS
+		// HOST-001: refreshable JWKS source (initial fetch fail-closed; TTL refresh + stale-if-error).
+		var jwksSource auth.JWKSSource
 		if jwtEnv.Configured() {
-			// Fetch once at serve start (fail closed). Continuous JWKS rotation residual.
-			jwks, err = fetchHTTPJWKS(serveCtx, nil, jwtEnv)
-			if err != nil {
-				return err
+			refreshTTL, ttlErr := parseHTTPJWKSRefreshTTL(os.Getenv)
+			if ttlErr != nil {
+				return ttlErr
+			}
+			src, srcErr := newHTTPJWKSSource(serveCtx, nil, jwtEnv, refreshTTL)
+			if srcErr != nil {
+				return srcErr
+			}
+			jwksSource = src
+			if src != nil {
+				log.Printf("HTTP JWT JWKS source ready refresh_ttl=%s uri_host_set=%v (stale-if-error; multi-instance cache residual)",
+					src.TTL(), strings.TrimSpace(jwtEnv.JWKSURL) != "")
 			}
 		}
-		cfg.IdentityResolver = newHTTPIdentityResolver(cfg.LabIdentity, token, jwks, auth.AccessTokenParams{
+		cfg.IdentityResolver = newHTTPIdentityResolver(cfg.LabIdentity, token, jwksSource, auth.AccessTokenParams{
 			Issuer:   jwtEnv.Issuer,
 			Audience: jwtEnv.Audience,
 		})

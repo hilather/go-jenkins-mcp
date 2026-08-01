@@ -104,7 +104,7 @@ There is **one** JWT validation stack: `ValidateAccessToken`. Callers must not i
 | Live Jenkins `jwt-auth-filter` (or proxy) version pin, fallthrough, route coverage | **OAUTH-005 / OAUTH-009** |
 | Live Entra end-to-end browser + bearer whoAmI principal | **OAUTH-005** lab |
 | RFC 7662 introspection for opaque tokens | Deferred |
-| Durable JWKS cache / outage TTL policy beyond fail-closed fetch | OAUTH-009 residual |
+| Multi-instance / under-load JWKS HA beyond process-local `RefreshingJWKS` (HOST-001 foundation TTL + stale-if-error) | OAUTH-009 / HOST-001 residual |
 | Continuous mid-serve JWT re-validation on every refresh | Optional hardening residual |
 
 ---
