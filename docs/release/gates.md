@@ -9,7 +9,8 @@
 Fill-in form: [`evidence-template.md`](evidence-template.md)  
 Offline CLI sample: `jenkins-mcp release-evidence --offline [--profile <id>] [--output dist/release-evidence.json]`  
 Schema: `jenkins-mcp.release-evidence.v2` (Wave 21 expand)  
-Offline pack automation: `make pilot-evidence` → `dist/pilot-evidence/<timestamp>/` (REL-001/002 lite)
+Offline pack automation: `make pilot-evidence` → `dist/pilot-evidence/<timestamp>/` (REL-001/002 lite)  
+**Residual honesty smoke (opt-in):** `make residual-smoke` (alias `make gateway-residual-smoke`) → `scripts/gateway-residual-smoke.sh` runs `gateway qualify --offline` + `release-evidence --offline` and **fails** if residual ids `multi_user_offline` · `oauth009_offline` · `host008_single_replica` · `gateway_modes_live` are missing. Artifacts under `dist/residual-smoke/<ts>/`. **Not** part of default `make test` / `make ci`.
 
 ---
 
@@ -118,6 +119,7 @@ Stable IDs emitted on `checks[].gate_id` and `residual[].gate_ids` in schema **v
 | pilot-check | `jenkins-mcp pilot-check --profile <id> [--offline]` | REL-001 JSON |
 | pilot-evidence pack | `make pilot-evidence PROFILE=<id>` or `scripts/pilot-evidence.sh` | Bundle + `MANIFEST.json` under `dist/pilot-evidence/` |
 | release-evidence lite | `jenkins-mcp release-evidence --offline [--output PATH]` | Schema v2: version, security self-check, policy self-test, MCP SDK pin, LKG, gateway offline, structured residual[] |
+| Residual honesty smoke (opt-in) | `make residual-smoke` / `scripts/gateway-residual-smoke.sh` | Asserts residual ids present; **not** default `make test`; does not close live pins |
 
 ### Ownership (mandatory names)
 
@@ -187,6 +189,7 @@ make pilot-evidence PROFILE= SKIP_GO_TEST=1
 - Live Entra / jwt-auth-filter / AgentCore Obtain remain residual (offline contracts only).
 - **Gateway modes A/B/C live multi-user** remain residual unless the release evidence mode matrix records live pilot cohorts; offline `gateway_qualify` / unit contracts are foundation only (`gateway_modes_live`).
 - Structured lite residual ids (automation honesty): `multi_user_offline` (Done\* foundation; not production multi-user GO), `oauth009_offline` (Done\* Bearer matrix; live Entra pin open), `host008_single_replica` (Tier A replicas:1; multi-replica HA residual). See [pilot checklist §0](../pilot/checklist.md).
+- **Verify residual honesty offline (opt-in):** `make residual-smoke` / `make gateway-residual-smoke` (`scripts/gateway-residual-smoke.sh`) — fails closed if those ids (plus `gateway_modes_live`) drop from `release-evidence --offline`. Unit contract: `go test ./cmd/jenkins-mcp/ -run 'KnownReleaseResidualIDsStable|ParseReleaseEvidenceResidualJSON'`.
 - Cursor host stdio CI remains residual (offline MCP protocol matrix + Wave 25 binary stdio smoke + Wave 26 optional CI job `stdio-smoke`; not real Cursor). Residual ids: `stdio_binary_smoke` Done* vs `cursor_host_ci` open.
 - Live Rocky/Ubuntu pilot install evidence remains operator-owned (REL-001).
 - Code signing keys and HSM remain organization-owned (packaging placeholder).

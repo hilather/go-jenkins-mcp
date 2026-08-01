@@ -13,6 +13,7 @@ provides:
 | [`checklist.md`](checklist.md) | Step-by-step install → diagnose → cache → rollback |
 | `jenkins-mcp pilot-check` | Offline/online evidence JSON (doctor + cache + sample verify) |
 | `scripts/pilot-evidence.sh` / `make pilot-evidence` | Offline/local secret-free evidence bundle under `dist/pilot-evidence/<ts>/` |
+| `scripts/gateway-residual-smoke.sh` / `make residual-smoke` | Opt-in offline residual honesty (qualify + release-evidence residual ids; not live GO) |
 | Deterministic chaos tests (QA-002 lite) | Recovery under truncated fetch, corrupt L1/L2, disk-full pack, mid-evict kill, cancel |
 
 **User path:** [../user/README.md](../user/README.md)  
@@ -143,6 +144,24 @@ is `fail`. Without `PROFILE`, overall is **`incomplete`** (doctor/pilot-check
 skipped) when the offline generators pass.
 
 See also REL-002 gates: [`../release/gates.md`](../release/gates.md).
+
+## Residual honesty smoke (`make residual-smoke`)
+
+Opt-in check that offline lite evidence still lists the residual ids operators
+must not treat as live multi-user / Entra / multi-replica GO:
+
+```bash
+make residual-smoke
+# alias:
+make gateway-residual-smoke
+# optional doctor residual fields when a profile exists:
+make residual-smoke PROFILE=corp
+```
+
+Runs `gateway qualify --offline` and `release-evidence --offline`, asserts
+`multi_user_offline` · `oauth009_offline` · `host008_single_replica` ·
+`gateway_modes_live`, and writes artifacts under `dist/residual-smoke/<ts>/`.
+**Not** part of default `make test` / `make ci`. See [release gates](../release/gates.md).
 
 ## Doctor / cache / support-bundle / policy
 

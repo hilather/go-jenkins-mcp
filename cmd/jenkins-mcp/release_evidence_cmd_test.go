@@ -183,6 +183,105 @@ require (
 	}
 }
 
+// TestKnownReleaseResidualIDsStable is the pure unit contract for
+// scripts/gateway-residual-smoke.sh (opt-in make residual-smoke).
+// Asserts REL lite residual honesty ids stay present in knownReleaseResiduals().
+func TestKnownReleaseResidualIDsStable(t *testing.T) {
+	t.Parallel()
+	// Keep in sync with scripts/gateway-residual-smoke.sh REQUIRED_RESIDUAL_IDS
+	// and docs/pilot/checklist.md §0 / docs/release/gates.md residuals.
+	required := []string{
+		"multi_user_offline",
+		"oauth009_offline",
+		"host008_single_replica",
+		"gateway_modes_live",
+	}
+	byID := map[string]releaseResidual{}
+	for _, r := range knownReleaseResiduals() {
+		if strings.TrimSpace(r.ID) == "" {
+			t.Fatal("empty residual id in knownReleaseResiduals")
+		}
+		if strings.TrimSpace(r.Message) == "" {
+			t.Fatalf("empty residual message for %s", r.ID)
+		}
+		byID[r.ID] = r
+	}
+	for _, id := range required {
+		r, ok := byID[id]
+		if !ok {
+			t.Fatalf("missing residual id %s (smoke script / release gates contract)", id)
+		}
+		if len(r.GateIDs) == 0 {
+			t.Fatalf("residual %s missing gate_ids", id)
+		}
+	}
+}
+
+// TestParseReleaseEvidenceResidualJSON asserts residual[] ids can be recovered
+// from a stable v2 JSON document (same shape as release-evidence --offline).
+// Regression: residual honesty ids must remain machine-readable for opt-in smoke.
+func TestParseReleaseEvidenceResidualJSON(t *testing.T) {
+	t.Parallel()
+	// Minimal fixture matching jenkins-mcp.release-evidence.v2 residual shape.
+	const fixture = `{
+  "schema": "jenkins-mcp.release-evidence.v2",
+  "offline": true,
+  "overall": "pass",
+  "residual": [
+    {"id": "multi_user_offline", "gate_ids": ["REL-002.compat.modes"], "message": "Done* foundation; not production multi-user GO"},
+    {"id": "oauth009_offline", "gate_ids": ["REL-002.sec.oauth"], "message": "Done* OAUTH-009 offline matrix; live pin residual"},
+    {"id": "host008_single_replica", "gate_ids": ["REL-002.compat.gateway"], "message": "HOST-008 single-replica default; multi-replica residual"},
+    {"id": "gateway_modes_live", "gate_ids": ["REL-002.compat.modes"], "message": "Live modes A/B/C residual unless pilot matrix records cohorts"}
+  ]
+}`
+	var ev releaseEvidence
+	if err := json.Unmarshal([]byte(fixture), &ev); err != nil {
+		t.Fatalf("unmarshal fixture: %v", err)
+	}
+	if ev.Schema != releaseEvidenceSchemaV2 {
+		t.Fatalf("schema %q", ev.Schema)
+	}
+	if !ev.Offline {
+		t.Fatal("offline")
+	}
+	got := map[string]string{}
+	for _, r := range ev.Residual {
+		got[r.ID] = r.Message
+	}
+	for _, id := range []string{
+		"multi_user_offline", "oauth009_offline", "host008_single_replica", "gateway_modes_live",
+	} {
+		msg, ok := got[id]
+		if !ok || strings.TrimSpace(msg) == "" {
+			t.Fatalf("missing or empty residual %s in parsed fixture: %+v", id, got)
+		}
+	}
+	// Round-trip residual slice from knownReleaseResiduals via JSON.
+	raw, err := json.Marshal(struct {
+		Residual []releaseResidual `json:"residual"`
+	}{Residual: knownReleaseResiduals()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wrap struct {
+		Residual []releaseResidual `json:"residual"`
+	}
+	if err := json.Unmarshal(raw, &wrap); err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]bool{}
+	for _, r := range wrap.Residual {
+		ids[r.ID] = true
+	}
+	for _, id := range []string{
+		"multi_user_offline", "oauth009_offline", "host008_single_replica", "gateway_modes_live",
+	} {
+		if !ids[id] {
+			t.Fatalf("round-trip missing residual %s", id)
+		}
+	}
+}
+
 func TestBuildReleaseEvidenceUnknownVersionWarn(t *testing.T) {
 	oldV, oldC, oldB := version, commit, buildTime
 	version, commit, buildTime = "unknown", "unknown", ""

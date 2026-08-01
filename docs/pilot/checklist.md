@@ -31,7 +31,8 @@ Gateway residual accepted (ticket/notes): _____________
 
 **REL lite residual ids** (from `jenkins-mcp release-evidence --offline`; do not treat as live GO):  
 `multi_user_offline` · `oauth009_offline` · `host008_single_replica` · `gateway_modes_live`  
-See [release gates](../release/gates.md) residuals section.
+See [release gates](../release/gates.md) residuals section.  
+Optional honesty automation (not default test): `make residual-smoke` → fails if those ids are missing from offline evidence.
 
 ## 1. Install
 
