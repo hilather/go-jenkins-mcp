@@ -20,6 +20,8 @@ func sanitizeEvent(e Event) Event {
 	e.Type = clip(redact.Secrets(e.Type), maxTypeLen)
 	e.ProfileID = clip(redact.Secrets(e.ProfileID), maxIDLen)
 	e.PrincipalID = clip(redact.Secrets(e.PrincipalID), maxIDLen)
+	e.ExternalSubject = clip(redact.Secrets(e.ExternalSubject), maxIDLen)
+	e.SubjectKeyHash = sanitizeSubjectKeyHash(e.SubjectKeyHash)
 	e.Tool = clip(redact.Secrets(e.Tool), maxToolLen)
 	e.Action = clip(redact.Secrets(e.Action), maxActionLen)
 	e.Decision = clip(redact.Secrets(e.Decision), maxCodeLen)
@@ -37,6 +39,26 @@ func sanitizeEvent(e Event) Event {
 		e.DurationMs = 0
 	}
 	return e
+}
+
+// sanitizeSubjectKeyHash keeps the field opaque: raw subject keys
+// (tenant|subject|profile) or oversize free-form values are re-hashed with
+// HashOpaque so vault/namespace material never lands in audit JSONL.
+func sanitizeSubjectKeyHash(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	// SubjectKey format always contains '|' when multi-part; never store raw.
+	if strings.Contains(s, "|") {
+		return HashOpaque(s)
+	}
+	// Oversize or non-short labels → hash rather than clip raw identity strings.
+	if utf8.RuneCountInString(s) > maxIDLen {
+		return HashOpaque(s)
+	}
+	// Expected path: already HashOpaque (16 hex) or short opaque label.
+	return clip(redact.Secrets(s), maxIDLen)
 }
 
 func clip(s string, max int) string {

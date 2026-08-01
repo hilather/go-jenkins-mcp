@@ -89,6 +89,10 @@ export interface AuditEvent {
   type: string;
   profileId?: string;
   principalId?: string;
+  /** Optional IdP subject label (gateway multi-user); never a token. */
+  externalSubject?: string;
+  /** Opaque HashOpaque(tenant|subject|profile); never raw subject key or vault material. */
+  subjectKeyHash?: string;
   tool?: string;
   action?: string;
   decision?: string;

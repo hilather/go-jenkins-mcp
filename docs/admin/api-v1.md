@@ -318,6 +318,12 @@ Query:
 }
 ```
 
+Events are `internal/audit.Event` JSON (secret-free). Optional multi-user correlation
+fields when present: `externalSubject` (IdP label, redacted/clipped), `subjectKeyHash`
+(`HashOpaque(tenant|subject|profile)` only — never raw subject keys or vault material).
+**Residual:** multi-pod audit aggregation (central sink / fleet timeline) is not
+provided by admin; per-process JSONL only (HOST-008).
+
 Missing audit file → empty `events` (not 500). Path traversal on `{id}` rejected.
 
 ## GET /admin/v1/profiles/{id}/doctor

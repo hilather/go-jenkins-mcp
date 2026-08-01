@@ -24,6 +24,8 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 | `type` | `login_success`, `login_fail`, `serve_start`, `tool_deny`, `auth_fail`, optional `tool_success` |
 | `profileId` | Connection profile id |
 | `principalId` | Verified Jenkins user id (never a token) |
+| `externalSubject` | Optional IdP subject label (gateway multi-user); redacted + length-capped like `principalId` — never a token |
+| `subjectKeyHash` | Optional `audit.HashOpaque(tenant\|subject\|profile)` for multi-user correlation — **never** raw subject key, vault material, or tokens |
 | `tool` / `action` | MCP tool name / short class |
 | `decision` | `allow` / `deny` / `success` / `fail` / `error` |
 | `reasonCode` | Stable code (policy reason, auth code) |
@@ -37,7 +39,12 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 
 - `login` success / fail (profile data dir)
 - `serve` start after identity bind; `auth_fail` on serve-time verify failure
-- Tool dispatch **deny** (global read-only + deny-only MCP RBAC)
+- Tool dispatch **deny** (global read-only + deny-only MCP RBAC); multi-user tool
+  dispatch attributes `profileId` / `principalId` from **effective** subject when
+  wired, plus optional `externalSubject` + `subjectKeyHash` (opaque) when
+  SubjectKey / ExternalSubject are available. Metrics tool_ok / tool_deny /
+  tool_error remain separate (OBS-001); audit still focuses on denials by default
+  (`tool_success` optional residual).
 - Mid-serve **identity re-verify** fail-closed (`IdentityReverifyGate`, AUTH-004 / Wave 28):
   - `type=auth_fail`, `action=identity_reverify`, `decision=fail`
   - `reasonCode`: `identity_principal_drift` | `identity_reverify_fail` | `identity_unbound`
@@ -45,6 +52,14 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
   - At most **one event per reason class** per gate lifetime (sticky transition / first 401-class fail — no flood on sticky re-Check)
 
 Audit emit is **best-effort**: failures never authorize mutations and never elevate access.
+
+### Multi-user correlation residual
+
+| Surface | Status |
+|---------|--------|
+| Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
+| Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
 
 ### Rotation / retention
 
@@ -429,6 +444,8 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 | `type` | `login_success`, `login_fail`, `serve_start`, `tool_deny`, `auth_fail`, optional `tool_success` |
 | `profileId` | Connection profile id |
 | `principalId` | Verified Jenkins user id (never a token) |
+| `externalSubject` | Optional IdP subject label (gateway multi-user); redacted + length-capped like `principalId` — never a token |
+| `subjectKeyHash` | Optional `audit.HashOpaque(tenant\|subject\|profile)` for multi-user correlation — **never** raw subject key, vault material, or tokens |
 | `tool` / `action` | MCP tool name / short class |
 | `decision` | `allow` / `deny` / `success` / `fail` / `error` |
 | `reasonCode` | Stable code (policy reason, auth code) |
@@ -442,7 +459,12 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 
 - `login` success / fail (profile data dir)
 - `serve` start after identity bind; `auth_fail` on serve-time verify failure
-- Tool dispatch **deny** (global read-only + deny-only MCP RBAC)
+- Tool dispatch **deny** (global read-only + deny-only MCP RBAC); multi-user tool
+  dispatch attributes `profileId` / `principalId` from **effective** subject when
+  wired, plus optional `externalSubject` + `subjectKeyHash` (opaque) when
+  SubjectKey / ExternalSubject are available. Metrics tool_ok / tool_deny /
+  tool_error remain separate (OBS-001); audit still focuses on denials by default
+  (`tool_success` optional residual).
 - Mid-serve **identity re-verify** fail-closed (`IdentityReverifyGate`, AUTH-004 / Wave 28):
   - `type=auth_fail`, `action=identity_reverify`, `decision=fail`
   - `reasonCode`: `identity_principal_drift` | `identity_reverify_fail` | `identity_unbound`
@@ -450,6 +472,14 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
   - At most **one event per reason class** per gate lifetime (sticky transition / first 401-class fail — no flood on sticky re-Check)
 
 Audit emit is **best-effort**: failures never authorize mutations and never elevate access.
+
+### Multi-user correlation residual
+
+| Surface | Status |
+|---------|--------|
+| Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
+| Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod JSONL only |
+| Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
 
 ### Rotation / retention
 
