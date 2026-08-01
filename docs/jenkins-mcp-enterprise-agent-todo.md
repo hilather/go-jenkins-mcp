@@ -2783,14 +2783,17 @@ process fair-share + secret-free `StatusMap` tests. Mutation confirms bound to
 `mutation.Binding` = profile + principal + ExternalSubject + tenant; multi-user
 `BindingFromContext` / serve `MutationBindingFromContext` via
 `mutationBindingFromGatewayCtx` (prefer Valid `PolicySubject` PrincipalID =
-JenkinsUserID from HTTP JenkinsPrincipal/lab header; else Caller + process
-principal) so Alice preview cannot confirm as Bob on ExternalSubject **or**
-PrincipalID; cooldown keys and audit use effective binding. **Serve wire Done*:**
-`tools.SubjectSlotLimiter` + `tools.SubjectRateLimiter`; `addTool` Allow then Hold
-under `--gateway`; env concurrent + rate/burst
+JenkinsUserID from HTTP JenkinsPrincipal/lab header; else Caller +
+`PrincipalCache` Obtain principal when set, else process principal) so Alice
+preview cannot confirm as Bob on ExternalSubject **or** PrincipalID; cooldown
+keys and audit use effective binding. **Done\*** Obtain→Binding principal via
+process-local `PrincipalCache` (Mode A vault username; Binding-only). **Serve
+wire Done*:** `tools.SubjectSlotLimiter` + `tools.SubjectRateLimiter`; `addTool`
+Allow then Hold under `--gateway`; env concurrent + rate/burst
 (`JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` 0 = rate disabled).
 **Residual:** multi-replica (HOST-008); policy overlay rate reduction; Obtain
-principal not re-injected onto ctx mid-call.
+still does not rewrite `policy.Subject` on request ctx mid-call (policy RBAC
+uses HTTP claim).
 
 ---
 

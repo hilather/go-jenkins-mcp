@@ -1958,8 +1958,10 @@ func runServe(args []string) error {
 			// Adapter: tools imports policy only (FND-004 — no tools→gateway).
 			serveSubjectFromCtx = gateway.PolicySubjectFromContext
 			// Mutation confirm isolation: prefer PolicySubject (JenkinsPrincipal→
-			// PrincipalID) when Valid; else Caller + process principal.
-			// AuthProviderCtx cannot write Obtain principal onto ctx (residual).
+			// PrincipalID) when Valid; else Caller + PrincipalCache (Obtain/Mode A
+			// vault username) when present, else process principal.
+			// AuthProviderCtx cannot write onto request context; Binding uses the
+			// process-local principal cache (policy.Subject mid-call residual remains).
 			processPrincipal := strings.TrimSpace(subject.JenkinsUserID)
 			serveMutationBindingFromCtx = func(ctx context.Context) (mutation.Binding, bool) {
 				return mutationBindingFromGatewayCtx(ctx, processPrincipal)

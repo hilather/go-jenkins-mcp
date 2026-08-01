@@ -635,6 +635,85 @@ func TestAttachGatewayObtainAuthProviderDynamic_NilSafe(t *testing.T) {
 	}
 }
 
+// Regression: multi-user Obtain Mode A fills PrincipalCache with vault username
+// (alice-j / bob-j); Binding can use cache without lab JenkinsPrincipal; canary
+// never in cache.String; Delete clears one subject only.
+func TestAttachGatewayObtainAuthProviderDynamic_PrincipalCacheModeA(t *testing.T) {
+	t.Parallel()
+	cache := gateway.NewPrincipalCache()
+	v := gateway.NewMemoryAPITokenVault()
+	alice := host003Caller("alice-sub")
+	bob := host003Caller("bob-sub")
+	const aliceTok = host003WireCanary + "-alice-pcache"
+	const bobTok = host003WireCanary + "-bob-pcache"
+	if err := v.Put(context.Background(), gateway.SubjectKey(alice), "alice-j", aliceTok); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Put(context.Background(), gateway.SubjectKey(bob), "bob-j", bobTok); err != nil {
+		t.Fatal(err)
+	}
+	p, err := gateway.RequireAPITokenVaultSetup(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &jenkins.Client{}
+	attachGatewayObtainAuthProviderDynamicWithCache(c, p, alice, false, cache)
+
+	user, secret, sch, err := c.AuthProviderCtx(gateway.ContextWithCaller(context.Background(), alice))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user != "alice-j" || secret != aliceTok || sch != jenkins.AuthSchemeBasic {
+		t.Fatalf("alice wire: user=%q sch=%v secret_ok=%v", user, sch, secret == aliceTok)
+	}
+	got, ok := cache.Get(gateway.SubjectKey(alice))
+	if !ok || got != "alice-j" {
+		t.Fatalf("cache after alice Obtain: ok=%v got=%q", ok, got)
+	}
+
+	user, secret, _, err = c.AuthProviderCtx(gateway.ContextWithCaller(context.Background(), bob))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user != "bob-j" || secret != bobTok {
+		t.Fatalf("bob wire: user=%q secret_ok=%v", user, secret == bobTok)
+	}
+	if got, ok := cache.Get(gateway.SubjectKey(bob)); !ok || got != "bob-j" {
+		t.Fatalf("cache bob: ok=%v got=%q", ok, got)
+	}
+	// Isolation: alice still alice-j.
+	if got, _ := cache.Get(gateway.SubjectKey(alice)); got != "alice-j" {
+		t.Fatalf("alice principal after bob Obtain: %q", got)
+	}
+	// Canary: tokens never in String / StatusMap.
+	if strings.Contains(cache.String(), aliceTok) || strings.Contains(cache.String(), bobTok) ||
+		strings.Contains(cache.String(), host003WireCanary) {
+		t.Fatalf("cache.String leaked token: %s", cache.String())
+	}
+
+	// Failed Obtain must not clobber existing or invent principal for missing subject.
+	missing := host003Caller("missing-sub")
+	_, _, _, err = c.AuthProviderCtx(gateway.ContextWithCaller(context.Background(), missing))
+	if err == nil {
+		t.Fatal("missing subject must fail")
+	}
+	if _, ok := cache.Get(gateway.SubjectKey(missing)); ok {
+		t.Fatal("failed Obtain must not Set principal")
+	}
+	if strings.Contains(err.Error(), aliceTok) || strings.Contains(err.Error(), bobTok) {
+		t.Fatalf("canary in Obtain error: %v", err)
+	}
+
+	// Delete companion (Invalidate path): alice gone, bob remains.
+	cache.Delete(gateway.SubjectKey(alice))
+	if _, ok := cache.Get(gateway.SubjectKey(alice)); ok {
+		t.Fatal("Delete alice")
+	}
+	if got, ok := cache.Get(gateway.SubjectKey(bob)); !ok || got != "bob-j" {
+		t.Fatalf("bob after alice Delete: ok=%v got=%q", ok, got)
+	}
+}
+
 // Regression: multi-user off path still uses fixed AuthProvider (single-subject pin foundation).
 func TestAttachGatewayObtainAuthProvider_SingleSubjectStillFixed(t *testing.T) {
 	t.Parallel()

@@ -17,13 +17,19 @@ import (
 //     Mode A vault multi-user should send that header matching vault username).
 //     ProfileID / ExternalSubject / Tenant come from the same subject.
 //  2. gateway.Caller when Valid — ExternalSubject/Tenant/Profile from Caller;
-//     PrincipalID falls back to processPrincipal (session-start / process Jenkins
-//     user). AuthProviderCtx cannot re-inject Obtain JenkinsPrincipal onto ctx
-//     after whoAmI mid-call — that remains a residual; multi-user principal for
-//     Binding is the HTTP claim / lab path (goal 2).
+//     PrincipalID prefers PrincipalCache (SubjectKey → Obtain/Mode A vault
+//     username recorded by AuthProviderCtx) when non-empty, else processPrincipal
+//     (session-start / process Jenkins user). AuthProviderCtx cannot write onto
+//     request context — policy.Subject mid-call still uses HTTP claim for
+//     JenkinsUserID; the process-local principal cache is Binding-only.
 //
 // ok is false when neither trusted source is usable.
 func mutationBindingFromGatewayCtx(ctx context.Context, processPrincipal string) (mutation.Binding, bool) {
+	return mutationBindingFromGatewayCtxWithCache(ctx, processPrincipal, gateway.ProcessPrincipalCache())
+}
+
+// mutationBindingFromGatewayCtxWithCache is the injectable variant for tests.
+func mutationBindingFromGatewayCtxWithCache(ctx context.Context, processPrincipal string, cache *gateway.PrincipalCache) (mutation.Binding, bool) {
 	processPrincipal = strings.TrimSpace(processPrincipal)
 	if s, ok := gateway.PolicySubjectFromContext(ctx); ok && s.Valid() {
 		return mutation.Binding{
@@ -49,12 +55,18 @@ func mutationBindingFromGatewayCtx(ctx context.Context, processPrincipal string)
 			if t := strings.TrimSpace(s.Tenant); t != "" {
 				tenant = t
 			}
-			// Principal only from subject when Valid (handled above). Residual:
-			// non-empty JenkinsUserID with empty Profile is not Valid — keep process.
+			// Principal only from Valid PolicySubject (handled above). !Valid
+			// subject does not elevate; Obtain principal may still come from cache.
+		}
+		principalID := processPrincipal
+		if cache != nil {
+			if p, ok := cache.Get(gateway.SubjectKey(c)); ok && strings.TrimSpace(p) != "" {
+				principalID = strings.TrimSpace(p)
+			}
 		}
 		return mutation.Binding{
 			ProfileID:       profileID,
-			PrincipalID:     processPrincipal,
+			PrincipalID:     principalID,
 			ExternalSubject: ext,
 			Tenant:          tenant,
 		}, true

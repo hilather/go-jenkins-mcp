@@ -57,6 +57,11 @@ func attachGatewayObtainAuthProvider(client *jenkins.Client, prov gateway.Creden
 //   - Obtain error → error; never another subject's token
 //   - does not write secrets onto Client.User/Token (AuthProviderCtx path)
 //
+// On successful Obtain, records the non-secret Jenkins principal in the process
+// PrincipalCache (SubjectKey → principal) so mutation Binding can prefer it
+// when policy.Subject is missing/!Valid. AuthProviderCtx still cannot write
+// onto request context (policy.Subject mid-call residual remains).
+//
 // No-op when client or provider is nil. defaultCaller is captured at attach
 // for session-start whoAmI and stdio residual when context has no Caller.
 //
@@ -68,12 +73,25 @@ func attachGatewayObtainAuthProvider(client *jenkins.Client, prov gateway.Creden
 // Session-start whoAmI must pass ContextWithCaller(defaultCaller).
 // requireContextCaller=false: allow defaultCaller when ctx has no Caller (tests).
 func attachGatewayObtainAuthProviderDynamic(client *jenkins.Client, prov gateway.CredentialProvider, defaultCaller gateway.Caller, requireContextCaller bool) {
+	attachGatewayObtainAuthProviderDynamicWithCache(client, prov, defaultCaller, requireContextCaller, gateway.ProcessPrincipalCache())
+}
+
+// attachGatewayObtainAuthProviderDynamicWithCache is the injectable variant for
+// tests (private PrincipalCache). production wire uses ProcessPrincipalCache.
+func attachGatewayObtainAuthProviderDynamicWithCache(
+	client *jenkins.Client,
+	prov gateway.CredentialProvider,
+	defaultCaller gateway.Caller,
+	requireContextCaller bool,
+	principalCache *gateway.PrincipalCache,
+) {
 	if client == nil || prov == nil {
 		return
 	}
 	p := prov
 	def := defaultCaller
 	require := requireContextCaller
+	cache := principalCache
 	// Multi-user path: clear fixed AuthProvider so only context-scoped Obtain runs.
 	client.WithAuthProvider(nil)
 	client.WithAuthProviderCtx(func(ctx context.Context) (user, secret string, sch jenkins.AuthScheme, err error) {
@@ -91,11 +109,7 @@ func attachGatewayObtainAuthProviderDynamic(client *jenkins.Client, prov gateway
 				return "", "", "", apperr.New(apperr.CodeAuthentication,
 					"gateway multi-user caller subject and profile are required")
 			}
-			ha, err := gateway.ObtainHTTPAuth(ctx, p, def)
-			if err != nil {
-				return "", "", "", err
-			}
-			return httpAuthToJenkins(ha)
+			return obtainAndRememberPrincipal(ctx, p, def, cache)
 		}
 		// Only rebind when the context caller is Valid after merge; fail closed
 		// rather than silently falling through to default for a partial spoof.
@@ -104,13 +118,34 @@ func attachGatewayObtainAuthProviderDynamic(client *jenkins.Client, prov gateway
 			return "", "", "", apperr.New(apperr.CodeAuthentication,
 				"gateway multi-user caller subject and profile are required")
 		}
-		ha, err := gateway.ObtainHTTPAuth(ctx, p, caller)
-		if err != nil {
-			// Preserve ConsentRequired; never map to static SA or other subject.
-			return "", "", "", err
-		}
-		return httpAuthToJenkins(ha)
+		return obtainAndRememberPrincipal(ctx, p, caller, cache)
 	})
+}
+
+// obtainAndRememberPrincipal Obtains credentials for caller, maps to Jenkins
+// wire auth, and caches the non-secret Jenkins principal under SubjectKey.
+// Uses Obtain + HTTPAuthFromCredential so Credential.JenkinsPrincipal is
+// available (Mode A vault username); never stores AccessToken in the cache.
+func obtainAndRememberPrincipal(
+	ctx context.Context,
+	p gateway.CredentialProvider,
+	caller gateway.Caller,
+	cache *gateway.PrincipalCache,
+) (user, secret string, sch jenkins.AuthScheme, err error) {
+	if p == nil {
+		return "", "", "", apperr.New(apperr.CodeAuthentication, "gateway credential provider is nil")
+	}
+	cred, err := p.Obtain(ctx, caller)
+	if err != nil {
+		// Preserve ConsentRequired; never map to static SA or other subject.
+		return "", "", "", err
+	}
+	ha, err := gateway.HTTPAuthFromCredential(cred)
+	if err != nil {
+		return "", "", "", err
+	}
+	gateway.RememberObtainPrincipal(cache, caller, cred, ha)
+	return httpAuthToJenkins(ha)
 }
 
 // clearGatewayLocalSessionCredentials removes static keyring/OIDC User/Token

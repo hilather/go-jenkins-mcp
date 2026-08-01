@@ -454,8 +454,9 @@ Prevent one user from exhausting process-wide budgets for others.
 `gateway.SubjectRateLimiter` (30/min + burst 10 default; process ceiling).
 **Serve wire Done*:** `SubjectSlotLimiter` + `SubjectRateLimiter`; Allow then Hold;
 `MutationBindingFromContext` prefers Valid PolicySubject PrincipalID (HTTP claim)
-else Caller + process principal. **Residual:** HOST-008 multi-replica; policy
-overlay rate reduction; Obtain whoAmI principal not re-injected onto ctx mid-call.
+else Caller + PrincipalCache (Obtain) else process principal. **Done\*** Obtain→
+Binding principal via PrincipalCache. **Residual:** HOST-008 multi-replica; policy
+overlay rate reduction; Obtain still does not rewrite policy.Subject on ctx mid-call.
 
 ---
 

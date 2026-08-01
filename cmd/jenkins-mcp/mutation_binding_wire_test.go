@@ -10,6 +10,7 @@ import (
 	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
 	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
 	"github.com/simonfxr/go-jenkins-mcp/internal/mutation"
 	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
 )
@@ -293,5 +294,112 @@ func TestMutationBinding_LabJenkinsPrincipalMatchesVaultStyleUsername(t *testing
 	}
 	if b.ExternalSubject != "entra-alice" {
 		t.Fatalf("external: %q", b.ExternalSubject)
+	}
+}
+
+// Regression: Obtain Mode A vault → PrincipalCache → Binding PrincipalID = alice-j
+// even without lab/JWT JenkinsPrincipal (policy.Subject !Valid). Bob isolated.
+func TestMutationBinding_ObtainPrincipalCache_ModeAWithoutLabClaim(t *testing.T) {
+	t.Parallel()
+	const processPrincipal = "process-whoami"
+	const canaryTok = "MUT_BIND_PCACHE_canary_token_never_log_xyz"
+	cache := gateway.NewPrincipalCache()
+	v := gateway.NewMemoryAPITokenVault()
+	alice := gateway.Caller{Subject: "alice-sub", Tenant: "tid-1", ProfileID: "corp"}
+	bob := gateway.Caller{Subject: "bob-sub", Tenant: "tid-1", ProfileID: "corp"}
+	if err := v.Put(context.Background(), gateway.SubjectKey(alice), "alice-j", canaryTok+"-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Put(context.Background(), gateway.SubjectKey(bob), "bob-j", canaryTok+"-b"); err != nil {
+		t.Fatal(err)
+	}
+	p, err := gateway.RequireAPITokenVaultSetup(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate multi-user AuthProviderCtx Obtain for Alice then Bob.
+	client := &jenkins.Client{}
+	attachGatewayObtainAuthProviderDynamicWithCache(client, p, alice, false, cache)
+	if _, _, _, err := client.AuthProviderCtx(gateway.ContextWithCaller(context.Background(), alice)); err != nil {
+		t.Fatalf("alice Obtain: %v", err)
+	}
+	if _, _, _, err := client.AuthProviderCtx(gateway.ContextWithCaller(context.Background(), bob)); err != nil {
+		t.Fatalf("bob Obtain: %v", err)
+	}
+	// Cache has vault usernames; String secret-free.
+	if got, ok := cache.Get(gateway.SubjectKey(alice)); !ok || got != "alice-j" {
+		t.Fatalf("cache alice: ok=%v got=%q", ok, got)
+	}
+	if got, ok := cache.Get(gateway.SubjectKey(bob)); !ok || got != "bob-j" {
+		t.Fatalf("cache bob: ok=%v got=%q", ok, got)
+	}
+	if strings.Contains(cache.String(), canaryTok) {
+		t.Fatalf("cache.String leaked canary: %s", cache.String())
+	}
+	if strings.Contains(cache.String(), canaryTok+"-a") || strings.Contains(cache.String(), canaryTok+"-b") {
+		t.Fatal("cache.String leaked tokens")
+	}
+
+	// Binding without Valid PolicySubject (no lab JenkinsPrincipal): use cache.
+	aliceCtx := gateway.ContextWithCaller(context.Background(), alice)
+	bobCtx := gateway.ContextWithCaller(context.Background(), bob)
+	ba, ok := mutationBindingFromGatewayCtxWithCache(aliceCtx, processPrincipal, cache)
+	if !ok || ba.PrincipalID != "alice-j" {
+		t.Fatalf("alice Binding PrincipalID want alice-j (not process %q): ok=%v %+v", processPrincipal, ok, ba)
+	}
+	bb, ok := mutationBindingFromGatewayCtxWithCache(bobCtx, processPrincipal, cache)
+	if !ok || bb.PrincipalID != "bob-j" {
+		t.Fatalf("bob Binding PrincipalID want bob-j: ok=%v %+v", ok, bb)
+	}
+	if ba.PrincipalID == bb.PrincipalID {
+		t.Fatal("alice/bob PrincipalID must differ")
+	}
+	if ba.PrincipalID == processPrincipal || bb.PrincipalID == processPrincipal {
+		t.Fatal("must not fall back to process when cache hit")
+	}
+	if ba.ExternalSubject != "alice-sub" || bb.ExternalSubject != "bob-sub" {
+		t.Fatalf("ExternalSubject isolation: alice=%+v bob=%+v", ba, bb)
+	}
+
+	// Delete on Invalidate companion: remove alice → Binding falls back to process.
+	cache.Delete(gateway.SubjectKey(alice))
+	ba2, ok := mutationBindingFromGatewayCtxWithCache(aliceCtx, processPrincipal, cache)
+	if !ok || ba2.PrincipalID != processPrincipal {
+		t.Fatalf("after Delete alice want process fallback: ok=%v %+v", ok, ba2)
+	}
+	// Bob still cached.
+	bb2, _ := mutationBindingFromGatewayCtxWithCache(bobCtx, processPrincipal, cache)
+	if bb2.PrincipalID != "bob-j" {
+		t.Fatalf("bob must remain after alice Delete: %+v", bb2)
+	}
+
+	// Valid PolicySubject still wins over cache (HTTP claim preferred).
+	ps := policy.Subject{
+		ProfileID: "corp", JenkinsUserID: "claim-alice",
+		ExternalSubject: "alice-sub", Tenant: "tid-1", Verified: true,
+	}
+	cache.Set(gateway.SubjectKey(alice), "alice-j")
+	ctxClaim := gateway.ContextWithCallerAndPolicySubject(context.Background(), alice, ps)
+	bc, ok := mutationBindingFromGatewayCtxWithCache(ctxClaim, processPrincipal, cache)
+	if !ok || bc.PrincipalID != "claim-alice" {
+		t.Fatalf("Valid PolicySubject must win over cache: ok=%v %+v", ok, bc)
+	}
+}
+
+// Caller path with empty cache keeps process principal (prior residual path).
+func TestMutationBinding_PrincipalCacheMiss_ProcessFallback(t *testing.T) {
+	t.Parallel()
+	const processPrincipal = "process-jenkins"
+	cache := gateway.NewPrincipalCache()
+	c := gateway.Caller{Subject: "entra-bob", Tenant: "tid-1", ProfileID: "corp"}
+	ctx := gateway.ContextWithCaller(context.Background(), c)
+	b, ok := mutationBindingFromGatewayCtxWithCache(ctx, processPrincipal, cache)
+	if !ok || b.PrincipalID != processPrincipal {
+		t.Fatalf("cache miss: ok=%v %+v", ok, b)
+	}
+	// nil cache also process fallback.
+	b2, ok := mutationBindingFromGatewayCtxWithCache(ctx, processPrincipal, nil)
+	if !ok || b2.PrincipalID != processPrincipal {
+		t.Fatalf("nil cache: ok=%v %+v", ok, b2)
 	}
 }
