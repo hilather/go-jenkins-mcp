@@ -835,10 +835,11 @@ flag/env fail closed at serve start (no silent clamp). Empty/whitespace/`0`/`0s`
 at all layers means default **5s**. Serve `SetConfirmCooldown` installs the live
 process value used when library `Config.ConfirmCooldown` is 0 (Managers created
 at tool registration). Serve logs non-secret `mutation_confirm_cooldown=…`
-(combined with resilience log fields). Residual honesty: library
-`Config.ConfirmCooldown` negative still turns cooldown off for tests; the
-operator resolve path cannot set 0/disable. Mutations remain opt-in
-(`--allow-mutations`); pilot default is still read-only.
+(combined with resilience log fields). After TokenTTL also resolves, serve
+fail-closes when cooldown ≥ token TTL (`EnsureConfirmCooldownLessThanTokenTTL`).
+Residual honesty: library `Config.ConfirmCooldown` negative still turns cooldown
+off for tests; the operator resolve path cannot set 0/disable. Mutations remain
+opt-in (`--allow-mutations`); pilot default is still read-only.
 
 ### Mutation MaxPreviewsPerMinute (Wave 52 Track C / MUT-001)
 
@@ -875,12 +876,13 @@ flag/env fail closed at serve start (no silent clamp). Empty/whitespace/`0`/`0s`
 at all layers means default **2m**. Serve `SetTokenTTL` installs the live
 process value used when library `Config.TTL` ≤ 0 (Managers created at tool
 registration). Serve logs non-secret `mutation_token_ttl=…` (combined with
-resilience/mutation log fields). Residual honesty: ConfirmCooldown and TokenTTL
-are independent operator caps — serve does not fail closed when cooldown ≥ TTL;
-package defaults keep DefaultConfirmCooldown (5s) < DefaultTokenTTL (2m). No
-unlimited/disabled TTL path (library `Config.TTL` ≤0 still yields a positive
-TTL). Mutations remain opt-in (`--allow-mutations`); pilot default is still
-read-only.
+resilience/mutation log fields). After both ConfirmCooldown and TokenTTL
+resolve, serve fail-closes when cooldown ≥ TTL
+(`EnsureConfirmCooldownLessThanTokenTTL`) so cooldown cannot exhaust (or equal)
+the confirmation window; package defaults keep DefaultConfirmCooldown (5s) <
+DefaultTokenTTL (2m). No unlimited/disabled TTL path (library `Config.TTL` ≤0
+still yields a positive TTL). Mutations remain opt-in (`--allow-mutations`);
+pilot default is still read-only.
 
 ### UI-009 testing
 

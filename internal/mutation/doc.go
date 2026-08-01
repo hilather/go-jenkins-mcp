@@ -58,10 +58,10 @@
 // process live value used when Config.ConfirmCooldown is 0. Residual: library
 // Config negative still disables cooldown for tests; operator path cannot set 0.
 //
-// Residual honesty (Wave 52 / Wave 53): ConfirmCooldown and TokenTTL are
-// independent operator caps. Serve does not fail closed when ConfirmCooldown ≥
-// TokenTTL (operators may tune either independently). Package defaults keep
-// DefaultConfirmCooldown (5s) < DefaultTokenTTL (2m).
+// ConfirmCooldown vs TokenTTL (MUT-001 residual fix): after ResolveConfirmCooldown
+// and ResolveTokenTTL, serve calls EnsureConfirmCooldownLessThanTokenTTL and fails
+// closed when cooldown ≥ TTL so cooldown cannot exhaust (or equal) the token
+// window. Package defaults keep DefaultConfirmCooldown (5s) < DefaultTokenTTL (2m).
 //
 // Preview exceed → apperr.CodeThrottled + reason preview_rate_limited.
 // Confirm during cooldown → apperr.CodePolicyDenial + reason confirm_cooldown

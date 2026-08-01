@@ -947,6 +947,37 @@ func TestResolveServeMutationTokenTTL_Wiring(t *testing.T) {
 	}
 }
 
+// MUT-001 residual fix: serve fail-closed when ConfirmCooldown ≥ TokenTTL
+// (same call shape as runServe after both resolve).
+func TestEnsureServeMutationConfirmCooldownLessThanTokenTTL_Wiring(t *testing.T) {
+	t.Parallel()
+	// Defaults ok (5s < 2m).
+	if err := mutation.EnsureConfirmCooldownLessThanTokenTTL(
+		mutation.DefaultConfirmCooldown, mutation.DefaultTokenTTL); err != nil {
+		t.Fatalf("defaults: %v", err)
+	}
+	// Resolved operator pair ok when cooldown < ttl.
+	cooldown, err := mutation.ResolveConfirmCooldown("20s", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ttl, err := mutation.ResolveTokenTTL("1m", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mutation.EnsureConfirmCooldownLessThanTokenTTL(cooldown, ttl); err != nil {
+		t.Fatalf("20s < 1m must succeed: %v", err)
+	}
+	// Equal fails closed.
+	if err := mutation.EnsureConfirmCooldownLessThanTokenTTL(30*time.Second, 30*time.Second); err == nil {
+		t.Fatal("equal must fail closed")
+	}
+	// Cooldown > ttl fails closed.
+	if err := mutation.EnsureConfirmCooldownLessThanTokenTTL(2*time.Minute, 30*time.Second); err == nil {
+		t.Fatal("cooldown > ttl must fail closed")
+	}
+}
+
 // Wave 52 Track C / MUT-001: serve MaxPreviewsPerMinute resolve (0→default; absolute 300 fail-closed).
 func TestSoftTargetClampApplied_ServeWiring(t *testing.T) {
 	t.Parallel()
