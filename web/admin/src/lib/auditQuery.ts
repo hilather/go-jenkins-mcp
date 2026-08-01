@@ -96,6 +96,8 @@ export const AUDIT_EVENT_FIELD_ORDER = [
   "schemaVersion",
   "profileId",
   "principalId",
+  "externalSubject",
+  "subjectKeyHash",
   "tool",
   "action",
   "decision",

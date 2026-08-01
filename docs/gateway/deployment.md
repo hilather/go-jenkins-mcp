@@ -402,7 +402,7 @@ Raise replicas **only** when every row is satisfied (org-owned design):
 | 2 | **Session affinity** (sticky sessions) **or** shared session store | Subject bind / confirm tokens must not split-brain across pods | **Done* scaffold / residual runtime** — kustomize Service `sessionAffinity: ClientIP` + `sessionAffinityConfig.clientIP.timeoutSeconds` (default 10800). Affinity is optional packaging for operators who later scale; **does not** close multi-replica HA without 1b + 3–8. Shared durable session store still residual |
 | 3 | **No reliance on memory token cache alone** | In-process Obtain cache must be shared or disabled under multi-replica | **Residual** (`MemoryTokenCache` only today) |
 | 4 | Shared or carefully partitioned **cache / archive** policy | Avoid cross-pod archive handle / pin confusion | **Residual** (STO / HOST-004) |
-| 5 | **Audit aggregation** (central sink) | Per-pod files are not a fleet audit plane | **Residual** |
+| 5 | **Audit aggregation** (central sink) | Per-pod files are not a fleet audit plane | **Residual** — per-process JSONL may carry multi-user `externalSubject` / `subjectKeyHash` (opaque correlation foundation; see `docs/observability.md`); fleet merge / multi-pod timeline still residual |
 | 6 | Sticky or shared Obtain / consent correlation | Refresh/consent must not double-mint unsafely | **Residual** (Mode C progressive consent) |
 | 7 | JWKS / identity multi-instance behavior measured | Process-local JWKS refresh is not multi-region HA | **Residual** |
 | 8 | Shared subject rate / concurrency limiters | Process-local `SubjectRateLimiter` / `SubjectLimiter` only today | **Residual** (admin `rateEnabled`/`ratePerMinute`/`rateBurst` are process-local env residual only; external rate residual when scaling) |

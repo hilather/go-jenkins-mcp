@@ -102,6 +102,110 @@ func TestToolDenyAuditsAndMetrics(t *testing.T) {
 	}
 }
 
+// Multi-user residual foundation: tool_deny audit uses effectiveSubject +
+// SubjectKeyHash (opaque), never raw subject keys or vault canaries.
+func TestToolDenyAudit_MultiUserCorrelation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	const (
+		canary = "CANARY_vault_token_must_never_appear_in_audit_xyz"
+		sk     = "tid-1|entra-alice|corp"
+	)
+	wantHash := audit.HashOpaque(sk)
+	if wantHash == "" || strings.Contains(wantHash, "|") {
+		t.Fatalf("HashOpaque: %q", wantHash)
+	}
+
+	mem := &audit.Memory{}
+	server := mcp.NewServer(&mcp.Implementation{Name: "aud-mu", Version: "test"}, nil)
+	doc := policy.Document{
+		Mode:      policy.ModePilot,
+		DenyTools: map[string]struct{}{"jenkins_get_jobs": {}},
+	}
+	ev := policy.NewDenyOnlyEvaluator(doc)
+	alice := policy.NewSubject("corp", "alice-j", true).
+		WithExternal("entra-alice").
+		WithGateway("tid-1", "", nil)
+	opts := &tools.RegisterOptions{
+		Gate:        policy.NewDefaultReadOnlyGate(),
+		Policy:      ev,
+		Subject:     policy.NewSubject("corp", "process-user", true), // process fallback
+		Audit:       mem,
+		ProfileID:   "corp",
+		PrincipalID: "process-user",
+		SubjectKey:  "tid-default|process-ext|corp",
+		SubjectFromContext: func(context.Context) (policy.Subject, bool) {
+			return alice, true
+		},
+		SubjectKeyFromContext: func(context.Context) string {
+			// Production never puts tokens in SubjectKey; canary proves audit hash path.
+			_ = canary
+			return sk
+		},
+	}
+	tools.ForceRegisterReadToolForTest(server, opts, &mcp.Tool{
+		Name:        "jenkins_get_jobs",
+		Description: "test",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args jenkins.GetJobsToolArgs) (*mcp.CallToolResult, jenkins.GetJobsToolResponse, error) {
+		t.Fatal("handler must not run on policy deny")
+		return nil, jenkins.GetJobsToolResponse{}, nil
+	})
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "test"}, nil)
+	ct, st := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+	cs, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "jenkins_get_jobs", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("transport: %v", err)
+	}
+	if res == nil || !res.IsError {
+		t.Fatalf("want tool error, got %#v", res)
+	}
+
+	evs := mem.Events()
+	if len(evs) != 1 {
+		t.Fatalf("audit events=%d", len(evs))
+	}
+	e := evs[0]
+	if e.Type != audit.TypeToolDeny {
+		t.Fatalf("type=%s", e.Type)
+	}
+	// Effective multi-user subject, not process defaults.
+	if e.ProfileID != "corp" || e.PrincipalID != "alice-j" {
+		t.Fatalf("profile/principal: %+v", e)
+	}
+	if e.ExternalSubject != "entra-alice" {
+		t.Fatalf("ExternalSubject=%q", e.ExternalSubject)
+	}
+	if e.SubjectKeyHash != wantHash {
+		t.Fatalf("SubjectKeyHash=%q want %q", e.SubjectKeyHash, wantHash)
+	}
+	// Stability: same key → same hash.
+	if audit.HashOpaque(sk) != e.SubjectKeyHash {
+		t.Fatal("SubjectKeyHash not stable")
+	}
+	// Canary / raw key never in event fields.
+	blob := e.Type + e.ProfileID + e.PrincipalID + e.ExternalSubject + e.SubjectKeyHash +
+		e.Tool + e.Action + e.Decision + e.ReasonCode + e.TargetHash + e.RequestID
+	if strings.Contains(blob, canary) {
+		t.Fatalf("canary in audit: %+v", e)
+	}
+	if strings.Contains(blob, sk) || strings.Contains(e.SubjectKeyHash, "|") {
+		t.Fatalf("raw subject key in audit: %+v", e)
+	}
+}
+
 // Registration under RO emits tool_deny for omitted mutation tools (AUD-001).
 func TestRegisterROOmitsMutationsWithAudit(t *testing.T) {
 	t.Parallel()
