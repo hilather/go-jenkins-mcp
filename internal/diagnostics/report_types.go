@@ -104,7 +104,10 @@ func residualHonestyNonSecretKey(k string) bool {
 	switch k {
 	case "shared_token_cache_file",
 		// Mode A vault path residual bool (contains "token"; never vault bytes/path).
-		"shared_api_token_vault_file":
+		"shared_api_token_vault_file",
+		// Progressive consent nest honesty (contains "token"; always false — never token values).
+		// Must survive sanitizeResidualStatusMap on doctor / support-bundle embeds.
+		"stores_tokens":
 		return true
 	default:
 		return false

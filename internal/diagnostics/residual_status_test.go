@@ -19,6 +19,8 @@ func TestBuildGatewayResidualStatus_SecretFreeAndModeBId(t *testing.T) {
 	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeJWTRSBearer))
 	t.Setenv("JENKINS_MCP_GATEWAY_MULTI_USER", "1")
 	t.Setenv("KUBERNETES_SERVICE_HOST", "")
+	// Empty consent path → progressive_consent.file_backed default false.
+	t.Setenv(gateway.EnvConsentSessionStorePath, "")
 
 	out := diagnostics.BuildGatewayResidualStatus(nil)
 	blob, err := json.Marshal(out)
@@ -100,6 +102,26 @@ func TestBuildGatewayResidualStatus_SecretFreeAndModeBId(t *testing.T) {
 	}
 	if _, ok := out["subject_limiter_max_subjects"]; ok {
 		t.Fatalf("unlimited must omit subject_limiter_max_subjects: %+v", out["subject_limiter_max_subjects"])
+	}
+	// Progressive consent nest always present (empty environ: file_backed=false).
+	pc, ok := out["progressive_consent"].(map[string]any)
+	if !ok || pc == nil {
+		t.Fatalf("progressive_consent object required: %+v", out["progressive_consent"])
+	}
+	if pc["browser_3lo_automated"] != false {
+		t.Fatalf("browser_3lo_automated must be false: %+v", pc)
+	}
+	if pc["metadata_path_done_star"] != true {
+		t.Fatalf("metadata_path_done_star must be true (Done*): %+v", pc)
+	}
+	if pc["stores_tokens"] != false {
+		t.Fatalf("stores_tokens must be false: %+v", pc)
+	}
+	if pc["multi_replica_shared"] != false {
+		t.Fatalf("multi_replica_shared must be false: %+v", pc)
+	}
+	if pc["file_backed"] != false {
+		t.Fatalf("file_backed default false (empty environ): %+v", pc)
 	}
 	note, _ := out["residual_note"].(string)
 	doc, _ := out["doc"].(string)
@@ -246,6 +268,9 @@ func TestBuildGatewayResidualStatus_ModeCConsentNote(t *testing.T) {
 	if pc["browser_3lo_automated"] != false {
 		t.Fatalf("browser_3lo_automated: %+v", pc)
 	}
+	if pc["metadata_path_done_star"] != true {
+		t.Fatalf("metadata_path_done_star must be true (Done*): %+v", pc)
+	}
 	// HOST-007 SPA progressive consent honesty (always on progressive_consent nest).
 	if pc["stores_tokens"] != false {
 		t.Fatalf("stores_tokens must be false: %+v", pc)
@@ -285,6 +310,12 @@ func TestBuildGatewayResidualStatus_ProgressiveConsentFileBacked(t *testing.T) {
 	if pc["multi_replica_shared"] != false {
 		t.Fatalf("multi_replica_shared: %+v", pc)
 	}
+	if pc["browser_3lo_automated"] != false {
+		t.Fatalf("browser_3lo_automated: %+v", pc)
+	}
+	if pc["metadata_path_done_star"] != true {
+		t.Fatalf("metadata_path_done_star: %+v", pc)
+	}
 	blob, err := json.Marshal(out)
 	if err != nil {
 		t.Fatal(err)
@@ -306,6 +337,9 @@ func TestBuildGatewayResidualStatus_ProgressiveConsentFileBacked(t *testing.T) {
 	}
 	if cpc["stores_tokens"] != false || cpc["multi_replica_shared"] != false {
 		t.Fatalf("cleared getenv token/multi: %+v", cpc)
+	}
+	if cpc["metadata_path_done_star"] != true {
+		t.Fatalf("cleared getenv metadata_path_done_star: %+v", cpc)
 	}
 }
 
@@ -380,8 +414,9 @@ func TestBuildGatewayResidualStatus_SubjectLimiterMaxSubjects(t *testing.T) {
 }
 
 // Regression: LooksSecretKey must not treat residual honesty bool shared_token_cache_file
-// or shared_api_token_vault_file as a secret key (doctor/support-bundle sanitize +
-// release-evidence scrub). Still drops real secret keys like access_token / client_secret.
+// or shared_api_token_vault_file or progressive_consent stores_tokens as a secret key
+// (doctor/support-bundle sanitize + release-evidence scrub). Still drops real secret
+// keys like access_token / client_secret.
 func TestLooksSecretKey_SharedTokenCacheFileAllowlist(t *testing.T) {
 	t.Parallel()
 	if diagnostics.LooksSecretKey("shared_token_cache_file") {
@@ -399,6 +434,13 @@ func TestLooksSecretKey_SharedTokenCacheFileAllowlist(t *testing.T) {
 	// shared_jwt_vault_file has no secret-shaped substring; still must not look secret.
 	if diagnostics.LooksSecretKey("shared_jwt_vault_file") {
 		t.Fatal("shared_jwt_vault_file residual honesty bool must not look secret")
+	}
+	// Progressive consent nest honesty bool (contains "token"; always false).
+	if diagnostics.LooksSecretKey("stores_tokens") {
+		t.Fatal("Regression: stores_tokens residual honesty bool must not look secret (support-bundle sanitize)")
+	}
+	if diagnostics.LooksSecretKey("STORES_TOKENS") {
+		t.Fatal("case-insensitive allowlist for stores_tokens")
 	}
 	for _, secret := range []string{
 		"access_token", "refresh_token", "client_secret", "authorization",
