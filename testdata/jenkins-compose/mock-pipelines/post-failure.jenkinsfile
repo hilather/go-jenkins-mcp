@@ -1,0 +1,23 @@
+pipeline {
+  agent any
+  stages {
+    stage('Deploy') {
+      steps {
+        sh '''
+          echo "Deploying mock service to staging"
+          echo "ERROR: health check failed after deploy"
+          exit 1
+        '''
+      }
+    }
+  }
+  post {
+    always {
+      echo '[mock-inv-post-failure] post always: collecting diagnostics'
+      sh 'echo "post: archived workspace metadata" && echo "post: notified team channel #mock-alerts"'
+    }
+    failure {
+      echo '[mock-inv-post-failure] post failure: opened incident ticket MOCK-101'
+    }
+  }
+}

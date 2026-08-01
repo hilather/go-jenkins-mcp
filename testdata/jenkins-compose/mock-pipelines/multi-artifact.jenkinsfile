@@ -1,0 +1,24 @@
+pipeline {
+  agent any
+  stages {
+    stage('Package') {
+      steps {
+        sh '''
+          set -euo pipefail
+          mkdir -p out/reports out/config
+          echo "summary=ok" > out/reports/summary.txt
+          echo "version=1.0.0-mock" > out/reports/version.txt
+          echo "mode=pilot" > out/config/settings.properties
+          cat > out/reports/TEST-Artifacts.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Artifacts" tests="1" failures="0" errors="0" skipped="0" time="0.01">
+  <testcase classname="com.mock.Artifacts" name="testPack" time="0.01"/>
+</testsuite>
+EOF
+        '''
+        archiveArtifacts artifacts: 'out/**/*', fingerprint: true
+        junit testResults: 'out/reports/TEST-*.xml', allowEmptyResults: true
+      }
+    }
+  }
+}

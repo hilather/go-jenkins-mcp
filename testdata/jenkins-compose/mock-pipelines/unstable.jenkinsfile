@@ -1,0 +1,26 @@
+pipeline {
+  agent any
+  stages {
+    stage('Build') {
+      steps {
+        echo '[mock-inv-unstable] build ok'
+      }
+    }
+    stage('Integration') {
+      steps {
+        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+          sh '''
+            echo "WARN: integration probe failed (non-blocking for pilot fixture)"
+            echo "java.lang.RuntimeException: flaky downstream timeout"
+            exit 1
+          '''
+        }
+      }
+    }
+    stage('Publish') {
+      steps {
+        echo '[mock-inv-unstable] publish ran despite unstable integration'
+      }
+    }
+  }
+}

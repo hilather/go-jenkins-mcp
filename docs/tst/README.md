@@ -122,7 +122,9 @@ JENKINS_LIVE_KEEP=1 ./scripts/jenkins-live-smoke.sh
 | `TestLive_ProgressiveLogTail` | `GetBuildLogTail` / `GetBuildLogs` |
 | `TestLive_CapabilityDiscovery` | `RefreshCapabilities` |
 
-Seeded controller jobs: `sample-freestyle` (JUnit + artifact), `sample-pipeline`. See [`testdata/jenkins-compose/README.md`](../../testdata/jenkins-compose/README.md).
+Seeded controller jobs: `sample-freestyle` (JUnit + artifact), `sample-pipeline`,
+and twelve `mock-inv-*` investigation fixtures — see
+[`testdata/jenkins-compose/FIXTURES.md`](../../testdata/jenkins-compose/FIXTURES.md).
 
 ### Security
 

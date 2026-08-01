@@ -1,0 +1,15 @@
+pipeline {
+  agent any
+  stages {
+    stage('Heavy Job') {
+      steps {
+        sh '''
+          echo "Starting memory-heavy mock workload"
+          echo "Killed"
+          echo "Out of memory: Kill process 12345 (java) total-vm:8388608kB, anon-rss:7990000kB"
+          exit 137
+        '''
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+pipeline {
+  agent any
+  stages {
+    stage('Matrix') {
+      parallel {
+        stage('Frontend') {
+          steps {
+            sh '''
+              echo "npm run build — frontend branch green"
+              echo "webpack compiled successfully"
+            '''
+          }
+        }
+        stage('Backend') {
+          steps {
+            sh '''
+              echo "npm ERR! code ELIFECYCLE"
+              echo "npm ERR! errno 1"
+              echo "npm ERR! mock-service@1.0.0 test: node index.js"
+              echo "npm ERR! Exit status 1"
+              exit 1
+            '''
+          }
+        }
+      }
+    }
+  }
+}

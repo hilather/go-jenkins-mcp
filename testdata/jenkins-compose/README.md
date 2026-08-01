@@ -11,6 +11,7 @@ Ephemeral Jenkins controller for **local / optional CI** live smoke tests of
 | API token | Written inside the container to `/var/jenkins_home/mcp-api-token` at boot |
 | `sample-freestyle` | Shell + JUnit sample XML + small artifact; one build triggered at init |
 | `sample-pipeline` | Minimal Pipeline (`agent any`); one build triggered at init |
+| `mock-inv-*` (12 jobs) | Mock investigation pipelines — see [FIXTURES.md](FIXTURES.md) |
 | Plugins | `workflow-aggregator`, `junit`, `ws-cleanup` (see `plugins.txt`) |
 
 ## Prerequisites
@@ -59,6 +60,19 @@ Or use the wrapper:
 
 ```bash
 ./scripts/jenkins-live-smoke.sh
+```
+
+## Mock investigation fixtures
+
+Twelve `mock-inv-*` Pipeline jobs cover failure modes for MCP triage drills
+(compile/test/unstable/nested/parallel/docker/OOM/long-log/post/artifacts).
+Catalog and example prompts: [FIXTURES.md](FIXTURES.md).
+
+Rebuild all fixture jobs on a running lab:
+
+```bash
+chmod +x scripts/jenkins-fixture-rebuild.sh
+./scripts/jenkins-fixture-rebuild.sh
 ```
 
 ## Environment variables

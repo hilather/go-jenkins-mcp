@@ -1,0 +1,37 @@
+pipeline {
+  agent any
+  stages {
+    stage('Prepare') {
+      steps {
+        echo '[mock-inv-nested-stages] prepare'
+      }
+    }
+    stage('Verify') {
+      stages {
+        stage('Lint') {
+          steps {
+            echo 'lint passed'
+          }
+        }
+        stage('Integration') {
+          stages {
+            stage('Smoke') {
+              steps {
+                echo 'smoke passed'
+              }
+            }
+            stage('Contract') {
+              steps {
+                sh '''
+                  echo "Nested failure in Contract stage"
+                  echo "Caused by: java.io.IOException: upstream service unavailable"
+                  exit 1
+                '''
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

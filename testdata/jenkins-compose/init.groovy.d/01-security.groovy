@@ -31,7 +31,7 @@ strategy.setAllowAnonymousRead(false)
 instance.setAuthorizationStrategy(strategy)
 
 // Built-in node executors for freestyle/pipeline smoke builds.
-instance.setNumExecutors(2)
+instance.setNumExecutors(4)
 
 // Ephemeral API token for live tests (never log the plain value).
 def user = User.getById("admin", true)

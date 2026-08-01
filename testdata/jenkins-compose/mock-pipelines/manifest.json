@@ -1,0 +1,90 @@
+{
+  "schema": "jenkins-mcp.mock-pipelines.manifest.v1",
+  "description": "Disposable Jenkins lab fixtures for MCP triage, diagnose, compare, and regression drills.",
+  "jobs": [
+    {
+      "name": "mock-inv-baseline-green",
+      "expected_result": "SUCCESS",
+      "scenario": "Multi-stage green baseline for compare_builds and regression windows",
+      "diagnose_patterns": [],
+      "mcp_tools": ["jenkins_diagnose_build", "jenkins_compare_builds", "jenkins_get_stage_log"]
+    },
+    {
+      "name": "mock-inv-regression-broken",
+      "expected_result": "FAILURE",
+      "scenario": "Same shape as baseline-green but Test stage fails (regression compare target)",
+      "diagnose_patterns": ["failed_marker", "junit_surefire"],
+      "mcp_tools": ["jenkins_compare_builds", "jenkins_find_regression_window"]
+    },
+    {
+      "name": "mock-inv-compile-failure",
+      "expected_result": "FAILURE",
+      "scenario": "Compile stage fails with compiler-style errors before tests run",
+      "diagnose_patterns": ["clang_error", "error_prefix"],
+      "mcp_tools": ["jenkins_diagnose_build", "jenkins_get_stage_log"]
+    },
+    {
+      "name": "mock-inv-test-failure",
+      "expected_result": "FAILURE",
+      "scenario": "Build passes; JUnit reports multiple failures",
+      "diagnose_patterns": ["junit_surefire", "failed_marker"],
+      "mcp_tools": ["jenkins_diagnose_build", "jenkins_get_test_report", "jenkins_analyze_tests"]
+    },
+    {
+      "name": "mock-inv-unstable",
+      "expected_result": "UNSTABLE",
+      "scenario": "Non-fatal stage failure marked UNSTABLE; pipeline continues to Publish",
+      "diagnose_patterns": ["failed_marker"],
+      "mcp_tools": ["jenkins_diagnose_build", "jenkins_get_stage_log"]
+    },
+    {
+      "name": "mock-inv-nested-stages",
+      "expected_result": "FAILURE",
+      "scenario": "Nested stage groups; failure deep in Integration child stage",
+      "diagnose_patterns": ["failed_marker", "exception"],
+      "mcp_tools": ["jenkins_get_stage_log", "jenkins_diagnose_build"]
+    },
+    {
+      "name": "mock-inv-parallel-mixed",
+      "expected_result": "FAILURE",
+      "scenario": "Parallel branches: one green, one npm-style failure",
+      "diagnose_patterns": ["npm_error", "failed_marker"],
+      "mcp_tools": ["jenkins_diagnose_build", "jenkins_get_stage_log"]
+    },
+    {
+      "name": "mock-inv-docker-error",
+      "expected_result": "FAILURE",
+      "scenario": "Docker daemon connection failure signature",
+      "diagnose_patterns": ["docker_daemon"],
+      "mcp_tools": ["jenkins_diagnose_build", "jenkins_survey_recent_failures"]
+    },
+    {
+      "name": "mock-inv-oom-killed",
+      "expected_result": "FAILURE",
+      "scenario": "Simulated OOM / exit 137 kill signature",
+      "diagnose_patterns": ["oom"],
+      "mcp_tools": ["jenkins_diagnose_build"]
+    },
+    {
+      "name": "mock-inv-long-log",
+      "expected_result": "SUCCESS",
+      "scenario": "Emits ~500 log lines for progressive tail and budget testing",
+      "diagnose_patterns": [],
+      "mcp_tools": ["jenkins_get_build_log_tail", "jenkins_get_build_logs"]
+    },
+    {
+      "name": "mock-inv-post-failure",
+      "expected_result": "FAILURE",
+      "scenario": "Main stage fails; post { always } still runs cleanup lines",
+      "diagnose_patterns": ["failed_marker"],
+      "mcp_tools": ["jenkins_get_stage_log", "jenkins_diagnose_build"]
+    },
+    {
+      "name": "mock-inv-multi-artifact",
+      "expected_result": "SUCCESS",
+      "scenario": "Archives multiple small artifacts for list/inspect flows",
+      "diagnose_patterns": [],
+      "mcp_tools": ["jenkins_list_artifacts", "jenkins_get_artifact_text", "jenkins_inspect_artifact"]
+    }
+  ]
+}

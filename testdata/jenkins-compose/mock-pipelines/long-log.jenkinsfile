@@ -1,0 +1,18 @@
+pipeline {
+  agent any
+  stages {
+    stage('Emit Log Volume') {
+      steps {
+        sh '''
+          set -euo pipefail
+          i=1
+          while [ "$i" -le 500 ]; do
+            echo "LINE ${i} mock-inv-long-log padding for progressive tail and budget drills"
+            i=$((i + 1))
+          done
+          echo "mock-inv-long-log complete marker at end of stream"
+        '''
+      }
+    }
+  }
+}
