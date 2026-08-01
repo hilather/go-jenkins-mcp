@@ -75,6 +75,10 @@ Code constant: `auth.FallbackAuthMethodWhenOnlyOICAuth == MethodAPIToken`.
 
 ## 4. AgentCore 3LO/OBO (gateway residual — OAUTH-010)
 
+**Live production residual checklist (Entra app reg + AgentCore pin):**
+[../gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) §3.
+**Do not claim live Entra Done** from the offline matrix below.
+
 | Item | Decision |
 |------|----------|
 | AS discovery/authorize/token | **Entra or approved AS**, not stock Jenkins |

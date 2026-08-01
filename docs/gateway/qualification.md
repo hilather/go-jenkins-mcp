@@ -1,7 +1,7 @@
 # Gateway 3LO/OBO qualification (GWY-003)
 
 **Status:** Offline (mock) harness shipped — **modes A/B/C matrix Done***; **live AgentCore / Entra / jwt-auth-filter pin residual**.  
-**Related:** [README.md](README.md), [auth-architecture.md](../auth-architecture.md) §2.3, ADR 0003, OAUTH-006 claims/revocation, [HOST-011](../roadmap/server-team-hosted.md), [oauth-lab](../../testdata/oauth-lab/README.md).
+**Related:** [README.md](README.md), **[live-pin-blockers.md](live-pin-blockers.md)** (live production GO residual runbook), [auth-architecture.md](../auth-architecture.md) §2.3, ADR 0003, OAUTH-006 claims/revocation, [HOST-011](../roadmap/server-team-hosted.md), [oauth-lab](../../testdata/oauth-lab/README.md).
 
 This document is the **checklist for a live production pin** of AgentCore /
 Entra-backed gateway credential acquisition. The offline suite proves local
@@ -94,6 +94,11 @@ Package suite: `go test ./internal/gateway -run TestOAUTH010 -count=1` (includes
 ---
 
 ## 2. Live pin checklist (security)
+
+**Consolidated residual runbook (OAUTH-009 / OAUTH-010 / HOST-008 + residual-smoke
+honesty):** [live-pin-blockers.md](live-pin-blockers.md). This section remains the
+GWY-003-oriented security/performance pin; do **not** mark live Entra Done from
+offline qualify alone.
 
 Complete before enabling `CredentialProvider.Live` / production gateway mode.
 
@@ -235,4 +240,4 @@ proxy so `HTTPTokenFetcher` can run). **Never mark live Entra Done from this tag
 2. CLI: `jenkins-mcp gateway qualify --offline`
 3. Authlab units: `go test ./internal/authlab/...`
 4. Opt-in: `make live-oauth-test` + `go test -tags=live_oauth ./internal/gateway/qualify/ -count=1`
-5. Full GWY-003 DoD: attach live Entra + AgentCore + jwt-auth-filter evidence (still open)
+5. Full GWY-003 DoD: attach live Entra + AgentCore + jwt-auth-filter evidence (still open) — checklist: [live-pin-blockers.md](live-pin-blockers.md)

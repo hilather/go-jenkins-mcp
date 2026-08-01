@@ -3,7 +3,7 @@
 **Status:** Planning SoT for optional **team/server-hosted** Jenkins MCP  
 **Audience:** engineering leads, security, platform operators, implementation agents  
 **Not a claim of production readiness:** local Cursor stdio pilot remains the default product path (ADR 0002).  
-**Related SoT:** [architecture](../jenkins-mcp-enterprise-architecture.md) (§§1–2, §6.6, §19.7, Phase 4), [agent todo](../jenkins-mcp-enterprise-agent-todo.md) (GWY/MGR/OAUTH/REL/UI/**HOST**), [task index](../jenkins-mcp-enterprise-task-index.json), [gateway](../gateway/README.md), [auth-architecture](../auth-architecture.md), ADRs 0002 / 0003 / 0004 / 0013 / 0014  
+**Related SoT:** [architecture](../jenkins-mcp-enterprise-architecture.md) (§§1–2, §6.6, §19.7, Phase 4), [agent todo](../jenkins-mcp-enterprise-agent-todo.md) (GWY/MGR/OAUTH/REL/UI/**HOST**), [task index](../jenkins-mcp-enterprise-task-index.json), [gateway](../gateway/README.md), **[live pin blockers](../gateway/live-pin-blockers.md)** (OAUTH-009/010 + HOST-008 production GO residual), [auth-architecture](../auth-architecture.md), ADRs 0002 / 0003 / 0004 / 0013 / 0014  
 
 **Auth decision for Tier A (binding):** implement **all three** Jenkins credential paths as first-class, tested gateway modes — sites pick the default; engineering does **not** pick only one:
 
@@ -53,6 +53,8 @@ JWT on Jenkins (**mode B/C**) and “OAuth” (**Entra AS + obtain path**) are *
 
 **Bottom line:** the repo has a **credible foundation and offline contracts** for managed gateway, not a shippable multi-user server. Local stdio + personal credentials is the production-shaped pilot. Team-hosted requires finishing **all three auth modes**, HTTP multi-user authn, isolation, packaging, and REL gates — primarily by **executing existing GWY/OAUTH/MGR tasks plus HOST-***, not inventing a parallel product.
 
+**Live production GO residual runbook:** [docs/gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) consolidates what still blocks production Mode B/C and multi-pod HA (OAUTH-009 jwt-auth-filter pin, OAUTH-010 Entra/AgentCore, HOST-008 multi-pod checklist, and what `make residual-smoke` proves vs does not). **Do not claim live Entra / multi-replica Done** from offline qualify alone.
+
 ### 1.3 Code / deploy map (for agents)
 
 | Path | Role |
@@ -66,6 +68,7 @@ JWT on Jenkins (**mode B/C**) and “OAuth” (**Entra AS + obtain path**) are *
 | `internal/admin/` + `web/admin/` | Operator console (loopback BFF + SPA) |
 | `deploy/gateway/` | Optional container/kustomize scaffold |
 | `docs/gateway/*` | Gateway operator/security narrative |
+| `docs/gateway/live-pin-blockers.md` | Live production GO residual checklists (OAUTH-009/010, HOST-008) |
 
 ---
 
@@ -488,6 +491,7 @@ Operators of a **team gateway** can use admin BFF safely; still **not** a multi-
 **Dependencies:** HOST-003, HOST-004, durable vault  
 **Maps to:** architecture HA session notes  
 **Progress:** **Done* lite** — same-host file vault flock + sticky Service scaffold + docs residual (no multi-replica runtime)  
+**Operator residual runbook:** [live-pin-blockers.md §4](../gateway/live-pin-blockers.md) + [deployment.md §9](../gateway/deployment.md)
 
 **Objective**
 

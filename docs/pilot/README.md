@@ -14,6 +14,7 @@ provides:
 | `jenkins-mcp pilot-check` | Offline/online evidence JSON (doctor + cache + sample verify) |
 | `scripts/pilot-evidence.sh` / `make pilot-evidence` | Offline/local secret-free evidence bundle under `dist/pilot-evidence/<ts>/` |
 | `scripts/gateway-residual-smoke.sh` / `make residual-smoke` | Opt-in offline residual honesty (qualify + release-evidence residual ids; not live GO) |
+| [gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) | Live production GO residual runbook (OAUTH-009/010, HOST-008; residual-smoke proves-vs-not) |
 | Deterministic chaos tests (QA-002 lite) | Recovery under truncated fetch, corrupt L1/L2, disk-full pack, mid-evict kill, cancel |
 
 **User path:** [../user/README.md](../user/README.md)  
@@ -163,8 +164,9 @@ Runs `gateway qualify --offline` and `release-evidence --offline`, asserts
 `progressive_consent_offline` · `host008_single_replica` · `gateway_modes_live`
 (**offline only** — not live Entra / AgentCore / multi-replica GO), and writes
 artifacts under `dist/residual-smoke/<ts>/`.
-**Not** part of default `make test` / `make ci`. See [release gates](../release/gates.md)
-and [checklist §0](checklist.md).
+**Not** part of default `make test` / `make ci`. See [release gates](../release/gates.md),
+[checklist §0](checklist.md), and [live-pin-blockers.md](../gateway/live-pin-blockers.md)
+(what residual-smoke proves vs live pin checklists for OAUTH-009 / OAUTH-010 / HOST-008).
 
 ## Doctor / cache / support-bundle / policy
 

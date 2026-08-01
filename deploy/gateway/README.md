@@ -9,7 +9,8 @@ Illustrative packaging for `jenkins-mcp serve --gateway` near Jenkins.
 | `Dockerfile` | Distroless non-root image build of the same MCP binary |
 | `kustomize/` | Deployment (probes + limits, replicas: 1) + ClusterIP Service with optional `sessionAffinity: ClientIP` scaffold (HOST-008; residual multi-replica runtime) |
 
-**Docs:** [docs/gateway/deployment.md](../../docs/gateway/deployment.md) (reverse-proxy matrix, readiness, HA residual)
+**Docs:** [docs/gateway/deployment.md](../../docs/gateway/deployment.md) (reverse-proxy matrix, readiness, HA residual) ·
+[docs/gateway/live-pin-blockers.md](../../docs/gateway/live-pin-blockers.md) (live production GO residual: OAUTH-009/010, HOST-008; not live Done)
 
 ## Security shape (scaffold)
 
@@ -90,7 +91,7 @@ make build
 | Streamable HTTP mTLS + non-local production pin | HOST-001 / HOST-002 |
 | Live reverse-proxy path-prefix matrix | HOST-002 / NET-001 |
 | Multi-replica HA | HOST-008 Tier B (file vault flock Done* lite same-host only; Service sticky **Done* scaffold** / residual runtime; multi-pod vault + shared rate residual; replicas stay 1) |
-| Real Entra / jwt-auth-filter production pin | OAUTH-009 / OAUTH-010 |
+| Real Entra / jwt-auth-filter production pin | OAUTH-009 / OAUTH-010 — [live-pin-blockers.md](../../docs/gateway/live-pin-blockers.md) |
 | Multi-user production GO | HOST multi-user foundation only (`MULTI_USER` ≠ production pin) |
 
 **Windows is out of scope** (ADR 0008).

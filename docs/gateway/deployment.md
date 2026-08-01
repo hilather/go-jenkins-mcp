@@ -4,6 +4,7 @@
 AgentCore binary or signed production image is published by this repository.  
 **Platforms:** Rocky Linux and Ubuntu (Tier-1). **Windows is out of scope.**  
 **Related:** [README.md](README.md), [qualification.md](qualification.md),
+**[live-pin-blockers.md](live-pin-blockers.md)** (production GO residual runbook),
 [packaging.md](../packaging.md), [server-team-hosted roadmap](../roadmap/server-team-hosted.md),
 architecture §§1–2 / §6.6, ADR 0003 / 0008.
 
@@ -444,7 +445,8 @@ When (and only if) org design closes 1b–8 and operators set `replicas` > 1:
 
 **Never** claim multi-replica Done from docs, kustomize `replicas: 1`, Service
 `sessionAffinity`, k8s env detection, emptyDir heuristics, or these status fields.
-See [roadmap § HOST-008](../roadmap/server-team-hosted.md).
+See [roadmap § HOST-008](../roadmap/server-team-hosted.md) and
+[live-pin-blockers.md §4](live-pin-blockers.md).
 
 ### Explicit non-goal until durable vault exists
 
@@ -470,6 +472,7 @@ See [roadmap § HOST-008](../roadmap/server-team-hosted.md).
 | Durable token vault (AgentCore Identity) | GWY-001 completion (offline mock + memory cache only today) |
 | Live Entra / AgentCore obtain pin | GWY-003 / OAUTH-010 — `TokenFetcher` / mock AS prove contracts offline |
 | Multi-replica HA | HOST-008 Tier B |
+| **Consolidated live pin blockers** | [live-pin-blockers.md](live-pin-blockers.md) (OAUTH-009 / OAUTH-010 / HOST-008) |
 
 **Do not claim** production GWY-004 DoD complete from this scaffold alone.
 HOST-002 docs + fail-closed matrix and HOST-005 probe/envelope pieces are
@@ -486,5 +489,6 @@ jenkins-mcp gateway qualify --offline
 make pilot-evidence SKIP_GO_TEST=1   # includes gateway qualify JSON when binary built
 ```
 
-Docs: [qualification.md](qualification.md), [release/gates.md](../release/gates.md),
-[packaging.md](../packaging.md), [auth/jwt-auth-filter-qualification.md](../auth/jwt-auth-filter-qualification.md).
+Docs: [qualification.md](qualification.md), [live-pin-blockers.md](live-pin-blockers.md),
+[release/gates.md](../release/gates.md), [packaging.md](../packaging.md),
+[auth/jwt-auth-filter-qualification.md](../auth/jwt-auth-filter-qualification.md).

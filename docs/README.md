@@ -55,6 +55,7 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [gateway/README.md](gateway/README.md) | Managed gateway foundation |
 | [gateway/deployment.md](gateway/deployment.md) | Deploy scaffold + non-secret env |
 | [gateway/qualification.md](gateway/qualification.md) | Offline qualify residual |
+| [gateway/live-pin-blockers.md](gateway/live-pin-blockers.md) | Live production GO residual (OAUTH-009/010, HOST-008) |
 | [adapters/README.md](adapters/README.md) | Optional adapters (default off) |
 | [adapters/ext-logs.md](adapters/ext-logs.md) | External logs + Jenkins ACL preflight |
 | [adapters/work-items.md](adapters/work-items.md) | Change / work-item correlation |
@@ -79,7 +80,7 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 
 ## Residual honesty (do not over-claim)
 
-- Live Entra / jwt-auth-filter lab / AgentCore obtain pin — residual  
+- Live Entra / jwt-auth-filter lab / AgentCore obtain pin — residual (runbook: [gateway/live-pin-blockers.md](gateway/live-pin-blockers.md))  
 - SaaS log/ticket clients — residual  
 - Cursor host stdio CI — residual (Wave 25 offline binary `make stdio-smoke` does not close it) 
 - HTTP MCP: loopback-hardened but **no** socket client auth (KD-008)  

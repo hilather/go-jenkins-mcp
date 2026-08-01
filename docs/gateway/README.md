@@ -6,7 +6,7 @@
 **Multi-user opt-in:** `JENKINS_MCP_GATEWAY_MULTI_USER=1` → per-request Caller → Obtain (see §3b).  
 **Real Entra / AgentCore Identity vault pin residual** (GWY-003 / OAUTH-010) — do **not** mark GWY-001 fully Done.  
 **GWY-004:** deployment **scaffold** (compose/kustomize/docs + `.env.example` lab flags: MULTI_USER, JWKS max stale, path prefix, REQUIRE_SIGNED_POLICY, subject concurrency) only — no live AgentCore image; live pins residual.  
-**Related:** [deployment.md](deployment.md), [qualification.md](qualification.md), [auth-architecture.md](../auth-architecture.md) §2.3, [ADR 0003](../adr/0003-jenkins-not-oauth-authorization-server.md), [policy-rbac.md](../policy-rbac.md), architecture §§1–2 / §6.6, **[server/team-hosted roadmap](../roadmap/server-team-hosted.md)** (Tier A path, HOST-*, 30/60/90).
+**Related:** [deployment.md](deployment.md), [qualification.md](qualification.md), **[live-pin-blockers.md](live-pin-blockers.md)** (OAUTH-009/010 + HOST-008 production GO residual runbook), [auth-architecture.md](../auth-architecture.md) §2.3, [ADR 0003](../adr/0003-jenkins-not-oauth-authorization-server.md), [policy-rbac.md](../policy-rbac.md), architecture §§1–2 / §6.6, **[server/team-hosted roadmap](../roadmap/server-team-hosted.md)** (Tier A path, HOST-*, 30/60/90).
 
 ---
 
@@ -489,7 +489,8 @@ session store (HOST-008).
 | Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT, session fingerprint, JWKS TTL refresh + MaxStaleAge, multi-user Obtain + **policy.Subject rebind foundation** + **protect→inner Alice/Bob** (`multi_user_http_test.go`) + **tools/call JSON-RPC Alice/Bob AuthProviderCtx e2e** (`multi_user_tools_call_test.go`, session-scoped Connect ctx); residual: multi-instance JWKS HA, live Entra groups claim completeness, per-POST (intra-session) handler-ctx rebind if SDK adds it |
 | Reverse-proxy non-local matrix | HOST-002 **Partial Done***: docs + `PathPrefix` strip + dual health + offline origin pin fixtures + `TrustedProxy` default false; live edge residual; no CORS wildcards |
 | Health/readiness envelope | HOST-005 **partial** — `/healthz` + `/readyz` + compose/k8s limits; Obtain Ready on `/readyz` when `--gateway` |
-| Multi-replica HA | HOST-008 Tier B residual (single-replica Tier A; sticky Service Done* scaffold; multi-pod vault residual) |
+| Multi-replica HA | HOST-008 Tier B residual (single-replica Tier A; sticky Service Done* scaffold; multi-pod vault residual) — checklist: [live-pin-blockers.md](live-pin-blockers.md) §4 |
+| **Live production pin blockers** | [live-pin-blockers.md](live-pin-blockers.md) — OAUTH-009 RS, OAUTH-010 Entra/AgentCore, HOST-008 multi-pod; residual-smoke honesty |
 | **Program path to team-hosted** | [roadmap/server-team-hosted.md](../roadmap/server-team-hosted.md) |
 
 **HOST-003 wiring (Ready path):** closed for Mode A and Mode C Live-opt-in foundation
