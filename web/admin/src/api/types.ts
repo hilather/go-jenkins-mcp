@@ -68,6 +68,10 @@ export interface EffectivePolicy {
   deny_artifact_paths?: string[];
   deny_branch_names?: string[];
   max_result_bytes?: number;
+  /** HOST-006: optional per-subject tools/min cap (lower only vs serve bootstrap). */
+  max_tools_per_minute?: number;
+  /** HOST-006: optional per-subject burst cap (lower only). */
+  max_tools_burst?: number;
   bundle_seq?: number;
   key_id?: string;
   content_hash?: string;
@@ -263,6 +267,10 @@ export interface PolicyOverlay {
   deny_artifact_paths?: string[];
   deny_branch_names?: string[];
   max_result_bytes?: number;
+  /** HOST-006: optional per-subject tools/min (positive int; omit = no overlay change). */
+  max_tools_per_minute?: number;
+  /** HOST-006: optional per-subject burst (positive int; omit = no overlay change). */
+  max_tools_burst?: number;
 }
 
 /** GET /admin/v1/policy/overlay */

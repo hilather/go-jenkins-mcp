@@ -2808,8 +2808,11 @@ concurrent + rate/burst (`JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` 0 = rate disabled
 `/gateway/vault` expose secret-free `rateEnabled` / `ratePerMinute` / `rateBurst`
 via `gateway.SubjectRateConfigFromEnviron` (SPA Overview shows when present).
 **Done\*** Obtain→policy RBAC JenkinsUserID via PrincipalCache.
-**Residual:** multi-replica shared rate (HOST-008); SPA write/edit of subject-rate
-or overlay `max_tools_*` knobs.
+**Done\* SPA Policy editor:** plain pilot overlay write of `max_tools_per_minute`
+/ `max_tools_burst` (policy_admin / `policy_write`; BFF monotonic lower-or-keep +
+`Overlay.Validate` positive-only; residual honesty on Policy page).
+**Residual:** multi-replica shared rate (HOST-008); raise env bootstrap needs
+serve restart.
 
 ---
 

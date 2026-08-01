@@ -457,7 +457,7 @@ Prevent one user from exhausting process-wide budgets for others.
 else Caller + PrincipalCache (Obtain) else process principal. **Done\*** Obtain→
 Binding + policy RBAC JenkinsUserID via PrincipalCache + rate `LowerRate` +
 admin read-only rate knobs.
-**Residual:** HOST-008 multi-replica; SPA write/edit of subject-rate.
+**Residual:** HOST-008 multi-replica shared rate. **Done\* SPA:** Policy page overlay edit of `max_tools_per_minute` / `max_tools_burst` (policy_admin; lower only).
 
 ---
 

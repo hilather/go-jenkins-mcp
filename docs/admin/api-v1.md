@@ -191,7 +191,9 @@ Returns the current **plain pilot** overlay document when the resolved policy pa
     "force_read_only": true,
     "mode": "pilot",
     "deny_tools": ["jenkins_get_build_logs"],
-    "max_result_bytes": 65536
+    "max_result_bytes": 65536,
+    "max_tools_per_minute": 15,
+    "max_tools_burst": 5
   },
   "notes": ["plain pilot overlay (unsigned); production should use signed bundles"]
 }
@@ -220,13 +222,16 @@ Requires **`policy_write`** (`policy_admin`). Dry-run only — does not write.
     "mode": "pilot",
     "deny_tools": ["jenkins_get_build_logs"],
     "deny_job_prefixes": [],
-    "max_result_bytes": 32768
+    "max_result_bytes": 32768,
+    "max_tools_per_minute": 10,
+    "max_tools_burst": 4
   }
 }
 ```
 
 - `overlay.signature` from the browser is **ignored/cleared** (never accepted as trust material).
 - Body size cap: 256 KiB.
+- `max_tools_per_minute` / `max_tools_burst` are optional positive ints (HOST-006). Omitted = no overlay rate knobs. Zero/negative fail closed via `Overlay.Validate()`.
 
 **Response:**
 
@@ -249,7 +254,8 @@ Requires **`policy_write`** (`policy_admin`). Dry-run only — does not write.
 | Deny lists | When a current overlay exists, each proposed deny list must be a **set superset** of the current list (entries may only grow). |
 | `mode` | Cannot weaken `strict` → `pilot`. |
 | `max_result_bytes` | When current has a cap, draft cannot clear it or raise it. |
-| Schema | `Overlay.Validate()` field-level errors. |
+| `max_tools_per_minute` / `max_tools_burst` | When current has a cap, draft cannot clear it or raise it (HOST-006 lower-only write path; live serve also clamps via `SubjectRateLimiter.LowerRate`). |
+| Schema | `Overlay.Validate()` field-level errors (positive-only for rate/budget fields). |
 
 Always HTTP **200** with `valid: true|false` when authz succeeds (invalid draft is not 4xx for validate). Authz failures: **401** / **403**.
 
@@ -286,6 +292,7 @@ Requires **`policy_write`**. Re-validates with the same rules as validate (**no 
 - Signed-bundle apply / multi-sig from the browser is **out of scope** (CLI `jenkins-mcp policy sign` on host).
 - Multi-source merge beyond “current plain/signed overlay baseline + draft” is simplified; at minimum force RO and deny-list superset are enforced.
 - Hot-reload of a running `serve` process is separate (existing policy reload path); admin apply writes the file only.
+- **Subject rate (HOST-006):** SPA can edit `max_tools_per_minute` / `max_tools_burst` on plain pilot overlays (`policy_admin` / `policy_write` only). Overlay **lowers only** vs serve env bootstrap (`JENKINS_MCP_SUBJECT_RATE_*`); raising bootstrap needs serve restart. Rate is **process-local**; multi-replica shared rate residual (HOST-008). Live raise above current limiter is never applied (`LowerRate`).
 
 ## GET /admin/v1/metrics
 

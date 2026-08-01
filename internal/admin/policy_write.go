@@ -318,6 +318,9 @@ func (s *server) validateDraftOverlay(paths config.Paths, draft *policy.Overlay,
 //   - When current mode is strict, draft must remain strict (pilot would widen).
 //   - When current max_result_bytes is set, draft may only lower or keep the cap
 //     (nil draft cap would remove the enterprise-style bound — reject).
+//   - When current max_tools_per_minute / max_tools_burst is set, draft may only
+//     lower or keep (HOST-006; LowerRate never raises live rate; write path must
+//     not widen the overlay-enforced cap either).
 func checkMonotonicRestrict(current *policy.Overlay, draft *policy.Overlay, currentForceEffective bool) []PolicyFieldError {
 	var errs []PolicyFieldError
 	if draft == nil {
@@ -366,6 +369,33 @@ func checkMonotonicRestrict(current *policy.Overlay, draft *policy.Overlay, curr
 			errs = append(errs, PolicyFieldError{
 				Field:   "max_result_bytes",
 				Message: fmt.Sprintf("cannot raise max_result_bytes above current cap %d", curN),
+			})
+		}
+	}
+	// max_tools_per_minute / max_tools_burst: same monotonic lower-or-keep.
+	if curN, ok := current.EffectiveMaxToolsPerMinute(); ok {
+		if draft.MaxToolsPerMinute == nil {
+			errs = append(errs, PolicyFieldError{
+				Field:   "max_tools_per_minute",
+				Message: "cannot clear max_tools_per_minute when current overlay enforces a cap",
+			})
+		} else if *draft.MaxToolsPerMinute > curN {
+			errs = append(errs, PolicyFieldError{
+				Field:   "max_tools_per_minute",
+				Message: fmt.Sprintf("cannot raise max_tools_per_minute above current cap %d", curN),
+			})
+		}
+	}
+	if curN, ok := current.EffectiveMaxToolsBurst(); ok {
+		if draft.MaxToolsBurst == nil {
+			errs = append(errs, PolicyFieldError{
+				Field:   "max_tools_burst",
+				Message: "cannot clear max_tools_burst when current overlay enforces a cap",
+			})
+		} else if *draft.MaxToolsBurst > curN {
+			errs = append(errs, PolicyFieldError{
+				Field:   "max_tools_burst",
+				Message: fmt.Sprintf("cannot raise max_tools_burst above current cap %d", curN),
 			})
 		}
 	}
@@ -660,6 +690,10 @@ func fieldErrorsFromValidate(err error) []PolicyFieldError {
 		field = "deny_branch_names"
 	case strings.Contains(lower, "max_result_bytes"):
 		field = "max_result_bytes"
+	case strings.Contains(lower, "max_tools_per_minute"):
+		field = "max_tools_per_minute"
+	case strings.Contains(lower, "max_tools_burst"):
+		field = "max_tools_burst"
 	case strings.Contains(lower, "mode"):
 		field = "mode"
 	case strings.Contains(lower, "version"):

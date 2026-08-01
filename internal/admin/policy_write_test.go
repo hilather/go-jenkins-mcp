@@ -469,6 +469,137 @@ func TestCheckMonotonicRestrict_Unit(t *testing.T) {
 	t.Parallel()
 }
 
+// HOST-006: overlay max_tools_* must be positive when set (policy.Validate);
+// BFF maps field errors and monotonic lower-or-keep on raise/clear.
+func TestPolicyWrite_MaxToolsRateFields(t *testing.T) {
+	t.Setenv(policy.EnvPolicyRequiredVar, "")
+	t.Setenv(policy.EnvPolicyFileVar, "")
+	paths := testPaths(t)
+	rpm := 20
+	burst := 8
+	writeTestOverlay(t, paths, policy.Overlay{
+		Version:           1,
+		ForceReadOnly:     true,
+		Mode:              policy.ModePilot,
+		MaxToolsPerMinute: &rpm,
+		MaxToolsBurst:     &burst,
+	})
+	h := newPolicyAdminHandler(t, admin.RolePolicyAdmin, policyWriteCanary, paths)
+
+	// Zero must fail closed via Overlay.Validate field mapping.
+	zeroDraft := map[string]any{
+		"overlay": map[string]any{
+			"version":              1,
+			"force_read_only":      true,
+			"mode":                 "pilot",
+			"max_tools_per_minute": 0,
+			"max_tools_burst":      8,
+		},
+	}
+	rr := doJSON(t, h, http.MethodPost, "/admin/v1/policy/validate", policyWriteCanary, zeroDraft)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("validate status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var zeroResp struct {
+		Valid  bool `json:"valid"`
+		Errors []struct {
+			Field   string `json:"field"`
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &zeroResp); err != nil {
+		t.Fatal(err)
+	}
+	if zeroResp.Valid {
+		t.Fatal("zero max_tools_per_minute must be invalid")
+	}
+	foundZero := false
+	for _, e := range zeroResp.Errors {
+		if e.Field == "max_tools_per_minute" {
+			foundZero = true
+		}
+	}
+	if !foundZero {
+		t.Fatalf("want max_tools_per_minute field error, got %+v", zeroResp.Errors)
+	}
+
+	// Raise above current overlay cap must fail monotonic restrict.
+	raiseDraft := map[string]any{
+		"overlay": map[string]any{
+			"version":              1,
+			"force_read_only":      true,
+			"mode":                 "pilot",
+			"max_tools_per_minute": 30, // current 20
+			"max_tools_burst":      8,
+		},
+	}
+	rr = doJSON(t, h, http.MethodPost, "/admin/v1/policy/validate", policyWriteCanary, raiseDraft)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("raise validate status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var raiseResp struct {
+		Valid  bool `json:"valid"`
+		Errors []struct {
+			Field string `json:"field"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &raiseResp); err != nil {
+		t.Fatal(err)
+	}
+	if raiseResp.Valid {
+		t.Fatal("raise max_tools_per_minute must be invalid")
+	}
+	foundRaise := false
+	for _, e := range raiseResp.Errors {
+		if e.Field == "max_tools_per_minute" {
+			foundRaise = true
+		}
+	}
+	if !foundRaise {
+		t.Fatalf("want raise error on max_tools_per_minute, got %+v", raiseResp.Errors)
+	}
+
+	// Lower (or keep) is allowed; apply writes positive rate fields.
+	lowerDraft := map[string]any{
+		"overlay": map[string]any{
+			"version":              1,
+			"force_read_only":      true,
+			"mode":                 "pilot",
+			"max_tools_per_minute": 10,
+			"max_tools_burst":      4,
+		},
+		"profileId": "corp",
+	}
+	rr = doJSON(t, h, http.MethodPost, "/admin/v1/policy/apply", policyWriteCanary, lowerDraft)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("apply lower status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), policyWriteCanary) {
+		t.Fatal("canary in apply body")
+	}
+	var applyResp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &applyResp); err != nil {
+		t.Fatal(err)
+	}
+	if applyResp["applied"] != true {
+		t.Fatalf("applied=%v body=%s", applyResp["applied"], rr.Body.String())
+	}
+	raw, err := os.ReadFile(paths.DefaultPolicyFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got policy.Overlay
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if n, ok := got.EffectiveMaxToolsPerMinute(); !ok || n != 10 {
+		t.Fatalf("written max_tools_per_minute=%v ok=%v", n, ok)
+	}
+	if n, ok := got.EffectiveMaxToolsBurst(); !ok || n != 4 {
+		t.Fatalf("written max_tools_burst=%v ok=%v", n, ok)
+	}
+}
+
 func TestCanWidenForceReadOnly_StillAlwaysFalse(t *testing.T) {
 	t.Parallel()
 	if admin.CanWidenForceReadOnly(admin.RolePolicyAdmin) {

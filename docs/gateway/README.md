@@ -329,8 +329,10 @@ concurrency still applies).
 **Done\*** Binding PrincipalID + policy SubjectFromContext JenkinsUserID from
 PrincipalCache after Obtain (prefer cache over HTTP claim). **Admin residual
 knobs Done\* (read-only):** `rateEnabled` / `ratePerMinute` / `rateBurst` on
-health + vault. **Residual:** multi-replica shared rate/slots (HOST-008); SPA
-write/edit of subject-rate or overlay `max_tools_*`.
+health + vault. **Done\* SPA Policy editor:** plain pilot overlay
+`max_tools_per_minute` / `max_tools_burst` (policy_admin / `policy_write`; lower
+only; empty omit). **Residual:** multi-replica shared rate/slots (HOST-008);
+raise env bootstrap still needs serve restart.
 
 ---
 
