@@ -45,6 +45,24 @@ func ConsentSessionPathFromEnviron(getenv func(string) string) string {
 	return filepath.Join(xdgDataHome(getenv), filepath.FromSlash(DefaultConsentSessionRelPath))
 }
 
+// ConsentStorePathConfiguredFromEnviron reports whether
+// JENKINS_MCP_CONSENT_STORE_PATH is non-empty (secret-free residual bool).
+// When true, residual-status progressive_consent may advertise file_backed and
+// same_host_reload_before_persist (HOST-007 / OAUTH-010 same-host lite).
+// Does not validate path usability. getenv nil → os.Getenv. Never returns the
+// path value. Never opens the consent file (metadata only on disk — residual
+// surfaces must not dump path or session inventory).
+//
+// Note: Mode C serve also file-backs under the XDG default when env is empty;
+// residual-status only claims same-host path-configured lite when the env
+// override is set (admin↔serve share). Multi-pod shared consent store residual.
+func ConsentStorePathConfiguredFromEnviron(getenv func(string) string) bool {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	return strings.TrimSpace(getenv(EnvConsentSessionStorePath)) != ""
+}
+
 // NewFileBackedConsentSessionStore builds a memory store that persists metadata
 // to path (crash recovery residual). path required. Parent dirs 0700; file 0600.
 // Loads existing file when present. Never stores tokens.

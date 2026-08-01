@@ -49,6 +49,13 @@ func TestProgressiveConsentResidual(t *testing.T) {
 	if sm["process_local_consent_metadata_store"] != true {
 		t.Fatalf("StatusMap process_local: %+v", sm)
 	}
+	// Consent store honesty parity (HOST-007 SPA progressive_consent nest).
+	if sm["stores_tokens"] != false {
+		t.Fatalf("stores_tokens must be false: %+v", sm)
+	}
+	if sm["multi_replica_shared"] != false {
+		t.Fatalf("multi_replica_shared must be false: %+v", sm)
+	}
 	raw, err := json.Marshal(sm)
 	if err != nil {
 		t.Fatal(err)

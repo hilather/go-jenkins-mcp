@@ -4,7 +4,33 @@
  * Never tokens, subjects, vault paths, or live GO claims.
  */
 
-import type { GatewayResidualStatusResponse } from "../api/types";
+import type {
+  GatewayProgressiveConsent,
+  GatewayResidualStatusResponse,
+} from "../api/types";
+
+/**
+ * Consent store same-host file lite honesty (OAUTH-010 / HOST-007).
+ * residual-status progressive_consent.file_backed when CONSENT_STORE_PATH set.
+ * Path never shown; not multi-pod shared consent store.
+ */
+export const CONSENT_FILE_BACKED_HONESTY =
+  "same-host consent metadata file when true (JENKINS_MCP_CONSENT_STORE_PATH); path never shown; not multi-pod HA";
+
+/**
+ * OAUTH-010 Done* lite: file-backed reload-before-persist under flock.
+ * True only when progressive_consent.file_backed; not multi-replica HA.
+ */
+export const CONSENT_SAME_HOST_RELOAD_HONESTY =
+  "same-host file reload-before-persist flock lite when true (admin/CLI purge not resurrected by serve Put); not multi-pod HA";
+
+/** Consent metadata never stores tokens (always false on residual-status). */
+export const CONSENT_STORES_TOKENS_HONESTY =
+  "always false — progressive consent metadata only (authorization_url + session_id); never tokens";
+
+/** Multi-replica shared consent store residual (always false). */
+export const CONSENT_MULTI_REPLICA_SHARED_HONESTY =
+  "always false — process/file-local only (HOST-008 multi-pod shared consent residual)";
 
 /** Same-host file rate lite honesty (HOST-008); not multi-pod shared rate. */
 export const SHARED_SUBJECT_RATE_FILE_HONESTY =
@@ -206,4 +232,57 @@ export function formatPrincipalCacheHygiene(
     parts.push(`ttl_seconds=${ttlSeconds}`);
   }
   return parts.length ? parts.join(" · ") : null;
+}
+
+/**
+ * Progressive consent residual honesty fields (HOST-007 SPA).
+ * Nested under residual-status progressive_consent (ProgressiveConsentResidual
+ * + consent-store StatusMap honesty). Fail-closed: only explicit true for
+ * file_backed / same_host_reload; stores_tokens / multi_replica_shared only
+ * true when explicit true (else false). Never path/tokens/session inventory.
+ */
+export interface ResidualProgressiveConsentFields {
+  metadata_path_done_star: boolean;
+  browser_3lo_automated: boolean;
+  stores_tokens: boolean;
+  multi_replica_shared: boolean;
+  file_backed: boolean;
+  same_host_reload_before_persist: boolean;
+}
+
+/**
+ * Pick progressive_consent honesty fields from residual-status (or nested map).
+ * Accepts full residual response or the progressive_consent nest alone.
+ */
+export function pickProgressiveConsentFields(
+  data:
+    | GatewayResidualStatusResponse
+    | GatewayProgressiveConsent
+    | null
+    | undefined,
+): ResidualProgressiveConsentFields {
+  const pc: GatewayProgressiveConsent | undefined | null =
+    data && "progressive_consent" in data
+      ? (data as GatewayResidualStatusResponse).progressive_consent
+      : (data as GatewayProgressiveConsent | null | undefined);
+
+  if (!pc) {
+    return {
+      metadata_path_done_star: false,
+      browser_3lo_automated: false,
+      stores_tokens: false,
+      multi_replica_shared: false,
+      file_backed: false,
+      same_host_reload_before_persist: false,
+    };
+  }
+  return {
+    metadata_path_done_star: pc.metadata_path_done_star === true,
+    browser_3lo_automated: pc.browser_3lo_automated === true,
+    // Fail closed: only explicit true would claim tokens/multi-replica (must never).
+    stores_tokens: pc.stores_tokens === true,
+    multi_replica_shared: pc.multi_replica_shared === true,
+    file_backed: pc.file_backed === true,
+    same_host_reload_before_persist: pc.same_host_reload_before_persist === true,
+  };
 }

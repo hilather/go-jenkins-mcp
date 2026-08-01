@@ -438,6 +438,24 @@ func TestConsentSessionPathFromEnviron(t *testing.T) {
 	}
 }
 
+func TestConsentStorePathConfiguredFromEnviron(t *testing.T) {
+	t.Parallel()
+	if gateway.ConsentStorePathConfiguredFromEnviron(func(string) string { return "" }) {
+		t.Fatal("empty env must be false")
+	}
+	if gateway.ConsentStorePathConfiguredFromEnviron(func(string) string { return "   " }) {
+		t.Fatal("whitespace env must be false")
+	}
+	if !gateway.ConsentStorePathConfiguredFromEnviron(func(k string) string {
+		if k == gateway.EnvConsentSessionStorePath {
+			return "/tmp/consent-path-canary-not-returned.json"
+		}
+		return ""
+	}) {
+		t.Fatal("non-empty path must be true")
+	}
+}
+
 func TestOpenConsentSessionStoreForCLI_MissingFile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

@@ -4,11 +4,16 @@ import { fetchDoctor, getProfileId } from "../api/client";
 import type { GatewayResidualStatusResponse } from "../api/types";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
 import {
+  CONSENT_FILE_BACKED_HONESTY,
+  CONSENT_MULTI_REPLICA_SHARED_HONESTY,
+  CONSENT_SAME_HOST_RELOAD_HONESTY,
+  CONSENT_STORES_TOKENS_HONESTY,
   formatPrincipalCacheHygiene,
   formatResidualBool,
   GATEWAY_READY_RESIDUAL_HONESTY,
   HA_MULTI_REPLICA_RESIDUAL_HONESTY,
   LIVE_PIN_RESIDUAL_HONESTY,
+  pickProgressiveConsentFields,
   pickResidualLivePinFields,
   pickResidualRateCacheFields,
   PRINCIPAL_CACHE_HYGIENE_HONESTY,
@@ -41,11 +46,13 @@ function DoctorGatewayResidualCard({
 }) {
   const rateCache = pickResidualRateCacheFields(data);
   const livePins = pickResidualLivePinFields(data);
+  const consent = pickProgressiveConsentFields(data);
   const hygiene = formatPrincipalCacheHygiene(
     rateCache.principal_cache_max_entries,
     rateCache.principal_cache_ttl_seconds,
   );
   const doc = data.doc || "docs/gateway/live-pin-blockers.md";
+  const showConsent = Boolean(data.progressive_consent);
 
   return (
     <div className="card">
@@ -155,6 +162,30 @@ function DoctorGatewayResidualCard({
             <dd>
               {hygiene}{" "}
               <span className="muted">({PRINCIPAL_CACHE_HYGIENE_HONESTY})</span>
+            </dd>
+          </>
+        ) : null}
+        {showConsent ? (
+          <>
+            <dt>progressive_consent.file_backed</dt>
+            <dd>
+              {consent.file_backed ? "yes" : "no"}{" "}
+              <span className="muted">({CONSENT_FILE_BACKED_HONESTY})</span>
+            </dd>
+            <dt>progressive_consent.same_host_reload_before_persist</dt>
+            <dd>
+              {consent.same_host_reload_before_persist ? "yes" : "no"}{" "}
+              <span className="muted">({CONSENT_SAME_HOST_RELOAD_HONESTY})</span>
+            </dd>
+            <dt>progressive_consent.multi_replica_shared</dt>
+            <dd>
+              {formatResidualBool(consent.multi_replica_shared)}{" "}
+              <span className="muted">({CONSENT_MULTI_REPLICA_SHARED_HONESTY})</span>
+            </dd>
+            <dt>progressive_consent.stores_tokens</dt>
+            <dd>
+              {formatResidualBool(consent.stores_tokens)}{" "}
+              <span className="muted">({CONSENT_STORES_TOKENS_HONESTY})</span>
             </dd>
           </>
         ) : null}

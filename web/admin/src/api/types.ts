@@ -447,11 +447,34 @@ export interface GatewayResidualModeMatrix {
   valid?: boolean;
 }
 
+/**
+ * progressive_consent nest from residual-status
+ * (gateway.ProgressiveConsentResidual.StatusMap + consent-store honesty).
+ * Never tokens, paths, or session inventory.
+ */
 export interface GatewayProgressiveConsent {
   metadata_path_done_star?: boolean;
   browser_3lo_automated?: boolean;
+  process_local_consent_metadata_store?: boolean;
+  durable_consent_session_store?: boolean;
+  multi_replica_consent_correlation?: boolean;
+  /** Always false — consent metadata only (never access/refresh tokens). */
+  stores_tokens?: boolean;
+  /** Always false — not multi-pod / multi-replica shared store (HOST-008 residual). */
+  multi_replica_shared?: boolean;
+  /**
+   * true when JENKINS_MCP_CONSENT_STORE_PATH set (same-host file lite).
+   * Path never returned. Mode C serve may also use XDG default when env empty.
+   */
+  file_backed?: boolean;
+  /**
+   * true when file_backed (OAUTH-010 same-host reload-before-persist flock lite).
+   * Parity with ConsentSessionStore.StatusMap when FilePath set. Not multi-pod.
+   */
+  same_host_reload_before_persist?: boolean;
+  surfaces?: string;
   residual_note?: string;
-  [key: string]: unknown;
+  last_consent_would_apply?: boolean;
 }
 
 export interface GatewayResidualStatusResponse {

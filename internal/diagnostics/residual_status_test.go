@@ -230,6 +230,8 @@ func TestBuildGatewayResidualStatus_MultiPodFromK8s(t *testing.T) {
 func TestBuildGatewayResidualStatus_ModeCConsentNote(t *testing.T) {
 	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAgentCore))
 	t.Setenv(gateway.EnvGatewayEnabledModes, "")
+	// Explicitly clear consent path so default residual does not claim file_backed.
+	t.Setenv(gateway.EnvConsentSessionStorePath, "")
 	out := diagnostics.BuildGatewayResidualStatus(nil)
 	if out["mode_c_enabled"] != true {
 		t.Fatalf("mode_c_enabled=%v", out["mode_c_enabled"])
@@ -243,6 +245,67 @@ func TestBuildGatewayResidualStatus_ModeCConsentNote(t *testing.T) {
 	}
 	if pc["browser_3lo_automated"] != false {
 		t.Fatalf("browser_3lo_automated: %+v", pc)
+	}
+	// HOST-007 SPA progressive consent honesty (always on progressive_consent nest).
+	if pc["stores_tokens"] != false {
+		t.Fatalf("stores_tokens must be false: %+v", pc)
+	}
+	if pc["multi_replica_shared"] != false {
+		t.Fatalf("multi_replica_shared must be false: %+v", pc)
+	}
+	if pc["file_backed"] != false {
+		t.Fatalf("file_backed default false without CONSENT_STORE_PATH: %+v", pc)
+	}
+	if pc["same_host_reload_before_persist"] != false {
+		t.Fatalf("same_host_reload_before_persist default false: %+v", pc)
+	}
+}
+
+// HOST-007 / OAUTH-010: progressive_consent nests consent-store same_host_reload
+// honesty when JENKINS_MCP_CONSENT_STORE_PATH set (path never dumped).
+func TestBuildGatewayResidualStatus_ProgressiveConsentFileBacked(t *testing.T) {
+	marker := "consent-path-canary-NEVER-IN-JSON"
+	path := t.TempDir() + "/" + marker + ".json"
+	t.Setenv(gateway.EnvConsentSessionStorePath, path)
+
+	out := diagnostics.BuildGatewayResidualStatus(nil)
+	pc, ok := out["progressive_consent"].(map[string]any)
+	if !ok {
+		t.Fatalf("progressive_consent: %+v", out["progressive_consent"])
+	}
+	if pc["file_backed"] != true {
+		t.Fatalf("file_backed want true when path set: %+v", pc)
+	}
+	if pc["same_host_reload_before_persist"] != true {
+		t.Fatalf("same_host_reload_before_persist want true: %+v", pc)
+	}
+	if pc["stores_tokens"] != false {
+		t.Fatalf("stores_tokens: %+v", pc)
+	}
+	if pc["multi_replica_shared"] != false {
+		t.Fatalf("multi_replica_shared: %+v", pc)
+	}
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	if strings.Contains(s, marker) || strings.Contains(s, path) {
+		t.Fatal("Regression: CONSENT_STORE_PATH leaked into residual-status JSON")
+	}
+	for _, bad := range []string{residualCanary, "access_token=", "refresh_token=", "client_secret="} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q in residual-status with consent path", bad)
+		}
+	}
+	// getenv empty → file flags false.
+	clear := diagnostics.BuildGatewayResidualStatus(func(string) string { return "" })
+	cpc, _ := clear["progressive_consent"].(map[string]any)
+	if cpc["file_backed"] != false || cpc["same_host_reload_before_persist"] != false {
+		t.Fatalf("cleared getenv file flags: %+v", cpc)
+	}
+	if cpc["stores_tokens"] != false || cpc["multi_replica_shared"] != false {
+		t.Fatalf("cleared getenv token/multi: %+v", cpc)
 	}
 }
 

@@ -178,6 +178,10 @@ func NewProgressiveConsentResidual() ProgressiveConsentResidual {
 }
 
 // StatusMap is a non-secret map for doctor / admin / JSON CLI.
+// Always includes stores_tokens=false and multi_replica_shared=false (consent
+// store honesty parity). residual-status may additionally nest file_backed /
+// same_host_reload_before_persist when CONSENT_STORE_PATH is configured.
+// Never tokens, paths, or session inventory.
 func (r ProgressiveConsentResidual) StatusMap() map[string]any {
 	return map[string]any{
 		"browser_3lo_automated":                r.Browser3LOAutomated,
@@ -185,8 +189,11 @@ func (r ProgressiveConsentResidual) StatusMap() map[string]any {
 		"process_local_consent_metadata_store": r.ProcessLocalConsentMetadataStore,
 		"durable_consent_session_store":        r.DurableConsentSessionStore,
 		"multi_replica_consent_correlation":    r.MultiReplicaConsentCorrelation,
-		"surfaces":                             r.Surfaces,
-		"residual_note":                        r.ResidualNote,
-		"last_consent_would_apply":             r.LastConsentWouldApply,
+		// ConsentSessionStore StatusMap honesty (static; metadata only).
+		"stores_tokens":            false,
+		"multi_replica_shared":     false,
+		"surfaces":                 r.Surfaces,
+		"residual_note":            r.ResidualNote,
+		"last_consent_would_apply": r.LastConsentWouldApply,
 	}
 }

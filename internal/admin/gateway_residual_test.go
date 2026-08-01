@@ -131,13 +131,26 @@ func TestGatewayResidualStatus_SecretFreeAndCoreFields(t *testing.T) {
 		t.Fatalf("subject_slots_process_local must always be true: %+v", body["subject_slots_process_local"])
 	}
 
-	// Progressive consent object.
+	// Progressive consent object (HOST-007 SPA store honesty nest).
 	pc, ok := body["progressive_consent"].(map[string]any)
 	if !ok {
 		t.Fatalf("progressive_consent: %+v", body["progressive_consent"])
 	}
 	if pc["browser_3lo_automated"] != false {
 		t.Fatalf("browser_3lo_automated: %+v", pc)
+	}
+	if pc["stores_tokens"] != false {
+		t.Fatalf("stores_tokens must be false: %+v", pc)
+	}
+	if pc["multi_replica_shared"] != false {
+		t.Fatalf("multi_replica_shared must be false: %+v", pc)
+	}
+	// Default without CONSENT_STORE_PATH: file_backed / same_host_reload false.
+	if pc["file_backed"] != false {
+		t.Fatalf("file_backed default false: %+v", pc)
+	}
+	if pc["same_host_reload_before_persist"] != false {
+		t.Fatalf("same_host_reload_before_persist default false: %+v", pc)
 	}
 
 	// Honesty pointer to live-pin-blockers.
