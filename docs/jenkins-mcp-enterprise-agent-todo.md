@@ -2611,6 +2611,7 @@ Produce a signed non-root Linux container/service with approved Streamable HTTP 
 
 **Priority:** P0  
 **Dependencies:** GWY-002, MCP-001  
+**Status:** **Partial Done*** offline (mid-session subject rebind + RequireSubject); **not** live Entra production
 
 **Objective**
 
@@ -2618,11 +2619,13 @@ Authenticated individual subjects on MCP HTTP in gateway mode (shared secret alo
 
 **Acceptance criteria**
 
-- [ ] Non-local bind requires authenticated subject (not anonymous).
-- [ ] Shared-secret is transport gate only if retained; still requires per-user identity.
-- [ ] Session/request credentials bind to `policy.Subject`; mid-session subject change fails closed.
-- [ ] Tokens never in logs/errors/metrics/support bundles (canaries).
-- [ ] Gateway mode cannot enable anonymous multi-user; local KD-008 residual remains explicit for non-gateway.
+- [x] Non-local bind requires authenticated subject (not anonymous).
+- [x] Shared-secret is transport gate only if retained; still requires per-user identity.
+- [x] Session/request credentials bind to identity fingerprint; mid-session subject change fails closed (`internal/mcpserver` `Mcp-Session-Id`→`IdentityFingerprint`; gateway `Binding.Revalidate` for `policy.Subject`).
+- [x] Tokens never in logs/errors/metrics/support bundles (canaries).
+- [x] Gateway mode cannot enable anonymous multi-user; local KD-008 residual remains explicit for non-gateway.
+
+**Residual:** continuous JWKS rotation under load; live Entra / jwt-auth-filter; durable multi-replica session store.
 
 ---
 

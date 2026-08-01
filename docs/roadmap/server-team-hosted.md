@@ -141,14 +141,14 @@ Legend: **Done** / **Partial** / **Not started** relative to Tier A needs.
 | Capability | Local today | Needed for Tier A | Task IDs (existing or NEW) | Priority | Notes |
 |------------|-------------|-------------------|----------------------------|----------|-------|
 | Transport (stdio default) | **Done** | Keep default; server mode optional | ADR 0002, MCP-001 | P0 | Do not flip product default |
-| Streamable HTTP hardened multi-user | **Partial** (loopback + shared-secret) | Per-user bearer/mTLS, session bind, non-loopback fail-closed | GWY-004, MCP-001 residual, **HOST-001**, **HOST-002** | P0 | KD-008 residual today |
+| Streamable HTTP hardened multi-user | **Partial*** (RequireSubject + session fingerprint offline; loopback pilot residual) | Live Entra/JWKS rotation, proxy matrix, mTLS residual | GWY-004, MCP-001 residual, **HOST-001**, **HOST-002** | P0 | Mid-session subject swap fail-closed offline (HOST-001) |
 | Authn (Entra/OIDC, gateway subject) | **Partial** (local OIDC; gateway env labels) | Live inbound claims → `policy.Subject` | OAUTH-001…003, GWY-002, OAUTH-010 | P0 | Env binding is foundation only |
 | Authz (deny-only + Jenkins AND) | **Done** local | Same contracts on gateway path | POL-*, GWY-002 | P0 | Tool args never set identity |
 | Token acquisition **mode A** API token vault | Local keyring **Done** | Per-user vault on gateway host; Obtain path | **HOST-009**, HOST-003 | P0 | Never shared SA |
 | Token acquisition **mode B** JWT RS bearer | OIDC offline **Partial**; RS live residual | Live jwt-auth-filter + claim matrix + bearer wire | **OAUTH-009**, OAUTH-003/005, **HOST-010** | P0 | JWT = Jenkins half |
 | Token acquisition **mode C** 3LO/OBO Obtain | Gateway Obtain **stub** | Live Entra 3LO + OBO + vault | **OAUTH-010**, **GWY-001**, HOST-003 | P0 | AS = Entra, not Jenkins |
 | Mode matrix / fail-closed switch | N/A | Config selects modes; no silent cross-mode fallthrough | **HOST-011**, GWY-003 | P0 | Qualify all three |
-| Session/subject binding | Local re-verify **Done*** | Mid-session rebind, fingerprint, TTL on gateway | AUTH-004, GWY-002, **HOST-003** | P0 | Cross-user session confusion is top risk |
+| Session/subject binding | Local re-verify **Done***; HTTP `Mcp-Session-Id` fingerprint **Done*** offline | Continuous JWKS rotation; durable multi-replica session store | AUTH-004, GWY-002, **HOST-001**, **HOST-003** | P0 | Mid-session subject swap → 401 offline; live Entra residual |
 | Cache isolation by user/tenant/profile | Local XDG per OS user **Partial** | Namespace + ACL on multi-user host | GWY-004, STO-*, **HOST-004** | P0 | MVP: one process per subject OK |
 | Audit isolation + correlation | Local audit **Done*** | Per-subject + correlation ID across hops | AUD-001, GWY-004, OBS-* | P1 | No secrets in events |
 | Network placement near Jenkins | N/A (local) | Deploy next to controller; measure bytes | GWY-004, PERF-* | P1 | Prove near-source benefit |
@@ -327,6 +327,7 @@ Also keep **OAUTH-011** as a scheduled decision gate after OAUTH-010/009 evidenc
 **Priority:** P0  
 **Dependencies:** GWY-002 (subject binding), MCP-001 HTTP guards  
 **Maps to:** GWY-004 transport AC; KD-008 residual  
+**Status:** **Partial Done*** offline (not live Entra production)
 
 **Objective**
 
@@ -334,11 +335,13 @@ Replace “optional shared secret on loopback” as the multi-user story with **
 
 **Acceptance criteria**
 
-- [ ] Non-local bind always requires authenticated subject (not anonymous).
-- [ ] Shared-secret alone is **not** documented as multi-user identity; if retained, it is transport gate only and still requires per-user token/OIDC.
-- [ ] Session or request credentials bind to `policy.Subject`; mid-session subject change fails closed.
-- [ ] Tokens never appear in logs, errors, metrics labels, or support bundles (canary tests).
-- [ ] Regression: loopback pilot without gateway may keep KD-008 residual **explicitly documented**; gateway mode cannot enable anonymous multi-user.
+- [x] Non-local bind always requires authenticated subject (not anonymous).
+- [x] Shared-secret alone is **not** documented as multi-user identity; if retained, it is transport gate only and still requires per-user token/OIDC.
+- [x] Session or request credentials bind to identity fingerprint; mid-session subject change fails closed (`Mcp-Session-Id` + `IdentityFingerprint` in `internal/mcpserver`; gateway `Binding.Revalidate` for policy.Subject).
+- [x] Tokens never appear in logs, errors, metrics labels, or support bundles (canary tests).
+- [x] Regression: loopback pilot without gateway may keep KD-008 residual **explicitly documented**; gateway mode cannot enable anonymous multi-user.
+
+**Residual (do not claim Done):** continuous JWKS rotation under load (serve fetches JWKS once); live Entra / jwt-auth-filter production pin; multi-replica durable session store (HOST-008).
 
 ---
 
