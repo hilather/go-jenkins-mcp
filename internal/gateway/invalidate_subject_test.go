@@ -3,6 +3,7 @@ package gateway_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -244,5 +245,128 @@ func TestFileTokenCache_DeleteBySubjectKey(t *testing.T) {
 	}
 	if _, ok := c.Get(bob); !ok {
 		t.Fatal("bob remains")
+	}
+}
+
+// Regression: FilePrincipalCache.Delete IO/corrupt must not claim principal_cleared
+// (GWY-002 InvalidateSubjectLocal durability honesty; parity with FileTokenCache -1).
+func TestInvalidateSubjectLocal_FilePrincipalDeleteFailHonesty(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "principal.json")
+	c, err := gateway.NewFilePrincipalCache(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sk := gateway.SubjectKeyParts("tid", "alice-del", "corp")
+	c.Set(sk, "alice-j")
+	if p, ok := c.Get(sk); !ok || p != "alice-j" {
+		t.Fatalf("seed: ok=%v p=%q", ok, p)
+	}
+
+	// Corrupt the durable file so load fails on Delete (fail closed).
+	if err := os.WriteFile(path, []byte("{not-valid-json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Delete(sk); err == nil {
+		t.Fatal("Delete on corrupt file must return error")
+	}
+
+	caller := gateway.Caller{Tenant: "tid", Subject: "alice-del", ProfileID: contracts.ProfileID("corp")}
+	res := gateway.InvalidateSubjectLocal(caller, c, nil)
+	if res.PrincipalCleared {
+		t.Fatalf("must not claim principal_cleared on Delete failure: %+v", res)
+	}
+	if !strings.Contains(res.ResidualNote, "principal Delete failed") {
+		t.Fatalf("residual honesty missing: %q", res.ResidualNote)
+	}
+	st := res.StatusMap()
+	if cleared, _ := st["principal_cleared"].(bool); cleared {
+		t.Fatal("StatusMap principal_cleared must be false")
+	}
+	if nested, ok := st["cleared"].(map[string]any); ok {
+		if p, _ := nested["principal"].(bool); p {
+			t.Fatal("cleared.principal must be false")
+		}
+	}
+	// Secret-free: no canary / token-shaped fields.
+	blob := strings.ToLower(fmt.Sprint(st) + res.ResidualNote)
+	if strings.Contains(blob, "access_token") || strings.Contains(blob, strings.ToLower(invalidateCanaryToken)) {
+		t.Fatal("canary/token shape leaked")
+	}
+}
+
+// Regression: FilePrincipalCache.Delete save failure (parent dir not writable)
+// must not claim principal_cleared — disk row may still exist.
+func TestInvalidateSubjectLocal_FilePrincipalSaveFailHonesty(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "principal.json")
+	c, err := gateway.NewFilePrincipalCache(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sk := gateway.SubjectKeyParts("tid", "bob-save", "corp")
+	c.Set(sk, "bob-j")
+	if _, ok := c.Get(sk); !ok {
+		t.Fatal("seed miss")
+	}
+
+	// Drop write on parent so atomic .tmp write / rename fails.
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	if err := c.Delete(sk); err == nil {
+		// Some filesystems may still allow owner write; skip only if Delete
+		// unexpectedly succeeded (honesty path not exercisable here).
+		t.Skip("parent chmod did not block principal cache save; residual untested on this FS")
+	}
+
+	caller := gateway.Caller{Tenant: "tid", Subject: "bob-save", ProfileID: contracts.ProfileID("corp")}
+	res := gateway.InvalidateSubjectLocal(caller, c, nil)
+	if res.PrincipalCleared {
+		t.Fatalf("must not claim principal_cleared on save failure: %+v", res)
+	}
+	if !strings.Contains(res.ResidualNote, "principal Delete failed") {
+		t.Fatalf("residual honesty missing: %q", res.ResidualNote)
+	}
+	// After restore write, durable row may still be present (honesty of false clear).
+	_ = os.Chmod(dir, 0o700)
+	c2, err := gateway.NewFilePrincipalCache(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, ok := c2.Get(sk); !ok || p != "bob-j" {
+		// If delete partially applied before save fail, still OK — flag honesty is the SoT.
+		t.Logf("post-fail Get: ok=%v p=%q (flag honesty is primary)", ok, p)
+	}
+}
+
+func TestInvalidateSubjectLocal_FilePrincipalSuccessCleared(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "principal.json")
+	c, err := gateway.NewFilePrincipalCache(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sk := gateway.SubjectKeyParts("tid", "carol-ok", "corp")
+	c.Set(sk, "carol-j")
+	caller := gateway.Caller{Tenant: "tid", Subject: "carol-ok", ProfileID: contracts.ProfileID("corp")}
+	res := gateway.InvalidateSubjectLocal(caller, c, nil)
+	if !res.PrincipalCleared {
+		t.Fatalf("want principal_cleared on successful file Delete: %+v", res)
+	}
+	if _, ok := c.Get(sk); ok {
+		t.Fatal("principal must be gone after successful Delete")
+	}
+	// Cross-instance durable miss.
+	c2, err := gateway.NewFilePrincipalCache(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := c2.Get(sk); ok {
+		t.Fatal("second instance must also miss")
 	}
 }
