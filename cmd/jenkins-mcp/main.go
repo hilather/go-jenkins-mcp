@@ -1980,6 +1980,11 @@ func runServe(args []string) error {
 				// Optional same-host multi-process subject rate share (HOST-008 lite).
 				// Empty path → process-local SubjectRateLimiter. Path set → FileSubjectRateLimiter
 				// (flock + secret-free JSON). Multi-pod shared rate still residual.
+				// Optional MaxSubjects hygiene (HOST-008 residual lite): empty → unlimited.
+				maxSubjects, maxSubjErr := gateway.SubjectRateMaxSubjectsFromEnviron(os.Getenv)
+				if maxSubjErr != nil {
+					return maxSubjErr
+				}
 				ratePath := strings.TrimSpace(os.Getenv(gateway.EnvGatewaySubjectRatePath))
 				var rateLim interface {
 					Allow(subjectKey string) error
@@ -1994,16 +1999,32 @@ func runServe(args []string) error {
 					if ferr != nil {
 						return ferr
 					}
+					if maxSubjects > 0 {
+						fileLim.SetMaxSubjects(maxSubjects)
+					}
 					rateLim = fileLim
-					log.Printf("HOST-006 subject rate limiter: file-backed same-host lite (shared_subject_rate_file=true; multi-pod residual) rate_per_minute=%d burst=%d multi_user=%v",
-						fileLim.RatePerMinute(), fileLim.Burst(), gatewayMultiUser)
+					if maxSubjects > 0 {
+						log.Printf("HOST-006 subject rate limiter: file-backed same-host lite (shared_subject_rate_file=true; multi-pod residual) rate_per_minute=%d burst=%d max_subjects=%d multi_user=%v",
+							fileLim.RatePerMinute(), fileLim.Burst(), maxSubjects, gatewayMultiUser)
+					} else {
+						log.Printf("HOST-006 subject rate limiter: file-backed same-host lite (shared_subject_rate_file=true; multi-pod residual) rate_per_minute=%d burst=%d multi_user=%v",
+							fileLim.RatePerMinute(), fileLim.Burst(), gatewayMultiUser)
+					}
 				} else {
 					memLim := gateway.NewSubjectRateLimiter(
 						rateRPM, rateBurst, 0, 0, // process caps → package defaults
 					)
+					if maxSubjects > 0 {
+						memLim.SetMaxSubjects(maxSubjects)
+					}
 					rateLim = memLim
-					log.Printf("HOST-006 subject rate limiter: rate_per_minute=%d burst=%d multi_user=%v",
-						memLim.RatePerMinute(), memLim.Burst(), gatewayMultiUser)
+					if maxSubjects > 0 {
+						log.Printf("HOST-006 subject rate limiter: rate_per_minute=%d burst=%d max_subjects=%d multi_user=%v",
+							memLim.RatePerMinute(), memLim.Burst(), maxSubjects, gatewayMultiUser)
+					} else {
+						log.Printf("HOST-006 subject rate limiter: rate_per_minute=%d burst=%d multi_user=%v",
+							memLim.RatePerMinute(), memLim.Burst(), gatewayMultiUser)
+					}
 				}
 				// HOST-006: overlay may only lower bootstrap rate (never raise).
 				// Empty/omitted overlay fields leave env bootstrap unchanged.

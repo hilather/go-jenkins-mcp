@@ -60,6 +60,11 @@ const (
 	// EnvSubjectRateBurst is optional env for per-subject burst capacity.
 	// Empty → DefaultSubjectRateBurst. Ignored when rate is disabled (0).
 	EnvSubjectRateBurst = "JENKINS_MCP_SUBJECT_RATE_BURST"
+	// EnvGatewaySubjectRateMaxSubjects is optional max tracked subjects for
+	// SubjectRateLimiter / FileSubjectRateLimiter map hygiene (HOST-008 residual lite).
+	// Empty → unlimited (0). Non-negative int; invalid fails closed at resolve.
+	// Process-local / file-local only — multi-pod residual remains.
+	EnvGatewaySubjectRateMaxSubjects = "JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS"
 )
 
 // ResolveSubjectRateCaps resolves optional env overrides for NewSubjectRateLimiter.
@@ -124,12 +129,38 @@ func SubjectRateConfigFromEnviron(getenv func(string) string) (enabled bool, rat
 	return true, rpm, burst
 }
 
+// ResolveSubjectRateMaxSubjects parses optional max-subjects hygiene env raw.
+// Empty → 0 (unlimited). Non-negative integer accepted; invalid/negative fails closed.
+func ResolveSubjectRateMaxSubjects(raw string) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, nil
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v < 0 {
+		return 0, apperr.New(apperr.CodeInvalidArgument,
+			"invalid "+EnvGatewaySubjectRateMaxSubjects+" (non-negative integer; empty = unlimited)")
+	}
+	return v, nil
+}
+
+// SubjectRateMaxSubjectsFromEnviron resolves
+// JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS (secret-free). Empty → 0 unlimited.
+// Invalid → error (fail closed at serve / residual resolve). getenv nil → os.Getenv.
+func SubjectRateMaxSubjectsFromEnviron(getenv func(string) string) (int, error) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	return ResolveSubjectRateMaxSubjects(getenv(EnvGatewaySubjectRateMaxSubjects))
+}
+
 // subjectBucket is one token bucket (subject or process).
 type subjectBucket struct {
 	tokens     float64
 	capacity   float64
 	refillPerS float64
 	last       time.Time
+	lastAccess time.Time // LRU eviction order (subject maps only; process bucket unused)
 }
 
 func (b *subjectBucket) refill(now time.Time) {
@@ -166,11 +197,19 @@ func (b *subjectBucket) take(n float64) bool {
 // Thread-safe. Process-local by default. Optional same-host multi-process share
 // uses FileSubjectRateLimiter via JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH
 // (HOST-008 Done* lite). Multi-pod shared rate remains residual.
+//
+// Hygiene residual lite (long-running multi-user gateway):
+//   - MaxSubjects (0 = unlimited default): on Allow when map full for a new
+//     subject, purge idle full buckets if any, else evict oldest lastAccess
+//     (never the current subject mid-allow when other victims exist).
+//
+// Process-local only — multi-pod shared rate map residual.
 type SubjectRateLimiter struct {
 	ratePerMinute int
 	burst         int
 	processRPM    int
 	processBurst  int
+	maxSubjects   int // 0 = unlimited
 
 	mu        sync.Mutex
 	bySubject map[string]*subjectBucket
@@ -356,11 +395,51 @@ func (l *SubjectRateLimiter) SetNow(now func() time.Time) {
 	l.now = now
 }
 
+// SetMaxSubjects bounds the per-process subject map (0 = unlimited).
+// Negative treated as 0. Does not immediately evict; enforcement runs on Allow
+// when inserting a new subject. Process-local hygiene only (HOST-008 residual lite).
+func (l *SubjectRateLimiter) SetMaxSubjects(n int) {
+	if l == nil {
+		return
+	}
+	if n < 0 {
+		n = 0
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.maxSubjects = n
+}
+
+// MaxSubjects returns the configured subject-map cap (0 = unlimited).
+func (l *SubjectRateLimiter) MaxSubjects() int {
+	if l == nil {
+		return 0
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.maxSubjects
+}
+
+// SubjectsTracked returns the number of subject buckets currently tracked
+// (non-secret status; never keys).
+func (l *SubjectRateLimiter) SubjectsTracked() int {
+	if l == nil {
+		return 0
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.bySubject)
+}
+
 // Allow consumes one token for subjectKey. Fail closed:
 //   - empty / invalid subjectKey → invalid_argument
 //   - ratePerMinute == 0 (disabled residual constructed) → CodeQuota
 //   - subject bucket empty → CodeQuota
 //   - process bucket empty → CodeQuota
+//
+// When MaxSubjects > 0 and subjectKey is new while the map is full: purges
+// idle full buckets (if any), else evicts the oldest lastAccess subject
+// (never the current key when other victims exist).
 //
 // Nil limiter is a no-op success (unlimited; tests / stdio / rate disabled wire).
 func (l *SubjectRateLimiter) Allow(subjectKey string) error {
@@ -381,6 +460,9 @@ func (l *SubjectRateLimiter) Allow(subjectKey string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.now()
+	if l.now == nil {
+		now = time.Now()
+	}
 	if l.bySubject == nil {
 		l.bySubject = make(map[string]*subjectBucket)
 	}
@@ -395,15 +477,25 @@ func (l *SubjectRateLimiter) Allow(subjectKey string) error {
 
 	b := l.bySubject[key]
 	if b == nil {
+		if l.maxSubjects > 0 && len(l.bySubject) >= l.maxSubjects {
+			l.purgeIdleFullLocked(now, key)
+			for len(l.bySubject) >= l.maxSubjects {
+				if !l.evictOldestSubjectLocked(key) {
+					break
+				}
+			}
+		}
 		b = &subjectBucket{
 			tokens:     float64(l.burst),
 			capacity:   float64(l.burst),
 			refillPerS: float64(l.ratePerMinute) / 60.0,
 			last:       now,
+			lastAccess: now,
 		}
 		l.bySubject[key] = b
 	} else {
 		b.refill(now)
+		b.lastAccess = now
 	}
 	if !b.take(1) {
 		// Refund process token so Alice's empty bucket does not burn process
@@ -414,10 +506,65 @@ func (l *SubjectRateLimiter) Allow(subjectKey string) error {
 		}
 		return apperr.New(apperr.CodeQuota, "subject tool rate budget exceeded")
 	}
+	b.lastAccess = now
 	return nil
 }
 
+// purgeIdleFullLocked drops subjects at full capacity after refill (idle /
+// no partial budget to preserve). Never purges protectKey. Caller holds l.mu.
+func (l *SubjectRateLimiter) purgeIdleFullLocked(now time.Time, protectKey string) {
+	for k, b := range l.bySubject {
+		if k == protectKey || b == nil {
+			continue
+		}
+		// Snapshot refill without mutating shared last permanently if not idle —
+		// copy then check full.
+		tmp := *b
+		tmp.refill(now)
+		if tmp.tokens >= tmp.capacity && tmp.capacity > 0 {
+			delete(l.bySubject, k)
+		}
+	}
+}
+
+// evictOldestSubjectLocked removes the subject with the oldest lastAccess,
+// never protectKey when other candidates exist. Returns false if nothing
+// evicted. Caller holds l.mu.
+func (l *SubjectRateLimiter) evictOldestSubjectLocked(protectKey string) bool {
+	if len(l.bySubject) == 0 {
+		return false
+	}
+	var victim string
+	var oldest time.Time
+	first := true
+	for k, b := range l.bySubject {
+		if k == protectKey {
+			continue
+		}
+		if b == nil {
+			victim = k
+			break
+		}
+		access := b.lastAccess
+		if access.IsZero() {
+			access = b.last
+		}
+		if first || access.Before(oldest) {
+			victim = k
+			oldest = access
+			first = false
+		}
+	}
+	if victim == "" {
+		// Only protectKey present (or empty after filter) — cannot free for new key.
+		return false
+	}
+	delete(l.bySubject, victim)
+	return true
+}
+
 // StatusMap is a non-secret summary for doctor / readiness (no subject keys).
+// Includes subject_rate_max_subjects only when configured (> 0).
 func (l *SubjectRateLimiter) StatusMap() map[string]any {
 	if l == nil {
 		return map[string]any{"configured": false}
@@ -426,8 +573,9 @@ func (l *SubjectRateLimiter) StatusMap() map[string]any {
 	subjects := len(l.bySubject)
 	rpm := l.ratePerMinute
 	burst := l.burst
+	maxSubj := l.maxSubjects
 	l.mu.Unlock()
-	return map[string]any{
+	out := map[string]any{
 		"configured":                    true,
 		"kind":                          "memory",
 		"rate_per_minute":               rpm,
@@ -443,4 +591,8 @@ func (l *SubjectRateLimiter) StatusMap() map[string]any {
 		"shared_subject_rate_file":      false, // set path → FileSubjectRateLimiter
 		"ha_multi_replica":              false, // HOST-008 multi-pod residual
 	}
+	if maxSubj > 0 {
+		out["subject_rate_max_subjects"] = maxSubj
+	}
+	return out
 }

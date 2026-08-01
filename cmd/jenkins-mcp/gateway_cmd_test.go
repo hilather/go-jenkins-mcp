@@ -612,6 +612,31 @@ func TestGatewayResidualStatus_PrincipalCacheHygieneEnv(t *testing.T) {
 	}
 }
 
+// HOST-008 residual lite: subject_rate_max_subjects surfaces when env set; omit when unlimited.
+func TestGatewayResidualStatus_SubjectRateMaxSubjects(t *testing.T) {
+	// Empty / unset → omit field (unlimited default).
+	t.Setenv(gateway.EnvGatewaySubjectRateMaxSubjects, "")
+	out := buildGatewayResidualStatus(os.Getenv)
+	if _, ok := out["subject_rate_max_subjects"]; ok {
+		t.Fatalf("unlimited must omit subject_rate_max_subjects: %+v", out["subject_rate_max_subjects"])
+	}
+	t.Setenv(gateway.EnvGatewaySubjectRateMaxSubjects, "4096")
+	out = buildGatewayResidualStatus(os.Getenv)
+	if out["subject_rate_max_subjects"] != 4096 {
+		t.Fatalf("subject_rate_max_subjects: %+v", out["subject_rate_max_subjects"])
+	}
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(blob)
+	for _, bad := range []string{canaryCLIToken, "access_token=", "Bearer "} {
+		if strings.Contains(s, bad) {
+			t.Fatalf("forbidden %q in residual-status with max subjects", bad)
+		}
+	}
+}
+
 func TestGatewayResidualStatus_ModeBResidualIdAlways(t *testing.T) {
 	// Even with Mode A env (or default), residual_id oauth009_offline must be present.
 	t.Setenv(gateway.EnvGatewayCredentialMode, string(gateway.CredentialModeAPITokenVault))

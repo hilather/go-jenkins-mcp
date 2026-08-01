@@ -35,8 +35,15 @@ const EnvGatewaySubjectRatePath = "JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH"
 // multi-pod shared rate remains residual.
 //
 // File contents are intentionally secret-free: only subjectKey → tokens/last
-// refill timestamps. Never credentials, Bearer tokens, or Authorization material.
+// refill timestamps (+ optional last_access for LRU hygiene). Never credentials,
+// Bearer tokens, or Authorization material.
 // Operators set path via JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH.
+//
+// Hygiene residual lite (HOST-008): optional MaxSubjects (0 = unlimited) via
+// SetMaxSubjects / JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS. On Allow when
+// the map is full for a new subject: purge idle full buckets, else evict oldest
+// last_access (never the current subject mid-allow when other victims exist).
+// File-local only — multi-pod shared rate residual.
 //
 // Implements the same Allow surface as SubjectRateLimiter (tools.SubjectRateLimiter)
 // plus LowerRate / RatePerMinute / Burst for serve overlay wire.
@@ -47,6 +54,7 @@ type FileSubjectRateLimiter struct {
 	burst         int
 	processRPM    int
 	processBurst  int
+	maxSubjects   int // 0 = unlimited
 
 	mu      sync.Mutex
 	process subjectBucket
@@ -56,15 +64,16 @@ type FileSubjectRateLimiter struct {
 // fileSubjectRateDoc is the on-disk shape (versioned). Keys are subjectKey
 // strings; values are bucket state only — never tokens/credentials.
 type fileSubjectRateDoc struct {
-	Version  int                              `json:"version"`
-	Subjects map[string]fileSubjectRateEntry  `json:"subjects"`
+	Version  int                             `json:"version"`
+	Subjects map[string]fileSubjectRateEntry `json:"subjects"`
 }
 
 // fileSubjectRateEntry is one subject's durable token-bucket snapshot.
 // Capacity and refill rate come from the live process config (not stored).
 type fileSubjectRateEntry struct {
-	Tokens float64 `json:"tokens"`
-	Last   string  `json:"last"` // RFC3339 UTC; empty → treat as now on first use
+	Tokens     float64 `json:"tokens"`
+	Last       string  `json:"last"`                  // RFC3339 UTC; empty → treat as now on first use
+	LastAccess string  `json:"last_access,omitempty"` // RFC3339 UTC for LRU; empty → fall back to Last
 }
 
 // NewFileSubjectRateLimiter constructs a file-backed subject rate limiter at path.
@@ -226,6 +235,52 @@ func (l *FileSubjectRateLimiter) SetNow(now func() time.Time) {
 	l.now = now
 }
 
+// SetMaxSubjects bounds the durable subject map (0 = unlimited).
+// Negative treated as 0. Enforcement runs on Allow when inserting a new subject
+// (file-local hygiene; multi-pod residual). Same knob as SubjectRateLimiter.
+func (l *FileSubjectRateLimiter) SetMaxSubjects(n int) {
+	if l == nil {
+		return
+	}
+	if n < 0 {
+		n = 0
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.maxSubjects = n
+}
+
+// MaxSubjects returns the configured subject-map cap (0 = unlimited).
+func (l *FileSubjectRateLimiter) MaxSubjects() int {
+	if l == nil {
+		return 0
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.maxSubjects
+}
+
+// SubjectsTracked returns durable subject count (non-secret; never keys).
+// Best-effort under flock; IO failure → 0.
+func (l *FileSubjectRateLimiter) SubjectsTracked() int {
+	if l == nil {
+		return 0
+	}
+	l.mu.Lock()
+	path := l.path
+	l.mu.Unlock()
+	subjects := 0
+	_ = withVaultFileLock(path, func() error {
+		doc, err := l.loadLocked()
+		if err != nil {
+			return err
+		}
+		subjects = len(doc.Subjects)
+		return nil
+	})
+	return subjects
+}
+
 // Allow consumes one token for subjectKey against shared file state + process-local
 // process ceiling. Fail closed:
 //   - empty / invalid subjectKey → invalid_argument
@@ -233,6 +288,10 @@ func (l *FileSubjectRateLimiter) SetNow(now func() time.Time) {
 //   - subject bucket empty → CodeQuota
 //   - process bucket empty → CodeQuota
 //   - IO / corrupt file → CodeQuota (fail closed; never over-allow)
+//
+// When MaxSubjects > 0 and subjectKey is new while the map is full: purges
+// idle full buckets (if any), else evicts the oldest last_access subject
+// (never the current key when other victims exist).
 //
 // Nil limiter is a no-op success (unlimited residual).
 func (l *FileSubjectRateLimiter) Allow(subjectKey string) error {
@@ -275,6 +334,14 @@ func (l *FileSubjectRateLimiter) Allow(subjectKey string) error {
 		}
 
 		entry, found := doc.Subjects[key]
+		if !found && l.maxSubjects > 0 && len(doc.Subjects) >= l.maxSubjects {
+			l.purgeIdleFullFileLocked(doc, now, key)
+			for len(doc.Subjects) >= l.maxSubjects {
+				if !l.evictOldestFileSubjectLocked(doc, key) {
+					break
+				}
+			}
+		}
 		b := l.bucketFromEntry(found, entry, now)
 		b.refill(now)
 		if !b.take(1) {
@@ -283,8 +350,9 @@ func (l *FileSubjectRateLimiter) Allow(subjectKey string) error {
 		}
 		doc.Version = 1
 		doc.Subjects[key] = fileSubjectRateEntry{
-			Tokens: b.tokens,
-			Last:   b.last.UTC().Format(time.RFC3339Nano),
+			Tokens:     b.tokens,
+			Last:       b.last.UTC().Format(time.RFC3339Nano),
+			LastAccess: now.UTC().Format(time.RFC3339Nano),
 		}
 		return l.saveLocked(doc)
 	})
@@ -306,8 +374,77 @@ func (l *FileSubjectRateLimiter) Allow(subjectKey string) error {
 	return nil
 }
 
+// purgeIdleFullFileLocked drops durable subjects at full capacity after refill.
+// Never purges protectKey. Mutates doc.Subjects in place. Caller holds process mu + flock.
+func (l *FileSubjectRateLimiter) purgeIdleFullFileLocked(doc fileSubjectRateDoc, now time.Time, protectKey string) {
+	for k, e := range doc.Subjects {
+		if k == protectKey {
+			continue
+		}
+		b := l.bucketFromEntry(true, e, now)
+		b.refill(now)
+		if b.tokens >= b.capacity && b.capacity > 0 {
+			delete(doc.Subjects, k)
+		}
+	}
+}
+
+// evictOldestFileSubjectLocked removes the subject with the oldest last_access
+// (fallback: Last refill timestamp; zero timestamps count as oldest).
+// Never protectKey when other victims exist. Returns false if nothing evicted.
+// Caller holds process mu + flock.
+func (l *FileSubjectRateLimiter) evictOldestFileSubjectLocked(doc fileSubjectRateDoc, protectKey string) bool {
+	if len(doc.Subjects) == 0 {
+		return false
+	}
+	// Use a sentinel far in the past so zero / missing access sorts as oldest.
+	const farPastUnix = 0
+	var victim string
+	oldestUnix := int64(1<<63 - 1) // max int64
+	found := false
+	for k, e := range doc.Subjects {
+		if k == protectKey {
+			continue
+		}
+		access := parseSubjectRateTime(e.LastAccess)
+		if access.IsZero() {
+			access = parseSubjectRateTime(e.Last)
+		}
+		var u int64 = farPastUnix
+		if !access.IsZero() {
+			u = access.UnixNano()
+		}
+		if !found || u < oldestUnix {
+			victim = k
+			oldestUnix = u
+			found = true
+		}
+	}
+	if !found || victim == "" {
+		return false
+	}
+	delete(doc.Subjects, victim)
+	return true
+}
+
+// parseSubjectRateTime parses RFC3339Nano / RFC3339; empty or bad → zero.
+func parseSubjectRateTime(raw string) time.Time {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}
+	}
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return t
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t
+	}
+	return time.Time{}
+}
+
 // StatusMap is a non-secret summary for doctor / residual-status (no subject keys,
 // no path contents, no tokens). HOST-008 residual honesty: shared file lite only.
+// Includes subject_rate_max_subjects only when configured (> 0).
 func (l *FileSubjectRateLimiter) StatusMap() map[string]any {
 	if l == nil {
 		return map[string]any{"configured": false}
@@ -316,6 +453,7 @@ func (l *FileSubjectRateLimiter) StatusMap() map[string]any {
 	rpm := l.ratePerMinute
 	burst := l.burst
 	pathConfigured := l.path != ""
+	maxSubj := l.maxSubjects
 	l.mu.Unlock()
 
 	subjects := 0
@@ -328,7 +466,7 @@ func (l *FileSubjectRateLimiter) StatusMap() map[string]any {
 		return nil
 	})
 
-	return map[string]any{
+	out := map[string]any{
 		"configured":                    true,
 		"kind":                          "file",
 		"rate_per_minute":               rpm,
@@ -341,10 +479,14 @@ func (l *FileSubjectRateLimiter) StatusMap() map[string]any {
 		"absolute_min_rate_per_minute":  MinSubjectRatePerMinute,
 		"absolute_min_burst":            MinSubjectRateBurst,
 		"absolute_process_rate_per_min": AbsoluteMaxProcessRatePerMinute,
-		"shared_subject_rate_file":      true,  // HOST-008 Done* lite same-host
+		"shared_subject_rate_file":      true, // HOST-008 Done* lite same-host
 		"path_configured":               pathConfigured,
 		"ha_multi_replica":              false, // multi-pod shared rate residual
 	}
+	if maxSubj > 0 {
+		out["subject_rate_max_subjects"] = maxSubj
+	}
+	return out
 }
 
 // bucketFromEntry builds a live subjectBucket from durable state.
