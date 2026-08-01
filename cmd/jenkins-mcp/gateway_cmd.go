@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
@@ -18,7 +19,7 @@ import (
 func runGateway(args []string) error {
 	if len(args) < 1 {
 		return apperr.New(apperr.CodeInvalidArgument,
-			"gateway subcommand required: qualify | residual-status | consent-residual | vault | vault-put | vault-delete")
+			"gateway subcommand required: qualify | residual-status | consent-residual | subject-invalidate | vault | vault-put | vault-delete")
 	}
 	switch args[0] {
 	case "qualify":
@@ -27,6 +28,9 @@ func runGateway(args []string) error {
 		return runGatewayResidualStatus(args[1:])
 	case "consent-residual":
 		return runGatewayConsentResidual(args[1:])
+	case "subject-invalidate", "invalidate-subject":
+		// GWY-002 / HOST-003 force re-auth residual lite.
+		return runGatewaySubjectInvalidate(args[1:])
 	case "vault":
 		return runGatewayVault(args[1:])
 	case "vault-put":
@@ -37,7 +41,7 @@ func runGateway(args []string) error {
 		return runGatewayVaultDelete(args[1:])
 	default:
 		return apperr.New(apperr.CodeInvalidArgument,
-			fmt.Sprintf("unknown gateway subcommand %q (qualify|residual-status|consent-residual|vault|vault-put|vault-delete)", args[0]))
+			fmt.Sprintf("unknown gateway subcommand %q (qualify|residual-status|consent-residual|subject-invalidate|vault|vault-put|vault-delete)", args[0]))
 	}
 }
 
@@ -286,6 +290,102 @@ func runGatewayConsentResidual(args []string) error {
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(out); err != nil {
 		return apperr.Wrap(apperr.CodeInternal, "failed to encode consent residual", err)
+	}
+	return nil
+}
+
+// subjectInvalidateDoc points operators at force re-auth residual honesty.
+const subjectInvalidateDoc = "docs/gateway/README.md § force re-auth residual lite"
+
+// runGatewaySubjectInvalidate clears process-local multi-user caches for one
+// subject so the next Obtain re-fetches (GWY-002 / HOST-003 force re-auth residual lite).
+//
+//	jenkins-mcp gateway subject-invalidate --subject-key tenant|sub|profile
+//	jenkins-mcp gateway subject-invalidate --tenant T --subject-id S --profile P
+//
+// Alias: gateway invalidate-subject
+//
+// Clears ProcessPrincipalCache for the key in THIS process. When
+// JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH is set, also deletes matching
+// FileTokenCache entries (same-host flock lite). Serve process-local
+// MemoryTokenCache is not reachable from this CLI — residual note says so.
+// Never tokens; never live Entra revocation; multi-pod residual remains.
+func runGatewaySubjectInvalidate(args []string) error {
+	fs := flag.NewFlagSet("gateway subject-invalidate", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	subjectKeyFlag := fs.String("subject-key", "", "Subject key tenant|subject|profile")
+	subjectFlag := fs.String("subject", "", "Alias of --subject-key (full key)")
+	tenant := fs.String("tenant", "", "Tenant when composing subject key")
+	subjectID := fs.String("subject-id", "", "Subject (user) id when composing subject key")
+	profile := fs.String("profile", "", "Profile id when composing subject key")
+	workload := fs.String("workload", "", "Optional workload for exact CacheKey fallback (usually unused with FileTokenCache subject purge)")
+	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
+		"subject-key": true,
+		"subject":     true,
+		"tenant":      true,
+		"subject-id":  true,
+		"profile":     true,
+		"workload":    true,
+	})); err != nil {
+		return apperr.New(apperr.CodeInvalidArgument, err.Error())
+	}
+
+	// Prefer --subject-key; --subject is an alias for vault-style operators.
+	explicit := strings.TrimSpace(*subjectKeyFlag)
+	if explicit == "" {
+		explicit = strings.TrimSpace(*subjectFlag)
+	}
+	sk, err := resolveVaultSubjectKey(explicit, *tenant, *subjectID, *profile)
+	if err != nil {
+		// Rephrase vault wording for this command.
+		if explicit == "" && strings.TrimSpace(*subjectID) == "" {
+			return apperr.New(apperr.CodeInvalidArgument,
+				"gateway subject-invalidate requires --subject-key KEY or --subject-id (optionally --tenant/--profile)")
+		}
+		return err
+	}
+	// Force re-auth keys must be tenant|subject|profile (exactly three fields).
+	if _, _, _, err := gateway.SplitSubjectKey(sk); err != nil {
+		return err
+	}
+
+	// Principal cache: process-local to THIS CLI process only.
+	// Serve process principal entries are residual unless an in-process admin
+	// path calls InvalidateSubjectLocal / provider.Invalidate.
+	principals := gateway.ProcessPrincipalCache()
+
+	// Optional same-host FileTokenCache when env path is set.
+	var tokens gateway.TokenCache
+	tokenPath := strings.TrimSpace(os.Getenv(gateway.EnvGatewayTokenCachePath))
+	tokenPathConfigured := tokenPath != ""
+	if tokenPathConfigured {
+		ftc, ferr := gateway.NewFileTokenCache(tokenPath, 0)
+		if ferr != nil {
+			return apperr.Wrap(apperr.CodeInvalidArgument, "gateway subject-invalidate token cache path", ferr)
+		}
+		tokens = ftc
+	}
+
+	res, ierr := gateway.InvalidateSubjectKeyLocal(sk, *workload, principals, tokens)
+	if ierr != nil {
+		return ierr
+	}
+
+	out := res.StatusMap()
+	out["doc"] = subjectInvalidateDoc
+	out["token_cache_path_configured"] = tokenPathConfigured
+	// Never print path contents of the cache file; only whether env was set.
+	if !tokenPathConfigured {
+		out["token_cache_cli_note"] = "JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH unset — principal cleared in this process only; serve MemoryTokenCache not reachable from CLI"
+	} else {
+		out["token_cache_cli_note"] = "FileTokenCache subject-namespace purge attempted (same-host flock lite; multi-pod residual)"
+	}
+	out["principal_process_note"] = "PrincipalCache clear is process-local to this CLI invocation; live serve process principal entries require in-process Invalidate (or future admin path)"
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(out); err != nil {
+		return apperr.Wrap(apperr.CodeInternal, "failed to encode subject-invalidate result", err)
 	}
 	return nil
 }

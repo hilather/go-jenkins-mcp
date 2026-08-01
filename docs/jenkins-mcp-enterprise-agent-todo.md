@@ -2568,6 +2568,13 @@ Map trusted AgentCore/Entra subject, tenant, groups/roles, workload identity, an
 - [ ] Role removal and emergency deny propagate within the approved window.
 - [ ] Gateway policy cannot grant Jenkins-denied access.
 
+**Force re-auth residual lite (this slice — offline)**
+
+- [x] `gateway.InvalidateSubjectLocal` + `DeleteBySubjectKey` on Memory/File token caches; provider `Invalidate` also drops `PrincipalCache` companion (Mode A/B/C).
+- [x] CLI `jenkins-mcp gateway subject-invalidate` (alias `invalidate-subject`) — secret-free JSON; optional `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH`.
+- [x] Docs: `docs/gateway/README.md` force re-auth section; live-pin-blockers OAUTH-010 revocation honesty.
+- [ ] Live Entra/AgentCore revocation window + multi-pod invalidate fan-out (residual HOST-008 / OAUTH-010 / GWY-003).
+
 ---
 
 ## GWY-003 - Run gateway 3LO/OBO security and performance qualification
@@ -2729,6 +2736,7 @@ When `--gateway` and provider Ready, Jenkins credentials come from **Obtain for 
 - [x] ConsentRequired (mode C) surfaces auth URL metadata only. — Obtain → AuthProvider → `mapToolErr` progressive `authorization_url` + `session_id` only (Done\*); doctor `gateway_status` + `gateway qualify` residual row + `gateway consent-residual` CLI; browser 3LO not automated residual
 - [x] Unit/integration tests per mode with mocks. *(A + C offline; B residual)*
 - [x] `docs/gateway/README.md` residuals closed for wiring. *(wiring section; Entra pin still residual)*
+- [x] Force re-auth residual lite: `InvalidateSubjectLocal` + `gateway subject-invalidate` (principal + optional FileTokenCache); provider Invalidate drops PrincipalCache companion. **Residual:** live IdP revocation, multi-pod fan-out, CLI↔remote serve MemoryTokenCache.
 
 ---
 

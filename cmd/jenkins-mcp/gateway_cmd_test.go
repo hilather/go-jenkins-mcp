@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
@@ -212,6 +213,169 @@ func TestGatewayConsentResidual_ViaDispatch(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "metadata_path_done_star") {
 		t.Fatalf("stdout: %s", buf.String())
+	}
+}
+
+// GWY-002 / HOST-003 force re-auth residual lite: subject-invalidate CLI.
+func TestGatewaySubjectInvalidate(t *testing.T) {
+	// Isolate process principal cache mutations to a known key.
+	sk := gateway.SubjectKeyParts("tid-cli", "alice-cli", "corp")
+	gateway.ProcessPrincipalCache().Set(sk, "alice-j")
+	t.Cleanup(func() { gateway.ProcessPrincipalCache().Delete(sk) })
+
+	// Plant canary env that must never appear in output.
+	t.Setenv("HOST009_FAKE_TOKEN", canaryCLIToken)
+	t.Setenv(gateway.EnvGatewayTokenCachePath, "") // principal-only path
+
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	errRun := runGatewaySubjectInvalidate([]string{"--subject-key", sk})
+	_ = w.Close()
+	os.Stdout = old
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	_ = r.Close()
+	if errRun != nil {
+		t.Fatalf("run: %v\nstdout=%s", errRun, buf.String())
+	}
+	out := buf.String()
+	if strings.Contains(out, canaryCLIToken) || strings.Contains(out, qualify.CanaryToken) {
+		t.Fatal("canary in subject-invalidate output")
+	}
+	for _, bad := range []string{"access_token=", "refresh_token=", "client_secret=", "Authorization: Bearer"} {
+		if strings.Contains(out, bad) {
+			t.Fatalf("forbidden %q in output", bad)
+		}
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &payload); err != nil {
+		t.Fatalf("json: %v body=%s", err, out)
+	}
+	if payload["subject_key"] != sk {
+		t.Fatalf("subject_key: %+v", payload["subject_key"])
+	}
+	if payload["principal_cleared"] != true {
+		t.Fatalf("principal_cleared: %+v", payload)
+	}
+	if payload["token_cache_cleared"] != false {
+		t.Fatalf("token_cache_cleared without path: %+v", payload)
+	}
+	if payload["token_cache_path_configured"] != false {
+		t.Fatalf("path configured: %+v", payload)
+	}
+	note, _ := payload["residual_note"].(string)
+	if !strings.Contains(note, "multi-pod") || !strings.Contains(strings.ToLower(note), "not live") {
+		t.Fatalf("residual honesty: %q", note)
+	}
+	if _, ok := gateway.ProcessPrincipalCache().Get(sk); ok {
+		t.Fatal("principal must be cleared in process cache")
+	}
+}
+
+func TestGatewaySubjectInvalidate_WithFileTokenCache(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tok-cache.json")
+	ftc, err := gateway.NewFileTokenCache(path, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alice := gateway.CacheKey{Tenant: "tid-f", User: "alice-f", Workload: "wl", Profile: "corp"}
+	bob := gateway.CacheKey{Tenant: "tid-f", User: "bob-f", Workload: "wl", Profile: "corp"}
+	exp := time.Now().Add(time.Hour)
+	ftc.Set(alice, gateway.CachedToken{AccessToken: canaryCLIToken + "-a", ExpiresAt: exp})
+	ftc.Set(bob, gateway.CachedToken{AccessToken: canaryCLIToken + "-b", ExpiresAt: exp})
+
+	sk := alice.NamespaceSubjectKey()
+	gateway.ProcessPrincipalCache().Set(sk, "alice-j")
+	t.Cleanup(func() { gateway.ProcessPrincipalCache().Delete(sk) })
+	t.Setenv(gateway.EnvGatewayTokenCachePath, path)
+
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	errRun := runGateway([]string{"subject-invalidate", "--subject-key", sk})
+	_ = w.Close()
+	os.Stdout = old
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	_ = r.Close()
+	if errRun != nil {
+		t.Fatalf("run: %v\n%s", errRun, buf.String())
+	}
+	out := buf.String()
+	if strings.Contains(out, canaryCLIToken) {
+		t.Fatal("canary token leaked in CLI JSON")
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &payload); err != nil {
+		t.Fatalf("json: %v body=%s", err, out)
+	}
+	if payload["token_cache_cleared"] != true {
+		t.Fatalf("want token_cache cleared: %+v", payload)
+	}
+	if payload["token_cache_path_configured"] != true {
+		t.Fatalf("path: %+v", payload)
+	}
+	// Re-open file cache to verify alice gone, bob remains.
+	ftc2, err := gateway.NewFileTokenCache(path, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := ftc2.Get(alice); ok {
+		t.Fatal("alice token must be deleted from file cache")
+	}
+	if _, ok := ftc2.Get(bob); !ok {
+		t.Fatal("bob token must remain")
+	}
+}
+
+func TestGatewaySubjectInvalidate_RequiresSubject(t *testing.T) {
+	err := runGatewaySubjectInvalidate(nil)
+	if err == nil {
+		t.Fatal("expected error without subject")
+	}
+}
+
+func TestGatewaySubjectInvalidate_ComposeParts(t *testing.T) {
+	sk := gateway.SubjectKeyParts("t-compose", "sub-compose", "corp")
+	gateway.ProcessPrincipalCache().Set(sk, "u-j")
+	t.Cleanup(func() { gateway.ProcessPrincipalCache().Delete(sk) })
+
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	errRun := runGatewaySubjectInvalidate([]string{
+		"--tenant", "t-compose", "--subject-id", "sub-compose", "--profile", "corp",
+	})
+	_ = w.Close()
+	os.Stdout = old
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	_ = r.Close()
+	if errRun != nil {
+		t.Fatalf("run: %v\n%s", errRun, buf.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &payload); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if payload["subject_key"] != sk {
+		t.Fatalf("subject_key: %+v", payload["subject_key"])
+	}
+	if _, ok := gateway.ProcessPrincipalCache().Get(sk); ok {
+		t.Fatal("must clear")
 	}
 }
 
