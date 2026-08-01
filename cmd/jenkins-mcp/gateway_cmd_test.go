@@ -64,6 +64,10 @@ func TestGatewayUnknownSubcommand(t *testing.T) {
 
 // OAUTH-010 / GWY-001: progressive consent residual CLI (secret-free JSON).
 func TestGatewayConsentResidual(t *testing.T) {
+	// Point consent store path at empty temp so CLI does not touch real XDG data.
+	dir := t.TempDir()
+	t.Setenv(gateway.EnvConsentSessionStorePath, filepath.Join(dir, "missing-consent.json"))
+
 	old := os.Stdout
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -99,15 +103,93 @@ func TestGatewayConsentResidual(t *testing.T) {
 	if pc["metadata_path_done_star"] != true {
 		t.Fatalf("metadata_path_done_star: %+v", pc)
 	}
+	if pc["process_local_consent_metadata_store"] != true {
+		t.Fatalf("process_local_consent_metadata_store: %+v", pc)
+	}
+	if pc["durable_consent_session_store"] != false || pc["multi_replica_consent_correlation"] != false {
+		t.Fatalf("AgentCore durable / multi-replica must stay residual: %+v", pc)
+	}
 	note, _ := pc["residual_note"].(string)
 	if !strings.Contains(note, "OAUTH-010") || !strings.Contains(strings.ToLower(note), "not automated") {
 		t.Fatalf("residual_note honesty: %q", note)
+	}
+	if !strings.Contains(strings.ToLower(note), "process-local") {
+		t.Fatalf("want process-local honesty: %q", note)
+	}
+	// Store residual block present (empty when no file).
+	if _, ok := payload["consent_store"]; !ok {
+		t.Fatalf("want consent_store: %+v", payload)
+	}
+	if payload["consent_sessions_count"] != float64(0) {
+		t.Fatalf("want empty sessions: %+v", payload["consent_sessions_count"])
 	}
 	// Forbidden secret markers.
 	for _, bad := range []string{"access_token=", "refresh_token=", "client_secret=", "Authorization: Bearer"} {
 		if strings.Contains(out, bad) {
 			t.Fatalf("forbidden %q in output", bad)
 		}
+	}
+}
+
+// Regression: consent-residual lists file-backed metadata only (never tokens).
+func TestGatewayConsentResidual_ListsFileMetadata(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "consent_sessions.json")
+	store, err := gateway.NewFileBackedConsentSessionStore(0, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(gateway.ConsentSessionRecord{
+		Info: gateway.ConsentInfo{
+			AuthorizationURL: "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?state=cli-list",
+			SessionID:        "sess-cli-residual-1",
+			Provider:         "agentcore",
+		},
+		SubjectKey: "tenant|alice|corp",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(gateway.EnvConsentSessionStorePath, path)
+
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	errRun := runGatewayConsentResidual(nil)
+	_ = w.Close()
+	os.Stdout = old
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	_ = r.Close()
+	if errRun != nil {
+		t.Fatalf("run: %v\n%s", errRun, buf.String())
+	}
+	out := buf.String()
+	if strings.Contains(out, canaryCLIToken) || strings.Contains(out, "access_token=") {
+		t.Fatal("canary/token in consent-residual list output")
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &payload); err != nil {
+		t.Fatalf("json: %v body=%s", err, out)
+	}
+	if payload["consent_sessions_count"] != float64(1) {
+		t.Fatalf("count: %+v payload=%s", payload["consent_sessions_count"], out)
+	}
+	sessions, ok := payload["consent_sessions"].([]any)
+	if !ok || len(sessions) != 1 {
+		t.Fatalf("sessions: %+v", payload["consent_sessions"])
+	}
+	row, _ := sessions[0].(map[string]any)
+	if row["session_id"] != "sess-cli-residual-1" {
+		t.Fatalf("row: %+v", row)
+	}
+	if _, hasURL := row["authorization_url"]; hasURL {
+		t.Fatal("CLI StatusMap must not dump full authorization_url")
+	}
+	if row["has_authorization_url"] != true {
+		t.Fatalf("want has_authorization_url: %+v", row)
 	}
 }
 

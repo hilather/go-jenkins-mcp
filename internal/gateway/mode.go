@@ -89,6 +89,17 @@ func RequireGatewaySetup(cfg AgentCoreConfig) (CredentialProvider, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Process-local consent metadata store (OAUTH-010 residual): optional file
+	// under XDG data for crash recovery of auth URL + session id only — never
+	// tokens. Not multi-replica shared store. Corrupt file fails closed.
+	if store, err := NewFileBackedConsentSessionStore(0, ConsentSessionPathFromEnviron(os.Getenv)); err == nil {
+		p.ConsentStore = store
+		SetProcessConsentSessionStore(store)
+	} else {
+		// Missing/empty path should not happen with default XDG; corrupt residual
+		// file must not block serve — fall back to memory-only (still metadata only).
+		p.ConsentStore = NewMemoryConsentSessionStore(0, "")
+	}
 	return p, nil
 }
 

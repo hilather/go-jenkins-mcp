@@ -372,8 +372,11 @@ func caseProgressiveConsentResidual(ctx context.Context) error {
 	if !pc.MetadataPathDoneStar {
 		return fmt.Errorf("metadata_path_done_star must be true (Done*)")
 	}
+	if !pc.ProcessLocalConsentMetadataStore {
+		return fmt.Errorf("process_local_consent_metadata_store must be true (Done*)")
+	}
 	if pc.DurableConsentSessionStore || pc.MultiReplicaConsentCorrelation {
-		return fmt.Errorf("durable store / multi-replica must stay residual false")
+		return fmt.Errorf("AgentCore durable vault / multi-replica must stay residual false")
 	}
 	if !pc.LastConsentWouldApply {
 		return fmt.Errorf("last_consent_would_apply residual marker must be true")

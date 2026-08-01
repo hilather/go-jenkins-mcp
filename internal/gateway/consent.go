@@ -124,9 +124,11 @@ func NewConsentRequired(info ConsentInfo) error {
 //
 // Done*: ConsentRequired → operator/model-visible authorization_url + session_id
 // only (tools.mapToolErr / AuthProvider preserve metadata; Error() stays host +
-// truncated session). Residual: browser 3LO not automated; durable consent
-// session store; multi-replica consent correlation.
-const ProgressiveConsentResidualNote = "Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; durable consent session store / multi-replica correlation residual"
+// truncated session); process-local consent metadata store (optional file under
+// XDG data for crash recovery of metadata only — never tokens).
+// Residual: browser 3LO not automated; multi-replica shared consent correlation
+// (HOST-008); AgentCore durable vault (not this process-local metadata store).
+const ProgressiveConsentResidualNote = "Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; process-local consent metadata store Done* (optional file; never tokens; not multi-replica shared store); multi-replica consent correlation residual"
 
 // ProgressiveConsentResidual is a secret-free residual snapshot for doctor,
 // qualify, and CLI surfaces when Mode C ConsentRequired would apply.
@@ -139,7 +141,12 @@ type ProgressiveConsentResidual struct {
 	// MetadataPathDoneStar is true when ConsentRequired → auth URL + session_id
 	// only is implemented on Obtain / AuthProvider / mapToolErr paths.
 	MetadataPathDoneStar bool `json:"metadata_path_done_star"`
-	// DurableConsentSessionStore is false (process-local metadata only).
+	// ProcessLocalConsentMetadataStore is true when process-local (optional
+	// file-backed) consent metadata store is implemented (Done*). Metadata only
+	// — never tokens. Not multi-replica shared store.
+	ProcessLocalConsentMetadataStore bool `json:"process_local_consent_metadata_store"`
+	// DurableConsentSessionStore is false: AgentCore / multi-replica durable
+	// vault remains residual. Process-local metadata store is a separate Done*.
 	DurableConsentSessionStore bool `json:"durable_consent_session_store"`
 	// MultiReplicaConsentCorrelation is false (HOST-008 residual).
 	MultiReplicaConsentCorrelation bool `json:"multi_replica_consent_correlation"`
@@ -148,33 +155,35 @@ type ProgressiveConsentResidual struct {
 	// ResidualNote is the operator-facing residual sentence.
 	ResidualNote string `json:"residual_note"`
 	// LastConsentWouldApply is always true as a static residual marker:
-	// when Obtain returns ConsentRequired, only auth URL + session_id surface.
-	// (No process-local last-consent store; env/static residual is intentional.)
+	// when Obtain returns ConsentRequired, only auth URL + session_id surface
+	// and metadata may be remembered in the process-local store.
 	LastConsentWouldApply bool `json:"last_consent_would_apply"`
 }
 
 // NewProgressiveConsentResidual returns the fixed secret-free residual snapshot.
 func NewProgressiveConsentResidual() ProgressiveConsentResidual {
 	return ProgressiveConsentResidual{
-		Browser3LOAutomated:            false,
-		MetadataPathDoneStar:           true,
-		DurableConsentSessionStore:     false,
-		MultiReplicaConsentCorrelation: false,
-		Surfaces:                       "authorization_url + session_id only; never access_token / refresh_token / client_secret / Authorization headers",
-		ResidualNote:                   ProgressiveConsentResidualNote,
-		LastConsentWouldApply:          true,
+		Browser3LOAutomated:              false,
+		MetadataPathDoneStar:             true,
+		ProcessLocalConsentMetadataStore: true,
+		DurableConsentSessionStore:       false,
+		MultiReplicaConsentCorrelation:   false,
+		Surfaces:                         "authorization_url + session_id only; never access_token / refresh_token / client_secret / Authorization headers",
+		ResidualNote:                     ProgressiveConsentResidualNote,
+		LastConsentWouldApply:            true,
 	}
 }
 
 // StatusMap is a non-secret map for doctor / admin / JSON CLI.
 func (r ProgressiveConsentResidual) StatusMap() map[string]any {
 	return map[string]any{
-		"browser_3lo_automated":             r.Browser3LOAutomated,
-		"metadata_path_done_star":           r.MetadataPathDoneStar,
-		"durable_consent_session_store":     r.DurableConsentSessionStore,
-		"multi_replica_consent_correlation": r.MultiReplicaConsentCorrelation,
-		"surfaces":                          r.Surfaces,
-		"residual_note":                     r.ResidualNote,
-		"last_consent_would_apply":          r.LastConsentWouldApply,
+		"browser_3lo_automated":                r.Browser3LOAutomated,
+		"metadata_path_done_star":              r.MetadataPathDoneStar,
+		"process_local_consent_metadata_store": r.ProcessLocalConsentMetadataStore,
+		"durable_consent_session_store":        r.DurableConsentSessionStore,
+		"multi_replica_consent_correlation":    r.MultiReplicaConsentCorrelation,
+		"surfaces":                             r.Surfaces,
+		"residual_note":                        r.ResidualNote,
+		"last_consent_would_apply":             r.LastConsentWouldApply,
 	}
 }
