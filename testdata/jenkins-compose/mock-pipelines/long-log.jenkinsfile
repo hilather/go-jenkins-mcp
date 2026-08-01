@@ -5,13 +5,21 @@ pipeline {
       steps {
         sh '''
           set -euo pipefail
+          mkdir -p target/surefire-reports
           i=1
           while [ "$i" -le 500 ]; do
             echo "LINE ${i} mock-inv-long-log padding for progressive tail and budget drills"
             i=$((i + 1))
           done
+          cat > target/surefire-reports/TEST-LongLog.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="LongLog" tests="1" failures="0" errors="0" skipped="0" time="0.01">
+  <testcase classname="com.mock.LongLog" name="testTailBudget" time="0.01"/>
+</testsuite>
+EOF
           echo "mock-inv-long-log complete marker at end of stream"
         '''
+        junit testResults: 'target/surefire-reports/TEST-*.xml', allowEmptyResults: false
       }
     }
   }

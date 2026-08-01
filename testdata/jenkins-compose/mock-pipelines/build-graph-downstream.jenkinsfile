@@ -1,0 +1,21 @@
+pipeline {
+  agent any
+  stages {
+    stage('Downstream') {
+      steps {
+        sh '''
+          set -euo pipefail
+          mkdir -p target/surefire-reports
+          cat > target/surefire-reports/TEST-GraphDownstream.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="GraphDownstream" tests="1" failures="0" errors="0" skipped="0" time="0.01">
+  <testcase classname="com.mock.Graph" name="testLeaf" time="0.01"/>
+</testsuite>
+EOF
+        '''
+        junit testResults: 'target/surefire-reports/TEST-*.xml', allowEmptyResults: false
+        echo '[mock-inv-build-graph-downstream] leaf build for upstream/downstream graph drills'
+      }
+    }
+  }
+}

@@ -33,6 +33,9 @@ jobs=(
   mock-inv-long-log
   mock-inv-post-failure
   mock-inv-multi-artifact
+  mock-inv-build-graph-downstream
+  mock-inv-build-graph-upstream
+  # queue-blocked stays queued; optional rebuild skip
 )
 
 echo "Triggering ${#jobs[@]} fixture builds on ${JENKINS_URL} ..."

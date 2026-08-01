@@ -10,9 +10,10 @@ Ephemeral Jenkins controller for **local / optional CI** live smoke tests of
 | User `admin` | Password from `JENKINS_ADMIN_PASSWORD` (default **`test`**, disposable only) |
 | API token | Written inside the container to `/var/jenkins_home/mcp-api-token` at boot |
 | `sample-freestyle` | Shell + JUnit sample XML + small artifact; one build triggered at init |
-| `sample-pipeline` | Minimal Pipeline (`agent any`); one build triggered at init |
+| `sample-pipeline` | Pipeline with JUnit + artifact; wfapi stage graph via `pipeline-rest-api` |
 | `mock-inv-*` (12 jobs) | Mock investigation pipelines — see [FIXTURES.md](FIXTURES.md) |
-| Plugins | `workflow-aggregator`, `junit`, `ws-cleanup` (see `plugins.txt`) |
+| View `mock-investigations` | ListView of all `mock-inv-*` jobs |
+| Plugins | `workflow-aggregator`, `pipeline-rest-api`, `junit`, `ws-cleanup` (see `plugins.txt`) |
 
 ## Prerequisites
 

@@ -121,6 +121,8 @@ JENKINS_LIVE_KEEP=1 ./scripts/jenkins-live-smoke.sh
 | `TestLive_GetBuild` | `ListBuilds` + `GetBuildDetailsByJob` |
 | `TestLive_ProgressiveLogTail` | `GetBuildLogTail` / `GetBuildLogs` |
 | `TestLive_CapabilityDiscovery` | `RefreshCapabilities` |
+| `TestLive_PipelineStages` | `GetPipelineStages` on `mock-inv-baseline-green` (requires `pipeline-rest-api`) |
+| `TestLive_ListViews` | `ListViews` includes `mock-investigations` |
 
 Seeded controller jobs: `sample-freestyle` (JUnit + artifact), `sample-pipeline`,
 and twelve `mock-inv-*` investigation fixtures — see

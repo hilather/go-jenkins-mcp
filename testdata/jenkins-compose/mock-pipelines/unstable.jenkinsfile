@@ -19,6 +19,20 @@ pipeline {
     }
     stage('Publish') {
       steps {
+        sh '''
+          set -euo pipefail
+          mkdir -p target/surefire-reports
+          cat > target/surefire-reports/TEST-Unstable.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Unstable" tests="2" failures="1" errors="0" skipped="0" time="0.02">
+  <testcase classname="com.mock.Unstable" name="testPass" time="0.01"/>
+  <testcase classname="com.mock.Unstable" name="testFlaky" time="0.01">
+    <failure message="flaky downstream timeout">java.lang.RuntimeException: flaky downstream timeout</failure>
+  </testcase>
+</testsuite>
+EOF
+        '''
+        junit testResults: 'target/surefire-reports/TEST-*.xml', allowEmptyResults: false
         echo '[mock-inv-unstable] publish ran despite unstable integration'
       }
     }

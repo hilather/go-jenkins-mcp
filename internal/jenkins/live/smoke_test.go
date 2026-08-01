@@ -191,3 +191,71 @@ func TestLive_CapabilityDiscovery(t *testing.T) {
 	t.Logf("capabilities version=%q pipelineREST=%v junit=%v notes=%v",
 		caps.JenkinsVersion, caps.HasPipelineREST, caps.HasJUnit, caps.ProbeNotes)
 }
+
+func TestLive_PipelineStages(t *testing.T) {
+	c := liveClient(t)
+	token := strings.TrimSpace(os.Getenv("JENKINS_API_TOKEN"))
+	if token == "" {
+		token = strings.TrimSpace(os.Getenv("JENKINS_TOKEN"))
+	}
+	job := envOr("JENKINS_LIVE_PIPELINE_JOB", "mock-inv-baseline-green")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	caps, err := c.RefreshCapabilities(ctx)
+	if err != nil {
+		assertNoSecret(t, token, err.Error())
+		t.Fatalf("RefreshCapabilities: %v", err)
+	}
+	if !caps.HasPipelineREST {
+		t.Fatal("HasPipelineREST=false; install pipeline-rest-api in lab plugins.txt")
+	}
+
+	builds, err := c.ListBuilds(ctx, jenkins.ListBuildsToolArgs{JobName: job, Limit: 3})
+	if err != nil {
+		assertNoSecret(t, token, err.Error())
+		t.Fatalf("ListBuilds(%q): %v", job, err)
+	}
+	buildNum := 1
+	if builds != nil && len(builds.Builds) > 0 {
+		buildNum = builds.Builds[0].Number
+	}
+
+	stages, err := c.GetPipelineStages(ctx, job, buildNum)
+	if err != nil {
+		assertNoSecret(t, token, err.Error())
+		t.Fatalf("GetPipelineStages(%q, %d): %v", job, buildNum, err)
+	}
+	if stages == nil || len(stages.Stages) == 0 {
+		t.Fatalf("GetPipelineStages: expected stage graph for %q #%d", job, buildNum)
+	}
+	t.Logf("pipeline stages job=%s #%d count=%d status=%q", job, buildNum, stages.StageCount, stages.Status)
+}
+
+func TestLive_ListViews(t *testing.T) {
+	c := liveClient(t)
+	token := strings.TrimSpace(os.Getenv("JENKINS_API_TOKEN"))
+	if token == "" {
+		token = strings.TrimSpace(os.Getenv("JENKINS_TOKEN"))
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	resp, err := c.ListViews(ctx, 0, 50)
+	if err != nil {
+		assertNoSecret(t, token, err.Error())
+		t.Fatalf("ListViews: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("ListViews: nil response")
+	}
+	var names []string
+	for _, v := range resp.Views {
+		names = append(names, v.Name)
+		assertNoSecret(t, token, v.Name, v.Description)
+	}
+	if !strings.Contains(strings.Join(names, ","), "mock-investigations") {
+		t.Fatalf("ListViews: expected mock-investigations view in %v", names)
+	}
+	t.Logf("ListViews total=%d views=%v", resp.Summary.TotalViews, names)
+}

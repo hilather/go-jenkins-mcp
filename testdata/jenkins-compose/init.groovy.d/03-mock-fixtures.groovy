@@ -31,6 +31,9 @@ def fixtures = [
     [name: "mock-inv-long-log",          file: "long-log.jenkinsfile",          desc: "~500 log lines for tail/budget testing"],
     [name: "mock-inv-post-failure",      file: "post-failure.jenkinsfile",      desc: "Deploy fails; post always/failure hooks run"],
     [name: "mock-inv-multi-artifact",    file: "multi-artifact.jenkinsfile",    desc: "Multiple archived artifacts + JUnit"],
+    [name: "mock-inv-build-graph-downstream", file: "build-graph-downstream.jenkinsfile", desc: "Leaf job for upstream/downstream graph drills"],
+    [name: "mock-inv-build-graph-upstream",   file: "build-graph-upstream.jenkinsfile",   desc: "Triggers downstream; build graph drills"],
+    [name: "mock-inv-queue-blocked",     file: "queue-blocked.jenkinsfile",     desc: "Queued item with nonexistent agent label"],
 ]
 
 def WorkflowJob

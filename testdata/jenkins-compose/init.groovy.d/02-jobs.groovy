@@ -57,7 +57,20 @@ pipeline {
     stage("Build") {
       steps {
         echo "hello from sample-pipeline"
-        sh "echo pipeline log line"
+        sh """
+          set -euo pipefail
+          mkdir -p target/surefire-reports out
+          echo "pipeline log line"
+          cat > target/surefire-reports/TEST-SamplePipeline.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="SamplePipeline" tests="1" failures="0" errors="0" skipped="0" time="0.01">
+  <testcase classname="com.example.Pipeline" name="testSmoke" time="0.01"/>
+</testsuite>
+EOF
+          echo "pipeline artifact" > out/pipeline.txt
+        """
+        junit testResults: 'target/surefire-reports/TEST-*.xml', allowEmptyResults: false
+        archiveArtifacts artifacts: 'out/**', fingerprint: true
       }
     }
   }
