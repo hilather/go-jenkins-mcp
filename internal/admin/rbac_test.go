@@ -53,24 +53,33 @@ func TestRoleCan_Matrix(t *testing.T) {
 	if admin.RoleViewer.Can(admin.PermCacheDestructive) {
 		t.Fatal("viewer must not have PermCacheDestructive")
 	}
+	if admin.RoleViewer.Can(admin.PermGatewayOps) {
+		t.Fatal("viewer must not have PermGatewayOps")
+	}
 
-	// operator: day-2 cache destructive; not policy write
+	// operator: day-2 cache destructive + gateway_ops; not policy write
 	if !admin.RoleOperator.Can(admin.PermRead) {
 		t.Fatal("operator must have PermRead")
 	}
 	if !admin.RoleOperator.Can(admin.PermCacheDestructive) {
 		t.Fatal("operator must have PermCacheDestructive")
 	}
+	if !admin.RoleOperator.Can(admin.PermGatewayOps) {
+		t.Fatal("operator must have PermGatewayOps")
+	}
 	if admin.RoleOperator.Can(admin.PermPolicyWrite) {
 		t.Fatal("operator must not have PermPolicyWrite")
 	}
 
-	// policy_admin: policy write; not cache destructive
+	// policy_admin: policy write + gateway_ops; not cache destructive
 	if !admin.RolePolicyAdmin.Can(admin.PermRead) {
 		t.Fatal("policy_admin must have PermRead")
 	}
 	if !admin.RolePolicyAdmin.Can(admin.PermPolicyWrite) {
 		t.Fatal("policy_admin must have PermPolicyWrite")
+	}
+	if !admin.RolePolicyAdmin.Can(admin.PermGatewayOps) {
+		t.Fatal("policy_admin must have PermGatewayOps")
 	}
 	if admin.RolePolicyAdmin.Can(admin.PermCacheDestructive) {
 		t.Fatal("policy_admin must not have PermCacheDestructive")
@@ -112,11 +121,11 @@ func TestRolePermissions(t *testing.T) {
 		t.Fatalf("viewer perms=%v", viewer)
 	}
 	op := admin.RoleOperator.PermissionStrings()
-	if len(op) != 2 || op[0] != "read" || op[1] != "cache_destructive" {
+	if len(op) != 3 || op[0] != "read" || op[1] != "cache_destructive" || op[2] != "gateway_ops" {
 		t.Fatalf("operator perms=%v", op)
 	}
 	pa := admin.RolePolicyAdmin.PermissionStrings()
-	if len(pa) != 2 || pa[0] != "read" || pa[1] != "policy_write" {
+	if len(pa) != 3 || pa[0] != "read" || pa[1] != "policy_write" || pa[2] != "gateway_ops" {
 		t.Fatalf("policy_admin perms=%v", pa)
 	}
 }

@@ -9,8 +9,10 @@ import {
   formatApiError,
   formatDenyListText,
   hasCacheDestructive,
+  hasGatewayOps,
   hasPolicyWrite,
   parseDenyListText,
+  postGatewaySubjectInvalidate,
   setAdminToken,
   validatePolicyOverlay,
 } from "./client";
@@ -271,11 +273,101 @@ describe("hasCacheDestructive (UI-007)", () => {
     const operator: MeResponse = {
       authenticated: true,
       role: "operator",
-      permissions: ["read", "cache_destructive"],
+      permissions: ["read", "cache_destructive", "gateway_ops"],
       tokenConfigured: true,
     };
     expect(hasCacheDestructive(viewer)).toBe(false);
     expect(hasCacheDestructive(operator)).toBe(true);
     expect(hasCacheDestructive(null)).toBe(false);
+  });
+});
+
+describe("hasGatewayOps (HOST-007)", () => {
+  it("is true for operator and policy_admin gateway_ops", () => {
+    expect(hasGatewayOps(null)).toBe(false);
+    expect(
+      hasGatewayOps({
+        authenticated: true,
+        role: "viewer",
+        permissions: ["read"],
+        tokenConfigured: true,
+      }),
+    ).toBe(false);
+    expect(
+      hasGatewayOps({
+        authenticated: true,
+        role: "operator",
+        permissions: ["read", "cache_destructive", "gateway_ops"],
+        tokenConfigured: true,
+      }),
+    ).toBe(true);
+    expect(
+      hasGatewayOps({
+        authenticated: true,
+        role: "policy_admin",
+        permissions: ["read", "policy_write", "gateway_ops"],
+        tokenConfigured: true,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("postGatewaySubjectInvalidate (HOST-007)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setAdminToken(null);
+  });
+
+  it("POSTs identity fields only (never tokens)", async () => {
+    const canary = "planted-spa-token-never-in-body";
+    setAdminToken(canary);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        subject_key: "t|alice|corp",
+        principal_cleared: true,
+        token_cache_cleared: false,
+        residual_note: "multi-pod residual",
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await postGatewaySubjectInvalidate({
+      subject_key: "t|alice|corp",
+    });
+    expect(res.principal_cleared).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/admin/v1/gateway/subject-invalidate");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(String(init.body));
+    // Client strips to identity key fields only (never tokens).
+    expect(body).toEqual({ subject_key: "t|alice|corp" });
+    expect(Object.keys(body).sort()).toEqual(["subject_key"]);
+    expect(JSON.stringify(body)).not.toContain(canary);
+    // Bearer is header-only for admin shared secret (not Jenkins token).
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe(`Bearer ${canary}`);
+  });
+
+  it("composes tenant/subject_id/profile when subject_key empty", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ subject_key: "tid|sub|corp", principal_cleared: true }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await postGatewaySubjectInvalidate({
+      tenant: "tid",
+      subject_id: "sub",
+      profile: "corp",
+    });
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body));
+    expect(body).toEqual({
+      tenant: "tid",
+      subject_id: "sub",
+      profile: "corp",
+    });
   });
 });

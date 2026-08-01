@@ -35,6 +35,10 @@ const (
 	// PermCacheDestructive gates destructive cache eviction and support-bundle
 	// create (UI-007). Granted to operator only. Requires body confirm for evict.
 	PermCacheDestructive Permission = "cache_destructive"
+	// PermGatewayOps gates gateway force re-auth residual lite
+	// (POST /admin/v1/gateway/subject-invalidate; HOST-007). Granted to
+	// operator and policy_admin — not viewer. Never tokens.
+	PermGatewayOps Permission = "gateway_ops"
 )
 
 // ParseRole parses a role name (viewer|operator|policy_admin). Empty defaults
@@ -68,9 +72,9 @@ func (r Role) Can(perm Permission) bool {
 	case RoleViewer:
 		return perm == PermRead
 	case RoleOperator:
-		return perm == PermRead || perm == PermCacheDestructive
+		return perm == PermRead || perm == PermCacheDestructive || perm == PermGatewayOps
 	case RolePolicyAdmin:
-		return perm == PermRead || perm == PermPolicyWrite
+		return perm == PermRead || perm == PermPolicyWrite || perm == PermGatewayOps
 	default:
 		return false
 	}
@@ -80,9 +84,9 @@ func (r Role) Can(perm Permission) bool {
 func (r Role) Permissions() []Permission {
 	switch r {
 	case RoleOperator:
-		return []Permission{PermRead, PermCacheDestructive}
+		return []Permission{PermRead, PermCacheDestructive, PermGatewayOps}
 	case RolePolicyAdmin:
-		return []Permission{PermRead, PermPolicyWrite}
+		return []Permission{PermRead, PermPolicyWrite, PermGatewayOps}
 	case RoleViewer:
 		return []Permission{PermRead}
 	default:

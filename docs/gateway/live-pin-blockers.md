@@ -364,6 +364,7 @@ live pin complete without lab evidence.
 | `gateway consent-residual` | Progressive consent residual snapshot | Browser 3LO not automated; residual-smoke optional |
 | `gateway consent-purge` / `consent-expire` | Purge TTL-expired consent metadata (or `--session-id` / `--all`) | Metadata only; secret-free counts; same-host file reload-before-persist **Done\* lite** (no serve Put resurrection); not multi-replica HA |
 | `gateway subject-invalidate` | Force re-auth residual lite: process-local principal **or** FilePrincipalCache + optional FileTokenCache | Not live Entra revocation; multi-pod residual; share file paths for same-host CLI↔serve |
+| Admin `POST /admin/v1/gateway/subject-invalidate` | Same residual lite as CLI (HOST-007 SPA Overview form; `gateway_ops`) | Not live Entra; multi-pod residual; share file paths for same-host admin↔serve |
 | `gateway qualify --offline` | Residual notes in JSON summary | Live residuals always listed |
 
 ```bash
