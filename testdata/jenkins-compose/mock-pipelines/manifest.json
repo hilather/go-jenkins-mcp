@@ -85,6 +85,27 @@
       "scenario": "Archives multiple small artifacts for list/inspect flows",
       "diagnose_patterns": [],
       "mcp_tools": ["jenkins_list_artifacts", "jenkins_get_artifact_text", "jenkins_inspect_artifact"]
+    },
+    {
+      "name": "mock-inv-build-graph-downstream",
+      "expected_result": "SUCCESS",
+      "scenario": "Leaf pipeline for upstream/downstream related-build graph drills",
+      "diagnose_patterns": [],
+      "mcp_tools": ["jenkins_get_build_graph", "jenkins_trace_failure_graph"]
+    },
+    {
+      "name": "mock-inv-build-graph-upstream",
+      "expected_result": "SUCCESS",
+      "scenario": "Triggers mock-inv-build-graph-downstream via build step",
+      "diagnose_patterns": [],
+      "mcp_tools": ["jenkins_get_build_graph"]
+    },
+    {
+      "name": "mock-inv-queue-blocked",
+      "expected_result": "QUEUED",
+      "scenario": "Build stays queued (nonexistent agent label) for queue delay/pressure drills",
+      "diagnose_patterns": [],
+      "mcp_tools": ["jenkins_explain_queue_delay", "jenkins_queue_pressure", "jenkins_get_queue_item"]
     }
   ]
 }

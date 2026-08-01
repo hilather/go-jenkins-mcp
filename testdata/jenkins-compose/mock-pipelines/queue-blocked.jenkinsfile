@@ -1,0 +1,10 @@
+pipeline {
+  agent { label 'mock-mcp-lab-nonexistent-label' }
+  stages {
+    stage('Never Runs') {
+      steps {
+        echo 'mock-inv-queue-blocked should remain queued'
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+pipeline {
+  agent any
+  stages {
+    stage('Trigger Downstream') {
+      steps {
+        sh '''
+          set -euo pipefail
+          mkdir -p target/surefire-reports
+          cat > target/surefire-reports/TEST-GraphUpstream.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="GraphUpstream" tests="1" failures="0" errors="0" skipped="0" time="0.01">
+  <testcase classname="com.mock.Graph" name="testTrigger" time="0.01"/>
+</testsuite>
+EOF
+        '''
+        junit testResults: 'target/surefire-reports/TEST-*.xml', allowEmptyResults: false
+        echo '[mock-inv-build-graph-upstream] scheduling downstream build'
+        build job: 'mock-inv-build-graph-downstream', wait: true, propagate: false
+      }
+    }
+  }
+}

@@ -5,6 +5,24 @@ local MCP triage drills. **Not production data.**
 
 Machine-readable index: [`mock-pipelines/manifest.json`](mock-pipelines/manifest.json)
 
+## Lab HTTP coverage (avoid MCP 404 noise)
+
+The disposable controller installs **`pipeline-rest-api`** (see `plugins.txt`) so
+Pipeline REST paths such as `/job/…/wfapi/describe` and stage logs resolve for
+`mock-inv-*` jobs instead of returning HTTP 404.
+
+| Endpoint | Fixture |
+|----------|---------|
+| `wfapi/describe` / stage log | Any `mock-inv-*` Pipeline build (e.g. `mock-inv-baseline-green` #1) |
+| `testReport/api/json` | `mock-inv-baseline-green`, `mock-inv-test-failure`, `sample-freestyle`, `sample-pipeline`, `mock-inv-long-log`, `mock-inv-unstable` |
+| Build graph | `mock-inv-build-graph-downstream` last build → upstream edge to `mock-inv-build-graph-upstream` |
+| Queue | `mock-inv-queue-blocked` (stays queued) |
+| Artifacts | `mock-inv-multi-artifact` #1 (`out/reports/summary.txt`, …) |
+| Views | `mock-investigations` view (seeded by `04-lab-view.groovy`) |
+
+After changing `plugins.txt` or init groovy, recreate the volume:
+`make live-jenkins-down && make live-jenkins-up` (or `LOCAL_COMPOSE_PROFILES=with-jenkins make local-docker-down && …`).
+
 ## Refresh fixtures on an existing volume
 
 Init groovy runs only on **first boot** of a volume. To pick up new fixtures after
@@ -40,6 +58,9 @@ Trigger fresh builds on a running controller:
 | `mock-inv-long-log` | SUCCESS | Progressive log tail (~500 lines) |
 | `mock-inv-post-failure` | FAILURE | Failed Deploy + post always/failure hooks |
 | `mock-inv-multi-artifact` | SUCCESS | Artifact list/inspect/text |
+| `mock-inv-build-graph-downstream` | SUCCESS | Build graph leaf node |
+| `mock-inv-build-graph-upstream` | SUCCESS | Triggers downstream; graph edge |
+| `mock-inv-queue-blocked` | QUEUED | Queue delay / pressure (no agent label) |
 
 Legacy seeds (unchanged): `sample-freestyle`, `sample-pipeline`.
 
