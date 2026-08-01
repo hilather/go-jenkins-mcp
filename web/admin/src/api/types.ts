@@ -50,6 +50,16 @@ export interface HealthResponse {
    */
   sharedSubjectRateFile?: boolean;
   /**
+   * HOST-008 Done* lite: true when JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH set
+   * (same-host FilePrincipalCache). Not multi-pod HA. Path never returned. Never tokens.
+   */
+  sharedPrincipalCacheFile?: boolean;
+  /**
+   * HOST-001 / HOST-008 Done* lite: true when JENKINS_MCP_HTTP_JWKS_CACHE_PATH set
+   * (same-host public JWKS snapshot). Not multi-pod external JWKS HA. Path never returned.
+   */
+  sharedJwksFile?: boolean;
+  /**
    * OAUTH-010 / GWY-001: ConsentRequired → authorization_url + session_id only
    * path Done* (always true). Static residual; never tokens or authorize query.
    */
@@ -384,6 +394,16 @@ export interface GatewayVaultResponse {
    * (same-host file rate). Not multi-pod HA. Path never returned.
    */
   sharedSubjectRateFile?: boolean;
+  /**
+   * HOST-008 Done* lite: true when JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH set
+   * (same-host FilePrincipalCache). Not multi-pod HA. Path never returned. Never tokens.
+   */
+  sharedPrincipalCacheFile?: boolean;
+  /**
+   * HOST-001 / HOST-008 Done* lite: true when JENKINS_MCP_HTTP_JWKS_CACHE_PATH set
+   * (same-host public JWKS snapshot). Not multi-pod external JWKS HA. Path never returned.
+   */
+  sharedJwksFile?: boolean;
   vaultConfigured: boolean;
   entryCount: number;
   subjects: string[];

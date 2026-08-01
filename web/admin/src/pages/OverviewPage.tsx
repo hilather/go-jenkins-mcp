@@ -206,6 +206,22 @@ export function OverviewPage() {
                 path never shown)
               </span>
             </dd>
+            <dt>sharedPrincipalCacheFile</dt>
+            <dd>
+              {health.data.sharedPrincipalCacheFile ? "yes" : "no"}{" "}
+              <span className="muted">
+                (HOST-008 same-host FilePrincipalCache lite when path set; not multi-pod HA —
+                path never shown; never tokens)
+              </span>
+            </dd>
+            <dt>sharedJwksFile</dt>
+            <dd>
+              {health.data.sharedJwksFile ? "yes" : "no"}{" "}
+              <span className="muted">
+                (HOST-001/HOST-008 same-host public JWKS file lite when path set; not multi-pod
+                external JWKS HA — path never shown)
+              </span>
+            </dd>
             {health.data.residual ? (
               <>
                 <dt>residual</dt>
@@ -466,6 +482,22 @@ export function OverviewPage() {
                   (HOST-008 same-host file rate lite; not multi-pod HA — path never shown)
                 </span>
               </dd>
+              <dt>sharedPrincipalCacheFile</dt>
+              <dd>
+                {vault.data.sharedPrincipalCacheFile ? "yes" : "no"}{" "}
+                <span className="muted">
+                  (HOST-008 same-host FilePrincipalCache lite; not multi-pod HA — path never
+                  shown; never tokens)
+                </span>
+              </dd>
+              <dt>sharedJwksFile</dt>
+              <dd>
+                {vault.data.sharedJwksFile ? "yes" : "no"}{" "}
+                <span className="muted">
+                  (HOST-001/HOST-008 same-host public JWKS file lite; not multi-pod external
+                  JWKS HA — path never shown)
+                </span>
+              </dd>
               <dt>vaultConfigured</dt>
               <dd>{vault.data.vaultConfigured ? "yes" : "no"}</dd>
               <dt>entryCount</dt>
@@ -529,7 +561,10 @@ export function OverviewPage() {
             When <code>kubernetesEnvDetected</code>, Overview shows the multi-pod
             residual checklist (sticky, shared vault, rate, Obtain cache). Never
             multi-replica Done from k8s env alone.{" "}
-            <code>sharedSubjectRateFile</code> is same-host lite only.
+            <code>sharedSubjectRateFile</code> /{" "}
+            <code>sharedPrincipalCacheFile</code> /{" "}
+            <code>sharedJwksFile</code> are same-host lite only (paths never
+            shown; not multi-pod HA).
           </li>
           <li>
             Gateway residual status (HOST-007):{" "}
