@@ -71,11 +71,80 @@ Obtain:
 Consent metadata (`ConsentInfo`) may carry **authorization URL + session id** only —
 never access tokens, refresh tokens, client secrets, or auth codes.
 
-Token cache: in-memory, keyed by `(user, workload, profile)`, TTL-bounded.
-`String()` / errors / `Status` **never** include token bytes (canary tests).
+Token cache: in-memory, keyed by `(tenant, user, workload, profile)` (HOST-004),
+TTL-bounded. `String()` / errors / `Status` **never** include token bytes (canary tests).
 
 When the token JSON includes `audience` / `resource`, it must **exactly** match
 configured Jenkins API audience (wrong-audience residual fail-closed).
+
+---
+
+## 3b. Multi-tenant isolation foundations (HOST-004 / HOST-006)
+
+**Scope:** single-process MVP. Multi-replica / shared durable cache is **HOST-008 residual**.
+
+### HOST-004 — cache and continuation isolation
+
+| Resource | Isolation key | Behavior |
+|----------|---------------|----------|
+| Token cache (`MemoryTokenCache`) | `CacheKey{Tenant,User,Workload,Profile}` via `Caller.CacheKey()` | Cross-user / cross-tenant Get is a miss |
+| Vault (`APITokenVault`) | `SubjectKey` = `tenant\|subject\|profile` | Cross-subject Get → not found |
+| List `page_token` | Filter fingerprint **bound** with subject via `jenkins.BindSubjectToPageFilter` / `*WithSubject` helpers | Alice's token rejected for Bob (`invalid_argument`) |
+
+Stable namespace: `gateway.SubjectKey(Caller)` / `Caller.SubjectKey()` /
+`SubjectKeyHash` for filesystem-safe names. **Never** derive keys from tool args.
+
+```go
+// Multi-tenant list pagination (call sites in gateway mode):
+fp := jenkins.FilterFingerprint(folder, name)
+tok := jenkins.EncodePageTokenWithSubject(offset, limit, fp, gateway.SubjectKey(caller))
+off, lim, err := jenkins.ResolveListPaginationWithSubject(pageToken, …, fp, gateway.SubjectKey(caller))
+```
+
+Empty `subjectKey` leaves page tokens unbound (stdio single-user pilot). Gateway
+mode should always pass a non-empty subject key.
+
+**Residual (HOST-004 serve wire):** list tools under `internal/jenkins` /
+`internal/tools` still use unbound `ResolveListPagination` by default. Package
+APIs + tests are ready; wiring subject from `RegisterOptions.Subject` /
+gateway binding into every list tool is a follow-up (same PR optional; not
+required for foundation). Support-bundle/doctor remain secret-free (no tokens
+in keys or Status).
+
+### HOST-006 — per-subject concurrent budgets
+
+| Type | Role |
+|------|------|
+| `SubjectLimiter` | Per-`subjectKey` concurrent slots under a process ceiling |
+| `Hold` / `WithSubjectSlot` | Acquire → work → Release (prefer over bare Acquire) |
+| `StatusMap` | Non-secret doctor summary (`ha_multi_replica: false`) |
+
+Defaults: **8** concurrent per subject, **64** process-wide (clamped to abs
+ceilings **64** / **256**). Excess → `CodeQuota` (fail closed). Empty subjectKey
+→ `invalid_argument`. Policy may only **reduce** caps (construction clamps to
+absolute ceilings; never silent elevation past abs).
+
+```go
+lim := gateway.NewSubjectLimiter(8, 64)
+release, err := lim.Hold(gateway.SubjectKey(caller))
+if err != nil { /* CodeQuota */ }
+defer release()
+// … tool work …
+```
+
+**Fair-share policy (documented + tested):** each subject gets up to
+`maxPerSubject` until `processMax` binds. Subject A filling its cap does not
+consume subject B's slots while process headroom remains.
+
+**Residual (HOST-006 serve wire):** limiter API is exported for AuthGate-adjacent
+middleware; full `tools.Register` / `addTool` integration is optional. Concurrent
+limiting is **not** a pure `AuthGate` (`Check` without `Release`) — use `Hold`.
+Mutation confirm tokens already bind profile+principal (cannot replay across
+subjects). HOST-008 multi-process HA out of scope.
+
+```bash
+go test ./internal/gateway/ ./internal/jenkins/ -count=1 -run 'HOST004|SubjectLimiter|PageToken_Subject|TwoUser'
+```
 
 ---
 
@@ -210,7 +279,9 @@ Coverage includes: Live=false not_configured; Live+nil Fetcher; cache hit
 (Fetcher once); wrong audience; ConsentRequired; token canary never in
 errors/Status/String; cancelled context; HTTPS-only HTTPTokenFetcher + mock AS;
 offline qualify vault hit/miss, IdP outage chaos, JWKS kid-lite (see
-[qualification.md](qualification.md)).
+[qualification.md](qualification.md)); HOST-004 two-user token-cache +
+page_token subject isolation; HOST-006 SubjectLimiter per-subject vs process
+ceilings and fair-share.
 
 ---
 

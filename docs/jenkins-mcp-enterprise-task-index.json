@@ -4699,7 +4699,11 @@
         "Support-bundle/doctor secret-free."
       ],
       "acceptance_criteria_count": 4,
-      "evidence_tests": [],
+      "evidence_tests": [
+        "internal/gateway/token_cache_test.go:TestMemoryTokenCache_HOST004_TwoUserNoCrossHit",
+        "internal/jenkins/pagetoken_test.go:TestPageToken_SubjectIsolation_AliceTokenRejectedForBob"
+      ],
+      "status_note": "Foundation package APIs + offline tests done; residual list-tool serve wire + durable archive namespace",
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": [
@@ -4753,7 +4757,10 @@
         "Mutation confirms cannot replay across subjects."
       ],
       "acceptance_criteria_count": 4,
-      "evidence_tests": [],
+      "evidence_tests": [
+        "internal/gateway/subject_limits_test.go"
+      ],
+      "status_note": "SubjectLimiter foundation + tests; residual full tools.Register wire and rate token-bucket",
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": []

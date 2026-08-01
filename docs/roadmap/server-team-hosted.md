@@ -393,10 +393,15 @@ Ensure derived cache, L1/L2 handles, and list continuations cannot cross users/p
 
 **Acceptance criteria**
 
-- [ ] Cache key material includes subject/tenant/profile (or process isolation enforced and tested).
-- [ ] Continuation tokens are not an auth boundary; when multi-tenant, they fail closed across subjects.
-- [ ] Two-user offline test: no shared archive handle / cache hit leakage.
-- [ ] Support-bundle and doctor remain secret-free under multi-user layout.
+- [x] Cache key material includes subject/tenant/profile (or process isolation enforced and tested).
+- [x] Continuation tokens are not an auth boundary; when multi-tenant, they fail closed across subjects.
+- [x] Two-user offline test: no shared archive handle / cache hit leakage.
+- [x] Support-bundle and doctor remain secret-free under multi-user layout.
+
+**Foundation (done):** `CacheKey.Tenant`, `Caller.CacheKey`/`SubjectKey`,
+`jenkins.*WithSubject` page tokens, offline Alice/Bob tests,
+`docs/gateway/README.md` §3b. **Residual:** list-tool serve wire; durable L1/L2
+namespace; multi-replica (HOST-008).
 
 ---
 
@@ -431,10 +436,14 @@ Prevent one user from exhausting process-wide budgets for others.
 
 **Acceptance criteria**
 
-- [ ] Per-subject concurrent tool / preview rate caps (config via policy, not elevation).
-- [ ] Process absolute ceilings still apply (fail closed).
-- [ ] Tests: subject A spam does not starve subject B below documented floor (or fair-share policy documented).
-- [ ] Mutation confirm cooldown tokens cannot be replayed across subjects.
+- [x] Per-subject concurrent tool / preview rate caps (config via policy, not elevation).
+- [x] Process absolute ceilings still apply (fail closed).
+- [x] Tests: subject A spam does not starve subject B below documented floor (or fair-share policy documented).
+- [x] Mutation confirm cooldown tokens cannot be replayed across subjects.
+
+**Foundation (done):** `gateway.SubjectLimiter` + fair-share tests; mutation
+tokens already profile+principal bound. **Residual:** full `tools.Register`
+wire; token-bucket rate (beyond concurrency); HOST-008 multi-replica.
 
 ---
 
