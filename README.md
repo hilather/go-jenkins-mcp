@@ -179,10 +179,15 @@ Full pilot path: [`docs/user/README.md`](docs/user/README.md) · agent ops: [`do
 flowchart LR
   subgraph Host["Agent host"]
     Cursor["Cursor / MCP host"]
-    MCP["jenkins-mcp<br/>stdio · RO default"]
+    MCP["jenkins-mcp serve<br/>RO default"]
     Keyring["OS Secret Service"]
     Store["Local store · audit · cache"]
     Admin["admin serve + SPA"]
+  end
+
+  subgraph Transports["MCP transports"]
+    Stdio["stdio<br/>default · Cursor pilot"]
+    HTTP["Streamable HTTP<br/>--http 127.0.0.1:…"]
   end
 
   subgraph Jenkins["Jenkins fleet"]
@@ -190,7 +195,10 @@ flowchart LR
     Jobs["Jobs · pipelines · artifacts"]
   end
 
-  Cursor <-->|MCP tools · optional admin_*| MCP
+  Cursor <-->|MCP tools · optional admin_*| Stdio
+  Cursor -.->|optional local / lab| HTTP
+  Stdio --> MCP
+  HTTP --> MCP
   Admin -->|BFF /admin/v1| MCP
   MCP --> Keyring
   MCP --> Store
@@ -198,20 +206,44 @@ flowchart LR
   API --> Jobs
 ```
 
+### MCP transports (local)
+
+| Mode | How | When |
+| --- | --- | --- |
+| **stdio** (default) | `serve --stdio` / default Cursor entry | **Pilot and production local** path (ADR 0002). No listening port. |
+| **Streamable HTTP** | `serve --http 127.0.0.1:8765` | Local debugging, Docker support stack, or gateway-style peers. **Loopback by default.** |
+
+HTTP notes (fail closed; details in [`docs/packaging.md`](docs/packaging.md)):
+
+- Prefer **loopback** bind; non-local needs `--http-allow-non-local` + allowed Host/Origin + **shared secret**
+- Optional token: `--http-token-env` / `--http-token-file` (`Authorization: Bearer` or `X-Jenkins-MCP-Token`)
+- Optional force token: `--http-require-token` / `JENKINS_MCP_HTTP_REQUIRE_TOKEN`
+- **Not** multi-tenant OAuth and **not** a replacement for stdio Cursor pilot
+
+```bash
+# Local MCP over HTTP (loopback) — same profile + RO posture as stdio
+jenkins-mcp serve --profile corp --http 127.0.0.1:8765 --read-only
+# Stronger loopback gate (recommended for anything beyond a throwaway lab):
+# jenkins-mcp serve --profile corp --http 127.0.0.1:8765 --http-require-token \
+#   --http-token-env=MCP_HTTP_TOKEN --read-only
+```
+
+Admin console (`admin serve` on `:8787`) is a **separate** operator BFF/SPA surface — not the MCP Streamable HTTP port.
+
 | Layer | Responsibility |
 | --- | --- |
-| `cmd/jenkins-mcp` | Process entry (stdio default, optional HTTP, gateway, admin) |
+| `cmd/jenkins-mcp` | Process entry (**stdio default**, optional **`--http`**, gateway, admin) |
+| `internal/mcpserver` | Streamable HTTP serve (loopback / origin / token gates) |
 | `internal/tools` | MCP tool registration — no raw Jenkins HTTP |
 | `internal/jenkins` | Jenkins HTTP client — no MCP imports |
-| `internal/admin` + `web/admin` | Operator BFF + SPA (ADR 0014) |
+| `internal/admin` + `web/admin` | Operator BFF + SPA (ADR 0014) — distinct from MCP HTTP |
 | `internal/adminops` | Shared day-2 ops for BFF **and** `admin_*` MCP tools |
 | `internal/{auth,policy,audit,mutation,store,gateway,…}` | Enterprise controls |
 | `internal/adapter` | Optional integrations — **off by default** |
 | `deploy/local`, `testdata/*` | Docker labs (opt-in; not default `make test`) |
 | `site/` | Public product site (GitHub Pages) |
 
-Deep dive: [`docs/jenkins-mcp-enterprise-architecture.md`](docs/jenkins-mcp-enterprise-architecture.md) · ADRs in [`docs/adr/`](docs/adr/)
-
+Deep dive: [`docs/jenkins-mcp-enterprise-architecture.md`](docs/jenkins-mcp-enterprise-architecture.md) · ADR 0002 · [packaging HTTP](docs/packaging.md)
 ---
 
 ## Security posture
