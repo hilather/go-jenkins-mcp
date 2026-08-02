@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 	"github.com/hilather/go-jenkins-mcp/internal/policy"
 	"github.com/hilather/go-jenkins-mcp/internal/redact"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // ToolCompareBuilds is the DIAG-003 build comparison tool name.

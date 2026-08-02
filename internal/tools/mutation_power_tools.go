@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 	"github.com/hilather/go-jenkins-mcp/internal/mutation"
 	"github.com/hilather/go-jenkins-mcp/internal/policy"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // interruptBuildHandler implements MUT-010: mode stop|term|kill under preview/confirm.

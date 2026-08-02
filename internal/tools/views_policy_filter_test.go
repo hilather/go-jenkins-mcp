@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 	"github.com/hilather/go-jenkins-mcp/internal/policy"
 	"github.com/hilather/go-jenkins-mcp/internal/tools"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestFilterDeniedViews_Unit(t *testing.T) {

@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 	"github.com/hilather/go-jenkins-mcp/internal/redact"
 	"github.com/hilather/go-jenkins-mcp/internal/store"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // ToolSurveyRecentFailures is the DIAG-006 multi-build failure survey tool name.

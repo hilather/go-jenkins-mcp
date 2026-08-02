@@ -365,7 +365,7 @@ func runCacheQuota(args []string) error {
 	cacheTotalQuotaFlag := fs.String("cache-total-quota-bytes", "", "Per-profile L1+L2 total physical cache quota in bytes (empty/0=default 10GiB; env JENKINS_MCP_CACHE_TOTAL_QUOTA_BYTES fallback; flag wins; min 64MiB; max 1TiB absolute fail-closed)")
 	cacheLowDiskFlag := fs.String("cache-low-disk-bytes", "", "Free-space threshold for eviction planning in bytes (empty/0=default 1GiB; env JENKINS_MCP_CACHE_LOW_DISK_BYTES fallback; flag wins; min 16MiB; max 1TiB absolute fail-closed)")
 	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"profile": true,
+		"profile":                 true,
 		"cache-total-quota-bytes": true, "cache-low-disk-bytes": true,
 	})); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())

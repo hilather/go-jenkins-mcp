@@ -116,10 +116,10 @@ func TestResolveConfig_Valid(t *testing.T) {
 	}
 	// Wrong member id.
 	_, err := fleetmcp.ResolveConfig(fleetmcp.ResolveOptions{
-		ModeFlag:         "true",
-		MemberIDFlag:     "missing",
-		RosterPathFlag:   path,
-		MeshTokenInline:  "secret-token",
+		ModeFlag:        "true",
+		MemberIDFlag:    "missing",
+		RosterPathFlag:  path,
+		MeshTokenInline: "secret-token",
 	})
 	if err == nil {
 		t.Fatal("expected missing member")

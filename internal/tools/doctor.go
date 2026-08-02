@@ -3,8 +3,8 @@ package tools
 import (
 	"context"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // DoctorArgs are the tool arguments for jenkins_doctor (OPS-001).

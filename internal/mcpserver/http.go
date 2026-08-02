@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // DefaultMaxBodyBytes is the default request body cap for Streamable HTTP

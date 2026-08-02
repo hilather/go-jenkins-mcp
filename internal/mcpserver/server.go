@@ -5,8 +5,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // DefaultServerName is the Implementation.Name used by the jenkins-mcp binary.

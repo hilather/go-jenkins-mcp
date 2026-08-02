@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 	"github.com/hilather/go-jenkins-mcp/internal/tools"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // diagFixture is a multi-build Jenkins HTTP surface for DIAG-003/004/005 tests.

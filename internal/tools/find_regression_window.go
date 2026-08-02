@@ -6,10 +6,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 	"github.com/hilather/go-jenkins-mcp/internal/redact"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // ToolFindRegressionWindow is the DIAG-004 regression-window tool name.

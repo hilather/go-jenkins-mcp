@@ -6,10 +6,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 	"github.com/hilather/go-jenkins-mcp/internal/redact"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // ToolQueryExternalLogs is the optional INT-003 tool name.

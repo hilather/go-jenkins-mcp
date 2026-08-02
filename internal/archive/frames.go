@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/klauspost/compress/zstd"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/klauspost/compress/zstd"
 )
 
 // zstd content frame magic (little-endian 0xFD2FB528).

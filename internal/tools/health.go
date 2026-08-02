@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Tool names for health / diagnose surfaces (HEALTH-001/002, DIAG-007).

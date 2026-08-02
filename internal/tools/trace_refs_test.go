@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 	"github.com/hilather/go-jenkins-mcp/internal/tools"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // traceRefsFixture serves build JSON with optional parameters for INT-002 tests.

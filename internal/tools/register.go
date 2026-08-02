@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/adminops"
 	"github.com/hilather/go-jenkins-mcp/internal/audit"
 	"github.com/hilather/go-jenkins-mcp/internal/fleetmcp"
@@ -15,6 +14,7 @@ import (
 	"github.com/hilather/go-jenkins-mcp/internal/policy"
 	"github.com/hilather/go-jenkins-mcp/internal/store"
 	"github.com/hilather/go-jenkins-mcp/internal/telemetry"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // AuthGate fails closed when the serve session is no longer usable (token

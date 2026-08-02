@@ -17,13 +17,13 @@ import (
 // BindingsGetResponse is GET /admin/v1/policy/bindings (UI-011).
 // Secret-free: binding targets and deny patterns only — never tokens.
 type BindingsGetResponse struct {
-	Available      bool                    `json:"available"`
-	PathBase       string                  `json:"path_base,omitempty"`
-	SignatureState string                  `json:"signature_state,omitempty"`
-	Users          []policy.UserBinding    `json:"users,omitempty"`
-	Groups         []policy.GroupBinding   `json:"groups,omitempty"`
-	Notes          []string                `json:"notes,omitempty"`
-	Residual       string                  `json:"residual,omitempty"`
+	Available      bool                  `json:"available"`
+	PathBase       string                `json:"path_base,omitempty"`
+	SignatureState string                `json:"signature_state,omitempty"`
+	Users          []policy.UserBinding  `json:"users,omitempty"`
+	Groups         []policy.GroupBinding `json:"groups,omitempty"`
+	Notes          []string              `json:"notes,omitempty"`
+	Residual       string                `json:"residual,omitempty"`
 	// FleetSoT reminds operators multi-fleet SoT is config/signed policy.
 	FleetSoT string `json:"fleet_sot,omitempty"`
 }
@@ -37,12 +37,12 @@ type BindingsPutRequest struct {
 
 // BindingsPutResponse is PUT /admin/v1/policy/bindings.
 type BindingsPutResponse struct {
-	Applied  bool               `json:"applied"`
-	PathBase string             `json:"path_base,omitempty"`
+	Applied  bool                  `json:"applied"`
+	PathBase string                `json:"path_base,omitempty"`
 	Users    []policy.UserBinding  `json:"users,omitempty"`
 	Groups   []policy.GroupBinding `json:"groups,omitempty"`
-	Errors   []PolicyFieldError `json:"errors,omitempty"`
-	Notes    []string           `json:"notes,omitempty"`
+	Errors   []PolicyFieldError    `json:"errors,omitempty"`
+	Notes    []string              `json:"notes,omitempty"`
 }
 
 // BindingsPreviewRequest is POST /admin/v1/policy/bindings/preview.

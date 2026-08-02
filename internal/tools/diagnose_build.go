@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
@@ -13,6 +12,7 @@ import (
 	"github.com/hilather/go-jenkins-mcp/internal/policy"
 	"github.com/hilather/go-jenkins-mcp/internal/redact"
 	"github.com/hilather/go-jenkins-mcp/internal/search"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // ToolDiagnoseBuild is the minimal DIAG-002 triage tool name.

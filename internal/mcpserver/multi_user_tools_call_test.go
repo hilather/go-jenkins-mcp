@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/contracts"
 	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 	"github.com/hilather/go-jenkins-mcp/internal/mcpserver"
 	"github.com/hilather/go-jenkins-mcp/internal/policy"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // tools/call multi-user JSON-RPC e2e over Streamable HTTP (HOST residual close):

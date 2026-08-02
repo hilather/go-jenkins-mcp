@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/klauspost/compress/zstd"
 	"github.com/hilather/go-jenkins-mcp/internal/archive"
+	"github.com/klauspost/compress/zstd"
 )
 
 func TestPackFromGenerations_CopySinglePayload(t *testing.T) {

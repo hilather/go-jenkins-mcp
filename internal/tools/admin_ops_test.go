@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/adminops"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/audit"
@@ -16,6 +15,7 @@ import (
 	"github.com/hilather/go-jenkins-mcp/internal/policy"
 	"github.com/hilather/go-jenkins-mcp/internal/profile"
 	"github.com/hilather/go-jenkins-mcp/internal/tools"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestAdminOps_RegisterAndCall_SecretCanary(t *testing.T) {

@@ -76,7 +76,7 @@ const (
 	// canaryToken is the API token stored in the headless file keyring for smoke.
 	// It must never appear in MCP model-visible results/errors or server logs that
 	// are not mere protocol wire dumps of client-supplied arguments.
-	canaryToken = "CANARY_stdio_smoke_token_must_not_appear_xyz"
+	canaryToken  = "CANARY_stdio_smoke_token_must_not_appear_xyz"
 	smokeProfile = "stdio-smoke"
 	// plantCanary is planted only in invalid CallTool arguments (not used as auth).
 	// Model-visible tool errors must not echo it. Distinct from canaryToken so MCP

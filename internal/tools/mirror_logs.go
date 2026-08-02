@@ -6,11 +6,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 	"github.com/hilather/go-jenkins-mcp/internal/logmirror"
 	"github.com/hilather/go-jenkins-mcp/internal/policy"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // ToolMirrorLogs is the optional multi-log mirror tool name (LOG-004).

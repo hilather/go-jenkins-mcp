@@ -116,11 +116,11 @@ func TestResolveQuotaConfig_MinMaxBounds(t *testing.T) {
 func TestResolveQuotaConfig_RejectInvalid(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name                 string
-		flagTotal, envTotal  string
-		flagLow, envLow      string
-		wantCode             apperr.Code
-		wantSubstr           string
+		name                string
+		flagTotal, envTotal string
+		flagLow, envLow     string
+		wantCode            apperr.Code
+		wantSubstr          string
 	}{
 		{"garbage total", "not-a-number", "", "", "", apperr.CodeInvalidArgument, "invalid cache-total-quota-bytes"},
 		{"negative total", "-1", "", "", "", apperr.CodeInvalidArgument, "non-negative"},

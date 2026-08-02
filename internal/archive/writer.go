@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/klauspost/compress/zstd"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/klauspost/compress/zstd"
 )
 
 // MemberInput is one TAR member for the test / compatibility pack writer.

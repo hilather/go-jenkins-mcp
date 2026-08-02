@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/klauspost/compress/zstd"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/klauspost/compress/zstd"
 )
 
 // Frames is the L1 independent Zstandard frame store for one profile data dir.

@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/adminops"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/policy"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // overlayFromMap decodes a JSON-object map into policy.Overlay (MCP tool args).

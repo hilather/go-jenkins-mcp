@@ -31,18 +31,18 @@ type MemberResult struct {
 
 // AggregateEnvelope is the common fleet_* tool result shape.
 type AggregateEnvelope struct {
-	Schema           string         `json:"schema"`
-	Collection       string         `json:"collection"`
-	FleetID          string         `json:"fleet_id"`
-	CoordinatorID    string         `json:"coordinator_id"`
-	RosterBundleSeq  int            `json:"roster_bundle_seq,omitempty"`
-	QueriedAt        string         `json:"queried_at"`
-	Members          []MemberResult `json:"members"`
-	Summary          AggregateSummary `json:"summary"`
-	Aggregate        map[string]any `json:"aggregate,omitempty"`
-	Incomplete       bool           `json:"incomplete"`
-	ResidualNotes    []string       `json:"residual_notes,omitempty"`
-	NotMultiPodHA    bool           `json:"not_multi_pod_ha"`
+	Schema          string           `json:"schema"`
+	Collection      string           `json:"collection"`
+	FleetID         string           `json:"fleet_id"`
+	CoordinatorID   string           `json:"coordinator_id"`
+	RosterBundleSeq int              `json:"roster_bundle_seq,omitempty"`
+	QueriedAt       string           `json:"queried_at"`
+	Members         []MemberResult   `json:"members"`
+	Summary         AggregateSummary `json:"summary"`
+	Aggregate       map[string]any   `json:"aggregate,omitempty"`
+	Incomplete      bool             `json:"incomplete"`
+	ResidualNotes   []string         `json:"residual_notes,omitempty"`
+	NotMultiPodHA   bool             `json:"not_multi_pod_ha"`
 }
 
 // AggregateSummary is count honesty.

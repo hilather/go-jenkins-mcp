@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/policy"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // methodToolsList is the MCP JSON-RPC method for tool discovery (SDK methodListTools).

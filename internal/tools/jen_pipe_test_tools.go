@@ -3,8 +3,8 @@ package tools
 import (
 	"context"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // registerJenPipeTestTools registers JEN/PIPE/TEST/GRAPH/ART/SCM read tools.

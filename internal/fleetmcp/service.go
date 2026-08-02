@@ -6,9 +6,9 @@ import (
 
 // Service is the coordinator for fleet_* MCP tools.
 type Service struct {
-	Cfg    Config
-	Local  *LocalProvider
-	Peers  PeerFetcher
+	Cfg   Config
+	Local *LocalProvider
+	Peers PeerFetcher
 }
 
 // New builds a Service. Callers must pass Enabled Config.

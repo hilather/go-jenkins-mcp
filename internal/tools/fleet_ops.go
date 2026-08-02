@@ -3,8 +3,8 @@ package tools
 import (
 	"context"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/fleetmcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // registerFleetOpsTools attaches fleet_* tools when FleetOps is enabled.

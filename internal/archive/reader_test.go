@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/klauspost/compress/zstd"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/archive"
+	"github.com/klauspost/compress/zstd"
 )
 
 func testMembers() []archive.MemberInput {

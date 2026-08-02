@@ -581,6 +581,7 @@ comment):
 ## Before-done / before-commit procedure
 
 ```text
+0. make fmt   # gofmt -w .  — CI Format check fails hard without this
 1. Identify task ID(s) and re-read architecture + dependency tasks
 2. Implement within task scope
 3. Add/update tests (features + regression tests for fixes)

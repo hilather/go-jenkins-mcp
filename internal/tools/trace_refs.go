@@ -3,10 +3,10 @@ package tools
 import (
 	"context"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 	"github.com/hilather/go-jenkins-mcp/internal/otelx"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // ToolGetTraceRefs is the optional INT-002 correlation tool name.

@@ -142,8 +142,8 @@ func NewPeerMux(cfg Config, local *LocalProvider) http.Handler {
 	mux.HandleFunc(PeerPathPrefix+"/member", auth(func(w http.ResponseWriter, r *http.Request) {
 		self := cfg.Roster.MemberByID(cfg.MemberID)
 		out := map[string]any{
-			"id":        cfg.MemberID,
-			"fleet_id":  cfg.Roster.FleetID,
+			"id":         cfg.MemberID,
+			"fleet_id":   cfg.Roster.FleetID,
 			"bundle_seq": cfg.Roster.BundleSeq,
 		}
 		if self != nil {

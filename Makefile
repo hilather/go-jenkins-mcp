@@ -34,7 +34,8 @@ help:
 	@echo "  make bench-l2-pack      PERF-002 L2 seekable pack baselines (not in default test)"
 	@echo "  make perf-regression    QA-003 budget check vs docs/perf-budgets.json (opt-in)"
 	@echo "  make build      Build $(BIN_DIR)/$(BINARY) for host"
-	@echo "  make lint       gofmt check + go vet"
+	@echo "  make fmt        rewrite sources with gofmt -w (run before commit)"
+	@echo "  make lint       gofmt check + go vet (fails if unformatted; run make fmt)"
 	@echo "  make vuln       govulncheck (installs if needed)"
 	@echo "  make sbom       Generate SPDX SBOM under $(DIST_DIR)/"
 	@echo "  make package    Linux tarball (+ optional rpm/deb helpers; includes admin-ui when dist exists)"
@@ -146,10 +147,22 @@ build:
 	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY) $(CMD_PKG)
 	@echo "built $(BIN_DIR)/$(BINARY) version=$(VERSION) commit=$(COMMIT) go=$(GOVER) dirty=$(DIRTY) built=$(BUILDTIME)"
 
+.PHONY: fmt
+fmt:
+	@# Rewrite all .go files; keeps CI "Format check" green when run before push.
+	gofmt -w .
+	@echo "gofmt -w complete"
+
 .PHONY: lint
 lint:
 	@unformatted=$$(gofmt -l .); \
-	if [ -n "$$unformatted" ]; then echo "gofmt needed:"; echo "$$unformatted"; exit 1; fi
+	if [ -n "$$unformatted" ]; then \
+		echo "ERROR: gofmt needed on the following files (CI will fail):"; \
+		echo "$$unformatted"; \
+		echo ""; \
+		echo "Fix:  make fmt   &&  git add -u  &&  git commit --amend --no-edit   # or a new commit"; \
+		exit 1; \
+	fi
 	$(GO) vet ./...
 
 .PHONY: vuln

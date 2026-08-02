@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/klauspost/compress/zstd"
 	"github.com/hilather/go-jenkins-mcp/internal/archive"
+	"github.com/klauspost/compress/zstd"
 )
 
 // PERF-002 L2 seekable multi-frame pack baselines (native Go reader; no ratarmount).

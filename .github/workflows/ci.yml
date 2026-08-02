@@ -68,29 +68,54 @@ jobs:
           echo "$HOME/.local/go/bin" >> "$GITHUB_PATH"
 
       - name: Module download
-        run: go mod download
+        # Transient proxy/network blips are a common false red; retry a few times.
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4; do
+            if go mod download; then
+              exit 0
+            fi
+            echo "go mod download failed (attempt $i); sleep and retry"
+            sleep $((i * 5))
+          done
+          echo "::error::go mod download failed after retries"
+          exit 1
 
       - name: Format check
+        # Fail fast with a copy-paste fix. Most recent CI reds are unformatted Go.
+        shell: bash
         run: |
+          set -euo pipefail
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then
-            echo "gofmt needed on:"
+            echo "::error::gofmt needed — run 'make fmt' locally, commit, and push"
+            echo "Unformatted files:"
             echo "$unformatted"
+            echo ""
+            echo "Fix: make fmt && git add -u && git commit -m 'style: gofmt' && git push"
             exit 1
           fi
+          echo "gofmt clean"
 
       - name: Vet
         run: go vet ./...
 
       - name: Test
-        run: go test -count=1 ./...
+        # -count=1 disables cache; -timeout bounds hung tests (avoids "stuck job" GHA kills).
+        shell: bash
+        run: go test -count=1 -timeout=20m ./...
         env:
           # Never inject real Jenkins credentials into unit CI
           JENKINS_MCP_AUTH: ""
 
       - name: Test race
+        # Ubuntu only: race detector is heavy; bound wall time to avoid runner kill flakiness.
         if: matrix.container == ''
-        run: go test -count=1 -race ./...
+        shell: bash
+        run: go test -count=1 -race -timeout=30m ./...
+        env:
+          JENKINS_MCP_AUTH: ""
 
       - name: Build
         run: make build
@@ -112,7 +137,8 @@ jobs:
         if: matrix.container == ''
         uses: actions/upload-artifact@v4
         with:
-          name: jenkins-mcp-linux
+          # Unique name per matrix cell if both ever upload (today Ubuntu only).
+          name: jenkins-mcp-linux-${{ matrix.id }}
           path: dist/*
           if-no-files-found: warn
 

@@ -80,7 +80,6 @@ func emitServeAuthFail(sink audit.Sink, p *profile.Profile, profileFlag, princip
 	})
 }
 
-
 // auditReasonFromErr maps verify failures to stable, non-secret reason codes
 // (AUTH-004 identity mismatch residual).
 func auditReasonFromErr(err error) string {

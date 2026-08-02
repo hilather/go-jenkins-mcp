@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/hilather/go-jenkins-mcp/internal/adminops"
 	"github.com/hilather/go-jenkins-mcp/internal/audit"
 	"github.com/hilather/go-jenkins-mcp/internal/config"
@@ -16,6 +15,7 @@ import (
 	"github.com/hilather/go-jenkins-mcp/internal/policy"
 	"github.com/hilather/go-jenkins-mcp/internal/profile"
 	"github.com/hilather/go-jenkins-mcp/internal/tools"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // MCP-OPS write path honesty: CallTool for real writes + AUD-001 types that
