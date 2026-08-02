@@ -4,19 +4,21 @@
 **Tag:** `v0.5.0`  
 **Baseline:** continues `v0.4.0` (admin MCP ops, POL-006 bindings, gateway residual honesty)
 
+> **Links:** On the GitHub release page, all doc links below are absolute (tag tree). In-repo relative paths are not used here so release rendering stays correct.
+
 ## Highlights
 
 ### Product identity (UPSTREAM-EXIT)
 
 - Module and product identity: `github.com/hilather/go-jenkins-mcp`
-- Seed history moved to past-tense docs (`docs/HISTORY.md`, `docs/archive/`)
+- Seed history moved to past-tense docs ([`docs/HISTORY.md`](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/HISTORY.md), [`docs/archive/`](https://github.com/hilather/go-jenkins-mcp/tree/v0.5.0/docs/archive))
 - Hard-retire of `-auth` / `JENKINS_MCP_AUTH` bootstrap (fail closed; `login --profile` + keyring only)
 - Optional headless file keyring residual for CI (`JENKINS_MCP_KEYRING_FILE`)
 
 ### Multi-fleet + policy SoT
 
-- Multi-fleet rollout: shared **signed policy** + per-host profiles (no local user DB) — [`docs/fleet/multi-fleet-rollout.md`](../fleet/multi-fleet-rollout.md)
-- Fixtures: `testdata/fleet-pack/`
+- Multi-fleet rollout: shared **signed policy** + per-host profiles (no local user DB) — [multi-fleet-rollout.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/fleet/multi-fleet-rollout.md)
+- Fixtures: [`testdata/fleet-pack/`](https://github.com/hilather/go-jenkins-mcp/tree/v0.5.0/testdata/fleet-pack)
 - **HOST-008 multi-pod gateway HA cancelled** — scale via multi-fleet single-replica members, not multi-pod shared vault/rate
 
 ### Fleet-wide MCP reads (`fleet_*`)
@@ -31,7 +33,7 @@ Opt-in request-time fan-out across roster members (mesh-token peer API). **Not**
 - Membership only from roster (tool args cannot invent peers)
 - Partial peer failures set `incomplete` with per-member residuals
 - Secret-free envelopes; optional peer listen `--fleet-peer-listen`
-- Design SoT: [`docs/fleet/fleet-mcp-ops.md`](../fleet/fleet-mcp-ops.md)
+- Design SoT: [fleet-mcp-ops.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/fleet/fleet-mcp-ops.md)
 
 ### Cache quota operator tunables (ARC-007)
 
@@ -40,11 +42,11 @@ Opt-in request-time fan-out across roster members (mesh-token peer API). **Not**
 | `--cache-total-quota-bytes` / `JENKINS_MCP_CACHE_TOTAL_QUOTA_BYTES` | 10 GiB | min 64 MiB, max 1 TiB fail closed |
 | `--cache-low-disk-bytes` / `JENKINS_MCP_CACHE_LOW_DISK_BYTES` | 1 GiB | min 16 MiB, max 1 TiB fail closed |
 
-Serve maintenance, offline `cache quota` / eviction plan/evict, and admin BFF/MCP share `store.ResolveQuotaConfig`. Operator guide: [`docs/caching.md`](../caching.md).
+Serve maintenance, offline `cache quota` / eviction plan/evict, and admin BFF/MCP share `store.ResolveQuotaConfig`. Operator guide: [caching.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/caching.md).
 
 ### SAML admin SSO + Access / RBAC management
 
-- **POL-007 Done\* offline:** SAML SP (`internal/saml`, `JENKINS_MCP_SAML_CONFIG`), ACS session, group→role map; Keycloak lab (`testdata/saml-lab`, `make live-saml-*` / saml-lab targets)
+- **POL-007 Done\* offline:** SAML SP (`internal/saml`, `JENKINS_MCP_SAML_CONFIG`), ACS session, group→role map; Keycloak lab ([`testdata/saml-lab`](https://github.com/hilather/go-jenkins-mcp/tree/v0.5.0/testdata/saml-lab), `make live-saml-*` / saml-lab targets)
 - **UI-011 Done\* pilot:** Access SPA + BFF `/admin/v1/policy/bindings` + `admin_rbac_*` MCP tools
 - Fleet SoT for bindings remains **signed config**, not SPA alone
 - Live Entra/Okta/ADFS production pin remains operator residual
@@ -52,17 +54,17 @@ Serve maintenance, offline `cache quota` / eviction plan/evict, and admin BFF/MC
 ### Free labs vs production pin policy
 
 - Product free-lab bar kept: disposable Jenkins, oauth-lab, jwt-rs lab, saml-lab
-- Site Entra / jwt-auth-filter / AgentCore production pin = operator residual ([`docs/gateway/free-lab-qualification.md`](../gateway/free-lab-qualification.md), [`live-pin-blockers.md`](../gateway/live-pin-blockers.md))
+- Site Entra / jwt-auth-filter / AgentCore production pin = operator residual ([free-lab-qualification.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/gateway/free-lab-qualification.md), [live-pin-blockers.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/gateway/live-pin-blockers.md))
 
 ### Managed update residual honesty (UPD-001)
 
 - Signed manifest verify + optional checksum download + LKG remain; **no** auto-install / in-process binary swap
-- Install/rollback operator / package-manager owned — [`docs/release/update.md`](update.md)
+- Install/rollback operator / package-manager owned — [update.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/release/update.md)
 
 ### Agent / docs hygiene
 
-- Session todos: **remove completed items** (open queue only) — `AGENTS.md` + global rule
-- Living product residuals: [`docs/security/product-residuals.md`](../security/product-residuals.md)
+- Session todos: **remove completed items** (open queue only) — [AGENTS.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/AGENTS.md) + global rule
+- Living product residuals: [product-residuals.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/security/product-residuals.md)
 - Platform: Tier-1 Rocky + Ubuntu only; macOS/Windows out of scope (ADR 0008)
 
 ## Breaking / migration
@@ -112,9 +114,9 @@ make package VERSION=v0.5.0
 
 | Doc | Topic |
 |-----|--------|
-| [`docs/caching.md`](../caching.md) | Cache planes + quota config by deploy type |
-| [`docs/fleet/multi-fleet-rollout.md`](../fleet/multi-fleet-rollout.md) | Shared policy multi-fleet |
-| [`docs/fleet/fleet-mcp-ops.md`](../fleet/fleet-mcp-ops.md) | `fleet_*` MCP fan-out |
-| [`docs/release/update.md`](update.md) | UPD-001 residual honesty |
-| [`docs/admin/mcp-ops-parity.md`](../admin/mcp-ops-parity.md) | `admin_*` + fleet pointer |
-| [`docs/security/product-residuals.md`](../security/product-residuals.md) | Living residual honesty |
+| [caching.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/caching.md) | Cache planes + quota config by deploy type |
+| [multi-fleet-rollout.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/fleet/multi-fleet-rollout.md) | Shared policy multi-fleet |
+| [fleet-mcp-ops.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/fleet/fleet-mcp-ops.md) | `fleet_*` MCP fan-out |
+| [update.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/release/update.md) | UPD-001 residual honesty |
+| [mcp-ops-parity.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/admin/mcp-ops-parity.md) | `admin_*` + fleet pointer |
+| [product-residuals.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/security/product-residuals.md) | Living residual honesty |
