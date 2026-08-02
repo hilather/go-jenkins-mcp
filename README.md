@@ -165,11 +165,13 @@ jenkins-mcp admin serve --admin-role operator --admin-token-env JENKINS_MCP_ADMI
 # Agents managing ops without admin HTTP (default off)
 jenkins-mcp serve --profile corp --enable-admin-mcp --admin-role operator
 
-# Opt-in mutations (never with force_read_only enterprise pin)
-jenkins-mcp serve --profile corp --allow-mutations
+# Opt-in mutations (default off; blocked by --read-only / force_read_only / env RO)
+jenkins-mcp serve --profile corp --stdio --allow-mutations
 ```
 
-Full pilot path: [`docs/user/README.md`](docs/user/README.md) · agent ops: [`docs/agent-usage.md`](docs/agent-usage.md) §12 · product walkthrough: [getting started](https://hilather.github.io/go-jenkins-mcp/getting-started.html)
+Mutations stay **disabled** unless `--allow-mutations` is set and no stronger RO is effective. User guide: [`docs/user/README.md` § Mutations](docs/user/README.md#7-mutations-disabled-by-default).
+
+Full pilot path: [`docs/user/README.md`](docs/user/README.md) · agent ops: [`docs/agent-usage.md`](docs/agent-usage.md) · product walkthrough: [getting started](https://hilather.github.io/go-jenkins-mcp/getting-started.html)
 
 ---
 

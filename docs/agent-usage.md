@@ -113,9 +113,11 @@ Full marker table, confidence order, and residual false-positive notes: [tool-co
 
 ## 5. Mutations and confirmation
 
-If mutation tools are **not** listed by the host, stop — do not probe.
+**Default: mutations are off.** Hosts must pass **`--allow-mutations`** (and must **not** be under stronger RO) or mutation tools will not appear in ListTools. Pilot Cursor configs should stay `--read-only` / `JENKINS_MCP_READ_ONLY=true` without this flag. User-facing enablement: [user guide § Mutations](user/README.md#7-mutations-disabled-by-default).
 
-If they are listed (host must have used `--allow-mutations` without stronger RO):
+If mutation tools are **not** listed by the host, stop — do not probe and do not ask the user for tokens “to enable mutations.” Enabling is an **operator/host config** change (`--allow-mutations`), not a tool argument.
+
+If they are listed (host used `--allow-mutations` and effective RO is not blocking execute):
 
 1. Call without `confirmation_token` → receive **preview** + short-lived token.
 2. Show the user the preview (job / build / queue id, params without secrets, current state).
@@ -124,6 +126,7 @@ If they are listed (host must have used `--allow-mutations` without stronger RO)
 5. Queue items: use `jenkins_cancel_queue_item` for waiting items only. Missing, already-cancelled, or already-assigned (left queue) items must fail clearly — never treat as successful cancel. Once assigned to a build, use `jenkins_stop_build` if interruption is still needed.
 6. **Do not spam previews** — host enforces a process-local preview rate (~30/min). `throttled` / `preview_rate_limited` means back off, not retry in a tight loop.
 7. **Confirm cooldown** — after a successful confirm for a target, re-confirming the same action+target within a few seconds is denied (`confirm_cooldown`). Wait and request a fresh preview if the user truly wants another execute.
+8. Enterprise `force_read_only` / deny lists can still deny with `policy_denial` — treat as correct safety, not a bug.
 
 ### `jenkins_cancel_queue_item` (MUT-003)
 

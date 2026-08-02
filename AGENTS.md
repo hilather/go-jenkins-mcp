@@ -140,9 +140,10 @@ required before treating work done).
 
 | Change type | Update these |
 |-------------|--------------|
-| Tool schemas, defaults, budgets, CLI flags/env | Architecture and/or tool-contract docs; user/admin guidance when present; backlog notes if contracts change |
+| Tool schemas, defaults, budgets, CLI flags/env | Architecture and/or tool-contract docs; **user guide** + **agent-usage** when flags affect pilots; backlog notes if contracts change |
 | Auth, policy, platform matrix, packaging | `docs/jenkins-mcp-enterprise-architecture.md`, packaging notes, `AGENTS.md` if agent policy changes |
 | Storage/format/index behavior | Architecture storage sections + task acceptance evidence notes |
+| **Mutations / opt-in write tools** | **User guide § Mutations**, **agent-usage § Mutations**, **tool-contracts** mutation table, README feature line — default remains **off** unless `--allow-mutations`; never imply RO pilot enables writes — see *User-facing & mutation docs* below |
 | Operator-visible day-2 surfaces (policy, metrics, audit, doctor/cache, profiles, support-bundle, security self-check, budgets/caps) | **Admin console** — see next section (`internal/admin`, `web/admin`, `docs/admin/api-v1.md`) |
 | Task completion / partial work | Backlog checkboxes and task status (see next section) |
 | ADRs / irreversible choices | New or updated ADR per backlog FND-008 / task requirements |

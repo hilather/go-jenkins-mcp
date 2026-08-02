@@ -195,20 +195,80 @@ Prefer **high-level triage** tools over dumping full console logs.
 
 ---
 
-## 7. Mutations (usually disabled)
+## 7. Mutations (disabled by default)
 
-By default, **no** mutation tools are registered (including power-user tools).
+**Default pilot and production posture is read-only.** Mutation tools (start job, stop build, cancel queue, power-user writes, …) are **not registered** unless you deliberately enable them.
 
-Mutations are allowed **only** when a deliberate host uses `--allow-mutations` **and** no stronger read-only source is set (CLI `--read-only`, `JENKINS_MCP_READ_ONLY`, enterprise `force_read_only`, profile RO). Even then:
+### Enablement (opt-in)
 
-1. Call **without** `confirmation_token` → receive a **preview** + short-lived token.
+| Control | Default | Effect |
+|---------|---------|--------|
+| `--allow-mutations` | **off** | When set **and** no stronger RO is in force, mutation tools **register** (and are executable when RO is not effective) |
+| `--read-only` / `JENKINS_MCP_READ_ONLY=true` | often **on** in Cursor | Process RO — mutations not executable (and pilot configs should keep this) |
+| Enterprise `force_read_only` | site policy | **Cannot** be defeated by `--allow-mutations` alone |
+| Profile RO | profile field | Stronger RO still wins |
+
+**CLI / lab enable (stdio or HTTP):**
+
+```bash
+# Opt-in mutations for a deliberate non-RO host (not the pilot Cursor entry)
+jenkins-mcp serve --profile corp --stdio --allow-mutations
+
+# Same with local Streamable HTTP
+jenkins-mcp serve --profile corp --http 127.0.0.1:8765 --allow-mutations
+```
+
+Do **not** combine pilot Cursor configs with both `--read-only` and `--allow-mutations` expecting writes — RO wins. Enterprise force RO still registers mutation tools for ListTools honesty in some modes but they remain **not executable** until force clears (doctor check `mutations` shows this).
+
+**Optional Cursor entry (mutations host only — not pilot default):**
+
+```json
+{
+  "mcpServers": {
+    "jenkins-mutations": {
+      "command": "jenkins-mcp",
+      "args": [
+        "serve",
+        "--profile",
+        "corp",
+        "--stdio",
+        "--allow-mutations"
+      ]
+    }
+  }
+}
+```
+
+Still **never** put tokens in `args` / `env`. Prefer a separate MCP server id from your RO pilot entry so everyday triage stays read-only.
+
+**Verify posture:**
+
+```bash
+jenkins-mcp doctor --profile corp --json --allow-mutations
+# Check mutations: allow_mutations_opt_in, mutations_should_register, mutations_executable
+```
+
+### Preview → confirm (always)
+
+Even after enablement:
+
+1. Call **without** `confirmation_token` → **preview** + short-lived token.
 2. Show the user the preview (job / build / queue id, redacted params, mode).
-3. Only after **explicit user confirm**, call again with the token **once**.
+3. Only after **explicit human confirm**, call again with the token **once**.
 4. Agents must never invent confirmation tokens.
+5. Preview rate limit and confirm cooldown apply (see [agent-usage.md](../agent-usage.md#5-mutations-and-confirmation)).
 
-**Seed + power-user mutate tools (opt-in):** `jenkins_start_job`, `jenkins_stop_build`, `jenkins_cancel_queue_item`, `jenkins_interrupt_build` (`mode=stop|term|kill`), `jenkins_rebuild_build`, `jenkins_replay_pipeline` (same definition only), `jenkins_set_job_buildable`, `jenkins_set_build_keep_forever`, `jenkins_set_build_description`, `jenkins_cancel_queue_items_for_job` (cap 20). Optional policy allowlists: `allow_mutation_tools`, `allow_interrupt_modes`, `allow_mutation_job_prefixes`.
+### Tools available when enabled
 
-`jenkins_start_job` validates parameters against job definitions (MUT-002): secret types and secret-named keys are rejected; choice/boolean must match definitions. Wrong-state targets (finished builds, left queue) return errors, not success. **Not** exposed: script console, config.xml write, credentials, nodes, plugins, quiet-down. Details: [agent-usage.md § Mutations](../agent-usage.md#5-mutations-and-confirmation) · [power-user backlog](../mutations/power-user-backlog.md).
+**Seed + power-user mutate tools:** `jenkins_start_job`, `jenkins_stop_build`, `jenkins_cancel_queue_item`, `jenkins_interrupt_build` (`mode=stop|term|kill`), `jenkins_rebuild_build`, `jenkins_replay_pipeline` (same definition only), `jenkins_set_job_buildable`, `jenkins_set_build_keep_forever`, `jenkins_set_build_description`, `jenkins_cancel_queue_items_for_job` (cap 20).
+
+Optional enterprise overlay allowlists (further restrict, never elevate): `allow_mutation_tools`, `allow_interrupt_modes`, `allow_mutation_job_prefixes`.
+
+`jenkins_start_job` validates parameters against job definitions (MUT-002): secret types and secret-named keys are rejected; choice/boolean must match definitions. Wrong-state targets (finished builds, left queue) return errors, not success.
+
+**Not** exposed (MUT-ADMIN residual): script console, config.xml write, credentials, nodes, plugins, quiet-down.
+
+More detail: [agent-usage.md § Mutations](../agent-usage.md#5-mutations-and-confirmation) · [tool-contracts.md](../tool-contracts.md) · [power-user backlog](../mutations/power-user-backlog.md).
 
 ---
 

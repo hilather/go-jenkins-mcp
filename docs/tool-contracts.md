@@ -69,7 +69,14 @@ Optional registration (needs `RegisterOptions`):
 | `jenkins_search_builds` | Search by result/params | `job_name`, filters, `limit` (5), `max_lookback` (100) | lookback/limit; secret params never returned | read |
 | `jenkins_wait_for_running_build` | Poll until complete | `job_name`, `build_number`, `timeout_seconds` (600) | wall timeout | read |
 
-### Mutations (omit under RO; opt-in `--allow-mutations`)
+### Mutations (disabled by default; opt-in `--allow-mutations`)
+
+**Default:** mutation tools are **not** registered. Operators enable with serve
+`--allow-mutations` only when no stronger RO is in force for **execute**
+(`--read-only`, `JENKINS_MCP_READ_ONLY`, enterprise `force_read_only`, profile RO).
+User guide: [user/README.md § Mutations](user/README.md#7-mutations-disabled-by-default).
+Agent rules: [agent-usage.md § Mutations](agent-usage.md#5-mutations-and-confirmation).
+
 
 | Tool | Purpose | Key args | Class |
 |------|---------|----------|-------|
