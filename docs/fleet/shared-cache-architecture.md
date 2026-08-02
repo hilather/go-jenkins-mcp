@@ -110,6 +110,9 @@ Cursor **stdio** single-member pilots stay `off`. Do not enable by surprise.
 | Atomic roster hot-reload + LKG | **Done\*** — `RosterSnapshot` bundle_seq fail-closed (FLC-013) |
 | Peer URL HTTPS non-loopback + trust residual | **Done\*** — default `ParseRoster`/`ResolveConfig` reject non-loopback `http://`; lab residual `JENKINS_MCP_FLEET_ALLOW_INSECURE_HTTP`; mesh pilot / mTLS **not Done** (FLC-016) |
 | Pure zstd wire size/hash schema | **Done\*** — chunks.zstd_size / zstd_sha256 + backfill (FLC-020) |
+| Scoped peer assertions + replay | **Done\*** — `IssueAssertion`/`VerifyAssertion` HMAC + nonce store (FLC-017) |
+| Pure zstd export helpers | **Done\*** — `ExportPureZstd` / `ExportPureZstdEnsured` (FLC-021) |
+| Fleet-cache mode flags on serve | **Done\*** — default off; `StatusSummary` peer-read residual (FLC-060) |
 | Roster cache eligibility fields | **Done\*** — optional `cache` on roster v1 (FLC-012) |
 | 3-member lab scaffold | **Done\*** offline — `testdata/fleet-cache-lab/` + `make fleet-cache-lab-*` (FLC-003) |
 | Peer streaming read / logmirror hook | **Planned** (FLC-030…032) — **not** peer-read Done |

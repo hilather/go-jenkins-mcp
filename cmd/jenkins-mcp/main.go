@@ -23,6 +23,7 @@ import (
 	"github.com/hilather/go-jenkins-mcp/internal/config"
 	"github.com/hilather/go-jenkins-mcp/internal/contracts"
 	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/fleetcache"
 	"github.com/hilather/go-jenkins-mcp/internal/fleetmcp"
 	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
@@ -916,6 +917,11 @@ func runServe(args []string) error {
 	fleetRosterFlag := fs.String("fleet-roster", "", "Path to fleet roster.json (env JENKINS_MCP_FLEET_ROSTER)")
 	fleetMeshTokenFile := fs.String("fleet-mesh-token-file", "", "Path to mesh shared secret file (or set JENKINS_MCP_FLEET_MESH_TOKEN); required for fleet mode")
 	fleetPeerListen := fs.String("fleet-peer-listen", "", "Optional peer HTTP listen address for /fleet/v1/* (env JENKINS_MCP_FLEET_PEER_LISTEN; e.g. 127.0.0.1:9443)")
+	// FLC-060: fleet-cache mode/budgets (default off; peer-read handlers still Planned FLC-030…).
+	fleetCacheModeFlag := fs.String("fleet-cache-mode", "", "Fleet peer-cache mode off|shadow|read|full (empty=default off; env JENKINS_MCP_FLEET_CACHE_MODE; peer-read routes not registered until FLC-030)")
+	fleetCachePeerLookupTimeoutFlag := fs.String("fleet-cache-peer-lookup-timeout", "", "Peer owner lookup timeout before origin fallback (empty=default 750ms; env JENKINS_MCP_FLEET_CACHE_PEER_LOOKUP_TIMEOUT)")
+	fleetCacheMaxPeerStreamsFlag := fs.String("fleet-cache-max-peer-streams", "", "Max concurrent pure-frame peer streams (empty=default 4; env JENKINS_MCP_FLEET_CACHE_MAX_PEER_STREAMS)")
+	fleetCacheMaxPeerLookupsFlag := fs.String("fleet-cache-max-peer-lookups", "", "Max concurrent owner lookups per request (empty=default 2; env JENKINS_MCP_FLEET_CACHE_MAX_PEER_LOOKUPS)")
 	// Wave 52 Track A / MUT-001: confirm cooldown (default 5s; min 1s; absolute 5m; 0 → default).
 	mutationConfirmCooldownFlag := fs.String("mutation-confirm-cooldown", "", "Mutation confirm cooldown per target (Go duration; empty/0=default 5s; env JENKINS_MCP_MUTATION_CONFIRM_COOLDOWN fallback; flag wins; min 1s; max 5m absolute fail-closed; 0 means default; cannot disable via 0)")
 	// Wave 52 Track C / MUT-001: process-local Preview sliding-window rate (default 30; absolute 300 fail-closed; 0 → default, not unlimited).
@@ -2153,6 +2159,23 @@ func runServe(args []string) error {
 		})
 		log.Printf("MCP-OPS: admin_* tools enabled role=%s (never tokens in results)", role)
 	}
+	// FLC-060: resolve fleet-cache mode/budgets (default off). Does not register peer-read routes.
+	fleetCacheCfg, fleetCacheErr := fleetcache.ResolveConfig(fleetcache.ResolveOptions{
+		ModeFlag:              *fleetCacheModeFlag,
+		PeerLookupTimeoutFlag: *fleetCachePeerLookupTimeoutFlag,
+		MaxPeerStreamsFlag:    *fleetCacheMaxPeerStreamsFlag,
+		MaxPeerLookupsFlag:    *fleetCacheMaxPeerLookupsFlag,
+		Getenv:                os.Getenv,
+	})
+	if fleetCacheErr != nil {
+		return fmt.Errorf("fleet-cache config: %w", fleetCacheErr)
+	}
+	if fleetCacheCfg.Active() {
+		// Secret-free: mode + budgets only; peer-read handlers remain residual until FLC-030+.
+		log.Printf("fleet-cache: mode=%s peer_lookup_timeout=%s max_streams=%d max_lookups=%d origin_fallback=%v residual=peer-read-handlers-planned (FLC-030; not multi-pod HA)",
+			fleetCacheCfg.Mode, fleetCacheCfg.PeerLookupTimeout, fleetCacheCfg.MaxPeerStreams, fleetCacheCfg.MaxPeerLookups, fleetCacheCfg.OriginFallback)
+	}
+
 	// Fleet MCP: opt-in fleet_* fan-out (fail closed on invalid config).
 	var fleetOpsSvc *fleetmcp.Service
 	fleetCfg, ferr := fleetmcp.ResolveConfig(fleetmcp.ResolveOptions{

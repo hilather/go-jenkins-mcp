@@ -153,8 +153,34 @@ func (c Config) Active() bool {
 }
 
 // PeerIOEnabled reports whether peer payload I/O is permitted (read or full).
+// Note: true does NOT mean peer-read HTTP handlers are registered (FLC-030 residual).
 func (c Config) PeerIOEnabled() bool {
 	return c.Mode == ModeRead || c.Mode == ModeFull
+}
+
+// PeerReadHandlersLive is always false until FLC-030 wires owner-directed handlers.
+// Mode=read/full alone must not be treated as peer-read Done.
+func (c Config) PeerReadHandlersLive() bool {
+	return false
+}
+
+// StatusSummary is a secret-free operator/status map (FLC-060).
+func (c Config) StatusSummary() map[string]any {
+	mode := c.Mode
+	if mode == "" {
+		mode = ModeOff
+	}
+	return map[string]any{
+		"mode":                    string(mode),
+		"active":                  c.Active(),
+		"peer_lookup_timeout":     c.PeerLookupTimeout.String(),
+		"max_peer_streams":        c.MaxPeerStreams,
+		"max_peer_lookups":        c.MaxPeerLookups,
+		"origin_fallback":         c.OriginFallback,
+		"peer_read_handlers_live": c.PeerReadHandlersLive(),
+		"peer_read_handlers":      "planned", // FLC-030…032 residual
+		"residual":                "fleet-cache config only; peer-read/fill/RF2 not Done; HOST-008 multi-pod HA cancelled",
+	}
 }
 
 func resolveMode(raw string) (Mode, error) {

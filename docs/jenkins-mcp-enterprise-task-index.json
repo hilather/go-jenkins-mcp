@@ -5848,7 +5848,7 @@
         "Assertion specification",
         "Security test matrix"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) — fleetcache.IssueAssertion/VerifyAssertion HMAC+nonce replay; peer-read handlers still Planned",
       "source_line": 0,
       "dependency_depth": 4,
       "dependents": [
@@ -5968,7 +5968,7 @@
         "Frame metadata contract",
         "Before/after database sample"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) — store.ExportPureZstd + ExportPureZstdEnsured; AEAD not portable wire; peer import still Planned",
       "source_line": 0,
       "dependency_depth": 5,
       "dependents": [
@@ -6677,7 +6677,7 @@
         "Configuration reference",
         "Cursor/gateway examples"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) — serve --fleet-cache-mode/env ResolveConfig default off; PeerReadHandlersLive always false; FLC-030 peer-read still Planned",
       "source_line": 0,
       "dependency_depth": 3,
       "dependents": [

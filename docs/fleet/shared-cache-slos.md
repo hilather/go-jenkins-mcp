@@ -16,7 +16,7 @@ These limits keep multi-fleet peer cache from delaying authorized Jenkins origin
 | `read` | MVP A owner-directed peer read | Yes (read path) |
 | `full` | Fill + RF2 later gate | Yes |
 
-**Config:** `JENKINS_MCP_FLEET_CACHE_MODE` or flag (when wired) → `off` when unset.
+**Config:** `JENKINS_MCP_FLEET_CACHE_MODE` or serve `--fleet-cache-mode` (FLC-060) → `off` when unset.
 
 Cursor stdio / single-member pilots must leave mode **off**.
 

@@ -149,6 +149,45 @@ func TestResolveConfig_MillisInteger(t *testing.T) {
 	}
 }
 
+func TestConfig_StatusSummary_DefaultOffNoPeerReadLive(t *testing.T) {
+	t.Parallel()
+	cfg, err := fleetcache.ResolveConfig(fleetcache.ResolveOptions{Getenv: func(string) string { return "" }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := cfg.StatusSummary()
+	if st["mode"] != "off" || st["peer_read_handlers_live"] != false {
+		t.Fatalf("%+v", st)
+	}
+	if st["peer_read_handlers"] != "planned" {
+		t.Fatalf("%+v", st)
+	}
+	// Even read mode does not claim handlers live.
+	cfg2, err := fleetcache.ResolveConfig(fleetcache.ResolveOptions{
+		ModeFlag: "read",
+		Getenv:   func(string) string { return "" },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg2.PeerIOEnabled() && cfg2.PeerReadHandlersLive() {
+		t.Fatal("mode=read must not imply peer-read handlers live")
+	}
+	st2 := cfg2.StatusSummary()
+	if st2["peer_read_handlers_live"] != false {
+		t.Fatalf("%+v", st2)
+	}
+	for _, v := range st2 {
+		s, ok := v.(string)
+		if !ok {
+			continue
+		}
+		if strings.Contains(strings.ToLower(s), "token=") || strings.Contains(s, "Bearer ") {
+			t.Fatalf("secret-like status: %q", s)
+		}
+	}
+}
+
 func TestResolveConfig_MessagesSecretFree(t *testing.T) {
 	t.Parallel()
 	_, err := fleetcache.ResolveConfig(fleetcache.ResolveOptions{
