@@ -171,15 +171,17 @@ func branchJobDeniedByPatterns(patterns []string, j jenkins.JobSummary) bool {
 }
 
 // listJobsPolicyKeeps builds keep predicates from live deny_job_prefixes and
-// deny_branch_names. Empty when neither pattern set is live.
-func listJobsPolicyKeeps(st regState) []JobRowKeep {
+// deny_branch_names for the effective subject (POL-006). Empty when neither
+// pattern set is live for that subject.
+func listJobsPolicyKeeps(st regState, ctx context.Context) []JobRowKeep {
+	subj := effectiveSubject(st, ctx)
 	var keeps []JobRowKeep
-	if pats := policy.DenyJobPrefixesFromEvaluator(st.policy); len(pats) > 0 {
+	if pats := policy.DenyJobPrefixesForSubject(st.policy, subj); len(pats) > 0 {
 		if k := KeepUnlessJobPrefixDenied(pats); k != nil {
 			keeps = append(keeps, k)
 		}
 	}
-	if pats := policy.DenyBranchNamesFromEvaluator(st.policy); len(pats) > 0 {
+	if pats := policy.DenyBranchNamesForSubject(st.policy, subj); len(pats) > 0 {
 		if k := KeepUnlessBranchDenied(pats); k != nil {
 			keeps = append(keeps, k)
 		}
@@ -195,9 +197,18 @@ func listJobsPolicyKeeps(st regState) []JobRowKeep {
 //
 // Never includes credentials or raw secrets — only operator-configured deny
 // pattern strings (already non-secret policy material).
+//
+// Uses process-bound subject when ctx is nil (bootstrap fingerprint). Prefer
+// PolicyFingerprintMaterialForSubject when a request context is available.
 func PolicyFingerprintMaterial(st regState) []string {
-	jobPats := policy.DenyJobPrefixesFromEvaluator(st.policy)
-	branchPats := policy.DenyBranchNamesFromEvaluator(st.policy)
+	return PolicyFingerprintMaterialForSubject(st, st.subject)
+}
+
+// PolicyFingerprintMaterialForSubject is PolicyFingerprintMaterial for a
+// concrete subject (POL-006 effective patterns).
+func PolicyFingerprintMaterialForSubject(st regState, subj policy.Subject) []string {
+	jobPats := policy.DenyJobPrefixesForSubject(st.policy, subj)
+	branchPats := policy.DenyBranchNamesForSubject(st.policy, subj)
 	if len(jobPats) == 0 && len(branchPats) == 0 {
 		return nil
 	}
@@ -343,7 +354,8 @@ func collectAllJobs(ctx context.Context, client *jenkins.Client, args jenkins.Li
 //
 // Deny-only: never invents jobs. Empty after filter → empty jobs, total 0.
 func listJobsWithPolicyFilter(ctx context.Context, client *jenkins.Client, st regState, args jenkins.ListJobsToolArgs) (*jenkins.ListJobsToolResponse, error) {
-	keeps := listJobsPolicyKeeps(st)
+	subj := effectiveSubject(st, ctx)
+	keeps := listJobsPolicyKeeps(st, ctx)
 	if len(keeps) == 0 {
 		// Empty patterns: single ListJobs; fingerprint stays user-filter only.
 		// HOST-004: still subject-bind page tokens when SubjectKey is set.
@@ -353,7 +365,7 @@ func listJobsWithPolicyFilter(ctx context.Context, client *jenkins.Client, st re
 	sk := effectiveSubjectKey(st, ctx)
 	folderPrefix, nameContains, view, maxDepth := listJobsNormalizedFilter(args)
 	// Collect path: bind page_token to user filters + live deny patterns + subject.
-	policyParts := PolicyFingerprintMaterial(st)
+	policyParts := PolicyFingerprintMaterialForSubject(st, subj)
 	filterFP := jenkins.ListJobsFilterFingerprint(folderPrefix, nameContains, view, maxDepth, args.IncludeFolders, policyParts...)
 	userOffset, userLimit, err := jenkins.ResolveListPaginationWithSubject(
 		args.PageToken, args.Offset, args.Limit,
@@ -425,7 +437,9 @@ func applyListJobsPolicyFilters(res *jenkins.ListJobsToolResponse, st regState) 
 	if res == nil {
 		return res
 	}
-	keeps := listJobsPolicyKeeps(st)
+	// Process-bound subject (unit tests / no request ctx). Production path uses
+	// listJobsWithPolicyFilter with request context.
+	keeps := listJobsPolicyKeeps(st, nil)
 	if len(keeps) == 0 {
 		return res
 	}

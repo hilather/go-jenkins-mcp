@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/simonfxr/go-jenkins-mcp/internal/adapter"
+	"github.com/simonfxr/go-jenkins-mcp/internal/adminops"
 	"github.com/simonfxr/go-jenkins-mcp/internal/app"
 	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
@@ -258,6 +259,7 @@ Usage:
   jenkins-mcp serve --profile <id> [--allow-mutations] [--mutation-confirm-cooldown DURATION]
   jenkins-mcp serve --profile <id> [--mutation-max-previews-per-minute N]
   jenkins-mcp serve --profile <id> [--mutation-token-ttl DURATION]
+  jenkins-mcp serve --profile <id> [--enable-admin-mcp] [--admin-role viewer|operator|policy_admin]
   jenkins-mcp serve --profile <id> [--log-level debug|info|warn|error]
   jenkins-mcp admin serve --addr 127.0.0.1:8787 [--profile ID]
   jenkins-mcp admin serve [--admin-token-env=VAR | --admin-token-file=PATH]
@@ -902,6 +904,9 @@ func runServe(args []string) error {
 	otelExportBackend := fs.String("adapter-otel-export-backend", "noop", "otel-export backend when enabled: noop|mock|http (default noop; metadata-only; no secrets)")
 	otelExportBaseURL := fs.String("adapter-otel-export-base-url", "", "HTTPS origin/path for otel-export http backend (paths only; no credentials in URL)")
 	allowMutations := fs.Bool("allow-mutations", false, "Test/PILOT ONLY: allow mutation tools when no stronger read-only source is set")
+	// MCP-OPS-004: opt-in admin_* management tools (default off for pilot RO triage).
+	enableAdminMCP := fs.Bool("enable-admin-mcp", false, "Register admin_* day-2 management MCP tools (MCP-OPS; default off; process admin role from --admin-role / JENKINS_MCP_ADMIN_ROLE)")
+	adminRoleFlag := fs.String("admin-role", "", "Admin MCP/console role viewer|operator|policy_admin (empty=env JENKINS_MCP_ADMIN_ROLE or viewer; MCP-OPS)")
 	// Wave 52 Track A / MUT-001: confirm cooldown (default 5s; min 1s; absolute 5m; 0 → default).
 	mutationConfirmCooldownFlag := fs.String("mutation-confirm-cooldown", "", "Mutation confirm cooldown per target (Go duration; empty/0=default 5s; env JENKINS_MCP_MUTATION_CONFIRM_COOLDOWN fallback; flag wins; min 1s; max 5m absolute fail-closed; 0 means default; cannot disable via 0)")
 	// Wave 52 Track C / MUT-001: process-local Preview sliding-window rate (default 30; absolute 300 fail-closed; 0 → default, not unlimited).
@@ -973,6 +978,7 @@ func runServe(args []string) error {
 		"enable-adapter": true, "http-allowed-origin": true, "http-allowed-host": true,
 		"http-token-env": true, "http-token-file": true,
 		"http-max-body-bytes": true, "http-path-prefix": true,
+		"admin-role": true,
 	})); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
@@ -1630,9 +1636,11 @@ func runServe(args []string) error {
 	}
 
 	// AUD-001 / OBS-001 defaults when no profile store.
+	// Bare unlimited Memory would retain every tool_success after filter-gated emit;
+	// wrap a capped Memory with DefaultTypeFilter (empty data dir → no file reload).
 	var auditSink audit.Sink = auditFile
 	if auditSink == nil {
-		auditSink = &audit.Memory{}
+		auditSink = audit.NewReloadingFilterSink("", &audit.Memory{Max: 256})
 	}
 	if auditFile != nil {
 		defer func() { _ = auditFile.Close() }()
@@ -2123,6 +2131,44 @@ func runServe(args []string) error {
 	if polRes.Overlay != nil {
 		serveMutationPolicy = policy.MutationPolicyFromOverlay(polRes.Overlay)
 	}
+	// MCP-OPS-004: opt-in admin_* tools (default off).
+	var adminOpsSvc *adminops.Service
+	if *enableAdminMCP {
+		role, rerr := adminops.ParseRole(*adminRoleFlag)
+		if rerr != nil {
+			// Fall back to env when flag empty/invalid name already handled by ParseRole empty→viewer.
+			if strings.TrimSpace(*adminRoleFlag) != "" {
+				return rerr
+			}
+			role, rerr = adminops.RoleFromEnviron(os.Getenv)
+			if rerr != nil {
+				return rerr
+			}
+		} else if strings.TrimSpace(*adminRoleFlag) == "" {
+			if envRole, eerr := adminops.RoleFromEnviron(os.Getenv); eerr == nil {
+				role = envRole
+			}
+		}
+		var pstore *profile.Store
+		if paths, perr := config.Resolve(); perr == nil {
+			pstore = profile.NewStore(paths)
+		}
+		adminOpsSvc = adminops.New(adminops.Config{
+			Role:             role,
+			Version:          version,
+			Commit:           commit,
+			BuildTime:        buildTime,
+			ProfileStore:     pstore,
+			Metrics:          metrics,
+			Audit:            auditSink,
+			Gate:             gate,
+			FlagReadOnly:     *readOnly,
+			AllowMutations:   *allowMutations,
+			DefaultProfileID: string(subject.ProfileID),
+			Getenv:           os.Getenv,
+		})
+		log.Printf("MCP-OPS: admin_* tools enabled role=%s (never tokens in results)", role)
+	}
 	tools.Register(server, client, &tools.RegisterOptions{
 		Gate:                       gate,
 		Budgets:                    budgets,
@@ -2151,6 +2197,8 @@ func runServe(args []string) error {
 		SubjectRateLimiter:         serveSubjectRateLimiter,
 		MutationBindingFromContext: serveMutationBindingFromCtx,
 		MutationPolicy:             serveMutationPolicy,
+		EnableAdminOps:             *enableAdminMCP,
+		AdminOps:                   adminOpsSvc,
 	})
 	if *httpAddr != "" {
 		cfg := mcpserver.DefaultHTTPConfig()

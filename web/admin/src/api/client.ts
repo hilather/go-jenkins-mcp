@@ -12,6 +12,8 @@ import type {
   ApiErrorBody,
   AuditListResponse,
   AuditQuery,
+  AuditSettingsPutRequest,
+  AuditSettingsResponse,
   CacheSummaryResponse,
   DoctorReport,
   EffectivePolicy,
@@ -307,6 +309,35 @@ export function fetchAudit(
   return adminFetch<AuditListResponse>(
     `/profiles/${id}/audit${qs ? `?${qs}` : ""}`,
   );
+}
+
+/**
+ * GET /admin/v1/profiles/{id}/audit/settings — type catalog + enabled map.
+ * Secret-free; any authenticated admin role may read.
+ */
+export function fetchAuditSettings(
+  profileId: string = getProfileId(),
+): Promise<AuditSettingsResponse> {
+  const id = encodeURIComponent(profileId);
+  return adminFetch<AuditSettingsResponse>(`/profiles/${id}/audit/settings`);
+}
+
+/**
+ * PUT /admin/v1/profiles/{id}/audit/settings — enable/disable known event types.
+ * Requires gateway_ops (operator | policy_admin). Partial map merges with
+ * current; unknown types ignored. File sink reloads on mtime.
+ */
+export function putAuditSettings(
+  enabled: Record<string, boolean>,
+  profileId: string = getProfileId(),
+): Promise<AuditSettingsResponse> {
+  const id = encodeURIComponent(profileId);
+  const body: AuditSettingsPutRequest = { enabled };
+  return adminFetch<AuditSettingsResponse>(`/profiles/${id}/audit/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 /** Offline doctor by default (v1 safety). */

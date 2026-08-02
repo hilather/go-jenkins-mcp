@@ -259,7 +259,8 @@ func normalizeMaxArtifacts(maxArtifacts int) int {
 //
 // Deny-only: never invents artifacts. No Message field on ArtifactList.
 func listArtifactsWithPolicyFilter(ctx context.Context, client *jenkins.Client, st regState, job string, build, maxArtifacts int) (*jenkins.ArtifactList, error) {
-	patterns := policy.DenyArtifactPathsFromEvaluator(st.policy)
+	subj := effectiveSubject(st, ctx)
+	patterns := policy.DenyArtifactPathsForSubject(st.policy, subj)
 	userMax := normalizeMaxArtifacts(maxArtifacts)
 	if len(patterns) == 0 {
 		// Pass normalized user max so client AbsoluteMax clamp still applies
@@ -279,7 +280,7 @@ func listArtifactsWithPolicyFilter(ctx context.Context, client *jenkins.Client, 
 	// (Jenkins returned exactly hardCap — unknown if more exist).
 	hardCapHit := list.Truncated || len(list.Artifacts) >= hardCap
 
-	applyArtifactListPolicyFilter(st, list)
+	applyArtifactListPolicyFilterForSubject(st, subj, list)
 
 	if len(list.Artifacts) > userMax {
 		list.Artifacts = list.Artifacts[:userMax]
@@ -299,10 +300,15 @@ func listArtifactsWithPolicyFilter(ctx context.Context, client *jenkins.Client, 
 // and sets Truncated honesty after filter (Wave 40).
 // Empty evaluator / empty patterns → no change.
 func applyArtifactListPolicyFilter(st regState, list *jenkins.ArtifactList) {
+	// Process-bound subject (unit tests / no request ctx).
+	applyArtifactListPolicyFilterForSubject(st, st.subject, list)
+}
+
+func applyArtifactListPolicyFilterForSubject(st regState, subj policy.Subject, list *jenkins.ArtifactList) {
 	if list == nil {
 		return
 	}
-	patterns := policy.DenyArtifactPathsFromEvaluator(st.policy)
+	patterns := policy.DenyArtifactPathsForSubject(st.policy, subj)
 	if len(patterns) == 0 {
 		return
 	}
@@ -322,8 +328,16 @@ func applyArtifactListPolicyFilter(st regState, list *jenkins.ArtifactList) {
 //
 // Never includes credentials or raw secrets — only operator-configured deny
 // pattern strings (already non-secret policy material).
+// Uses process-bound subject; prefer ArtifactPolicyFingerprintMaterialForSubject
+// when a request subject is available (POL-006).
 func ArtifactPolicyFingerprintMaterial(st regState) []string {
-	pats := policy.DenyArtifactPathsFromEvaluator(st.policy)
+	return ArtifactPolicyFingerprintMaterialForSubject(st, st.subject)
+}
+
+// ArtifactPolicyFingerprintMaterialForSubject is ArtifactPolicyFingerprintMaterial
+// for a concrete subject (POL-006 effective patterns).
+func ArtifactPolicyFingerprintMaterialForSubject(st regState, subj policy.Subject) []string {
+	pats := policy.DenyArtifactPathsForSubject(st.policy, subj)
 	if len(pats) == 0 {
 		return nil
 	}

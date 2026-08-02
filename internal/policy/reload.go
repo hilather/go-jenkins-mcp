@@ -216,6 +216,20 @@ func (r *ReloadableDenyOnly) Document() Document {
 	return snap.eval.Document()
 }
 
+// EffectiveDocument returns the most-restrictive document for subject (POL-006).
+// Merges matching user/group bindings from the current snapshot.
+func (r *ReloadableDenyOnly) EffectiveDocument(subject Subject) Document {
+	if r == nil {
+		return Document{Mode: ModePilot}
+	}
+	r.MaybeReload(r.now())
+	snap := r.current.Load()
+	if snap == nil || snap.eval == nil {
+		return Document{Mode: ModePilot}
+	}
+	return snap.eval.EffectiveDocument(subject)
+}
+
 // BundleSeq returns the current verified bundle sequence (0 if plain/none).
 func (r *ReloadableDenyOnly) BundleSeq() int64 {
 	if r == nil {

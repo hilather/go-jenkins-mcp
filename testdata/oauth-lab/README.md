@@ -62,6 +62,28 @@ aud/iss/exp), RS fail-closed / no Basic fallthrough, and token peer scenarios
 go test -count=1 ./internal/authlab/...
 ```
 
+## Opt-in Go tests against a running lab (`//go:build live_oauth`)
+
+```bash
+make live-oauth-up
+go test -tags=live_oauth ./internal/gateway/qualify/ -count=1 -v
+make live-oauth-down
+```
+
+| Test | Mode | What it proves |
+|------|------|----------------|
+| `TestLiveOAuth_ModeB_VaultObtainBearerAgainstMockRS` | B | mint → JWT vault → Obtain Bearer → mock-rs whoAmI 200 |
+| `TestLiveOAuth_ModeB_MockRSFailClosedBasicAndWrongAud` | B | Basic-only / wrong aud / expired → 401 |
+| `TestLiveOAuth_ModeB_CrossSubjectVaultIsolation` | B | no cross-subject vault fallthrough |
+| `TestLiveOAuth_ModeC_*` | C | HTTPTokenFetcher via TLS shim → mock-token (https residual) |
+
+Operator CLI for Mode B vault (offline, no Docker required for put/list):
+
+```bash
+jenkins-mcp gateway jwt-vault put --subject 'tenant|alice|corp'   # token from $JENKINS_MCP_GATEWAY_JWT_VAULT_TOKEN
+jenkins-mcp gateway jwt-vault list
+```
+
 ## Endpoints
 
 ### mock-oidc (HOST-014)

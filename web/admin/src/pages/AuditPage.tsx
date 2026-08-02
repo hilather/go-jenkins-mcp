@@ -1,13 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { fetchAudit, getProfileId } from "../api/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  fetchAudit,
+  fetchAuditSettings,
+  fetchMe,
+  formatApiError,
+  getProfileId,
+  hasGatewayOps,
+  putAuditSettings,
+} from "../api/client";
 import type { AuditEvent, AuditQuery } from "../api/types";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
 import { PageHeader } from "../components/PageHeader";
 import {
   AUDIT_LIMIT_OPTIONS,
-  AUDIT_TYPE_OPTIONS,
+  AUDIT_TYPE_HINTS,
+  auditTypeFilterOptions,
   buildAuditExportPayload,
   datetimeLocalToRfc3339,
   filterEventsByExternalSubject,
@@ -58,6 +67,7 @@ function eventKey(ev: AuditEvent, index: number): string {
 
 export function AuditPage() {
   const profileId = getProfileId();
+  const queryClient = useQueryClient();
   const [draft, setDraft] = useState<AuditFilters>(defaultFilters);
   const [applied, setApplied] = useState<AuditFilters>(defaultFilters);
   /** When set, API `before` uses this load-older cursor (overrides form). */
@@ -65,6 +75,10 @@ export function AuditPage() {
   const [loaded, setLoaded] = useState<AuditEvent[]>([]);
   const [selected, setSelected] = useState<AuditEvent | null>(null);
   const [appendNext, setAppendNext] = useState(false);
+  /** Local draft of type enable map (synced from settings GET). */
+  const [enabledDraft, setEnabledDraft] = useState<Record<string, boolean>>({});
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
 
   const formBefore = useMemo(() => resolveBeforeFilter(applied), [applied]);
 
@@ -76,6 +90,55 @@ export function AuditPage() {
       externalSubject: applied.externalSubject || undefined,
     }),
     [applied.limit, applied.type, pageBefore, formBefore, applied.externalSubject],
+  );
+
+  const meQ = useQuery({
+    queryKey: ["me"],
+    queryFn: () => fetchMe(),
+    retry: 1,
+    staleTime: 30_000,
+  });
+  const canEditSettings = hasGatewayOps(meQ.data);
+
+  const settingsQ = useQuery({
+    queryKey: ["audit-settings", profileId],
+    queryFn: () => fetchAuditSettings(profileId),
+    retry: 1,
+  });
+
+  useEffect(() => {
+    if (!settingsQ.isSuccess || !settingsQ.data || settingsDirty) {
+      return;
+    }
+    setEnabledDraft({ ...settingsQ.data.enabled });
+  }, [settingsQ.dataUpdatedAt, settingsQ.isSuccess, settingsDirty, settingsQ.data]);
+
+  /** Prefer draft when dirty; else server map so first paint matches GET (no flash). */
+  const enabledView = useMemo(() => {
+    if (settingsDirty) {
+      return enabledDraft;
+    }
+    return settingsQ.data?.enabled ?? enabledDraft;
+  }, [settingsDirty, enabledDraft, settingsQ.data?.enabled]);
+
+  const saveSettingsMut = useMutation({
+    mutationFn: () => putAuditSettings(enabledDraft, profileId),
+    onSuccess: (data) => {
+      setEnabledDraft({ ...data.enabled });
+      setSettingsDirty(false);
+      setSettingsMsg(
+        "Saved. Serve reloads type_filter.json on mtime/size (no restart).",
+      );
+      void queryClient.invalidateQueries({ queryKey: ["audit-settings", profileId] });
+    },
+    onError: (err) => {
+      setSettingsMsg(formatApiError(err).message);
+    },
+  });
+
+  const typeFilterOptions = useMemo(
+    () => auditTypeFilterOptions(settingsQ.data?.types),
+    [settingsQ.data?.types],
   );
 
   const q = useQuery({
@@ -187,11 +250,135 @@ export function AuditPage() {
     (selected.requestId ?? "") === (ev.requestId ?? "") &&
     (selected.tool ?? "") === (ev.tool ?? "");
 
+  const toggleType = (type: string, on: boolean) => {
+    setEnabledDraft((prev) => {
+      const base = settingsDirty ? prev : { ...(settingsQ.data?.enabled ?? prev) };
+      return { ...base, [type]: on };
+    });
+    setSettingsDirty(true);
+    setSettingsMsg(null);
+  };
+
+  const setAllTypes = (on: boolean) => {
+    const types = settingsQ.data?.types ?? Object.keys(enabledView);
+    const next: Record<string, boolean> = { ...enabledView };
+    for (const t of types) {
+      next[t] = on;
+    }
+    setEnabledDraft(next);
+    setSettingsDirty(true);
+    setSettingsMsg(null);
+  };
+
+  const resetSettingsDraft = () => {
+    if (settingsQ.data?.enabled) {
+      setEnabledDraft({ ...settingsQ.data.enabled });
+    }
+    setSettingsDirty(false);
+    setSettingsMsg(null);
+  };
+
   return (
     <>
       <PageHeader title="Audit">
         Profile <code>{profileId}</code> · privacy-preserving event list
       </PageHeader>
+
+      <section className="card filters-card" aria-labelledby="audit-settings-heading">
+        <h2 id="audit-settings-heading">Event type settings</h2>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Enable or disable which AUD-001 types the File sink persists for this
+          profile (<code>audit/type_filter.json</code>). Requires{" "}
+          <code>gateway_ops</code> (operator or policy_admin) to save. Catalog
+          comes from <code>KnownEventTypes</code> — keep in sync when adding
+          types.
+        </p>
+        {settingsQ.isLoading && <Loading />}
+        {settingsQ.isError && <ErrorBanner error={settingsQ.error} />}
+        {settingsQ.isSuccess && settingsQ.data && (
+          <>
+            <div className="audit-type-toggles">
+              {(settingsQ.data.types.length
+                ? settingsQ.data.types
+                : Object.keys(enabledView)
+              ).map((type) => {
+                const checked = Boolean(enabledView[type]);
+                const hint = AUDIT_TYPE_HINTS[type];
+                return (
+                  <label
+                    key={type}
+                    className="audit-type-toggle"
+                    title={hint || type}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={!canEditSettings || saveSettingsMut.isPending}
+                      onChange={(e) => toggleType(type, e.target.checked)}
+                    />
+                    <span className="mono">{type}</span>
+                    {type === "tool_success" && (
+                      <span className="muted audit-type-badge">high volume</span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+            <div className="toolbar">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={
+                  !canEditSettings || !settingsDirty || saveSettingsMut.isPending
+                }
+                onClick={() => saveSettingsMut.mutate()}
+              >
+                {saveSettingsMut.isPending ? "Saving…" : "Save type settings"}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={!canEditSettings || saveSettingsMut.isPending}
+                onClick={() => setAllTypes(true)}
+              >
+                Enable all
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={!canEditSettings || saveSettingsMut.isPending}
+                onClick={() => setAllTypes(false)}
+              >
+                Disable all
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={!settingsDirty || saveSettingsMut.isPending}
+                onClick={resetSettingsDraft}
+              >
+                Reset draft
+              </button>
+              {!canEditSettings && (
+                <span className="toolbar-meta muted">
+                  Read-only: need <code>gateway_ops</code> to change settings
+                  {meQ.data?.role ? ` (role: ${meQ.data.role})` : ""}
+                </span>
+              )}
+              {settingsMsg && (
+                <span className="toolbar-meta muted" role="status">
+                  {settingsMsg}
+                </span>
+              )}
+            </div>
+            {settingsQ.data.residual && (
+              <p className="muted" style={{ fontSize: "0.8rem", marginBottom: 0 }}>
+                Residual: {settingsQ.data.residual}
+              </p>
+            )}
+          </>
+        )}
+      </section>
 
       <form className="card filters-card" onSubmit={applyFilters}>
         <h2>Filters</h2>
@@ -205,7 +392,7 @@ export function AuditPage() {
                 setDraft((d) => ({ ...d, type: e.target.value }))
               }
             >
-              {AUDIT_TYPE_OPTIONS.map((opt) => (
+              {typeFilterOptions.map((opt) => (
                 <option key={opt.value || "all"} value={opt.value}>
                   {opt.label}
                 </option>

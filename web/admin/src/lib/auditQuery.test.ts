@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AuditEvent } from "../api/types";
 import {
   AUDIT_TYPE_OPTIONS,
+  auditTypeFilterOptions,
   buildAuditExportPayload,
   buildAuditQueryString,
   datetimeLocalToRfc3339,
@@ -114,6 +115,21 @@ describe("AUDIT_TYPE_OPTIONS", () => {
     expect(values).toContain("mutation_deny");
     // Metrics name tool_ok is not an audit type string.
     expect(values).not.toContain("tool_ok");
+  });
+});
+
+describe("auditTypeFilterOptions", () => {
+  it("prefixes all-types and uses catalog when provided", () => {
+    const opts = auditTypeFilterOptions(["tool_deny", "auth_fail"]);
+    expect(opts[0]).toEqual({ value: "", label: "(all types)" });
+    expect(opts.map((o) => o.value)).toEqual(["", "tool_deny", "auth_fail"]);
+  });
+
+  it("falls back to static AUDIT_TYPE_OPTIONS when catalog empty", () => {
+    const opts = auditTypeFilterOptions(undefined);
+    expect(opts.map((o) => o.value)).toEqual(
+      AUDIT_TYPE_OPTIONS.map((o) => o.value),
+    );
   });
 });
 

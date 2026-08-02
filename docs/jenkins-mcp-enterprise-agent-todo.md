@@ -23,6 +23,8 @@ regressions, code review, documentation, and incomplete-work tracking.
 5. **Todo / backlog tracking:** work against task IDs; maintain session todos; if incomplete, leave explicit **next steps** (remaining work, blockers, verification); never check acceptance/DoD boxes without demonstrated evidence.
 6. **Admin console kept current:** operator-relevant features (policy, metrics, audit, doctor/cache, profiles, day-2 CLI) update `internal/admin` + `web/admin` + `docs/admin/api-v1.md` in the same change, or leave an explicit residual TODO — never silent drift (see `AGENTS.md`).
 7. **Docker integration scaffolds:** for external systems (Jenkins, IdP/JWT RS, gateway, HTTP peers), extend or add Compose under `testdata/` / `deploy/` with opt-in Makefile targets — **not** default `make test`. Prefer mocks for Entra; never bake secrets. See `AGENTS.md` “Docker integration scaffolds” and **HOST-012…HOST-015**.
+8. **RBAC always addressable per user and per group:** new authorization controls (tool denials, resource patterns, budgets, mutation classes, admin permissions) must be definable for **individual verified users** and for **groups** (SAML/OIDC/IdP groups). See **POL-006**, **POL-007**, **UI-011**, and root `AGENTS.md` → *RBAC per user/group*.
+9. **Release notes on every release:** when cutting a version / REL-002 pack / packages, update `docs/release/RELEASE_NOTES_vX.Y.Z.md` with **all** material features and high-level changes (not only the last commit). See root `AGENTS.md` → *release notes stay current on every release*.
 
 ### Backlog workflow
 
@@ -779,6 +781,92 @@ Build a matrix across identities, groups, profiles, nested jobs, cached data, to
 - [ ] Adding a deny/restriction never increases effective access.
 - [ ] Policy reload/revocation races do not permit a stale mutation or cache read.
 - [ ] Performance overhead and decision-cache behavior meet the approved budget.
+
+---
+
+## POL-006 - Per-user and per-group RBAC definition model (always addressable)
+
+**Priority:** P0  
+**Dependencies:** POL-002, POL-003, POL-004  
+**Status:** **Done\*** (policy language + evaluator; 2026-08-01) — Admin SPA/BFF CRUD + `admin_rbac_*` MCP residual (**UI-011**); SAML group source residual (**POL-007**)
+
+**Objective**
+
+Make every MCP RBAC control **definable against both individual verified users and groups** (IdP / SAML / OIDC / Entra groups and approved local group aliases). Operators and agents must never be forced into “profile-global only” or “one anonymous principal” when restricting tools, jobs, nodes, views, artifacts, branches, budgets, or mutations.
+
+**Implementation**
+
+- Policy language (signed document + profile overlay) supports bindings keyed by:
+  - **User:** verified Jenkins principal and/or external subject (`sub` / NameID) + profile
+  - **Group:** stable group id / claim value (SAML attribute, OIDC `groups`/`roles`, Entra object id or display name per site map)
+- Effective decision = enterprise force RO **AND** union of matching **user** denials **AND** matching **group** denials **AND** global/profile denials (deny-only; more denials only restrict; never elevate Jenkins).
+- Explicit precedence rules when a principal is in multiple groups (fail closed / most-restrictive wins — document in `docs/policy-rbac.md`).
+- Admin API + SPA (UI-011) and MCP `admin_*` policy tools can list/edit **user bindings** and **group bindings** separately; secret-free (no tokens; subject keys hashed where needed for display).
+- Agent rule (AGENTS.md non-negotiable): any new RBAC surface (tool deny, resource pattern, budget, mutation class, admin permission) **must** accept **user and group** targets in the same change — not user-only or group-only without residual.
+
+**Acceptance criteria**
+
+- [x] Policy schema documents `subjects.users[]` and `subjects.groups[]` (names may vary) with deny rules attachable to either.
+- [x] Same deny_tools / job / node / view / artifact / branch patterns can be scoped to a user **or** a group without a second policy engine.
+- [x] Multi-group membership applies **most restrictive** effective access (monotonic under added denials).
+- [x] Tool args still cannot choose subject; only verified identity + group claims from authn bind.
+- [x] Overlay/admin apply cannot widen enterprise force RO; can only add denials / lower caps per user or group.
+- [x] Unit + conformance tests: user-only deny, group-only deny, both, group membership change revalidation, unknown group fail closed (no invent membership).
+- [x] Docs + AGENTS.md agent hints updated; `docs/policy-rbac.md` SoT for binding model.
+- [ ] Admin BFF/SPA + `admin_*` MCP residual or tools for binding CRUD (see UI-011).
+
+**Related residual:** group claims overage fail-closed already **Done\*** for JWT (OAUTH-006); this task is **operator-defined** user/group permission maps, not IdP minting.
+
+---
+
+## POL-007 - SAML SSO for identity + group membership into MCP RBAC
+
+**Priority:** P1  
+**Dependencies:** POL-006, POL-003, AUTH-004, OAUTH-003 (claim discipline), UI-003, MGR-001  
+**Status:** **Backlog / not started** — OIDC/JWT and gateway group foundations exist; **SAML SP / assertion mapping residual**
+
+**Objective**
+
+Allow enterprises that standardize on **SAML 2.0** (rather than or in addition to OIDC) to authenticate operators/users and supply **group membership** that drives **POL-006** user/group RBAC — without treating Jenkins as a SAML IdP or AS (ADR 0003).
+
+**Multi-fleet design (configuration SoT)**
+
+For multi-host / multi-fleet deployments, **SAML users/groups are not managed in a local app user DB**. The IdP owns accounts; this product **maps** verified attributes into roles and deny bindings via **versioned configuration**:
+
+| Config surface | Contents (secret-free except key material via secret store) |
+|----------------|---------------------------------------------------------------|
+| SAML SP config file(s) | IdP metadata URL/path, SP entity ID, ACS, attribute map (subject + groups), optional issuer/tenant pin |
+| Group → console role map | IdP group ids → `viewer` / `operator` / `policy_admin` (admin SSO); default fail-closed if unmapped |
+| Policy overlay / signed bundle | `subjects.users[]` / `subjects.groups[]` deny bindings (POL-006) rolled with MGR-001 |
+
+Rationale: gitops + signed overlays converge every fleet member; per-pod mutable user tables diverge and cannot be the multi-fleet SoT. Single-host SPA CRUD (**UI-011**) remains optional pilot/break-glass — not required for fleet consistency. See `docs/policy-rbac.md` § *SAML and multi-fleet configuration*.
+
+**Implementation**
+
+- Optional SAML **service provider** path for:
+  1. **Admin console / operator SSO** (UI-003 residual: replace or complement shared-secret pilot token), and/or
+  2. **Gateway multi-user identity** when SAML is the site IdP (parallel to OIDC JWT inbound; fail closed if both misconfigured).
+- Map assertion attributes → policy identity: NameID / `sub` equivalent, email (optional display only), **group attribute** (configurable multi-value), tenant/issuer.
+- Group attributes feed **POL-006** group bindings; missing/overage group claims fail closed (same spirit as OAUTH-006 overage — no invent membership).
+- **Fleet:** load SP settings + role maps + overlay bindings from configuration paths (env/XDG + optional signed envelope); document multi-fleet roll-out; SPA not required.
+- Metadata: IdP metadata URL or static XML; SP entity ID; ACS URL; signed assertions required; encrypted assertions optional residual.
+- Never store SAML passwords; never put assertion XML or NameID raw in audit (hash / redacted labels only).
+- Opt-in Docker lab scaffold (mock SAML IdP) under `testdata/` + Makefile — not default `make test` (same pattern as HOST-012…015).
+- ADR for SAML SP trust boundary + relation to OIDC/JWT modes + multi-fleet config SoT.
+
+**Acceptance criteria**
+
+- [ ] ADR: SAML SP role; Jenkins is never SAML IdP for MCP; stock Jenkins not AS; multi-fleet config SoT documented.
+- [ ] Configurable attribute map: subject + groups → `policy.Subject` / inbound claims without tool-arg spoofing.
+- [ ] Group-based POL-006 denials apply after successful SAML session bind.
+- [ ] Invalid signature / wrong audience/recipient / expired assertion → fail closed (no Basic fallthrough for gated surfaces).
+- [ ] Admin SSO residual path documented vs pilot shared-secret; production prefers SSO when enabled.
+- [ ] **Multi-fleet:** SP settings, group→role map, and POL-006 bindings load from configuration files / signed policy (not a local user directory); secrets via env/secret store only.
+- [ ] Secret-free canaries: assertion, signatures, cookies/tokens never in logs/MCP/admin JSON.
+- [ ] Opt-in mock SAML lab + unit tests for attribute map and fail-closed matrix.
+- [ ] Live Entra/Okta/ADFS pin residual documented (like OAUTH-009) — offline mock ≠ production GO.
+
+**Out of scope unless explicit go:** SAML for Jenkins UI itself; using SAML to mint Jenkins API tokens; Jenkins-as-SAML-IdP; building a product user-account store that replaces the IdP.
 
 ---
 
@@ -2932,6 +3020,7 @@ Multi-user gateway with **personal API tokens only** (no OAuth/JWT required on J
 
 **Priority:** P0  
 **Dependencies:** OAUTH-009, OAUTH-003, OAUTH-005, HOST-001, GWY-002  
+**Status:** **Done\*** offline + mock-rs lab; **live jwt-auth-filter / Entra production pin residual (OAUTH-009)**
 
 **Objective**
 
@@ -2939,12 +3028,13 @@ End-to-end **Bearer Jenkins-audience JWT** with Jenkins as **RS only** (`jwt-aut
 
 **Acceptance criteria**
 
-- [ ] Live OAUTH-009: invalid Bearer no Basic/session/anonymous fallthrough on OAuth-required routes.
-- [ ] Claim validation (iss/aud/exp/nbf); ID token never used as Jenkins API credential.
-- [ ] Graph / generic gateway / wrong-audience rejected.
-- [ ] Gateway/local path can send Bearer without mixing Basic on the same call.
-- [ ] Doctor/self-check honest when RS not qualified.
-- [ ] Operator docs: Entra app + jwt-auth-filter version pin for mode B.
+- [x] Offline + mock lab OAUTH-009 matrix: invalid Bearer no Basic/session/anonymous fallthrough on mock-rs routes. — `TestLiveOAuth_ModeB_MockRSFailClosedBasicAndWrongAud` + oauth-lab-smoke; **real plugin pin residual**
+- [x] Claim validation (iss/aud/exp/nbf); ID token never used as Jenkins API credential. — OAUTH-003 offline + `rejectIDTokenAsAPICredential` on vault Put + CLI put
+- [x] Graph / generic gateway / wrong-audience rejected. — offline + mock-oidc `wrong_audience` + mock-rs 401
+- [x] Gateway path sends Bearer without mixing Basic on the same call. — `JWTRSBearerProvider` + `HTTPAuthFromCredential` + critical-path Bearer-only
+- [x] Doctor/self-check honest when RS not qualified. — residual ids; `mode_b_live_*_qualified=false`
+- [x] Operator docs + CLI: Mode B vault lifecycle (`gateway jwt-vault put|list|status|delete`); live pin residual in jwt-auth-filter-qualification + live-pin-blockers
+- [ ] **Production live OAUTH-009 pin:** real `jwt-auth-filter` (or approved proxy RS) version + Entra iss/aud/JWKS evidence (blocks “Mode B production”)
 
 ---
 
@@ -2986,11 +3076,11 @@ One documented entry point to bring up disposable Docker labs for modes A/B/C wi
 
 **Acceptance criteria**
 
-- [ ] Documented Compose files exist for at least mode A (existing Jenkins) and stubs for B/C lab profiles.
-- [ ] Opt-in Makefile targets; **not** part of default `make test` / `make ci`.
-- [ ] Tear-down removes volumes; no secrets committed; disposable passwords only.
-- [ ] README cross-links OAUTH-009, HOST-010, HOST-014/015, gateway docs.
-- [ ] Fail closed: lab docs never recommend shared Jenkins SA or Jenkins-as-AS.
+- [x] Documented Compose files exist for mode A (existing Jenkins) and B/C lab profiles. — `testdata/jenkins-compose/` + `testdata/oauth-lab/`
+- [x] Opt-in Makefile targets; **not** part of default `make test` / `make ci`. — `make live-oauth-*` / `make live-jenkins-*`
+- [x] Tear-down removes volumes; no secrets committed; disposable passwords only.
+- [x] README cross-links OAUTH-009, HOST-010, HOST-014/015, gateway docs. — `testdata/oauth-lab/README.md`
+- [x] Fail closed: lab docs never recommend shared Jenkins SA or Jenkins-as-AS.
 
 ---
 
@@ -3012,11 +3102,12 @@ Disposable Jenkins (or RS proxy) lab that exercises **Bearer JWT** validation fo
 
 **Acceptance criteria**
 
-- [ ] `make …-up` brings lab healthy; docs list residual if real jwt-auth-filter pin deferred.
-- [ ] Automated opt-in test: valid Jenkins-audience JWT → allowed; wrong aud/exp/iss → 401/403.
-- [ ] Invalid Bearer does not succeed via Basic/session/anonymous on OAuth-required routes (lab or mock RS).
-- [ ] No production secrets in image/compose; JWKS/keys are lab-only and rotated on rebuild.
-- [ ] Tear-down destroys lab keys/tokens.
+- [x] `make live-oauth-up` brings lab healthy; docs list residual (mock RS ≠ jwt-auth-filter pin).
+- [x] Automated opt-in test: valid Jenkins-audience JWT → allowed; wrong aud/exp → 401. — smoke + `TestLiveOAuth_ModeB_*` / oauth-lab-smoke
+- [x] Invalid Bearer does not succeed via Basic/session/anonymous on OAuth-required routes (mock RS).
+- [x] No production secrets in image/compose; JWKS/keys are lab-only and rotated on rebuild.
+- [x] Tear-down destroys lab keys/tokens (`down -v`).
+- [ ] **Production residual:** real `jwt-auth-filter` on disposable Jenkins image (optional follow-on; mock RS path is first-class lab)
 
 ---
 
@@ -3038,11 +3129,11 @@ Mock OIDC authorization server (Keycloak, WireMock+fixtures, or small Go IdP con
 
 **Acceptance criteria**
 
-- [ ] Discovery + JWKS reachable on loopback from host tests.
-- [ ] Can mint access tokens with configurable aud/iss/exp for HOST-013.
-- [ ] Wrong-audience / expired tokens fail MCP or RS tests as designed.
-- [ ] No client secrets committed; lab client is public/PKCE or disposable secret in volume.
-- [ ] Opt-in only; clean `down -v`.
+- [x] Discovery + JWKS reachable on loopback from host tests. — mock-oidc `:18081`
+- [x] Can mint access tokens with configurable aud/iss/exp for HOST-013. — `/token` + scenarios
+- [x] Wrong-audience / expired tokens fail RS tests as designed. — smoke + live_oauth Mode B
+- [x] No client secrets committed; lab client is public/PKCE or disposable secret in volume.
+- [x] Opt-in only; clean `down -v`.
 
 ---
 
@@ -3491,6 +3582,7 @@ Assemble a versioned release-evidence bundle, execute every applicable security,
 - [x] Compatibility honesty: release evidence lists **modes piloted** (A/B/C/stdio) and gateway offline residual. — template + residual id
 - [ ] Usability: install, profile, login, identity verification, diagnosis, cache purge, and `doctor` complete successfully from documentation.
 - [ ] Ownership: on-call/support, vulnerability response, Jenkins-side OAuth owner, and release owner are named.
+- [ ] **Release notes:** `docs/release/RELEASE_NOTES_vX.Y.Z.md` for the version is **current** — highlights all material features / high-level changes since the previous release, breaking/migration notes, residual honesty, and verify commands (see root `AGENTS.md` → *release notes stay current on every release*).
 
 ---
 
@@ -3685,7 +3777,9 @@ Define admin roles (e.g. `viewer`, `operator`, `policy_admin`) separate from MCP
 - [x] Tests for privilege escalation (role matrix + RequirePermission) and secret canaries (token never in JSON).
 - [ ] Logout invalidates session (in-process + durable residual documented). **Residual:** v1 is shared-secret Bearer/header (no cookie session table); “logout” = drop client token; durable multi-session invalidation deferred with cookie/OIDC.
 
-**Implementation notes (landed lite):** `internal/admin` Role/Permission, `--admin-role`, `GET /admin/v1/me`, `RequirePermission` / `CheckPermission`. No production write routes yet (UI-004). CSRF N/A for Bearer; documented residual for future cookie sessions.
+**Implementation notes (landed lite):** `internal/admin` Role/Permission, `--admin-role`, `GET /admin/v1/me`, `RequirePermission` / `CheckPermission`. CSRF N/A for Bearer; documented residual for future cookie sessions / SSO.
+
+**Admin users design (v1):** no local user directory — shared secret + **one process-wide role** for the BFF. Operator management = rotate token + set `--admin-role`. Design notes: `docs/admin/README.md` § *Design notes — admin users*. Multi-operator named accounts → POL-007 SAML/OIDC + multi-fleet config (group→role maps), not a password DB.
 
 ---
 
@@ -3851,12 +3945,45 @@ Keyboard nav, focus traps in modals, contrast, ARIA for tables/live regions (met
 
 ---
 
+## UI-011 - Admin console: SAML / user / group RBAC management
+
+**Priority:** P1  
+**Dependencies:** UI-003, UI-004, POL-006, POL-007, MCP-OPS-001  
+**Status:** **Backlog / not started**
+
+**Fleet note:** Multi-fleet SoT for SAML group/user **bindings and admin role maps** is **configuration files / signed policy** (**POL-007**, MGR-001) — not this SPA as the only management path. UI-011 is pilot/single-host + effective preview; fleet sites may treat Access UI as residual or read-only.
+
+**Objective**
+
+Operators manage **who** may do **what** in MCP policy via the admin console: bind **users** and **groups** (including groups supplied by **SAML**) to deny-only permissions, without hand-editing only, and without a second policy engine.
+
+**Implementation**
+
+- SPA section (Policy or dedicated **Access** page): list user bindings, group bindings, membership source (SAML attribute / OIDC groups / static map residual).
+- CRUD (policy_admin): attach/detach deny_tools, job/node/view/artifact/branch patterns, and lower-only budgets **per user** and **per group**.
+- SAML SP settings (secret-free): IdP metadata URL/path, SP entity ID, ACS path, attribute map (subject + groups); test-connection residual offline.
+- Effective access preview: given a subject + groups, show matched rules (safe reasons only).
+- BFF routes under `/admin/v1/...` + `docs/admin/api-v1.md`; MCP `admin_policy_*` / `admin_rbac_*` tools or MCP-OPS residual in same change.
+- AUD-001 on binding create/update/delete (secret-free; no assertion bodies).
+
+**Acceptance criteria**
+
+- [ ] Operators can define the same control for a **user** and for a **group** from the UI (agent hint parity: both always available).
+- [ ] Cannot widen enterprise `force_read_only`; apply validates like UI-004.
+- [ ] Viewer role is read-only; policy_admin for writes; gateway_ops residual if shared with gateway subject ops.
+- [ ] Effective preview matches offline evaluator for fixtures.
+- [ ] Secret canaries; XSS canaries on subject/group labels.
+- [ ] api-v1 + admin README + AGENTS admin/MCP parity updated.
+
+---
+
 # Recommended implementation sequence
 
 1. FND-001 through FND-008, PERF-001, SEC-001, AUTH-000, and ARC-000.
 2. CFG-001/002, AUTH-001 through AUTH-004, NET-001 through NET-004, and STO-001/002.
 3. POL-001 through POL-004 plus MCP-001/002. No mutation tool may be registered before these controls exist.
-4. LOG-001/002 and STO-003/004; then LOG-003/004, SEARCH-001/002, SEC-002/003, and POL-005.
+4. LOG-001/002 and STO-003/004; then LOG-003/004, SEARCH-001/002, SEC-002/003, and POL-005.  
+   After POL-005: **POL-006** (per-user/group RBAC model — agent non-negotiable) then **POL-007** (SAML identity/groups) and **UI-011** (admin user/group management).
 5. AUD-001, OBS-001, OPS-001, TST-001, PKG-001, and the local read-only pilot gate.
 6. OAUTH-001 through OAUTH-008, then OAUTH-009. Run OAUTH-010 as the AgentCore 3LO/OBO feasibility prototype and OAUTH-011 as the explicit Jenkins-authorization-server decision gate.
 7. ARC-001 through ARC-004, ARC-010 through ARC-012, ARC-005 through ARC-008, and PERF-002. ARC-011 defines bounded semantic grouping before ARC-005 publishes packs.
@@ -3864,7 +3991,7 @@ Keyboard nav, focus traps in modals, contrast, ARIA for tables/live regions (met
 9. Optional **server/team-hosted** path (see `docs/roadmap/server-team-hosted.md`): implement **all three** auth modes — **HOST-009** (API token vault), **OAUTH-009+HOST-010** (JWT RS bearer), **OAUTH-010+GWY-001** (AgentCore 3LO/OBO) — plus **HOST-001–006**, **HOST-011** mode matrix, **HOST-012…015** Docker labs (mock IdP/JWT RS/token peer; opt-in Makefile), **GWY-002–004**, **MGR-001**, **REL-001/002**. Sites pick which modes to enable; engineering ships all.
 10. Execute JAS-001 through JAS-005 only after an OAUTH-011 **go** decision. The normal external-IdP resource-server/AgentCore 3LO-OBO release path must not depend on this conditional epic.
 11. QA, documentation, local/gateway pilots, and production release gates.
-12. **Admin console (Phase 6):** UI-000 → UI-001/002/003 → UI-004 (policy/RBAC) + UI-005 (metrics) + UI-006 (audit) in parallel where deps allow → UI-007/008 → UI-009/010. Reactive SPA + local admin BFF; native MCP stdio path unchanged. Keep console residual notes current as HOST modes land (`AGENTS.md`).
+12. **Admin console (Phase 6):** UI-000 → UI-001/002/003 → UI-004 (policy/RBAC) + UI-005 (metrics) + UI-006 (audit) in parallel where deps allow → UI-007/008 → UI-009/010 → **UI-011** (SAML + user/group RBAC management; depends on POL-006/007). Reactive SPA + local admin BFF; native MCP stdio path unchanged. Keep console residual notes current as HOST modes land (`AGENTS.md`).
 
 Tasks in a step run in parallel only when declared dependencies permit. Authentication semantics, signed policy, public tools, subject/cache isolation, Zstandard/TAR formats, `ratarmount-rs` compatibility, and **admin console authz/CSP** require architecture and security review.
 

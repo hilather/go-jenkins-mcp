@@ -14,9 +14,22 @@ security-relevant* and [security/audit-trail-review.md](security/audit-trail-rev
 
 | Sink | Use |
 |------|-----|
-| `Memory` | Tests (ordered in-memory events) |
+| `Memory` | Tests (ordered in-memory events; **no** type filter unless wrapped) |
 | `File` | JSONL under `$profileDataDir/audit/audit.jsonl` (mode **0600**, dir **0700**) |
+| `ReloadingFilterSink` | Wraps File via `OpenProfileSink`; drops disabled types; reloads `audit/type_filter.json` on mtime |
 | `Nop` | Disabled / missing data dir |
+
+### Event type catalog and operator enable/disable
+
+| Piece | Role |
+|-------|------|
+| `audit.KnownEventTypes()` | Catalog SoT (`internal/audit/types_catalog.go`) — **extend when adding types** |
+| `DefaultTypeFilter()` | Defaults when `type_filter.json` missing; `tool_success` off unless `JENKINS_MCP_AUDIT_TOOL_OK` truthy |
+| `type_filter.json` | Per-profile under `$profileDataDir/audit/`; written by admin PUT settings |
+| Admin BFF | `GET`/`PUT /admin/v1/profiles/{id}/audit/settings` (`gateway_ops` on write) |
+| Admin SPA | Audit page **Event type settings** toggles (enable all / disable all / save) |
+
+Agents: new security-relevant operations must emit AUD-001 **and** register new types in the catalog so operators can toggle them. See root `AGENTS.md`.
 
 ### Event schema (v1)
 
@@ -25,7 +38,7 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 | Field | Notes |
 |-------|--------|
 | `time` | RFC3339 UTC |
-| `type` | `login_success`, `login_fail`, `serve_start`, `tool_deny`, `tool_error`, `auth_fail`, optional `tool_success` |
+| `type` | Catalog SoT: `audit.KnownEventTypes()` — `login_*`, `serve_start`, `tool_*`, `auth_fail`, `audit_settings`, `policy_validate`/`policy_apply`, `admin_cache_evict`/`admin_support_bundle`/`admin_subject_invalidate`/`admin_consent_purge`, `mutation_*` (high-volume `tool_success` filter-default off) |
 | `profileId` | Connection profile id |
 | `principalId` | Verified Jenkins user id (never a token) |
 | `externalSubject` | Optional IdP subject label (gateway multi-user); redacted + length-capped like `principalId` — never a token |
@@ -50,9 +63,10 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
   ExternalSubject are available. Metrics tool_ok / tool_deny / tool_error remain
   separate (OBS-001). `tool_error` audit reason is the stable `apperr` code only
   (never ModelMessage / tokens).
-- Optional **tool_success** audit: residual/off by default; set
-  `JENKINS_MCP_AUDIT_TOOL_OK=1` (truthy) to emit (high volume). Metrics
-  `mcp_tool_ok` always record regardless.
+- **tool_success** audit: emit always attempts; **persistence** defaults off via
+  type filter (`tool_success` disabled unless `JENKINS_MCP_AUDIT_TOOL_OK`
+  seeds defaults or operator enables via admin Audit settings). High volume.
+  Metrics `mcp_tool_ok` always record regardless.
 - **Mutation Manager** (`mutation_preview` / `mutation_confirm` / `mutation_deny`):
   ProfileID/PrincipalID from effective `mutation.Binding`; when Binding has
   ExternalSubject also `externalSubject` + `subjectKeyHash` =
@@ -71,9 +85,10 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 |---------|--------|
 | Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
 | Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
-| Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
+| tool_success audit (default filter off; admin toggle or `JENKINS_MCP_AUDIT_TOOL_OK` seed) | **Done\*** volume residual (opt-in persist) |
 | Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
 | Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; BFF `external_subject` exact match + client residual) | **Done\*** lite (same-host BFF filter; multi-pod aggregation still residual) |
+| Admin SPA **event type enable/disable** (`…/audit/settings` + `type_filter.json` + ReloadingFilterSink) | **Done\*** lite (per-host file; multi-pod residual) |
 | Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **Done\*** lite — multi-user correlation more complete on one host after rotation |
 | Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod / per-host JSONL only; no fleet merge |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
@@ -473,9 +488,22 @@ security-relevant* and [security/audit-trail-review.md](security/audit-trail-rev
 
 | Sink | Use |
 |------|-----|
-| `Memory` | Tests (ordered in-memory events) |
+| `Memory` | Tests (ordered in-memory events; **no** type filter unless wrapped) |
 | `File` | JSONL under `$profileDataDir/audit/audit.jsonl` (mode **0600**, dir **0700**) |
+| `ReloadingFilterSink` | Wraps File via `OpenProfileSink`; drops disabled types; reloads `audit/type_filter.json` on mtime |
 | `Nop` | Disabled / missing data dir |
+
+### Event type catalog and operator enable/disable
+
+| Piece | Role |
+|-------|------|
+| `audit.KnownEventTypes()` | Catalog SoT (`internal/audit/types_catalog.go`) — **extend when adding types** |
+| `DefaultTypeFilter()` | Defaults when `type_filter.json` missing; `tool_success` off unless `JENKINS_MCP_AUDIT_TOOL_OK` truthy |
+| `type_filter.json` | Per-profile under `$profileDataDir/audit/`; written by admin PUT settings |
+| Admin BFF | `GET`/`PUT /admin/v1/profiles/{id}/audit/settings` (`gateway_ops` on write) |
+| Admin SPA | Audit page **Event type settings** toggles (enable all / disable all / save) |
+
+Agents: new security-relevant operations must emit AUD-001 **and** register new types in the catalog so operators can toggle them. See root `AGENTS.md`.
 
 ### Event schema (v1)
 
@@ -484,7 +512,7 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 | Field | Notes |
 |-------|--------|
 | `time` | RFC3339 UTC |
-| `type` | `login_success`, `login_fail`, `serve_start`, `tool_deny`, `tool_error`, `auth_fail`, optional `tool_success` |
+| `type` | Catalog SoT: `audit.KnownEventTypes()` — `login_*`, `serve_start`, `tool_*`, `auth_fail`, `audit_settings`, `policy_validate`/`policy_apply`, `admin_cache_evict`/`admin_support_bundle`/`admin_subject_invalidate`/`admin_consent_purge`, `mutation_*` (high-volume `tool_success` filter-default off) |
 | `profileId` | Connection profile id |
 | `principalId` | Verified Jenkins user id (never a token) |
 | `externalSubject` | Optional IdP subject label (gateway multi-user); redacted + length-capped like `principalId` — never a token |
@@ -509,9 +537,10 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
   ExternalSubject are available. Metrics tool_ok / tool_deny / tool_error remain
   separate (OBS-001). `tool_error` audit reason is the stable `apperr` code only
   (never ModelMessage / tokens).
-- Optional **tool_success** audit: residual/off by default; set
-  `JENKINS_MCP_AUDIT_TOOL_OK=1` (truthy) to emit (high volume). Metrics
-  `mcp_tool_ok` always record regardless.
+- **tool_success** audit: emit always attempts; **persistence** defaults off via
+  type filter (`tool_success` disabled unless `JENKINS_MCP_AUDIT_TOOL_OK`
+  seeds defaults or operator enables via admin Audit settings). High volume.
+  Metrics `mcp_tool_ok` always record regardless.
 - **Mutation Manager** (`mutation_preview` / `mutation_confirm` / `mutation_deny`):
   ProfileID/PrincipalID from effective `mutation.Binding`; when Binding has
   ExternalSubject also `externalSubject` + `subjectKeyHash` =
@@ -530,9 +559,10 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 |---------|--------|
 | Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
 | Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
-| Optional tool_success audit (`JENKINS_MCP_AUDIT_TOOL_OK`, default off) | **Residual** opt-in (volume) |
+| tool_success audit (default filter off; admin toggle or `JENKINS_MCP_AUDIT_TOOL_OK` seed) | **Done\*** volume residual (opt-in persist) |
 | Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
 | Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; BFF `external_subject` exact match + client residual) | **Done\*** lite (same-host BFF filter; multi-pod aggregation still residual) |
+| Admin SPA **event type enable/disable** (`…/audit/settings` + `type_filter.json` + ReloadingFilterSink) | **Done\*** lite (per-host file; multi-pod residual) |
 | Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **Done\*** lite — multi-user correlation more complete on one host after rotation |
 | Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod / per-host JSONL only; no fleet merge |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
@@ -806,7 +836,7 @@ Env enable path (`JENKINS_MCP_TELEMETRY`) remains separate from force-off.
 |---------|--------|
 | Subject quota metrics (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`) | **Done\* lite** — process-local counters on HOST-006 CodeQuota (rate `Allow` / slot `Hold`); also counted in `mcp_tool_error`; **never** subject keys, tokens, or free-form labels. Fleet allowlist includes both names. Multi-pod aggregation / shared rate still **residual** (HOST-008). |
 | Multi-pod / multi-replica audit aggregation (central sink) | **Residual** — per-pod JSONL only. **Done\* lite:** same-host admin merge of rotated siblings (`audit.jsonl.N`) for a single profile path — not fleet timeline |
-| Optional tool-success audit summaries | **Residual** opt-in (`JENKINS_MCP_AUDIT_TOOL_OK`, default off; metrics always on) |
+| tool-success audit summaries | **Done\*** opt-in persist (admin type filter / env seed default; metrics always on; high volume residual) |
 | Per-tool allowlisted counters | **Residual** (only if a closed seed name set is required; default is total ok/error/deny + subject quota) |
 | OTLP export / remote collector query | **Residual** (INT-002 approved backend adapter) |
 | Per-request latency histograms / compression-ratio gauges / decoder CPU | **Residual** (OBS follow-on) |

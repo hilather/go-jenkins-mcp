@@ -266,7 +266,7 @@ func (s *server) handleCacheEvict(w http.ResponseWriter, r *http.Request) {
 	out, err := s.runEvictApply(r.Context(), p, req.TargetBytes)
 	// Always try to audit apply attempts (success or failure), secret-free.
 	s.emitOpsAudit(p, audit.Event{
-		Type:       "admin_cache_evict",
+		Type:       audit.TypeAdminCacheEvict,
 		ProfileID:  string(p.ID),
 		Action:     "cache_evict",
 		Decision:   auditDecision(err),
@@ -357,7 +357,7 @@ func (s *server) handleSupportBundle(w http.ResponseWriter, r *http.Request) {
 	// Audit non-preview creates (and failed create attempts).
 	if !req.Preview {
 		s.emitOpsAudit(p, audit.Event{
-			Type:       "admin_support_bundle",
+			Type:       audit.TypeAdminSupportBundle,
 			ProfileID:  string(p.ID),
 			Action:     "support_bundle_create",
 			Decision:   auditDecision(err),

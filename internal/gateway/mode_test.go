@@ -275,8 +275,13 @@ func TestNewResidualJWTRSProvider_NoFallthrough(t *testing.T) {
 	if err == nil || apperr.CodeOf(err) != apperr.CodeCapabilityMissing {
 		t.Fatalf("got %v", err)
 	}
-	if !strings.Contains(err.Error(), "residual") {
-		t.Fatalf("want residual wording: %v", err)
+	// Fail-closed no-vault surface (not Mode A fallthrough). HOST-010 vault path
+	// is the live Obtain wire; residual wording lives on Status for OAUTH-009 pin.
+	if !strings.Contains(err.Error(), "not_configured") && !strings.Contains(err.Error(), "no vault") {
+		t.Fatalf("want not_configured/no vault wording: %v", err)
+	}
+	if !strings.Contains(st.ErrorMessageSafe, "OAUTH-009") {
+		t.Fatalf("Status should note OAUTH-009 live pin residual: %+v", st)
 	}
 }
 

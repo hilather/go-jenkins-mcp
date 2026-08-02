@@ -278,3 +278,27 @@ jenkins_survey_recent_failures {
 4. jenkins_cancel_queue_item { queue_id, confirmation_token }
 5. If already assigned → jenkins_stop_build on the build (separate preview/confirm)
 ```
+
+---
+
+## 12. Day-2 admin ops via MCP (`admin_*`, MCP-OPS)
+
+Agents manage operator surfaces through **MCP tools**, not by calling loopback
+admin HTTP. See [admin/mcp-ops-parity.md](admin/mcp-ops-parity.md).
+
+**Enable (opt-in; default off for pilot RO triage):**
+
+```text
+jenkins-mcp serve --profile <id> --enable-admin-mcp --admin-role operator
+# or JENKINS_MCP_ADMIN_ROLE=operator|policy_admin|viewer
+```
+
+| Tool class | Examples | Notes |
+|------------|----------|--------|
+| Read | `admin_health`, `admin_me`, `admin_gateway_residual_status`, `admin_list_profiles`, `admin_policy_effective`, `admin_metrics`, `admin_audit_list`, `admin_doctor`, `admin_cache_status` | Secret-free; never tokens |
+| Write | `admin_cache_evict` (`confirm=EVICT`), `admin_consent_purge` (`CLEAR_ALL`), `admin_subject_invalidate`, `admin_audit_settings_put`, `admin_support_bundle` | Process role gates; AUD-001 on writes |
+| Residual | `admin_rbac_*`, `admin_saml_*` | Until POL-006/007 |
+
+**Rules:** Do not scrape `http://127.0.0.1:8787/admin/v1`. Prefer `admin_*` when
+registered. Confirm tokens are exact strings. `admin_policy_apply` durable write
+to signed enterprise bundles remains residual (validate path Done\*).

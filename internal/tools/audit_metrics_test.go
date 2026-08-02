@@ -395,20 +395,22 @@ func TestToolErrorAudit_MultiUserCorrelation(t *testing.T) {
 	}
 }
 
-// tool_success audit is residual/off by default; metrics still record mcp_tool_ok.
-func TestToolOKAudit_DefaultOffOptionalEnv(t *testing.T) {
+// tool_success is filtered off by DefaultTypeFilter (unless env seeds on);
+// metrics still record mcp_tool_ok. Bare Memory would receive every emit.
+func TestToolOKAudit_TypeFilterDefaultOffAndEnable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Explicit default-off (also covers JENKINS_MCP_AUDIT_TOOL_OK=0 residual).
+	// DefaultTypeFilter: tool_success off when env unset/false.
 	t.Setenv(tools.EnvAuditToolOK, "0")
-
+	dir := t.TempDir()
 	mem := &audit.Memory{}
+	filtered := audit.NewReloadingFilterSink(dir, mem)
 	metrics := telemetry.NewMetrics()
 	server := mcp.NewServer(&mcp.Implementation{Name: "aud-ok-off", Version: "test"}, nil)
 	opts := &tools.RegisterOptions{
 		Gate:        policy.NewDefaultReadOnlyGate(),
-		Audit:       mem,
+		Audit:       filtered,
 		Metrics:     metrics,
 		ProfileID:   "corp",
 		PrincipalID: "alice",
@@ -440,18 +442,23 @@ func TestToolOKAudit_DefaultOffOptionalEnv(t *testing.T) {
 		t.Fatalf("mcp_tool_ok=%d want 1", metrics.GetCounter(telemetry.MetricMCPToolOK))
 	}
 	if len(mem.Events()) != 0 {
-		t.Fatalf("tool_success audit must be off by default: %+v", mem.Events())
+		t.Fatalf("tool_success must be filtered off by default: %+v", mem.Events())
 	}
 
-	// Opt-in residual: truthy env emits tool_success with multi-user identity.
-	t.Setenv(tools.EnvAuditToolOK, "1")
+	// Admin enable: persist type_filter.json so ReloadingFilterSink allows tool_success.
+	f := audit.DefaultTypeFilter()
+	f.Enabled[audit.TypeToolSuccess] = true
+	if err := audit.SaveTypeFilter(dir, f); err != nil {
+		t.Fatal(err)
+	}
 	mem2 := &audit.Memory{}
+	filtered2 := audit.NewReloadingFilterSink(dir, mem2)
 	server2 := mcp.NewServer(&mcp.Implementation{Name: "aud-ok-on", Version: "test"}, nil)
 	alice := policy.NewSubject("corp", "alice-j", true).WithExternal("entra-alice")
 	opts2 := &tools.RegisterOptions{
 		Gate:        policy.NewDefaultReadOnlyGate(),
 		Subject:     policy.NewSubject("corp", "process-user", true),
-		Audit:       mem2,
+		Audit:       filtered2,
 		ProfileID:   "corp",
 		PrincipalID: "process-user",
 		SubjectFromContext: func(context.Context) (policy.Subject, bool) {
@@ -476,11 +483,11 @@ func TestToolOKAudit_DefaultOffOptionalEnv(t *testing.T) {
 	}
 	defer cs2.Close()
 	if _, err := cs2.CallTool(ctx, &mcp.CallToolParams{Name: "jenkins_get_jobs", Arguments: map[string]any{}}); err != nil {
-		t.Fatalf("transport opt-in: %v", err)
+		t.Fatalf("transport enable: %v", err)
 	}
 	evs := mem2.Events()
 	if len(evs) != 1 {
-		t.Fatalf("opt-in tool_success events=%d: %+v", len(evs), evs)
+		t.Fatalf("enabled tool_success events=%d: %+v", len(evs), evs)
 	}
 	e := evs[0]
 	if e.Type != audit.TypeToolSuccess || e.Decision != audit.DecisionSuccess {

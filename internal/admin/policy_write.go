@@ -110,7 +110,7 @@ func (s *server) handlePolicyValidate(w http.ResponseWriter, r *http.Request) {
 	result := s.validateDraftOverlay(paths, draft, profileID)
 	if !result.Valid {
 		// Best-effort audit for validate deny (widening attempts, etc.).
-		s.emitPolicyAudit(r.Context(), profileID, "policy_validate", audit.DecisionDeny,
+		s.emitPolicyAudit(r.Context(), profileID, audit.TypePolicyValidate, audit.DecisionDeny,
 			firstReason(result.Errors), nil)
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -139,7 +139,7 @@ func (s *server) handlePolicyApply(w http.ResponseWriter, r *http.Request) {
 
 	// Fail closed: no plain write when signed policy is required.
 	if blocked, msg := plainApplyBlocked(paths); blocked {
-		s.emitPolicyAudit(r.Context(), profileID, "policy_apply", audit.DecisionDeny,
+		s.emitPolicyAudit(r.Context(), profileID, audit.TypePolicyApply, audit.DecisionDeny,
 			"require_signed", nil)
 		writeJSON(w, http.StatusForbidden, PolicyApplyResponse{
 			Applied: false,
@@ -155,7 +155,7 @@ func (s *server) handlePolicyApply(w http.ResponseWriter, r *http.Request) {
 	// Re-validate with the same rules as validate (no partial apply).
 	v := s.validateDraftOverlay(paths, draft, profileID)
 	if !v.Valid {
-		s.emitPolicyAudit(r.Context(), profileID, "policy_apply", audit.DecisionDeny,
+		s.emitPolicyAudit(r.Context(), profileID, audit.TypePolicyApply, audit.DecisionDeny,
 			firstReason(v.Errors), nil)
 		writeJSON(w, http.StatusBadRequest, PolicyApplyResponse{
 			Applied: false,
@@ -173,7 +173,7 @@ func (s *server) handlePolicyApply(w http.ResponseWriter, r *http.Request) {
 			raw, rerr := os.ReadFile(envPath)
 			if rerr == nil && policy.LooksLikeBundle(raw) {
 				msg := "JENKINS_MCP_POLICY_FILE points at a signed bundle; browser apply refused (use CLI policy sign on host)"
-				s.emitPolicyAudit(r.Context(), profileID, "policy_apply", audit.DecisionDeny,
+				s.emitPolicyAudit(r.Context(), profileID, audit.TypePolicyApply, audit.DecisionDeny,
 					"signed_bundle_path", nil)
 				writeJSON(w, http.StatusForbidden, PolicyApplyResponse{
 					Applied: false,
@@ -190,7 +190,7 @@ func (s *server) handlePolicyApply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := writePlainOverlayFile(outPath, draft); err != nil {
-		s.emitPolicyAudit(r.Context(), profileID, "policy_apply", audit.DecisionDeny,
+		s.emitPolicyAudit(r.Context(), profileID, audit.TypePolicyApply, audit.DecisionDeny,
 			"write_failed", nil)
 		writeAppErr(w, err)
 		return
@@ -198,7 +198,7 @@ func (s *server) handlePolicyApply(w http.ResponseWriter, r *http.Request) {
 
 	// Build applied effective summary from written draft (secret-free).
 	ex := explainDraft(profileID, draft, paths, outPath)
-	s.emitPolicyAudit(r.Context(), profileID, "policy_apply", audit.DecisionSuccess,
+	s.emitPolicyAudit(r.Context(), profileID, audit.TypePolicyApply, audit.DecisionSuccess,
 		"applied", map[string]string{
 			"path_base":                 filepath.Base(outPath),
 			"force_read_only":           fmt.Sprintf("%v", draft.ForceReadOnly),

@@ -17,12 +17,13 @@ Offline pack automation: `make pilot-evidence` → `dist/pilot-evidence/<timesta
 ## How to use
 
 1. Record artifact identity (`version --json`, `dist/BUILD_INFO`, `SHA256SUMS`).
-2. Run each gate command; attach logs/JSON under a release evidence directory.
-3. Optionally run **`make pilot-evidence PROFILE=<id>`** (or `PROFILE=` offline-only) to capture version, security self-check, gateway qualify, doctor/pilot-check into one secret-free bundle with `MANIFEST.json`.
-4. Run **`jenkins-mcp release-evidence --offline`** for the expanded lite JSON (version, security self-check, policy self-test, MCP SDK pin, LKG note, gateway offline qualify, structured residuals, nested **`gateway_residual_status`** = full CLI residual-status map).
-5. Mark pass / fail / exception (with owner + ticket).
-6. Complete ownership sign-offs on the template.
-7. Decision: **GO** only if all mandatory rows are pass or approved exception.
+2. **Write or update versioned release notes** — `docs/release/RELEASE_NOTES_vX.Y.Z.md` must describe **all material features and high-level changes** in this version (highlights, breaking/migration, residual honesty, verify commands). Agent rule: root `AGENTS.md` → *Non-negotiable: release notes stay current on every release*. Stale or empty notes block treating the release as done.
+3. Run each gate command; attach logs/JSON under a release evidence directory.
+4. Optionally run **`make pilot-evidence PROFILE=<id>`** (or `PROFILE=` offline-only) to capture version, security self-check, gateway qualify, doctor/pilot-check into one secret-free bundle with `MANIFEST.json`.
+5. Run **`jenkins-mcp release-evidence --offline`** for the expanded lite JSON (version, security self-check, policy self-test, MCP SDK pin, LKG note, gateway offline qualify, structured residuals, nested **`gateway_residual_status`** = full CLI residual-status map).
+6. Mark pass / fail / exception (with owner + ticket).
+7. Complete ownership sign-offs on the template.
+8. Decision: **GO** only if all mandatory rows are pass or approved exception **and** release notes for the version are current.
 
 ---
 

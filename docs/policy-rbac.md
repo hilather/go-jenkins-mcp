@@ -48,7 +48,11 @@ Versioned, secret-free JSON loaded at `serve` time.
   "max_result_bytes": 65536,
   "max_tools_per_minute": 15,
   "max_tools_burst": 5,
-  "fleet_telemetry_force_off": true
+  "fleet_telemetry_force_off": true,
+  "subjects": {
+    "users": [{"jenkins_user_id": "alice", "deny_tools": ["jenkins_get_build_logs"]}],
+    "groups": [{"group_id": "contractors", "deny_job_prefixes": ["legacy/**"]}]
+  }
 }
 ```
 
@@ -56,6 +60,7 @@ Versioned, secret-free JSON loaded at `serve` time.
 |-------|---------|
 | `version` | Must be `1` |
 | `force_read_only` | When true, cannot be defeated by `--allow-mutations`, profile, or weaker flags |
+| `subjects` | Optional POL-006 per-user / per-group deny-only bindings (see [Per-user and per-group bindings](#per-user-and-per-group-bindings-pol-006)) |
 | `fleet_telemetry_force_off` | When true, forces fleet health telemetry **off** regardless of `JENKINS_MCP_TELEMETRY` (MGR-002). Fail closed / lower-only: env cannot re-enable while pin is true. Serve applies on load + hot-reload (`Collector.SetForceOff`). Admin pilot apply cannot clear a true pin. See [fleet-telemetry.md](security/fleet-telemetry.md). |
 | `mode` | `pilot` (default) or `strict` |
 | `deny_tools` | Exact MCP tool names to deny |
@@ -105,6 +110,122 @@ so mutation tools are **registered** under force RO. ListTools filter +
 `DenyMutation` still hide/deny until force clears; then tools reappear without
 restart. Without allow-mutations (pilot default), mutations stay omitted at
 Register (`AllowMutationsOptIn` false).
+
+## Per-user and per-group bindings (POL-006)
+
+**Status:** **Done\*** (policy language + evaluator). Admin SPA/BFF CRUD and SAML
+group source remain residual (**UI-011**, **POL-007**).
+
+Operator-defined **named permission sets per user and per group** attach to the
+same overlay document as global denials. Matching is against verified
+`policy.Subject` only (Jenkins user, optional external subject, IdP groups from
+gateway/JWT bind) — **never** MCP tool arguments.
+
+### Schema (`subjects` on overlay)
+
+```json
+{
+  "version": 1,
+  "force_read_only": true,
+  "deny_tools": ["jenkins_get_queue_item"],
+  "subjects": {
+    "users": [
+      {
+        "jenkins_user_id": "alice",
+        "deny_tools": ["jenkins_get_build_logs"],
+        "deny_job_prefixes": ["secret/**"]
+      },
+      {
+        "external_subject": "oidc|alice-sub",
+        "max_result_bytes": 8192
+      }
+    ],
+    "groups": [
+      {
+        "group_id": "contractors",
+        "deny_tools": ["jenkins_list_artifacts"],
+        "deny_job_prefixes": ["legacy/**"]
+      }
+    ]
+  }
+}
+```
+
+| Binding | Match |
+|---------|--------|
+| **User** `jenkins_user_id` | Case-insensitive equality with `Subject.JenkinsUserID` |
+| **User** `external_subject` | Exact (trimmed) equality with `Subject.ExternalSubject` |
+| **User** both keys set | **AND** (both must match) |
+| **Group** `group_id` | Exact (trimmed) equality with one of `Subject.Groups` |
+
+Group membership is **never invented**: empty or missing groups never match a
+group binding. Unknown group claims simply do not match (no elevation path).
+
+### Effective decision (most restrictive)
+
+```text
+enterprise force_read_only
+  AND global overlay denials / lower-only budgets
+  AND union of matching user binding denials
+  AND union of matching group binding denials
+```
+
+- Deny tool/pattern lists are **unioned** (more denials only restrict).
+- Budget caps (`max_result_bytes`, `max_tools_per_minute`, `max_tools_burst`) take
+  the **minimum positive** value among global + matching bindings.
+- **Runtime:** `max_result_bytes` is applied per request at tool dispatch
+  (`effectiveBudgetForSubject`) as lower-only vs process/LiveHardMax. Per-subject
+  `max_tools_per_minute` / `max_tools_burst` merge is available on
+  `EffectiveDocument` but process-wide `LowerRate` at serve remains residual until
+  per-subject rate maps land.
+- **List-row privacy:** job/node/view/artifact/branch list filters use
+  `Deny*ForSubject` (effective patterns), not global-only `Deny*FromEvaluator`.
+- `force_read_only` and `mode` are **global only** — bindings cannot clear force RO.
+- Group `group_id` match is **exact** after trim (case-sensitive); never invent
+  membership from partial claims.
+- Package: `policy.SubjectBindings`, `EffectiveDocumentForSubject`,
+  `DenyOnlyEvaluator` / `ReloadableDenyOnly.EffectiveDocument`.
+
+### Related tasks
+
+| Task | Scope | Status |
+|------|--------|--------|
+| **POL-006** | Policy language + evaluator (this section) | **Done\*** |
+| **POL-007** | SAML 2.0 SP path: assertion → subject + groups into policy (not Jenkins-as-IdP); multi-fleet **config-managed** | Backlog |
+| **UI-011** | Admin Access page + BFF CRUD + `admin_rbac_*` MCP for bindings (pilot/single-host; fleet SoT = config) | Backlog |
+
+**Agent non-negotiable** (root `AGENTS.md`): new RBAC controls must be designed so
+they can be defined **per verified user** and **per group** — never only as an
+undifferentiated global toggle without a residual task id.
+
+Group *claims* from JWT/gateway already attribute identity (OAUTH-006 / GWY-002)
+and now drive **POL-006 group bindings** when present on `Subject.Groups`.
+Operators manage binding documents via overlay JSON today; admin SPA editor is
+**UI-011** residual.
+
+### SAML and multi-fleet configuration (design)
+
+**Does config-file management of SAML users/groups make sense for multi-fleet?**
+**Yes — with a precise definition of “manage”.**
+
+| Layer | Multi-fleet SoT | Notes |
+|-------|-----------------|-------|
+| **Who can authenticate** | **IdP** (Entra/Okta/ADFS) | Product does **not** provision SAML passwords or a local user table |
+| **SAML SP settings** | **Versioned config** (file / gitops / signed bundle) | IdP metadata URL or static metadata path, SP entity ID, ACS, attribute map (NameID/`sub`, groups attribute), optional tenant/issuer pin |
+| **IdP group → console role** (admin SSO) | **Same config plane** | e.g. map `mcp-admin-ops` → `operator`, `mcp-policy-admins` → `policy_admin`; default deny if no map match |
+| **IdP group / user → MCP denials** | **Policy overlay** (`subjects.groups` / `subjects.users`, preferably **signed** MGR-001) | Same deny-only language as POL-006; roll out to fleet via config management + hot-reload / last-good |
+| **Secrets** | Secret store / env / file mode 0600 | SP signing/decryption keys, client secrets — **never** in git plain text; never in audit/admin JSON |
+| **Single-host SPA CRUD** | Pilot residual (**UI-011**) | Useful for lab/break-glass; **must not** be required for multi-fleet consistency |
+
+**Architectural rules (POL-007 / fleet):**
+
+1. SAML is **SP + attribute map** only — Jenkins is never the SAML IdP/AS (ADR 0003).
+2. Config **maps and restricts**; it does not invent membership. Group claims missing or oversize fail closed (OAUTH-006 spirit).
+3. Multi-fleet prefers **immutable config + signed policy** over mutable per-pod DBs so every gateway/admin host converges on the same bindings.
+4. Admin console v1 remains **shared secret + one process role** until SSO lands; see [admin README — admin users](admin/README.md).
+5. Optional SPA Access UI stays secret-free and cannot widen enterprise `force_read_only`; fleet sites may run SPA read-only and push overlays only via signed apply pipelines.
+
+---
 
 ## Deny-only RBAC (POL-002)
 

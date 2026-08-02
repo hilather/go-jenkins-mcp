@@ -159,7 +159,7 @@ func collectAllNodes(ctx context.Context, client *jenkins.Client) (all []jenkins
 // non-empty, filters the full list then re-paginates and recomputes Summary
 // over non-denied nodes. Empty evaluator / empty deny list → unchanged GetNodes.
 func getNodesWithPolicyFilter(ctx context.Context, client *jenkins.Client, st regState, offset, limit int) (*jenkins.GetNodesToolResponse, error) {
-	patterns := policy.DenyNodeNamesFromEvaluator(st.policy)
+	patterns := policy.DenyNodeNamesForSubject(st.policy, effectiveSubject(st, ctx))
 	if len(patterns) == 0 {
 		return client.GetNodes(ctx, offset, limit)
 	}

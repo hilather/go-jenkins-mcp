@@ -15,11 +15,11 @@ import (
 	"github.com/simonfxr/go-jenkins-mcp/internal/gateway/qualify"
 )
 
-// runGateway dispatches gateway operator commands (GWY-003 lite + HOST-009 vault).
+// runGateway dispatches gateway operator commands (GWY-003 lite + HOST-009/010 vaults).
 func runGateway(args []string) error {
 	if len(args) < 1 {
 		return apperr.New(apperr.CodeInvalidArgument,
-			"gateway subcommand required: qualify | residual-status | consent-residual | consent-purge | consent-expire | subject-invalidate | vault | vault-put | vault-delete")
+			"gateway subcommand required: qualify | residual-status | consent-residual | consent-purge | consent-expire | subject-invalidate | vault | jwt-vault | vault-put | vault-delete")
 	}
 	switch args[0] {
 	case "qualify":
@@ -36,6 +36,9 @@ func runGateway(args []string) error {
 		return runGatewaySubjectInvalidate(args[1:])
 	case "vault":
 		return runGatewayVault(args[1:])
+	case "jwt-vault", "jwtvault":
+		// HOST-010 Mode B Jenkins-audience access-token vault.
+		return runGatewayJWTVault(args[1:])
 	case "vault-put":
 		// Legacy alias for `gateway vault put` (HOST-009).
 		return runGatewayVaultPut(args[1:])
@@ -44,7 +47,7 @@ func runGateway(args []string) error {
 		return runGatewayVaultDelete(args[1:])
 	default:
 		return apperr.New(apperr.CodeInvalidArgument,
-			fmt.Sprintf("unknown gateway subcommand %q (qualify|residual-status|consent-residual|consent-purge|consent-expire|subject-invalidate|vault|vault-put|vault-delete)", args[0]))
+			fmt.Sprintf("unknown gateway subcommand %q (qualify|residual-status|consent-residual|consent-purge|consent-expire|subject-invalidate|vault|jwt-vault|vault-put|vault-delete)", args[0]))
 	}
 }
 

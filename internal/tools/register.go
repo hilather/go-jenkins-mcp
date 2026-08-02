@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/simonfxr/go-jenkins-mcp/internal/adminops"
 	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
 	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
 	"github.com/simonfxr/go-jenkins-mcp/internal/mutation"
@@ -180,6 +181,12 @@ type RegisterOptions struct {
 	// CodeQuota). Empty SubjectKey skips. Wire *gateway.SubjectRateLimiter from
 	// cmd when ratePerMinute > 0 (0 = disabled residual).
 	SubjectRateLimiter SubjectRateLimiter
+	// EnableAdminOps registers admin_* management tools (MCP-OPS). Default false
+	// (pilot RO triage). Serve: --enable-admin-mcp. Requires AdminOps service.
+	EnableAdminOps bool
+	// AdminOps is the day-2 ops service for admin_* tools. Nil ⇒ tools not
+	// registered even when EnableAdminOps is true.
+	AdminOps *adminops.Service
 }
 
 // regState is the effective configuration for one Register call.
@@ -229,6 +236,10 @@ type regState struct {
 	subjectFromContext func(ctx context.Context) (policy.Subject, bool)
 	// MUT-001 multi-user: optional per-request confirm-token binding.
 	mutationBindingFromContext func(ctx context.Context) (mutation.Binding, bool)
+
+	// MCP-OPS admin_* tools (opt-in).
+	enableAdminOps bool
+	adminOps       *adminops.Service
 }
 
 // effectiveSubjectKey returns per-request SubjectKey when SubjectKeyFromContext
@@ -304,6 +315,8 @@ func resolveRegisterOptions(opts *RegisterOptions) regState {
 	st.subjectRateLimiter = opts.SubjectRateLimiter
 	st.subjectFromContext = opts.SubjectFromContext
 	st.mutationBindingFromContext = opts.MutationBindingFromContext
+	st.enableAdminOps = opts.EnableAdminOps
+	st.adminOps = opts.AdminOps
 	// MUT-001: process-scoped manager so preview tokens survive until confirm.
 	// Create once when mutations may register and caller did not inject one.
 	// Wave 30: also create under AllowMutations opt-in while Effective RO so
@@ -341,6 +354,7 @@ func newMutationManager(st regState) *mutation.Manager {
 
 // effectiveBudget returns budgets for EnforceBudget, applying LiveHardMax when set.
 // Soft target is clamped to the live hard max. Budgets value type is not mutated.
+// Does not apply POL-006 per-subject overlay caps — use effectiveBudgetForSubject.
 func (st regState) effectiveBudget() Budgets {
 	b := st.budget.Normalize()
 	if st.liveHardMax == nil {
@@ -351,6 +365,26 @@ func (st regState) effectiveBudget() Budgets {
 		if b.TargetBytes > b.HardMaxBytes {
 			b.TargetBytes = b.HardMaxBytes
 		}
+	}
+	return b
+}
+
+// effectiveBudgetForSubject is effectiveBudget further lowered by POL-006
+// per-user/group max_result_bytes when the evaluator exposes EffectiveDocument.
+// Never raises the process/LiveHardMax ceiling. Rate/burst caps remain residual
+// (process-wide LowerRate at serve) until per-subject rate maps land.
+func (st regState) effectiveBudgetForSubject(subject policy.Subject) Budgets {
+	b := st.effectiveBudget()
+	type effectiveDoc interface {
+		EffectiveDocument(policy.Subject) policy.Document
+	}
+	edp, ok := st.policy.(effectiveDoc)
+	if !ok || edp == nil {
+		return b
+	}
+	doc := edp.EffectiveDocument(subject)
+	if doc.MaxResultBytes > 0 {
+		b = LowerHardMax(b, doc.MaxResultBytes)
 	}
 	return b
 }
@@ -649,6 +683,11 @@ func Register(s *mcp.Server, client *jenkins.Client, opts *RegisterOptions) {
 	registerTraceFailureGraphTool(s, client, st)
 	registerSurveyRecentFailuresTool(s, client, st)
 
+	// MCP-OPS: admin_* management tools (opt-in EnableAdminOps + AdminOps).
+	if st.enableAdminOps {
+		registerAdminOpsTools(s, st, st.adminOps)
+	}
+
 	// Wave 28+29: live ListTools filter for AuthGate / deny_tools / subject / RO.
 	InstallListToolsPolicyFilter(s, st)
 }
@@ -828,7 +867,7 @@ func addTool[In, Out any](
 			)
 			return res, nil, mapped
 		}
-		enforced, _, berr := EnforceBudgetOrError(out, st.effectiveBudget(), st.strict)
+		enforced, _, berr := EnforceBudgetOrError(out, st.effectiveBudgetForSubject(effectiveSubject(st, ctx)), st.strict)
 		if berr != nil {
 			mapped := mapToolErr(berr)
 			emitToolError(ctx, st, t.Name, string(effect), toolErrorReason(mapped), start)

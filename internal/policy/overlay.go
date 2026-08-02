@@ -160,6 +160,12 @@ type Overlay struct {
 	// Signed production bundles use BundleEnvelope.Signature instead; this
 	// field is cleared on verified envelope overlays.
 	Signature string `json:"signature,omitempty"`
+
+	// Subjects holds optional per-user and per-group deny-only bindings (POL-006).
+	// Global fields above always apply; matching bindings only add denials /
+	// lower budgets. Never elevates force_read_only or Jenkins access.
+	// Admin CRUD / SPA: UI-011 residual until operator UI ships.
+	Subjects *SubjectBindings `json:"subjects,omitempty"`
 }
 
 // SignatureVerifier checks integrity of an enterprise policy overlay.
@@ -365,6 +371,9 @@ func (o *Overlay) Validate() error {
 		if *o.MaxToolsBurst <= 0 {
 			return apperr.New(apperr.CodeInvalidArgument, "max_tools_burst must be positive when set")
 		}
+	}
+	if err := o.Subjects.Validate(); err != nil {
+		return err
 	}
 	return nil
 }

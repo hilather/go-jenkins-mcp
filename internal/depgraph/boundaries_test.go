@@ -42,6 +42,7 @@ var requiredPackages = []string{
 	"internal/contracts",
 	"internal/apperr",
 	"internal/admin",
+	"internal/adminops",
 }
 
 func moduleRoot(t *testing.T) string {
@@ -275,7 +276,7 @@ func TestDependencyDirection(t *testing.T) {
 		// Wave 45 Track B: operator_caps_snapshot reports auth + mcpserver constants
 		// (identity re-verify TTL bounds, Streamable HTTP MaxBodyBytes); both are
 		// cycle-free leaves (auth/mcpserver do not import tools).
-		"internal/tools": {"internal/jenkins", "internal/apperr", "internal/contracts", "internal/policy", "internal/audit", "internal/telemetry", "internal/redact", "internal/search", "internal/logmirror", "internal/diagnostics", "internal/mutation", "internal/otelx", "internal/correlate", "internal/store", "internal/auth", "internal/mcpserver"},
+		"internal/tools": {"internal/jenkins", "internal/apperr", "internal/contracts", "internal/policy", "internal/audit", "internal/telemetry", "internal/redact", "internal/search", "internal/logmirror", "internal/diagnostics", "internal/mutation", "internal/otelx", "internal/correlate", "internal/store", "internal/auth", "internal/mcpserver", "internal/adminops"},
 		// depgraph is test-only package for this suite; production imports of it are empty.
 		"internal/otelx":     {},
 		"internal/correlate": {}, // INT-004 pure extractors (no network, no jenkins).
@@ -289,6 +290,12 @@ func TestDependencyDirection(t *testing.T) {
 			"internal/apperr", "internal/audit", "internal/auth", "internal/config",
 			"internal/diagnostics", "internal/keyring", "internal/policy",
 			"internal/gateway", "internal/profile", "internal/store", "internal/telemetry",
+		},
+		// MCP-OPS: shared admin day-2 ops for admin_* tools (not HTTP; not MCP SDK).
+		"internal/adminops": {
+			"internal/admin", "internal/apperr", "internal/audit", "internal/config",
+			"internal/diagnostics", "internal/gateway", "internal/policy",
+			"internal/profile", "internal/store", "internal/telemetry",
 		},
 		// UI-008: embed-only SPA assets; stdlib only (no other internal imports).
 		"internal/admin/uiembed": {},

@@ -14,6 +14,12 @@ ops parity”.
 
 ## Authentication (shared secret)
 
+**Design (admin users v1):** There is **no local admin user directory**. Operators
+share an optional process shared secret plus a **single process-wide role**
+(`--admin-role`). Multi-operator named accounts, passwords, and per-user admin
+RBAC are residual (SSO + multi-fleet config — see [admin README design notes](README.md)
+and **POL-007**). Console auth never elevates Jenkins or MCP tool rights.
+
 Optional shared secret (recommended). When configured, every `/admin/v1/*` request must present:
 
 ```http
@@ -764,6 +770,56 @@ fleet timeline) is not provided — this is per-host profile path merge only (HO
 
 Missing audit file (and no rotated siblings) → empty `events` (not 500). Path
 traversal on `{id}` rejected.
+
+## GET /admin/v1/profiles/{id}/audit/settings
+
+Returns the **AUD-001 event-type catalog** and which types the profile File sink
+currently persists (`type_filter.json` under the profile audit directory).
+Secret-free. Any authenticated admin role may **read**.
+
+```json
+{
+  "profileId": "corp",
+  "types": ["login_success", "login_fail", "serve_start", "tool_deny", "tool_error", "tool_success", "auth_fail", "audit_settings", "policy_validate", "policy_apply", "admin_cache_evict", "admin_support_bundle", "admin_subject_invalidate", "admin_consent_purge", "mutation_preview", "mutation_confirm", "mutation_deny"],
+  "enabled": {
+    "login_success": true,
+    "tool_success": false
+  },
+  "pathNote": "profile_data/audit/type_filter.json",
+  "residual": "type filter applies to File sink; serve reloads on mtime; multi-pod residual"
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `types` | Stable catalog from `audit.KnownEventTypes()` — **agents must extend this when adding types** |
+| `enabled` | Full map type → bool after defaults merge (`tool_success` default off unless env seed / saved filter) |
+| `pathNote` / `residual` | Operator honesty; multi-pod filter sync residual |
+
+SPA **Audit → Event type settings** renders checkboxes from this response.
+
+## PUT /admin/v1/profiles/{id}/audit/settings
+
+(also accepts **POST** with the same body for clients that cannot PUT)
+
+Requires **`gateway_ops`** (`operator` or `policy_admin`). Body:
+
+```json
+{ "enabled": { "tool_deny": true, "tool_success": false } }
+```
+
+- Partial map **merges** with current known-type state; unknown keys are **ignored** (fail closed).
+- Writes `audit/type_filter.json` (0600) under the profile data dir.
+- Live `OpenProfileSink` / `ReloadingFilterSink` reloads when the file mtime changes (no process restart).
+- Does **not** rewrite historical JSONL; only affects future emits.
+- Emits best-effort `type=audit_settings` (`reasonCode=type_filter_updated`) via
+  bare File sink (not filter-gated) so operators cannot silence the change event
+  by disabling `audit_settings` in the filter itself. No tokens or full enabled map
+  in the event body.
+
+Response shape matches GET (updated `enabled`). Viewer role → **403**.
+
+**Agent rule:** new audit types go in `KnownEventTypes` so they appear here; see root `AGENTS.md` audit section.
 
 ## GET /admin/v1/profiles/{id}/doctor
 

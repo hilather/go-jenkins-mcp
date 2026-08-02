@@ -6,9 +6,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -393,4 +395,235 @@ func truncateForLog(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// --- Mode B (HOST-010 / HOST-013) live lab residual ---
+
+// TestLiveOAuth_ModeB_VaultObtainBearerAgainstMockRS mints a Jenkins-audience
+// JWT from mock-oidc, stores it in a Mode B JWT vault, Obtains Bearer-only
+// HTTP auth, and presents it to mock-rs /api/whoAmI (success). Also proves
+// Basic-only and wrong-audience Bearer fail closed at mock-rs (no anonymous).
+// Residual: mock RS ≠ jwt-auth-filter production pin (OAUTH-009).
+func TestLiveOAuth_ModeB_VaultObtainBearerAgainstMockRS(t *testing.T) {
+	oidcBase := labOIDCBase()
+	rsBase := labRSBase()
+	requireHealthz(t, oidcBase+"/healthz", "oauth-lab mock-oidc")
+	requireHealthz(t, rsBase+"/healthz", "oauth-lab mock-rs")
+
+	// Mint access token with default lab audience (jenkins-api).
+	token := mintLabAccessToken(t, oidcBase, map[string]string{
+		"audience": labAudience(),
+		"subject":  "mode-b-lab-user",
+	})
+	if token == "" || !strings.Contains(token, ".") {
+		t.Fatalf("expected JWT-shaped token, got len=%d", len(token))
+	}
+
+	// Mode B vault + Live Obtain → Bearer only.
+	v := gateway.NewMemoryJWTVault()
+	caller := labCaller()
+	key := gateway.SubjectKey(caller)
+	if err := v.Put(context.Background(), key, token); err != nil {
+		t.Fatalf("jwt vault put: %v", err)
+	}
+	p, err := gateway.RequireJWTRSBearerSetup(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth, err := gateway.ObtainHTTPAuth(context.Background(), p, caller)
+	if err != nil {
+		assertNoTokenLeak(t, token, err.Error())
+		t.Fatalf("Mode B Obtain: %v", err)
+	}
+	if auth.Scheme != gateway.HTTPAuthSchemeBearer || auth.Username != "" {
+		t.Fatalf("Mode B must be Bearer without username: %+v", auth)
+	}
+	if auth.Token != token {
+		t.Fatal("Obtain returned different token material")
+	}
+	assertNoTokenLeak(t, token, auth.String(), p.Status(context.Background()).ErrorMessageSafe)
+
+	// Present Bearer to mock-rs whoAmI → 200.
+	req, err := http.NewRequest(http.MethodGet, rsBase+"/api/whoAmI", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+auth.Token)
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		assertNoTokenLeak(t, token, string(body))
+		t.Fatalf("mock-rs whoAmI status %d body=%s", resp.StatusCode, body)
+	}
+	if !strings.Contains(string(body), "mode-b-lab-user") && !strings.Contains(string(body), `"ok":true`) && !strings.Contains(string(body), `"ok": true`) {
+		// ok+sub shape preferred; at least ok true.
+		if !strings.Contains(string(body), "ok") {
+			t.Fatalf("unexpected whoAmI body: %s", body)
+		}
+	}
+	t.Log("Mode B vault Obtain Bearer accepted by mock-rs (not jwt-auth-filter production pin)")
+}
+
+// TestLiveOAuth_ModeB_MockRSFailClosedBasicAndWrongAud proves mock-rs rejects
+// Basic-only and wrong-audience Bearer (OAUTH-009 fallthrough matrix residual).
+func TestLiveOAuth_ModeB_MockRSFailClosedBasicAndWrongAud(t *testing.T) {
+	oidcBase := labOIDCBase()
+	rsBase := labRSBase()
+	requireHealthz(t, oidcBase+"/healthz", "oauth-lab mock-oidc")
+	requireHealthz(t, rsBase+"/healthz", "oauth-lab mock-rs")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	// Basic alone → 401 (no session/anonymous fallthrough).
+	req, err := http.NewRequest(http.MethodGet, rsBase+"/api/whoAmI", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.SetBasicAuth("alice", "not-a-real-token")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("Basic-only want 401 got %d", resp.StatusCode)
+	}
+
+	// Wrong audience Bearer → 401.
+	badTok := mintLabAccessToken(t, oidcBase, map[string]string{
+		"scenario": "wrong_audience",
+	})
+	req2, err := http.NewRequest(http.MethodGet, rsBase+"/api/whoAmI", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req2.Header.Set("Authorization", "Bearer "+badTok)
+	resp2, err := client.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body2, _ := io.ReadAll(io.LimitReader(resp2.Body, 4096))
+	_ = resp2.Body.Close()
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("wrong aud want 401 got %d body=%s", resp2.StatusCode, body2)
+	}
+	assertNoTokenLeak(t, badTok, string(body2))
+
+	// Expired Bearer → 401.
+	expTok := mintLabAccessToken(t, oidcBase, map[string]string{
+		"scenario": "expired",
+	})
+	req3, err := http.NewRequest(http.MethodGet, rsBase+"/api/whoAmI", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req3.Header.Set("Authorization", "Bearer "+expTok)
+	resp3, err := client.Do(req3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp3.Body.Close()
+	if resp3.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expired want 401 got %d", resp3.StatusCode)
+	}
+	t.Log("mock-rs Basic + wrong_aud + expired fail-closed (OAUTH-009 lab residual; not production pin)")
+}
+
+// TestLiveOAuth_ModeB_CrossSubjectVaultIsolation proves Mode B vault never
+// returns another subject's token (no silent fallthrough to Mode A/other sub).
+func TestLiveOAuth_ModeB_CrossSubjectVaultIsolation(t *testing.T) {
+	oidcBase := labOIDCBase()
+	requireHealthz(t, oidcBase+"/healthz", "oauth-lab mock-oidc")
+
+	tokAlice := mintLabAccessToken(t, oidcBase, map[string]string{
+		"subject": "alice-lab",
+	})
+	v := gateway.NewMemoryJWTVault()
+	alice := gateway.Caller{
+		Subject: "alice", Tenant: "lab-tenant", WorkloadID: "wl", ProfileID: "lab-corp",
+	}
+	bob := gateway.Caller{
+		Subject: "bob", Tenant: "lab-tenant", WorkloadID: "wl", ProfileID: "lab-corp",
+	}
+	if err := v.Put(context.Background(), gateway.SubjectKey(alice), tokAlice); err != nil {
+		t.Fatal(err)
+	}
+	p, err := gateway.RequireJWTRSBearerSetup(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Bob has no entry → not_found; never Alice's token.
+	cred, err := p.Obtain(context.Background(), bob)
+	if err == nil || cred.AccessToken != "" {
+		t.Fatalf("bob must not obtain alice token: cred=%v err=%v", cred, err)
+	}
+	if apperr.CodeOf(err) != apperr.CodeNotFound && apperr.CodeOf(err) != apperr.CodeAuthentication {
+		t.Fatalf("code %v want not_found/auth: %v", apperr.CodeOf(err), err)
+	}
+	assertNoTokenLeak(t, tokAlice, err.Error())
+	t.Log("Mode B cross-subject isolation fail-closed")
+}
+
+func labOIDCBase() string {
+	host := envOr("OAUTH_HOST_BIND", "127.0.0.1")
+	return "http://" + host + ":" + envOr("OAUTH_OIDC_PORT", "18081")
+}
+
+func labRSBase() string {
+	host := envOr("OAUTH_HOST_BIND", "127.0.0.1")
+	return "http://" + host + ":" + envOr("OAUTH_RS_PORT", "18082")
+}
+
+// mintLabAccessToken POSTs mock-oidc /token with form params; returns access_token.
+func mintLabAccessToken(t *testing.T, oidcBase string, form map[string]string) string {
+	t.Helper()
+	// Prefer scenario query when provided alone (GET convenience on mock-oidc).
+	if sc := form["scenario"]; sc != "" && len(form) == 1 {
+		resp, err := http.Get(oidcBase + "/token?scenario=" + url.QueryEscape(sc))
+		if err != nil {
+			t.Fatalf("mint get: %v", err)
+		}
+		defer resp.Body.Close()
+		return parseAccessTokenJSON(t, resp)
+	}
+	vals := url.Values{}
+	for k, v := range form {
+		vals.Set(k, v)
+	}
+	req, err := http.NewRequest(http.MethodPost, oidcBase+"/token", strings.NewReader(vals.Encode()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		t.Fatalf("mint post: %v", err)
+	}
+	defer resp.Body.Close()
+	return parseAccessTokenJSON(t, resp)
+}
+
+func parseAccessTokenJSON(t *testing.T, resp *http.Response) string {
+	t.Helper()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("mint status %d body=%s", resp.StatusCode, raw)
+	}
+	var doc struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("mint json: %v", err)
+	}
+	if strings.TrimSpace(doc.AccessToken) == "" {
+		t.Fatal("empty access_token")
+	}
+	return doc.AccessToken
 }

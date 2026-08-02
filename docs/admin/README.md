@@ -98,13 +98,43 @@ HTTP server timeouts (local admin, not multi-tenant gateway): `ReadHeaderTimeout
 
 **Reverse-proxy residual:** prefer **same-origin** (SPA + `/admin/v1` on one host). If TLS terminates upstream, do **not** strip or weaken CSP carelessly; re-apply or pass through origin headers.
 
-**Console RBAC** (separate from MCP deny-only subjects): `viewer` = read GETs; `operator` = future cache destructive; `policy_admin` = future policy write. **No role can widen enterprise `force_read_only`.** API contract: [`api-v1.md`](api-v1.md) (includes `GET /admin/v1/me`). SPA notes: [`../../web/admin/README.md`](../../web/admin/README.md).
+**Console RBAC** (separate from MCP deny-only subjects): `viewer` = read GETs; `operator` = day-2 destructive + gateway ops; `policy_admin` = policy write + gateway ops. **No role can widen enterprise `force_read_only`.** API contract: [`api-v1.md`](api-v1.md) (includes `GET /admin/v1/me`). SPA notes: [`../../web/admin/README.md`](../../web/admin/README.md).
+
+### Design notes — admin users (v1, intentional)
+
+The admin console is an **operator control plane for one process/host**, not an
+application with a local user directory.
+
+| Today (shipped) | Not in product |
+|-----------------|----------------|
+| **One shared secret** authenticates the console (`--admin-token-env` / `--admin-token-file`; Bearer / header) | Local username/password signup or multi-operator password DB |
+| **One process-wide role** (`--admin-role=viewer\|operator\|policy_admin`) for the whole BFF | Per-person admin accounts with different roles on the same process |
+| `GET /admin/v1/me` returns role + permissions + `tokenConfigured` — **never** the token | Cookie sessions / multi-session logout table (residual with SSO) |
+| Role is **console-only** — never elevates Jenkins or MCP deny-only rights | Treating the admin token as a multi-user MCP identity |
+
+**How operators “manage admin users” today:** issue/rotate the shared secret
+out-of-band (secret manager, file mode 0600); set the process role at serve
+start; restart or redeploy to change role. Multiple humans share that
+token+role for a given host — that is the pilot model (HOST-007 honesty:
+single process role).
+
+**Future (admin only):**
+
+| Path | Intent |
+|------|--------|
+| **SAML/OIDC SSO for operators** (UI-003 residual + **POL-007**) | Replace or complement the shared secret; IdP authenticates the operator |
+| **Multi-fleet: config-managed** (preferred for many hosts) | SAML SP settings, attribute map, and **IdP group → console role** maps live in **versioned configuration** (gitops / signed files), not a per-pod user DB — see [policy-rbac.md § SAML multi-fleet](../policy-rbac.md#saml-and-multi-fleet-configuration-design) and **POL-007** |
+| **Single-host SPA residual** (UI-011) | Optional local editor for pilot overlays; multi-fleet SoT remains config/signed bundles (**MGR-001**) |
+
+Admin SSO must not invent group membership: groups come from the assertion
+(or OIDC claims); missing/overage claims fail closed. SP private keys and
+tokens stay in secret stores / env — **not** committed config.
 
 | Surface | SPA status (honest) |
 |---------|---------------------|
-| Overview / policy effective / doctor read | Scaffold (UI-001) + BFF (UI-002) + role badge / token control (UI-003) + serve/CSP packaging (UI-008) |
+| Overview / policy effective / doctor read | Scaffold (UI-001) + BFF (UI-002) + role badge / token control (UI-003) + serve/CSP packaging (UI-008). **MCP-OPS:** same reads available as `admin_*` tools when serve uses `--enable-admin-mcp` (default off) — [mcp-ops-parity.md](mcp-ops-parity.md) |
 | **Metrics** (UI-005) | Auto-refresh (15s) with pause on hidden tab + manual pause; **Apache ECharts** snapshot bars + session history (≤60 pts); tables under charts; secret-free JSON export. **Residual:** process-local only; no fleet aggregation |
-| **Audit** (UI-006) | type dropdown (tool_deny/error/success, mutation_*), limit/before, BFF **`external_subject`** exact match (case-sensitive) on multi-user `externalSubject`, **externalSubject** / **subjectKeyHash** table columns (muted/truncated), SPA client exact filter residual for older BFF, detail drawer, load-older, export includes multi-user fields. **Residual:** no live SSE tail; page-capped client export only; multi-pod aggregation residual |
+| **Audit** (UI-006) | type dropdown (catalog from settings API + static fallback), limit/before, BFF **`external_subject`** exact match (case-sensitive) on multi-user `externalSubject`, **externalSubject** / **subjectKeyHash** table columns (muted/truncated), SPA client exact filter residual for older BFF, detail drawer, load-older, export includes multi-user fields. **Event type settings:** enable/disable all known AUD-001 types (`GET`/`PUT …/audit/settings`, `gateway_ops` on write; `type_filter.json`; File sink reloads on mtime). **Residual:** no live SSE tail; page-capped client export only; multi-pod aggregation residual |
 | Policy write editor | Not yet (UI-004) |
 | Destructive ops | Not yet (UI-007) |
 

@@ -727,6 +727,39 @@ pre.json {
   margin-bottom: 0.85rem;
 }
 
+.audit-type-toggles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.45rem 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.audit-type-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.audit-type-toggle input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.audit-type-toggle input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+.audit-type-badge {
+  font-size: 0.72rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+}
+
 .filters-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));

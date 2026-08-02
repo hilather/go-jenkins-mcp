@@ -11,8 +11,17 @@ const (
 	TypeServeStart   = "serve_start"
 	TypeToolDeny     = "tool_deny"
 	TypeToolError    = "tool_error"   // handler/budget/subject-limiter failure (non-deny)
-	TypeToolSuccess  = "tool_success" // optional summary; off by default (JENKINS_MCP_AUDIT_TOOL_OK)
+	TypeToolSuccess  = "tool_success" // high volume; filter default off (admin toggle or JENKINS_MCP_AUDIT_TOOL_OK seed)
 	TypeAuthFail     = "auth_fail"    // serve-time identity / credential failures
+	// TypeAuditSettings is admin PUT …/audit/settings (type filter change). Secret-free.
+	TypeAuditSettings = "audit_settings"
+	// Admin / MCP-OPS write events (BFF + admin_* tools). Secret-free.
+	TypePolicyValidate      = "policy_validate"
+	TypePolicyApply         = "policy_apply"
+	TypeAdminCacheEvict     = "admin_cache_evict"
+	TypeAdminSupportBundle  = "admin_support_bundle"
+	TypeAdminSubjectInvalid = "admin_subject_invalidate"
+	TypeAdminConsentPurge   = "admin_consent_purge"
 )
 
 // Decision outcomes recorded on events (not Jenkins grants).

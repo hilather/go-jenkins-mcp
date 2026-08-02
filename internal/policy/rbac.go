@@ -153,6 +153,10 @@ type Document struct {
 	// Pilot default is false so provisional session usernames can be used until AUTH-004.
 	// Set true in enterprise mode when identity verification is mandatory.
 	RequireVerifiedSubject bool
+	// UserBindings / GroupBindings are POL-006 deny-only attachments.
+	// Evaluate merges matching bindings into this document (most restrictive).
+	UserBindings  []UserBinding
+	GroupBindings []GroupBinding
 }
 
 // DocumentFromOverlay builds a Document from a loaded overlay.
@@ -182,6 +186,14 @@ func DocumentFromOverlay(o *Overlay) Document {
 	if n, ok := o.EffectiveMaxToolsBurst(); ok {
 		doc.MaxToolsBurst = n
 	}
+	if o.Subjects != nil {
+		if len(o.Subjects.Users) > 0 {
+			doc.UserBindings = append([]UserBinding(nil), o.Subjects.Users...)
+		}
+		if len(o.Subjects.Groups) > 0 {
+			doc.GroupBindings = append([]GroupBinding(nil), o.Subjects.Groups...)
+		}
+	}
 	return doc
 }
 
@@ -198,14 +210,17 @@ type PolicyEvaluator interface {
 // Rules (deterministic, no network, no code execution):
 //  1. Invalid/empty/anonymous subject → Deny (POL-003).
 //  2. RequireVerifiedSubject && !subject.Verified → Deny.
-//  3. Explicit deny_tools match → Deny.
-//  4. Optional deny job-prefix match → Deny.
-//  5. Optional deny_node_names / deny_view_names match → Deny (Wave 35).
-//  6. Optional deny_artifact_paths match → Deny (Wave 36).
-//  7. Optional deny_branch_names match → Deny (Wave 37 BranchName; Wave 38
+//  3. POL-006: merge matching user/group bindings into the document
+//     (union denials; min positive budgets) — never invent group membership.
+//  4. Explicit deny_tools match → Deny.
+//  5. Optional deny job-prefix match → Deny.
+//  6. Optional deny_node_names / deny_view_names match → Deny (Wave 35).
+//  7. Optional deny_artifact_paths match → Deny (Wave 36).
+//  8. Optional deny_branch_names match → Deny (Wave 37 BranchName; Wave 38
 //     multi-segment JobName leaf / full when BranchName empty).
-//  8. ModeStrict && tool not a known seed/classified tool → Deny.
-//  9. Otherwise → Allow (MCP does not further restrict).
+//  9. ModeStrict && tool not a known seed/classified tool → Deny.
+//
+// 10. Otherwise → Allow (MCP does not further restrict).
 //
 // Jenkins remains authoritative: Allow here still requires Jenkins allow.
 type DenyOnlyEvaluator struct {
@@ -248,6 +263,22 @@ func (e *DenyOnlyEvaluator) Evaluate(subject Subject, action Action, target Targ
 		return d
 	}
 
+	// POL-006: merge matching user/group bindings (most restrictive / deny-only).
+	doc := EffectiveDocumentForSubject(e.doc, subject)
+	return evaluateAgainstDocument(doc, action, target)
+}
+
+// EffectiveDocument returns the most-restrictive document for subject (POL-006).
+// Used by status/budget paths that need merged caps without a full Evaluate.
+func (e *DenyOnlyEvaluator) EffectiveDocument(subject Subject) Document {
+	if e == nil {
+		return Document{Mode: ModePilot}
+	}
+	return EffectiveDocumentForSubject(e.doc, subject)
+}
+
+// evaluateAgainstDocument applies deny-only rules for a (possibly merged) document.
+func evaluateAgainstDocument(doc Document, action Action, target Target) Decision {
 	tool := strings.TrimSpace(action.ToolName)
 	if tool == "" {
 		return Decision{
@@ -258,8 +289,8 @@ func (e *DenyOnlyEvaluator) Evaluate(subject Subject, action Action, target Targ
 	}
 
 	// Explicit deny by tool name (works for any Jenkins role, including admin).
-	if e.doc.DenyTools != nil {
-		if _, denied := e.doc.DenyTools[tool]; denied {
+	if doc.DenyTools != nil {
+		if _, denied := doc.DenyTools[tool]; denied {
 			return Decision{
 				Effect:      EffectDeny,
 				ReasonCode:  ReasonExplicitDeny,
@@ -275,7 +306,7 @@ func (e *DenyOnlyEvaluator) Evaluate(subject Subject, action Action, target Targ
 	// (avoids "secret-folder" matching "secret-folder-other").
 	job := strings.TrimSpace(target.JobName)
 	if job != "" {
-		for _, prefix := range e.doc.DenyJobPrefixes {
+		for _, prefix := range doc.DenyJobPrefixes {
 			prefix = strings.TrimSpace(prefix)
 			if prefix == "" {
 				continue
@@ -295,7 +326,7 @@ func (e *DenyOnlyEvaluator) Evaluate(subject Subject, action Action, target Targ
 	// Checked after job prefixes when Target carries NodeName / ViewName / ArtifactPath.
 	node := strings.TrimSpace(target.NodeName)
 	if node != "" {
-		for _, pat := range e.doc.DenyNodeNames {
+		for _, pat := range doc.DenyNodeNames {
 			pat = strings.TrimSpace(pat)
 			if pat == "" {
 				continue
@@ -312,7 +343,7 @@ func (e *DenyOnlyEvaluator) Evaluate(subject Subject, action Action, target Targ
 	}
 	view := strings.TrimSpace(target.ViewName)
 	if view != "" {
-		for _, pat := range e.doc.DenyViewNames {
+		for _, pat := range doc.DenyViewNames {
 			pat = strings.TrimSpace(pat)
 			if pat == "" {
 				continue
@@ -330,7 +361,7 @@ func (e *DenyOnlyEvaluator) Evaluate(subject Subject, action Action, target Targ
 	// Wave 36: artifact path patterns (relative paths with '/' separators).
 	art := strings.TrimSpace(target.ArtifactPath)
 	if art != "" {
-		for _, pat := range e.doc.DenyArtifactPaths {
+		for _, pat := range doc.DenyArtifactPaths {
 			pat = strings.TrimSpace(pat)
 			if pat == "" {
 				continue
@@ -359,7 +390,7 @@ func (e *DenyOnlyEvaluator) Evaluate(subject Subject, action Action, target Targ
 	branch := strings.TrimSpace(target.BranchName)
 	if branch != "" {
 		cands := branchNameDenyCandidates(branch)
-		for _, pat := range e.doc.DenyBranchNames {
+		for _, pat := range doc.DenyBranchNames {
 			pat = strings.TrimSpace(pat)
 			if pat == "" {
 				continue
@@ -375,13 +406,13 @@ func (e *DenyOnlyEvaluator) Evaluate(subject Subject, action Action, target Targ
 				}
 			}
 		}
-	} else if len(e.doc.DenyBranchNames) > 0 && job != "" {
+	} else if len(doc.DenyBranchNames) > 0 && job != "" {
 		jobNorm, ok := NormalizeJobFullName(job)
 		if ok && jobNorm != "" {
 			cands := BranchDenyCandidates(jobNorm)
 			if len(cands) > 0 {
 				leaf := cands[0] // BranchDenyCandidates puts leaf first
-				for _, pat := range e.doc.DenyBranchNames {
+				for _, pat := range doc.DenyBranchNames {
 					pat = strings.TrimSpace(pat)
 					if pat == "" {
 						continue
@@ -403,7 +434,7 @@ func (e *DenyOnlyEvaluator) Evaluate(subject Subject, action Action, target Targ
 	}
 
 	// Strict mode: unknown/unclassified tools default deny.
-	if e.doc.Mode == ModeStrict {
+	if doc.Mode == ModeStrict {
 		if !IsKnownSeedTool(tool) {
 			return Decision{
 				Effect:      EffectDeny,

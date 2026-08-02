@@ -2,7 +2,11 @@
 
 **Audience:** implementers, agents, security  
 **Related:** [api-v1.md](api-v1.md), [ADR 0014](../adr/0014-admin-console-reactive-spa.md), [AGENTS.md](../../AGENTS.md)  
-**Status:** Gap analysis + backlog (2026-08-01). Local admin BFF/SPA is first-class for **operators in a browser**; **agent-facing management** via MCP is incomplete and is a first-class product requirement going forward.
+**Status:** **Done\* foundation (MCP-OPS-001…008)** — `admin_*` tools via
+`--enable-admin-mcp` (default **off**); shared library `internal/adminops`;
+process role `viewer|operator|policy_admin`. Local admin BFF/SPA remains
+first-class for browser operators. POL-006/007 RBAC user/group + SAML tools
+remain residual.
 
 ---
 
@@ -51,7 +55,11 @@ Console RBAC: `viewer` / `operator` / `policy_admin` (never widens enterprise `f
 | Mutations (start/stop/…) | allow-mutations | Jenkins writes, not admin BFF |
 | External logs / adapters | enable-adapter | Not admin SPA |
 
-**Gap:** Almost the entire admin console (profiles list, effective policy show, policy apply, metrics snapshot, audit tail, cache status/evict, residual-status, vault inventory, consent purge, subject-invalidate, support-bundle) is **CLI and/or admin HTTP only** — agents cannot manage those via MCP tools today.
+**Done\* lite:** With `--enable-admin-mcp`, agents get `admin_*` tools covering
+health/version/me, residual-status, profiles, policy effective/overlay/validate/apply
+(apply durable residual when signed bundles), metrics, audit list/settings, doctor,
+security self-check, cache status/plan/evict, support-bundle, vault status,
+subject-invalidate, consent-purge. Default pilot RO stdio keeps admin tools **off**.
 
 ---
 
@@ -69,8 +77,11 @@ Authz: process **admin role** (same as console) or stricter serve-time gate; des
 | Effective policy | `admin_policy_effective` | P0 | Mirror show-effective |
 | Policy overlay get | `admin_policy_overlay_get` | P1 | |
 | Policy validate/apply | `admin_policy_validate`, `admin_policy_apply` | P1 | policy_admin + confirm on apply |
+| User/group RBAC bindings (POL-006) | `admin_rbac_list_bindings`, `admin_rbac_put_binding`, `admin_rbac_delete_binding` | P1 | Policy language **Done\*** (`subjects.users`/`subjects.groups`); **admin_* CRUD residual** until UI-011 |
+| SAML SP / attribute map (POL-007) | `admin_saml_status`, `admin_saml_config_get` (write residual) | P2 | Secret-free metadata only; residual until POL-007 |
 | Metrics snapshot | `admin_metrics` | P0 | Counters/gauges only; residual note |
 | Audit list | `admin_audit_list` | P0 | limit/before/type/external_subject caps |
+| Audit type settings | `admin_audit_settings_get`, `admin_audit_settings_put` | P1 | Mirror GET/PUT `…/audit/settings`; gateway_ops on put; catalog from KnownEventTypes |
 | Doctor | `admin_doctor` (or extend `jenkins_doctor` with profile parity) | P0 | Prefer one doctor path + document alias residual |
 | Security self-check | `admin_security_selfcheck` | P1 | Offline default |
 | Cache status | `admin_cache_status` | P0 | |
@@ -87,16 +98,16 @@ Authz: process **admin role** (same as console) or stricter serve-time gate; des
 
 ## 5. Task backlog (MCP-OPS / ADM-MCP)
 
-| ID | Task | Size | Acceptance |
-|----|------|------|------------|
-| **MCP-OPS-001** | Design: `admin_*` tool schemas, RegisterOptions flag, role gate, deny interaction with force_read_only | M | ADR amend or this doc § accepted; no secrets in schemas |
-| **MCP-OPS-002** | Implement read tools: health, version, me, residual-status, profiles list/show, policy effective, metrics, audit list, doctor, cache status | L | Unit + MCP smoke list tools; secret canaries |
-| **MCP-OPS-003** | Implement write tools: policy validate/apply, cache plan/evict, support-bundle, subject-invalidate, consent-purge | L | Confirm tokens; RBAC fail-closed; AUD-001 emit on writes |
-| **MCP-OPS-004** | Wire serve: `--enable-admin-mcp` / profile flag; default off; docs packaging | S | `make` help + user docs |
-| **MCP-OPS-005** | Admin SPA residual note: “also available via MCP when admin-mcp enabled” | S | Overview or docs |
-| **MCP-OPS-006** | Parity test: every BFF route in api-v1 has MCP tool name or residual marker in this matrix | M | CI test or generate table from registry |
-| **MCP-OPS-007** | Agent usage guide: Cursor ops profile using admin_* tools | S | docs/agent-usage or user README |
-| **MCP-OPS-008** | Audit: every admin_* write emits AUD-001 | S | Align AGENTS audit non-negotiable |
+| ID | Task | Size | Acceptance | Status |
+|----|------|------|------------|--------|
+| **MCP-OPS-001** | Design: `admin_*` tool schemas, RegisterOptions flag, role gate | M | This doc + `internal/adminops` | **Done\*** |
+| **MCP-OPS-002** | Read tools: health, version, me, residual-status, profiles, policy effective, metrics, audit list, doctor, cache status | L | Unit + MCP list/call; secret canaries | **Done\*** |
+| **MCP-OPS-003** | Write tools: policy validate/apply, cache plan/evict, support-bundle, subject-invalidate, consent-purge, audit settings | L | Confirm tokens; RBAC fail-closed; AUD-001 | **Done\*** (policy apply durable residual) |
+| **MCP-OPS-004** | Wire serve: `--enable-admin-mcp` / `--admin-role`; default off | S | usage + log line | **Done\*** |
+| **MCP-OPS-005** | Admin SPA residual note | S | docs + Overview residual | **Done\*** docs |
+| **MCP-OPS-006** | Parity catalog + residual map | M | `adminops.ToolCatalog` + tests | **Done\*** |
+| **MCP-OPS-007** | Agent usage guide | S | docs/agent-usage | **Done\*** (this section + agent-usage note) |
+| **MCP-OPS-008** | Audit on admin_* writes | S | emitWriteAudit | **Done\*** |
 
 ---
 

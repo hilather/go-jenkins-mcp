@@ -222,6 +222,26 @@ export interface AuditQuery {
   externalSubject?: string;
 }
 
+/**
+ * GET/PUT /admin/v1/profiles/{id}/audit/settings — event-type enable/disable.
+ * Catalog (`types`) must stay in sync with internal/audit.KnownEventTypes.
+ * Never includes secrets. PUT requires gateway_ops.
+ */
+export interface AuditSettingsResponse {
+  profileId: string;
+  /** Known AUD-001 type strings (catalog). */
+  types: string[];
+  /** type → whether File sink should persist that type. */
+  enabled: Record<string, boolean>;
+  pathNote?: string;
+  residual?: string;
+}
+
+export interface AuditSettingsPutRequest {
+  /** Partial or full map of known types; unknown keys ignored by BFF. */
+  enabled: Record<string, boolean>;
+}
+
 /** GET /admin/v1/me (UI-003). Never includes the token value. */
 
 export interface MeResponse {

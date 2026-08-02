@@ -177,7 +177,8 @@ func (s *File) Close() error {
 	return err
 }
 
-// OpenProfileSink creates a File sink under profileDataDir (AUD-001 default layout).
+// OpenProfileSink creates a File sink under profileDataDir (AUD-001 default layout),
+// wrapped with ReloadingFilterSink so admin type enable/disable applies without restart.
 // profileDataDir empty → Nop. Failures return Nop + error so callers stay fail-safe.
 func OpenProfileSink(profileDataDir string) (Sink, error) {
 	profileDataDir = filepath.Clean(profileDataDir)
@@ -190,7 +191,7 @@ func OpenProfileSink(profileDataDir string) (Sink, error) {
 	if err != nil {
 		return Nop{}, err
 	}
-	return f, nil
+	return NewReloadingFilterSink(profileDataDir, f), nil
 }
 
 // Multi fans out to several sinks (e.g. Memory + File in tests). Best-effort:

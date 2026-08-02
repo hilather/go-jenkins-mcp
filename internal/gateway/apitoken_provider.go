@@ -370,13 +370,13 @@ func HTTPAuthFromCredential(cred Credential) (HTTPAuth, error) {
 
 // residualJWTRSProvider is a Mode B fail-closed stub used when operators want
 // an explicit not_configured surface without a vault (tests / disabled path).
-// Prefer JWTRSBearerProvider + JWTVault for HOST-010 offline Obtain.
-// Live jwt-auth-filter production pin remains OAUTH-009 residual either way.
+// Production/serve wiring uses JWTRSBearerProvider + JWTVault (HOST-010 Done*
+// offline). Live jwt-auth-filter / Entra production pin remains OAUTH-009 residual.
 type residualJWTRSProvider struct{}
 
-// NewResidualJWTRSProvider returns a Mode B residual fail-closed provider
-// (no vault). CredentialProviderFromEnviron wires the vault path instead;
-// this helper remains for explicit residual / disabled-mode tests.
+// NewResidualJWTRSProvider returns a Mode B fail-closed provider with no vault.
+// CredentialProviderFromEnviron wires FileJWTVault instead; this helper remains
+// for explicit not_configured / disabled-mode tests (no silent Mode A fallthrough).
 func NewResidualJWTRSProvider() CredentialProvider {
 	return residualJWTRSProvider{}
 }
@@ -384,14 +384,14 @@ func NewResidualJWTRSProvider() CredentialProvider {
 // Mode implements CredentialProvider.
 func (residualJWTRSProvider) Mode() Mode { return ModeJWTRSBearer }
 
-// Obtain implements CredentialProvider — always residual not_configured.
+// Obtain implements CredentialProvider — always not_configured (no vault).
 func (residualJWTRSProvider) Obtain(ctx context.Context, caller Caller) (Credential, error) {
 	if err := ctx.Err(); err != nil {
 		return Credential{}, apperr.Wrap(apperr.CodeCancelled, "gateway credential obtain cancelled", err)
 	}
 	_ = caller
 	return Credential{}, notConfigured(
-		"gateway credential mode jwt_rs_bearer is residual (HOST-010); not_configured")
+		"jwt_rs_bearer provider has no vault (not_configured); use jwt vault Live setup")
 }
 
 // Invalidate implements CredentialProvider.
@@ -413,7 +413,7 @@ func (residualJWTRSProvider) Status(ctx context.Context) ProviderStatus {
 		ASConfigured:     false,
 		Ready:            false,
 		ErrorCode:        string(apperr.CodeCapabilityMissing),
-		ErrorMessageSafe: "jwt_rs_bearer residual (HOST-010); live IdP JWT RS not wired (OAUTH-009)",
+		ErrorMessageSafe: "jwt_rs_bearer not_configured (no vault); live RS pin residual OAUTH-009",
 	}
 }
 

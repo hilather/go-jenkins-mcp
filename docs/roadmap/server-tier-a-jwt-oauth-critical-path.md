@@ -95,7 +95,7 @@ Design allows **either** plugin or edge RS — implement qualification for **bot
 | **S2.4** | JWKS outage + rotation under concurrent clients | M | Fail closed; document TTL/stale |
 | **S2.5** | Entra group overage fail-closed (no invent membership); Graph expansion residual noted | S | OAUTH-006 foundation Done\* |
 | **S2.6** | **Approved reverse-proxy RS path** (alternative to plugin): same fallthrough + route matrix | M | Document as first-class option in pin table |
-| **S2.7** | **HOST-010** Gateway Mode B: present Bearer only (no mixed Basic); JWT vault / claim helpers | M | Offline Done\* (`TestCriticalPath_*` Bearer-only + file JWT vault); live RS Obtain residual |
+| **S2.7** | **HOST-010** Gateway Mode B: present Bearer only (no mixed Basic); JWT vault / claim helpers / CLI | M | Offline Done\* (`TestCriticalPath_*` Bearer-only + file JWT vault + `gateway jwt-vault` CLI); mock-rs lab Done\* (`TestLiveOAuth_ModeB_*`); production jwt-auth-filter residual |
 | **S2.8** | Local/gateway OIDC PKCE → Jenkins-audience token path (stdio/gateway peer) still secret-free | M | OAUTH-001…005; pairs with RS pin |
 | **S2.9** | Security go/no-go record: filled §2.1 table + residual exceptions | S | Blocks “Mode B production” claim |
 
@@ -157,8 +157,8 @@ Ship **both** user-delegated 3LO and OBO/token-exchange shapes; site enables one
 
 | ID | Task | Size | Notes |
 |----|------|------|-------|
-| **S6.1** | **HOST-012…014** Mock IdP + mock JWT RS + route fallthrough lab | M | `make live-oauth-*` residual |
-| **S6.2** | **HOST-015** Mock token peer for Mode C Obtain shape | S | Offline/live tags residual |
+| **S6.1** | **HOST-012…014** Mock IdP + mock JWT RS + route fallthrough lab | M | Done\* (`make live-oauth-*` + Mode B live_oauth tests); production plugin residual |
+| **S6.2** | **HOST-015** Mock token peer for Mode C Obtain shape | S | Done\* scaffold + Mode C live_oauth; Entra residual |
 | **S6.3** | Disposable Jenkins + jwt-auth-filter image for OAUTH-009 | L | Real plugin pin path |
 | **S6.4** | Entra lab tenant checklist (dev app regs for 3LO and OBO) | M | Org |
 | **S6.5** | Evidence pack script: secret-free curl/probe outputs → `dist/` | S | Align pilot-evidence |

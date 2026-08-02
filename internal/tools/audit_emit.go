@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"os"
 	"strings"
 	"time"
 
@@ -11,9 +10,11 @@ import (
 	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
 )
 
-// EnvAuditToolOK enables optional tool_success audit emit when truthy
-// (1/true/yes/on). Default off (unset/0/false) — high volume residual.
-// Metrics mcp_tool_ok always record regardless of this env.
+// EnvAuditToolOK seeds the default for tool_success in audit.DefaultTypeFilter
+// when type_filter.json is missing (truthy = 1/true/yes/on). Persistence is
+// gated by ReloadingFilterSink / admin audit settings — emit always attempts
+// tool_success; disabled types are dropped at the File sink. Metrics
+// mcp_tool_ok always record regardless of this env or the type filter.
 const EnvAuditToolOK = "JENKINS_MCP_AUDIT_TOOL_OK"
 
 // toolAuditIdentity returns non-secret audit attribution for a tool dispatch
@@ -65,17 +66,6 @@ func toolErrorReason(err error) string {
 		return "error"
 	}
 	return code
-}
-
-// auditToolOKEnabled reports whether optional tool_success audit is on.
-// Default false; only truthy JENKINS_MCP_AUDIT_TOOL_OK enables (volume residual).
-func auditToolOKEnabled() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(EnvAuditToolOK))) {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
 }
 
 // emitToolDeny records a policy/RO denial (AUD-001) and increments mcp_tool_deny
@@ -135,15 +125,14 @@ func emitToolError(ctx context.Context, st regState, toolName, action, reason st
 	})
 }
 
-// emitToolOK increments mcp_tool_ok and optionally emits tool_success audit when
-// JENKINS_MCP_AUDIT_TOOL_OK is truthy (default off — volume residual). Multi-user
-// attribution matches deny/error when audit is enabled. Best-effort only.
+// emitToolOK increments mcp_tool_ok and emits tool_success audit (AUD-001).
+// Persistence is controlled by the sink type filter (admin Audit settings /
+// type_filter.json; default off for tool_success unless JENKINS_MCP_AUDIT_TOOL_OK
+// seeds DefaultTypeFilter). Bare Memory sinks in tests receive every event.
+// Multi-user attribution matches deny/error. Best-effort only.
 func emitToolOK(ctx context.Context, st regState, toolName, action string, start time.Time) {
 	if st.metrics != nil {
 		st.metrics.Inc(telemetry.MetricMCPToolOK, 1)
-	}
-	if !auditToolOKEnabled() {
-		return
 	}
 	profileID, principalID, externalSubject, subjectKeyHash := toolAuditIdentity(st, ctx)
 	_ = audit.Emit(ctx, st.audit, audit.Event{

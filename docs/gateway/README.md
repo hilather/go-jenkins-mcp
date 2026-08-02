@@ -774,9 +774,25 @@ access tokens**. **ID tokens must never** be used as Jenkins API credentials
 |-----|---------|
 | `JENKINS_MCP_GATEWAY_CREDENTIAL_MODE=jwt_rs_bearer` | Select Mode B for serve provider setup |
 | `JENKINS_MCP_GATEWAY_JWT_VAULT_PATH` | File vault path (default: `$XDG_DATA_HOME/jenkins-mcp/gateway/jwt_vault.json`). residual-status `shared_jwt_vault_file: true` only when this env is **explicitly set** (default XDG does not count; path never returned; residual never opens vault) |
+| `JENKINS_MCP_GATEWAY_JWT_VAULT_TOKEN` | Token source for CLI put (never put JWT on argv) |
+
+**Operator CLI (HOST-010 offline):**
+
+```bash
+# Store a Jenkins-audience access token for a subject (token from env only)
+export JENKINS_MCP_GATEWAY_JWT_VAULT_TOKEN="$(curl -sS …mint…)"  # lab mint
+jenkins-mcp gateway jwt-vault put --subject 'tenant|alice|corp'
+jenkins-mcp gateway jwt-vault list
+jenkins-mcp gateway jwt-vault status --subject 'tenant|alice|corp'
+jenkins-mcp gateway jwt-vault delete --subject 'tenant|alice|corp'
+```
+
+List/status never print tokens. Put rejects **ID tokens**. Lab end-to-end:
+`make live-oauth-up` then `go test -tags=live_oauth ./internal/gateway/qualify/`
+(`TestLiveOAuth_ModeB_*` mint → vault → Obtain Bearer → mock-rs whoAmI).
 
 **Residual (explicit):** Live **jwt-auth-filter** / real Entra issuance pin is
-**OAUTH-009** — offline vault does **not** close production RS qualification.
+**OAUTH-009** — offline vault + mock RS lab do **not** close production RS qualification.
 See [../auth/jwt-auth-filter-qualification.md](../auth/jwt-auth-filter-qualification.md).
 `ModeMatrix.Residual` notes this when Mode B is enabled. Doctor/self-check must
 remain honest when RS is not live-qualified.

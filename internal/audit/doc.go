@@ -15,4 +15,10 @@
 // authn fail, mutations, admin destructive writes, vault/consent changes),
 // emit via Emit/existing wrappers in the same change or leave an explicit
 // AUD-T residual — never silent omission. See docs/security/audit-trail-review.md.
+//
+// New event types must also update KnownEventTypes (types_catalog.go),
+// DefaultTypeFilter, admin GET/PUT …/audit/settings catalog, SPA Audit
+// toggles/hints, and docs/observability.md in the same change. OpenProfileSink
+// wraps File with ReloadingFilterSink so operators can enable/disable types
+// without restart (type_filter.json under profile audit/).
 package audit

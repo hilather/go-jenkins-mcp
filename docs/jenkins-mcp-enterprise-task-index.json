@@ -1,8 +1,8 @@
 {
   "schema_version": "1.1",
-  "generated_for_revision": "Engineer authentication, read-only/RBAC, AgentCore 3LO/OBO, seekable-Zstandard/ratarmount-rs; Tier-1 Rocky+Ubuntu, macOS nice-to-have, Windows excluded (no native FUSE)",
+  "generated_for_revision": "Engineer authentication, read-only/RBAC, AgentCore 3LO/OBO, seekable-Zstandard/ratarmount-rs; Tier-1 Rocky+Ubuntu, macOS nice-to-have, Windows excluded (no native FUSE); POL-006/007 UI-011 SAML user/group RBAC backlog",
   "source_file": "jenkins-mcp-enterprise-agent-todo.md",
-  "source_sha256": "c932f89b3f80f1bae5f3d0934075049ce9764748838f5a63fdb7b74ffed0b2db",
+  "source_sha256": "da82aba7de161fa3e681dc076c7a447c13b7db9aa15ee702e6f01cdf83417af3",
   "validation": {
     "unique_task_ids": true,
     "known_dependencies": true,
@@ -18,7 +18,7 @@
     "cycle_task_ids": []
   },
   "summary": {
-    "task_count": 152,
+    "task_count": 155,
     "conditional_task_count": 5,
     "priority_counts": {
       "P0": 67,
@@ -29,7 +29,7 @@
     "phase_count": 7,
     "dependency_edge_count": 244,
     "maximum_dependency_depth": 19,
-    "acceptance_criteria_count": 694,
+    "acceptance_criteria_count": 725,
     "definition_of_done_checkbox_count": 12,
     "total_markdown_checkbox_count": 577,
     "topological_wave_count": 20
@@ -234,7 +234,10 @@
     "UPD-001",
     "JAS-005",
     "QA-003",
-    "REL-001"
+    "REL-001",
+    "POL-006",
+    "POL-007",
+    "UI-011"
   ],
   "topological_waves": [
     [
@@ -455,9 +458,9 @@
       "source_line": 92,
       "dependency_depth": 1,
       "dependents": [
+        "ARC-000",
         "FND-003",
-        "FND-007",
-        "ARC-000"
+        "FND-007"
       ]
     },
     {
@@ -486,8 +489,8 @@
       "dependency_depth": 2,
       "dependents": [
         "FND-004",
-        "PERF-001",
-        "OAUTH-008"
+        "OAUTH-008",
+        "PERF-001"
       ]
     },
     {
@@ -548,15 +551,15 @@
       "source_line": 167,
       "dependency_depth": 4,
       "dependents": [
-        "CFG-001",
+        "AUD-001",
         "AUTH-001",
-        "NET-001",
-        "POL-001",
+        "CFG-001",
         "MCP-001",
         "MCP-002",
-        "STO-002",
-        "AUD-001",
-        "OAUTH-010"
+        "NET-001",
+        "OAUTH-010",
+        "POL-001",
+        "STO-002"
       ]
     },
     {
@@ -641,11 +644,11 @@
       "source_line": 239,
       "dependency_depth": 4,
       "dependents": [
-        "SEC-001",
-        "AUTH-000",
         "ARC-000",
+        "AUTH-000",
         "CFG-002",
-        "MGR-001"
+        "MGR-001",
+        "SEC-001"
       ]
     },
     {
@@ -705,8 +708,8 @@
       "dependency_depth": 5,
       "dependents": [
         "AUTH-000",
-        "STO-001",
-        "SEC-002"
+        "SEC-002",
+        "STO-001"
       ]
     },
     {
@@ -805,8 +808,8 @@
       "source_line": 359,
       "dependency_depth": 5,
       "dependents": [
-        "CFG-002",
         "AUTH-001",
+        "CFG-002",
         "NET-001",
         "NET-004",
         "STO-001"
@@ -838,10 +841,10 @@
       "source_line": 382,
       "dependency_depth": 6,
       "dependents": [
-        "POL-001",
-        "OAUTH-001",
         "INT-001",
-        "MGR-001"
+        "MGR-001",
+        "OAUTH-001",
+        "POL-001"
       ]
     },
     {
@@ -903,10 +906,10 @@
       "source_line": 426,
       "dependency_depth": 7,
       "dependents": [
+        "ARC-009",
         "AUTH-003",
         "OAUTH-002",
-        "OAUTH-004",
-        "ARC-009"
+        "OAUTH-004"
       ]
     },
     {
@@ -965,9 +968,9 @@
       "source_line": 472,
       "dependency_depth": 9,
       "dependents": [
+        "OPS-001",
         "POL-002",
-        "POL-003",
-        "OPS-001"
+        "POL-003"
       ]
     },
     {
@@ -997,9 +1000,9 @@
       "dependency_depth": 6,
       "dependents": [
         "AUTH-004",
+        "MCP-002",
         "NET-002",
-        "POL-004",
-        "MCP-002"
+        "POL-004"
       ]
     },
     {
@@ -1063,10 +1066,10 @@
       "source_line": 545,
       "dependency_depth": 8,
       "dependents": [
-        "LOG-001",
+        "ART-001",
         "JEN-001",
         "JEN-004",
-        "ART-001"
+        "LOG-001"
       ]
     },
     {
@@ -1095,8 +1098,8 @@
       "source_line": 572,
       "dependency_depth": 8,
       "dependents": [
-        "OPS-001",
-        "OAUTH-001"
+        "OAUTH-001",
+        "OPS-001"
       ]
     },
     {
@@ -1157,8 +1160,9 @@
       "source_line": 618,
       "dependency_depth": 10,
       "dependents": [
+        "MGR-001",
         "POL-003",
-        "MGR-001"
+        "POL-006"
       ]
     },
     {
@@ -1187,10 +1191,12 @@
       "source_line": 641,
       "dependency_depth": 11,
       "dependents": [
-        "POL-004",
+        "GWY-002",
         "OAUTH-006",
         "OAUTH-010",
-        "GWY-002"
+        "POL-004",
+        "POL-006",
+        "POL-007"
       ]
     },
     {
@@ -1221,10 +1227,11 @@
       "source_line": 663,
       "dependency_depth": 12,
       "dependents": [
-        "POL-005",
         "LOG-004",
+        "MUT-001",
         "OAUTH-009",
-        "MUT-001"
+        "POL-005",
+        "POL-006"
       ]
     },
     {
@@ -1256,6 +1263,78 @@
       "dependents": []
     },
     {
+      "id": "POL-006",
+      "title": "Per-user and per-group RBAC definition model (always addressable)",
+      "phase": "Phase 1 - Secure local read-only MVP",
+      "phase_order": 1,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "POL-002",
+        "POL-003",
+        "POL-004"
+      ],
+      "dependency_text": "POL-002, POL-003, POL-004",
+      "parallel_safe": null,
+      "objective": "Make every MCP RBAC control definable against both individual verified users and groups; deny-only most-restrictive multi-group.",
+      "implementation": "Policy schema subjects.users[] and subjects.groups[]; attach deny tools/patterns/budgets to either; effective = force RO AND union of matching user/group/global denials; admin API/SPA and admin_* MCP parity; AGENTS.md non-negotiable.",
+      "acceptance_criteria": [
+        "Schema documents user and group binding targets.",
+        "Same deny patterns attachable to user or group.",
+        "Multi-group membership is most restrictive.",
+        "Tool args cannot choose subject/groups.",
+        "Overlay cannot widen enterprise force RO.",
+        "Unit/conformance tests for user-only, group-only, both, membership change, unknown group fail closed.",
+        "Docs and AGENTS.md updated; admin/MCP residual or tools."
+      ],
+      "acceptance_criteria_count": 7,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "POL-007",
+        "UI-011"
+      ],
+      "status": "Done*",
+      "notes": "Policy language+evaluator Done* 2026-08-01; UI-011 admin CRUD residual; POL-007 SAML residual"
+    },
+    {
+      "id": "POL-007",
+      "title": "SAML SSO for identity + group membership into MCP RBAC",
+      "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
+      "phase_order": 2,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "POL-006",
+        "POL-003",
+        "AUTH-004",
+        "OAUTH-003",
+        "UI-003"
+      ],
+      "dependency_text": "POL-006, POL-003, AUTH-004, OAUTH-003, UI-003",
+      "parallel_safe": null,
+      "objective": "SAML 2.0 service provider path maps assertions to subject + groups for POL-006 RBAC; Jenkins is never SAML IdP/AS for MCP.",
+      "implementation": "Optional SAML SP for admin SSO and/or gateway multi-user identity; attribute map; signed assertions required; fail closed on invalid assertion; mock SAML lab opt-in; ADR; no assertion/token secrets in logs. Multi-fleet: SAML SP + group\u2192role + POL-006 bindings via versioned/signed config (not local user DB); secrets via secret store.",
+      "acceptance_criteria": [
+        "ADR: SAML SP role; Jenkins not IdP/AS for MCP.",
+        "Attribute map to policy subject/groups without tool-arg spoofing.",
+        "Group-based POL-006 denials apply after SAML bind.",
+        "Invalid assertion fail closed.",
+        "Admin SSO residual vs pilot shared-secret documented.",
+        "Secret-free canaries.",
+        "Opt-in mock SAML lab + unit tests.",
+        "Live IdP pin residual honest."
+      ],
+      "acceptance_criteria_count": 8,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": [
+        "UI-011"
+      ]
+    },
+    {
       "id": "MCP-001",
       "title": "Enforce central result-size and pagination budgets",
       "phase": "Phase 1 - Secure local read-only MVP",
@@ -1281,10 +1360,10 @@
       "source_line": 709,
       "dependency_depth": 5,
       "dependents": [
-        "SEC-003",
+        "HOST-001",
         "JEN-002",
-        "TEST-001",
-        "HOST-001"
+        "SEC-003",
+        "TEST-001"
       ]
     },
     {
@@ -1313,9 +1392,9 @@
       "source_line": 731,
       "dependency_depth": 7,
       "dependents": [
-        "POL-004",
         "JEN-002",
-        "MUT-001"
+        "MUT-001",
+        "POL-004"
       ]
     },
     {
@@ -1375,9 +1454,9 @@
       "source_line": 776,
       "dependency_depth": 10,
       "dependents": [
-        "STO-003",
         "PIPE-002",
-        "QA-002"
+        "QA-002",
+        "STO-003"
       ]
     },
     {
@@ -1406,8 +1485,8 @@
       "source_line": 799,
       "dependency_depth": 6,
       "dependents": [
-        "STO-002",
-        "ART-001"
+        "ART-001",
+        "STO-002"
       ]
     },
     {
@@ -1437,10 +1516,10 @@
       "source_line": 821,
       "dependency_depth": 7,
       "dependents": [
-        "LOG-002",
-        "STO-003",
         "ARC-007",
-        "ARC-011"
+        "ARC-011",
+        "LOG-002",
+        "STO-003"
       ]
     },
     {
@@ -1471,12 +1550,12 @@
       "source_line": 844,
       "dependency_depth": 11,
       "dependents": [
-        "STO-004",
-        "LOG-003",
-        "LOG-004",
         "ARC-002",
         "ARC-009",
-        "ARC-010"
+        "ARC-010",
+        "LOG-003",
+        "LOG-004",
+        "STO-004"
       ]
     },
     {
@@ -1504,9 +1583,9 @@
       "source_line": 868,
       "dependency_depth": 12,
       "dependents": [
+        "ARC-001",
         "LOG-003",
         "OPS-001",
-        "ARC-001",
         "QA-002"
       ]
     },
@@ -1538,10 +1617,10 @@
       "dependency_depth": 13,
       "dependents": [
         "LOG-004",
+        "PIPE-002",
         "SEARCH-001",
         "SEC-002",
-        "SEC-003",
-        "PIPE-002"
+        "SEC-003"
       ]
     },
     {
@@ -1719,8 +1798,8 @@
       "source_line": 1026,
       "dependency_depth": 15,
       "dependents": [
-        "OBS-001",
-        "MUT-001"
+        "MUT-001",
+        "OBS-001"
       ]
     },
     {
@@ -1749,8 +1828,8 @@
       "source_line": 1048,
       "dependency_depth": 16,
       "dependents": [
-        "OPS-001",
-        "MGR-002"
+        "MGR-002",
+        "OPS-001"
       ]
     },
     {
@@ -1815,8 +1894,8 @@
       "dependency_depth": 18,
       "dependents": [
         "GWY-004",
-        "UPD-001",
-        "REL-001"
+        "REL-001",
+        "UPD-001"
       ]
     },
     {
@@ -1847,11 +1926,11 @@
       "source_line": 1115,
       "dependency_depth": 8,
       "dependents": [
-        "POL-005",
+        "JEN-001",
         "OAUTH-005",
         "OAUTH-008",
         "OAUTH-009",
-        "JEN-001"
+        "POL-005"
       ]
     },
     {
@@ -2122,9 +2201,9 @@
       "source_line": 1320,
       "dependency_depth": 13,
       "dependents": [
-        "OAUTH-011",
         "GWY-003",
-        "HOST-010"
+        "HOST-010",
+        "OAUTH-011"
       ]
     },
     {
@@ -2161,12 +2240,12 @@
         "qualify/mode_c_agentcore_live_matrix",
         "TestRunDoctor_ModeC_GatewayStatusResidual"
       ],
-      "status_note": "Partial/offline prototype matrix Done*; live Entra 3LO/OBO + AgentCore pin residual — do not claim live Entra Done",
+      "status_note": "Partial/offline prototype matrix Done*; live Entra 3LO/OBO + AgentCore pin residual \u2014 do not claim live Entra Done",
       "source_line": 1344,
       "dependency_depth": 13,
       "dependents": [
-        "OAUTH-011",
-        "GWY-001"
+        "GWY-001",
+        "OAUTH-011"
       ]
     },
     {
@@ -2633,13 +2712,13 @@
       "source_line": 1704,
       "dependency_depth": 9,
       "dependents": [
+        "HEALTH-001",
+        "HEALTH-002",
         "JEN-002",
         "JEN-004",
         "PIPE-001",
-        "TEST-001",
         "SCM-001",
-        "HEALTH-001",
-        "HEALTH-002"
+        "TEST-001"
       ]
     },
     {
@@ -2669,8 +2748,8 @@
       "source_line": 1726,
       "dependency_depth": 10,
       "dependents": [
-        "JEN-003",
         "DIAG-006",
+        "JEN-003",
         "MUT-002"
       ]
     },
@@ -2699,13 +2778,13 @@
       "source_line": 1748,
       "dependency_depth": 11,
       "dependents": [
-        "PIPE-001",
-        "TEST-002",
-        "SCM-001",
-        "GRAPH-001",
         "ART-001",
         "DIAG-004",
-        "DIAG-006"
+        "DIAG-006",
+        "GRAPH-001",
+        "PIPE-001",
+        "SCM-001",
+        "TEST-002"
       ]
     },
     {
@@ -2734,8 +2813,8 @@
       "source_line": 1770,
       "dependency_depth": 10,
       "dependents": [
-        "HEALTH-001",
         "DIAG-007",
+        "HEALTH-001",
         "MUT-002",
         "MUT-003"
       ]
@@ -2766,10 +2845,10 @@
       "source_line": 1792,
       "dependency_depth": 12,
       "dependents": [
-        "PIPE-002",
-        "GRAPH-001",
         "DIAG-002",
-        "DIAG-003"
+        "DIAG-003",
+        "GRAPH-001",
+        "PIPE-002"
       ]
     },
     {
@@ -2828,8 +2907,8 @@
       "source_line": 1836,
       "dependency_depth": 10,
       "dependents": [
-        "TEST-002",
-        "DIAG-001"
+        "DIAG-001",
+        "TEST-002"
       ]
     },
     {
@@ -3103,8 +3182,8 @@
       "source_line": 2037,
       "dependency_depth": 17,
       "dependents": [
-        "PERF-003",
-        "INT-002"
+        "INT-002",
+        "PERF-003"
       ]
     },
     {
@@ -3398,10 +3477,10 @@
       "source_line": 2262,
       "dependency_depth": 7,
       "dependents": [
+        "GWY-001",
         "INT-002",
         "INT-003",
-        "INT-004",
-        "GWY-001"
+        "INT-004"
       ]
     },
     {
@@ -4376,11 +4455,13 @@
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": [
+        "HOST-007",
+        "POL-007",
         "UI-004",
         "UI-006",
         "UI-007",
         "UI-009",
-        "HOST-007"
+        "UI-011"
       ]
     },
     {
@@ -4418,7 +4499,8 @@
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": [
-        "UI-009"
+        "UI-009",
+        "UI-011"
       ]
     },
     {
@@ -4594,6 +4676,37 @@
         "Residual banners for unsigned policy/disabled telemetry/etc."
       ],
       "acceptance_criteria_count": 3,
+      "evidence_tests": [],
+      "source_line": 0,
+      "dependency_depth": 0,
+      "dependents": []
+    },
+    {
+      "id": "UI-011",
+      "title": "Admin console: SAML / user / group RBAC management",
+      "phase": "Phase 6 - Operator admin console (reactive SPA)",
+      "phase_order": 6,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "UI-003",
+        "UI-004",
+        "POL-006",
+        "POL-007"
+      ],
+      "dependency_text": "UI-003, UI-004, POL-006, POL-007",
+      "parallel_safe": null,
+      "objective": "Operators manage per-user and per-group MCP RBAC bindings and SAML attribute map via admin console + MCP parity.",
+      "implementation": "SPA Access/user-group page; BFF CRUD; effective preview; SAML SP secret-free settings; AUD-001 on binding changes; admin_rbac_* tools or MCP-OPS residual. Fleet SoT remains config/signed policy (POL-007); SPA is pilot/single-host residual, not multi-fleet user directory.",
+      "acceptance_criteria": [
+        "UI defines same control for user and for group.",
+        "Cannot widen force_read_only.",
+        "Viewer read-only; policy_admin writes.",
+        "Effective preview matches evaluator fixtures.",
+        "Secret and XSS canaries.",
+        "api-v1 + admin README + AGENTS parity updated."
+      ],
+      "acceptance_criteria_count": 6,
       "evidence_tests": [],
       "source_line": 0,
       "dependency_depth": 0,

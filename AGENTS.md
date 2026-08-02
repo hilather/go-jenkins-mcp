@@ -21,6 +21,7 @@ file is repo-specific and must not be ignored.
 | Phase 0 progress | `docs/phase0-progress.md` |
 | Operator admin console (BFF + SPA) | ADR 0014; `docs/admin/api-v1.md`; `internal/admin/`; `web/admin/` |
 | Server/team-hosted roadmap | `docs/roadmap/server-team-hosted.md` |
+| Release notes (per version) | `docs/release/RELEASE_NOTES_v*.md` · gates: `docs/release/gates.md` · REL-001/002 |
 | Agent policy (this file) | `AGENTS.md` |
 | Implemented code (when present) | `cmd/`, `internal/`, `pkg/` |
 
@@ -125,7 +126,8 @@ review findings unless the user explicitly accepts them.
 - **Admin console parity:** operator-relevant changes update BFF/SPA/api-v1 (or document residual)  
 - **Admin MCP ops parity:** same capabilities as `admin_*` MCP tools (or MCP-OPS residual) — agents manage via MCP  
 - **Audit trail:** security-relevant actions emit AUD-001 events (or explicit residual) — see audit section below  
-- **Docker lab residual:** integration-facing work has compose/Makefile/docs scaffold or an explicit residual
+- **Docker lab residual:** integration-facing work has compose/Makefile/docs scaffold or an explicit residual  
+- **Release notes (on release):** version `RELEASE_NOTES_v*.md` covers new features and high-level changes — see release notes section  
 
 ---
 
@@ -170,9 +172,10 @@ ops parity* below) — browser BFF alone is not enough for first-class agent ops
 
 | Product change | Admin follow-through (as applicable) |
 |----------------|--------------------------------------|
-| New/changed **policy / RO / deny-lists / signed bundles** | Effective/overlay APIs; Policy page; validate/apply rules; docs; **`admin_*` MCP tools** |
+| New/changed **policy / RO / deny-lists / signed bundles** | Effective/overlay APIs; Policy page; validate/apply rules; docs; **`admin_*` MCP tools**; **user + group** binding targets when POL-006 lands (see RBAC section) |
+| New/changed **SAML / IdP group / user RBAC management** | POL-006/007 model; UI-011 Access/user-group UI; BFF + **`admin_rbac_*` / policy binding MCP** (or residual) |
 | New/changed **metrics / telemetry / budgets / caps** | `GET /admin/v1/metrics` (or residual note); Metrics page; **ECharts** visualization; **`admin_metrics` MCP** |
-| New/changed **audit event types or fields** | **Emit sites** + Audit list/filter; SPA; canary tests; **`admin_audit_list` (or fields) MCP** |
+| New/changed **audit event types or fields** | **Emit sites** + **`KnownEventTypes` catalog** + type filter defaults + Audit list/filter **and Event type settings** toggles; SPA; canary tests; **`admin_audit_list` / `admin_audit_settings` MCP** (or residual) |
 | New/changed **doctor / support-bundle / security self-check** | Doctor/ops endpoints; SPA; **`admin_doctor` / selfcheck / support-bundle MCP** |
 | New/changed **cache / pin / quota / eviction** | Cache APIs; Cache page; **`admin_cache_*` MCP** |
 | New/changed **profiles / config paths / packaging** | Profile list/show; **`admin_list_profiles` / get MCP** |
@@ -276,6 +279,41 @@ RegisterOptions residual until implemented).
 
 ---
 
+## Non-negotiable: RBAC controls definable per user and per group
+
+**MCP and admin authorization must remain addressable at both individual-user
+and group granularity.** Agents must not ship new deny-lists, resource patterns,
+budgets, mutation gates, or admin permissions that can only be expressed as a
+single global/profile blob with no path to **user** or **group** targets.
+
+Backlog: **POL-006** (binding model), **POL-007** (SAML identity + groups),
+**UI-011** (admin console management). Deny-only foundation: **POL-001…005**,
+`docs/policy-rbac.md`. JWT group overage fail-closed: **OAUTH-006**.
+
+### Rules (always)
+
+| Rule | Detail |
+|------|--------|
+| **User and group targets** | When adding or extending an RBAC control, design (and prefer implement) bindings for **verified individual subjects** *and* **groups** (IdP/SAML/OIDC/Entra group claims or approved aliases). If group or user binding is deferred, leave an explicit **POL-006** residual — never silent “global only forever.” |
+| **Deny-only / most restrictive** | MCP policy only **reduces** access. Multi-group membership → **most restrictive** effective set (adding a group deny never elevates). Never invent group membership (overage / missing claims fail closed). |
+| **Trusted identity only** | Subject and groups come from verified authn (API-token principal, OIDC/JWT claims, SAML assertion map, gateway bind) — **never** tool arguments or free-form MCP params. |
+| **SAML is SP + attribute map** | SAML work is **service provider** + attribute→subject/groups mapping for RBAC (POL-007). Stock Jenkins is **not** a SAML IdP/AS for MCP (ADR 0003). |
+| **Admin + MCP parity** | Operator-facing user/group binding CRUD updates BFF/SPA (`UI-011`) and `admin_*` tools (or MCP-OPS residual) in the same change set as the policy model. |
+| **Audit** | Binding create/update/delete and authz denials emit AUD-001 (secret-free; no assertion XML, tokens, or raw oversize NameIDs). |
+| **Tests** | User-only deny, group-only deny, both, group membership change, unknown group fail closed; canaries that secrets never appear. |
+
+### Pre-done checklist (agents)
+
+When touching authorization / policy surfaces:
+
+1. Can an operator attach this control to a **user** and to a **group** (or is POL-006 residual stated)?  
+2. Does effective access remain **Jenkins ∧ RO ∧ MCP denials** with no elevation?  
+3. Are subject/groups from **verified identity** only?  
+4. Admin console / MCP management path updated or residualed?  
+5. AUD-001 + secret-free canaries?
+
+---
+
 ## Non-negotiable: audit trails when security-relevant (AUD-001)
 
 Privacy-preserving **security audit** is a first-class product control (`internal/audit`,
@@ -308,21 +346,38 @@ silent omission** of security-relevant actions.
 |------|--------|
 | **Use the audit package** | Prefer `audit.Emit(ctx, sink, Event{...})` or existing wrappers (`internal/tools/audit_emit.go`, mutation manager, `cmd/.../audit_wire.go`). Do not invent parallel “security log” formats. |
 | **Stable types + reason codes** | Use `Type*` constants (`login_*`, `tool_deny`, `tool_error`, `auth_fail`, …) or add a new **low-cardinality** type in `event.go` + docs. `reasonCode` is machine-stable (policy reason, `apperr` code) — not user/error strings. |
+| **Catalog + type filter (same change)** | Every new type string **must** be added to `audit.KnownEventTypes()` (`internal/audit/types_catalog.go`), appear in admin **Event type settings** via GET/PUT `…/audit/settings`, and have a sensible `DefaultTypeFilter` entry. SPA list filter options come from the catalog API (static `AUDIT_TYPE_OPTIONS` is offline fallback only — update both). High-volume types default **off** unless product decision says otherwise. |
 | **Secret-free forever** | Never put tokens, passwords, Authorization headers, prompts, full job parameters, log excerpts, or vault material in any Event field. Use `principalId` / redacted `externalSubject` / `subjectKeyHash` (`audit.HashOpaque`) / `targetHash`. Run or extend **canary** tests when adding fields or emit sites. |
 | **Best-effort emit** | Audit failures **must not** authorize work or fail-open security checks. Ignore or log emit errors without elevating privileges (existing pattern: `_ = audit.Emit(...)`). |
 | **Identity attribution** | Prefer effective multi-user identity on the event (`profileId`, `principalId`, optional `externalSubject` + `subjectKeyHash`) when SubjectKey / Binding is available — same as tool_deny/mutation patterns. |
-| **Sink wiring** | New long-lived processes (serve, admin serve, gateway) must have a sink when a profile data dir exists (`OpenProfileSink` / File). Tests may use `Memory` / `Nop`. Do not claim SIEM/syslog/Splunk ship without implementing **AUD-T-010…012**. |
-| **Schema / SPA / docs** | New event **types** or **fields** update: `internal/audit/event.go`, [docs/observability.md](docs/observability.md), admin Audit page filters/columns if operator-visible, and canary/unit tests in the **same change**. |
+| **Sink wiring** | New long-lived processes (serve, admin serve, gateway) must have a sink when a profile data dir exists (`OpenProfileSink` wraps File with `ReloadingFilterSink`). Tests may use `Memory` / `Nop` (Memory does **not** apply type filter unless you wrap it). Do not claim SIEM/syslog/Splunk ship without implementing **AUD-T-010…012**. |
+| **Schema / SPA / docs** | New event **types** or **fields** update: `event.go` constants, **`KnownEventTypes`**, [docs/observability.md](docs/observability.md), admin Audit page filters **and** settings toggles / hints, `docs/admin/api-v1.md`, canary/unit tests — **same change**. |
 | **Not a substitute for ext-logs** | Querying external log backends (INT-003) is not AUD-001. Shipping audit to SIEM is residual — see audit-trail-review. |
+
+### Adding a new audit event type (agent checklist)
+
+When introducing a **new** `type` string (not only a new emit of an existing type):
+
+1. Add `Type*` constant in `internal/audit/event.go` (if applicable) and append to **`KnownEventTypes()`**.
+2. Emit from the security-relevant path (`audit.Emit` / wrappers) — secret-free fields only.
+3. Set default enabled/disabled in **`DefaultTypeFilter()`** (high-volume → default off).
+4. Admin SPA: type appears via settings API catalog (no hard-coded-only catalog); add `AUDIT_TYPE_HINTS` / static `AUDIT_TYPE_OPTIONS` fallback entry.
+5. Document in [docs/observability.md](docs/observability.md) + [docs/admin/api-v1.md](docs/admin/api-v1.md); extend canary/unit tests.
+6. MCP-OPS: row for `admin_audit_settings` if not present (or residual).
+
+Skipping the catalog leaves the type **fail-closed** at the File filter (`AllowUnknown` false) and hidden from admin toggles — treat that as a **bug** in the change, not a residual, unless documented.
 
 ### Quick map for agents
 
 | Path | Role |
 |------|------|
-| `internal/audit/` | Event schema, File/Memory/Multi sinks, sanitize, HashOpaque |
-| `internal/tools/audit_emit.go` | Tool deny / error / optional success emit |
+| `internal/audit/` | Event schema, File/Memory/Multi sinks, **`KnownEventTypes` / TypeFilter / ReloadingFilterSink**, sanitize, HashOpaque |
+| `internal/audit/types_catalog.go` | **Catalog SoT** for admin settings + filter defaults |
+| `internal/admin/audit_settings.go` | GET/PUT `…/audit/settings` (gateway_ops on write) |
+| `internal/tools/audit_emit.go` | Tool deny / error / success emit (success persistence via filter) |
 | `internal/mutation/manager.go` | Mutation preview/confirm/deny audit |
 | `cmd/jenkins-mcp/audit_wire.go` | Login / auth_fail wire helpers |
+| `web/admin/src/pages/AuditPage.tsx` | Event list + **type enable/disable** panel |
 | `docs/observability.md` | AUD-001 SoT for operators |
 | `docs/security/audit-trail-review.md` | Standards mapping + **AUD-T-*** backlog (SIEM residual) |
 
@@ -333,8 +388,78 @@ Before marking security-relevant work complete, answer **yes** or document resid
 1. Does every **deny / fail-closed / destructive / auth** path emit an audit event (or residual id)?  
 2. Are events **secret-free** (canary or review of fields)?  
 3. Are **type** + **reasonCode** stable and documented?  
-4. Can an operator **see** the event via admin audit list when the console covers that domain (or residual stated)?  
-5. Did emit **failure** leave authorization fail-closed?
+4. Is a **new type** registered in **`KnownEventTypes`** + admin settings catalog + DefaultTypeFilter?  
+5. Can an operator **see** the event via admin audit list when the console covers that domain (or residual stated)?  
+6. Can an operator **enable/disable** the type via Audit settings (or residual stated)?  
+7. Did emit **failure** leave authorization fail-closed?
+
+---
+
+## Non-negotiable: release notes stay current on every release
+
+**When performing a release** (version tag, release package, REL-002 evidence pack,
+or publishing artifacts), agents **must** write or update **versioned release notes**
+so operators and agents can see **what changed** at a high level — not only a
+git tag and binary.
+
+**SoT location:** `docs/release/RELEASE_NOTES_vX.Y.Z.md` (see existing
+`RELEASE_NOTES_v0.1.0.md` / `RELEASE_NOTES_v0.3.0.md` for shape). Cross-link from
+release evidence / gates when applicable ([docs/release/gates.md](docs/release/gates.md),
+REL-001/002).
+
+### When release notes are required
+
+| Trigger | Expectation |
+|---------|-------------|
+| Cutting a **version tag** / release branch | New or updated `docs/release/RELEASE_NOTES_vX.Y.Z.md` in the **same** change set (or immediately before tag) |
+| **REL-002** / `release-evidence` / pilot-evidence pack for a version | Release notes path recorded or linked; content matches shipped features |
+| **Package** publish (tar/rpm/deb) for a version | Notes list user-visible / operator-visible changes for that version |
+| Hotfix / patch release | Notes still required: security/fix highlights + residual honesty |
+
+Day-to-day feature PRs **should** keep docs current (`AGENTS.md` documentation
+rules) so release-note drafting is summarization, not archaeology. Still, **the
+release step itself** must produce complete notes for the version.
+
+### What the notes must contain (high level)
+
+| Section | Include |
+|---------|---------|
+| **Identity** | Version, date, tag, baseline / previous version |
+| **Highlights** | New features and major behavior changes in plain language (tools, admin, auth modes, MCP-OPS, audit, storage, mutations, gateway, …) |
+| **Breaking / migration** | Schema, flag, env, policy, tool renames — anything operators must act on |
+| **Security / residual honesty** | Fail-closed defaults; what is **not** production GO (live Entra, multi-pod, etc.) |
+| **Verify** | Commands operators/agents can run (`make lint`, tests, residual-smoke, …) |
+
+### Rules (always)
+
+| Rule | Detail |
+|------|--------|
+| **Up to date with the release** | Notes cover **all** material features/high-level changes **in that version**, not only the last PR. Diff against previous tag / prior RELEASE_NOTES when drafting. |
+| **Operator-readable** | Prefer highlights and tables over dump of every commit subject. Link deeper docs (`api-v1`, observability, mcp-ops-parity, live-pin-blockers) instead of pasting secrets or full logs. |
+| **No silent capability claims** | Do not mark live GO / Entra pin / multi-pod Done unless evidence exists. Residual stays residual. |
+| **Secret-free forever** | Never put tokens, vault material, private URLs with credentials, or raw subject keys in release notes. |
+| **Same change as tag/package when practical** | Prefer notes + version bump + evidence in one PR; never ship a public tag with empty or stale notes. |
+| **Match reality** | If a feature is residual or flag-gated, say so (e.g. `--enable-admin-mcp`, `--allow-mutations`). |
+
+### Pre-release checklist (agents)
+
+Before treating a **release** as done:
+
+1. Is there a `docs/release/RELEASE_NOTES_vX.Y.Z.md` for this version?  
+2. Do **highlights** cover new tools, admin/MCP ops, auth/gateway, audit, policy, storage, and packaging changes since the previous release?  
+3. Are **breaking** changes and operator actions called out?  
+4. Are **residuals** honest (live pins, multi-pod, deferred MCP rows)?  
+5. Is content **secret-free** and consistent with code/docs (no invented Done claims)?  
+6. Are **verify** commands present and known-good for this tree?
+
+### Quick map
+
+| Path | Role |
+|------|------|
+| `docs/release/RELEASE_NOTES_v*.md` | Per-version release notes SoT |
+| `docs/release/gates.md` | REL-002 gate checklist |
+| `docs/release/evidence-template.md` | Evidence pack form |
+| `jenkins-mcp release-evidence --offline` | Offline evidence JSON (does not replace notes) |
 
 ---
 
@@ -376,8 +501,9 @@ comment):
 7. Update documentation and backlog/todo status
 8. Run lint/tests/race as applicable; attach perf evidence if required
 9. Structured code review (/review); fix bug findings; re-test
-10. If incomplete: write next steps; do not mark DoD complete
-11. Commit code + tests + docs (+ admin + lab scaffolds) together when practical
+10. If **releasing** a version: write/update docs/release/RELEASE_NOTES_vX.Y.Z.md (features + high-level deltas + residuals) — see release notes section
+11. If incomplete: write next steps; do not mark DoD complete
+12. Commit code + tests + docs (+ admin + lab scaffolds + release notes when releasing) together when practical
 ```
 
 ---

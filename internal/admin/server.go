@@ -235,6 +235,10 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("POST /admin/v1/policy/validate", s.handlePolicyValidate)
 	mux.HandleFunc("POST /admin/v1/policy/apply", s.handlePolicyApply)
 	mux.HandleFunc("GET /admin/v1/profiles/{id}/audit", s.handleAudit)
+	// AUD-001 type enable/disable (catalog + filter file); write requires gateway_ops.
+	mux.HandleFunc("GET /admin/v1/profiles/{id}/audit/settings", s.handleAuditSettingsGET)
+	mux.HandleFunc("PUT /admin/v1/profiles/{id}/audit/settings", s.handleAuditSettingsPUT)
+	mux.HandleFunc("POST /admin/v1/profiles/{id}/audit/settings", s.handleAuditSettingsPUT)
 	mux.HandleFunc("GET /admin/v1/profiles/{id}/doctor", s.handleDoctorProfile)
 	mux.HandleFunc("GET /admin/v1/doctor", s.handleDoctorDefault)
 
