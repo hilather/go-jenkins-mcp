@@ -1332,7 +1332,9 @@
       "dependency_depth": 0,
       "dependents": [
         "UI-011"
-      ]
+      ],
+      "status": "Done*",
+      "notes": "Offline SAML SP Done* 2026-08-01 ADR 0015 internal/saml admin ACS; live IdP residual"
     },
     {
       "id": "MCP-001",
