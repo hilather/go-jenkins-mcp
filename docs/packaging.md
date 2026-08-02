@@ -18,7 +18,22 @@
 | `dist/modules.json` | `make sbom` | Go module graph (SBOM-ish) |
 | `dist/jenkins-mcp.gomod.txt` | `make sbom` (after build) | `go version -m` on the binary |
 
-**Primary CI path:** Ubuntu runner produces tarball (+ DEB when `dpkg-deb` present). Rocky container job produces tarball; RPM when `rpm-build` is available, otherwise a documented skip (portable tarball remains valid).
+**Merge-gate CI (`ci.yml`):** Ubuntu + Rocky **build** packages and upload **Actions artifacts** (temporary; expire after retention). That is **not** the GitHub Releases page.
+
+**GitHub Releases (`release.yml` on `v*` tags):** builds and **attaches** release assets:
+
+| Artifact | When |
+|----------|------|
+| `jenkins-mcp_<ver>_linux_amd64.tar.gz` | Always |
+| `jenkins-mcp_<ver>_amd64.deb` | Ubuntu runner + `dpkg-deb` |
+| `jenkins-mcp-…x86_64.rpm` | When `rpmbuild` installed in the release job |
+| `jenkins-mcp_<ver>_linux_arm64.tar.gz` | Cross-compile `GOARCH=arm64` |
+| `jenkins-mcp_<ver>_arm64.deb` | When dpkg-deb can build arm64 |
+| `SHA256SUMS` + `BUILD_INFO` | Always |
+
+Re-publish: Actions → **release** workflow → **Run workflow** → enter tag (e.g. `v0.5.0`).
+
+Release notes path must exist: `docs/release/RELEASE_NOTES_<tag>.md` (absolute doc links — see `AGENTS.md`).
 
 ## Build
 

@@ -1,8 +1,19 @@
 # Publish GitHub Releases for version tags (v*).
 # Builds Tier-1 Linux packages and attaches them with SHA256SUMS / BUILD_INFO.
 #
-# Trigger: push of tags matching v* (e.g. v0.1.0).
-# Permissions: contents: write (create release + upload assets).
+# Artifacts (when tooling allows):
+#   - linux/amd64 tarball (always)
+#   - linux/amd64 .deb (dpkg-deb on Ubuntu runner)
+#   - linux/amd64 .rpm (rpmbuild installed in this job)
+#   - linux/arm64 tarball (cross-compile; GOARCH=arm64)
+#   - linux/arm64 .deb when dpkg-deb accepts arm64 (same runner)
+#   - SHA256SUMS + BUILD_INFO
+#
+# Trigger: push of tags matching v* (e.g. v0.5.0), or workflow_dispatch with tag.
+# Permissions: contents: write (create/update release + upload assets).
+#
+# Note: merge-gate CI (ci.yml) also runs `make package` and uploads *Actions artifacts*
+# for PR evidence — those expire and are NOT the GitHub Release. Releases use this workflow.
 name: release
 
 on:
@@ -12,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to release (e.g. v0.1.0)"
+        description: "Existing tag to release (e.g. v0.5.0)"
         required: true
         type: string
 
@@ -35,6 +46,20 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Setup Node (admin SPA)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/admin/package-lock.json
+
+      - name: Install package tooling (deb + rpm)
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          # dpkg-deb is usually present; rpmbuild for Rocky/RHEL packages.
+          sudo apt-get install -y dpkg-dev rpm
+
       - name: Resolve version
         id: ver
         run: |
@@ -44,44 +69,93 @@ jobs:
           else
             TAG="${GITHUB_REF_NAME}"
           fi
+          # Tag must look like vX.Y.Z (optional pre-release suffix).
+          if [[ ! "$TAG" =~ ^v[0-9] ]]; then
+            echo "::error::tag must start with v and a digit (got $TAG)"
+            exit 1
+          fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          # Strip leading v for package_version when present
           echo "version=${TAG}" >> "$GITHUB_OUTPUT"
           COMMIT="$(git rev-parse --short HEAD)"
           echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
+          NOTES="docs/release/RELEASE_NOTES_${TAG}.md"
+          if [ ! -f "$NOTES" ]; then
+            echo "::error::missing release notes at $NOTES"
+            exit 1
+          fi
+          echo "notes=${NOTES}" >> "$GITHUB_OUTPUT"
+          echo "Using notes=$NOTES commit=$COMMIT"
 
-      - name: Build and package
+      - name: Build admin SPA
+        run: make admin-ui
+        env:
+          VERSION: ${{ steps.ver.outputs.tag }}
+        continue-on-error: true
+
+      - name: Build and package (amd64 + arm64)
         env:
           VERSION: ${{ steps.ver.outputs.tag }}
           COMMIT: ${{ steps.ver.outputs.commit }}
         run: |
           set -euo pipefail
-          make package
+          mkdir -p dist bin
+
+          # --- amd64 (native) ---
+          make package VERSION="$VERSION" COMMIT="$COMMIT"
           ls -la dist/
-          # Keep only artifacts for this version
+
+          # --- arm64 (cross-compile) ---
+          # Pure Go binary; CGO not required for package path.
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
+            go build -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o bin/jenkins-mcp-linux-arm64 ./cmd/jenkins-mcp
+          PACKAGE_ARCH=arm64 \
+            ./scripts/package-linux.sh bin/jenkins-mcp-linux-arm64 dist "$VERSION" "$COMMIT"
+
+          # Stage upload set for this version only (ignore leftover dist/* from other builds).
           mkdir -p dist/upload
-          cp -v dist/jenkins-mcp_${VERSION}_linux_amd64.tar.gz dist/upload/ || \
-            cp -v dist/jenkins-mcp_*_linux_amd64.tar.gz dist/upload/
-          if ls dist/jenkins-mcp_${VERSION}_amd64.deb >/dev/null 2>&1; then
-            cp -v dist/jenkins-mcp_${VERSION}_amd64.deb dist/upload/
-          elif ls dist/jenkins-mcp_*_amd64.deb >/dev/null 2>&1; then
-            cp -v dist/jenkins-mcp_*_amd64.deb dist/upload/ || true
+          shopt -s nullglob
+          VER_STRIP="${VERSION#v}"
+          for f in dist/*; do
+            [ -f "$f" ] || continue
+            base="$(basename "$f")"
+            case "$base" in
+              SHA256SUMS|BUILD_INFO) continue ;;
+            esac
+            if [[ "$base" == *"${VERSION}"* ]] || [[ "$base" == *"${VER_STRIP}"* ]]; then
+              cp -v "$f" dist/upload/
+            fi
+          done
+          if [ -f dist/BUILD_INFO ]; then
+            cp -v dist/BUILD_INFO dist/upload/
+          else
+            {
+              echo "version=${VERSION}"
+              echo "commit=${COMMIT}"
+              echo "built=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            } > dist/upload/BUILD_INFO
           fi
-          cp -v dist/BUILD_INFO dist/upload/
           (cd dist/upload && sha256sum * > SHA256SUMS)
+          echo "=== upload set ==="
           ls -la dist/upload/
           cat dist/upload/SHA256SUMS
+          # Fail closed if we lack at least the portable amd64 tarball.
+          test -f dist/upload/jenkins-mcp_${VERSION}_linux_amd64.tar.gz
+          # Fail closed if arm64 tarball missing (cross-compile is required).
+          test -f dist/upload/jenkins-mcp_${VERSION}_linux_arm64.tar.gz
 
-      - name: Create GitHub Release
+      - name: Create / update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
-          name: ${{ steps.ver.outputs.tag }} — enterprise pilot baseline
-          body_path: docs/release/RELEASE_NOTES_v0.1.0.md
+          name: ${{ steps.ver.outputs.tag }}
+          body_path: ${{ steps.ver.outputs.notes }}
           draft: false
           prerelease: false
           files: |
             dist/upload/*
           fail_on_unmatched_files: true
+          # Re-run safe: replace assets when re-publishing the same tag.
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
