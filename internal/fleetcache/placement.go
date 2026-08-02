@@ -9,13 +9,19 @@ import (
 	"strings"
 
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
-	"github.com/hilather/go-jenkins-mcp/internal/fleetmcp"
 )
 
 // PlacementAlgorithmID is the versioned placement function name (golden vectors).
 const PlacementAlgorithmID = "hrw-sha256-weight-v1"
 
-// PlacementMember is a cache-eligible owner candidate (subset of roster fields).
+// Capacity weight bounds for placement (aligned with roster cache validation).
+// Defined here so fleetcache stays free of fleetmcp imports (no import cycle).
+const (
+	DefaultPlacementWeight = 100
+	MaxPlacementWeight     = 10000
+)
+
+// PlacementMember is a cache-eligible owner candidate (pure; no roster type).
 type PlacementMember struct {
 	ID             string
 	CapacityWeight int
@@ -30,31 +36,6 @@ type PlacementOptions struct {
 	ReplicationFactor int
 	// PreferDistinctDomains prefers different failure_domain values among the first RF owners.
 	PreferDistinctDomains bool
-}
-
-// MembersFromEligible converts fleetmcp.CacheEligibleMembers results into placement inputs.
-// Callers should pass members already filtered by controller/pool/protocol.
-func MembersFromEligible(members []fleetmcp.RosterMember) []PlacementMember {
-	out := make([]PlacementMember, 0, len(members))
-	for _, m := range members {
-		w := fleetmcp.DefaultCacheCapacityWeight
-		domain := ""
-		draining := false
-		if m.Cache != nil {
-			if m.Cache.CapacityWeight > 0 {
-				w = m.Cache.CapacityWeight
-			}
-			domain = m.Cache.FailureDomain
-			draining = m.Cache.Draining
-		}
-		out = append(out, PlacementMember{
-			ID:             m.ID,
-			CapacityWeight: w,
-			FailureDomain:  domain,
-			Draining:       draining,
-		})
-	}
-	return out
 }
 
 // OwnerOrder returns all candidates ordered by weighted rendezvous score (highest first).
@@ -86,9 +67,9 @@ func OwnerOrder(locatorHash string, members []PlacementMember) ([]string, error)
 		seen[id] = struct{}{}
 		w := m.CapacityWeight
 		if w <= 0 {
-			w = fleetmcp.DefaultCacheCapacityWeight
+			w = DefaultPlacementWeight
 		}
-		if w > fleetmcp.MaxCacheCapacityWeight {
+		if w > MaxPlacementWeight {
 			return nil, apperr.New(apperr.CodeInvalidArgument, "placement capacity_weight exceeds maximum")
 		}
 		items = append(items, scored{id: id, score: hrwScore(locatorHash, id, w)})
@@ -180,37 +161,15 @@ func SelectPrimaryOwners(locatorHash string, members []PlacementMember, opts Pla
 	return picked, nil
 }
 
-// OwnersForEligibleRoster is a convenience: filter roster then order owners.
-func OwnersForEligibleRoster(r *fleetmcp.Roster, controllerID, pool, locatorHash string, opts PlacementOptions) ([]string, error) {
-	if r == nil {
-		return nil, apperr.New(apperr.CodeInvalidArgument, "roster is nil")
-	}
-	elig := r.CacheEligibleMembers(controllerID, pool, fleetmcp.CacheEligibleOptions{
-		Protocol:        ProtocolV1,
-		IncludeDraining: true, // include for full order; SelectPrimaryOwners drops drain
-	})
-	members := MembersFromEligible(elig)
-	if opts.ReplicationFactor > 0 {
-		return SelectPrimaryOwners(locatorHash, members, opts)
-	}
-	return OwnerOrder(locatorHash, members)
-}
-
 // hrwScore implements weighted highest-random-weight:
 // score = hash64(locator||member) as uint64, then bias by weight via
-// mixing weight into the hash domain (deterministic; no process RNG).
-//
-// Weight effect: score' = score + (weight-1)*stride derived from a second hash,
-// keeping order deterministic while favoring higher weights statistically.
+// multi-probe HRW (deterministic; no process RNG).
 func hrwScore(locatorHash, memberID string, weight int) uint64 {
-	// Primary HRW hash.
 	h := sha256.Sum256([]byte(PlacementAlgorithmID + "\n" + locatorHash + "\n" + memberID + "\n"))
 	base := binary.BigEndian.Uint64(h[0:8])
 	if weight <= 1 {
 		return base
 	}
-	// Deterministic weight boost: additional samples per weight unit (classic multi-probe HRW lite).
-	// Take max of weight independent hashes of (key, member, i).
 	best := base
 	for i := 1; i < weight; i++ {
 		payload := fmt.Sprintf("%s\n%s\n%s\n%d\n", PlacementAlgorithmID, locatorHash, memberID, i)

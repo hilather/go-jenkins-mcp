@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
@@ -167,18 +168,65 @@ func (m WireManifest) ToManifestV1() ManifestV1 {
 }
 
 func rejectForbiddenWireKeys(raw []byte) error {
-	// Lightweight key scan on JSON text (case-insensitive) for smuggling local identity.
-	low := strings.ToLower(string(raw))
-	for _, k := range forbiddenWireKeys {
-		// Match JSON object keys: "key"
-		needle := `"` + k + `"`
-		if strings.Contains(low, needle) {
-			return apperr.New(apperr.CodeInvalidArgument, "wire manifest contains forbidden field")
+	// Decode to generic tree so JSON unicode escapes (e.g. "\u0070ath") are unescaped
+	// into real key names before the forbidden-key check (FLC-011 security).
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		// Let ParseWireManifestJSON surface a single invalid-JSON error path.
+		return nil
+	}
+	if err := walkJSONKeys(v, ""); err != nil {
+		return err
+	}
+	return rejectPathLikeJSONValues(v)
+}
+
+func walkJSONKeys(v any, path string) error {
+	switch x := v.(type) {
+	case map[string]any:
+		for k, child := range x {
+			kl := strings.ToLower(strings.TrimSpace(k))
+			for _, banned := range forbiddenWireKeys {
+				if kl == banned {
+					return apperr.New(apperr.CodeInvalidArgument, "wire manifest contains forbidden field")
+				}
+			}
+			// Nested objects/arrays (e.g. frames[]) still scanned.
+			if err := walkJSONKeys(child, path+"."+k); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for i, child := range x {
+			if err := walkJSONKeys(child, path+"["+strconv.Itoa(i)+"]"); err != nil {
+				return err
+			}
 		}
 	}
-	// Reject absolute path-looking strings in values (common smuggle).
-	if strings.Contains(low, `"/tmp/`) || strings.Contains(low, `"\\`) || strings.Contains(low, `":"/var/`) {
-		return apperr.New(apperr.CodeInvalidArgument, "wire manifest must not contain local paths")
+	return nil
+}
+
+func rejectPathLikeJSONValues(v any) error {
+	switch x := v.(type) {
+	case map[string]any:
+		for _, child := range x {
+			if err := rejectPathLikeJSONValues(child); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for _, child := range x {
+			if err := rejectPathLikeJSONValues(child); err != nil {
+				return err
+			}
+		}
+	case string:
+		s := strings.ToLower(strings.TrimSpace(x))
+		if strings.HasPrefix(s, "/tmp/") || strings.HasPrefix(s, "/var/") ||
+			strings.HasPrefix(s, "/home/") || strings.Contains(s, `\tmp\`) ||
+			strings.HasPrefix(s, "c:\\") {
+			return apperr.New(apperr.CodeInvalidArgument, "wire manifest must not contain local paths")
+		}
 	}
 	return nil
 }

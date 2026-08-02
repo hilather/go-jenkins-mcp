@@ -95,6 +95,22 @@ func TestParseWireManifestJSON_Adversarial(t *testing.T) {
 		{"path in value", func(m map[string]any) { m["note"] = "/tmp/evil" }},
 		{"oversize body", func(m map[string]any) { /* handled separately */ }},
 	}
+	// Unicode-escaped forbidden key must fail (not only plain "path" text scan).
+	t.Run("unicode_escaped_path_key", func(t *testing.T) {
+		t.Parallel()
+		// \u0070ath → "path" after JSON unescape
+		raw := []byte(`{"protocol_version":"fleet-cache/1","fleet_id":"f","cache_pool":"p","controller_id":"c","locator_hash":"` +
+			strings.Repeat("ab", 32) + `","sealed":true,"format_version":1,"codec":"zstd-independent-v1","total_raw_bytes":1,"total_lines":1,"frames":[{"seq":0,"raw_start":0,"raw_end":1,"line_start":0,"line_end":1,"decoded_size":1,"decoded_sha256":"` +
+			strings.Repeat("cd", 32) + `","zstd_size":1,"zstd_sha256":"` + strings.Repeat("ef", 32) + `"}],"\u0070ath":"/smuggled"}`)
+		_, err := fleetcache.ParseWireManifestJSON(raw)
+		if err == nil {
+			t.Fatal("expected reject unicode-escaped path key")
+		}
+		if apperr.CodeOf(err) != apperr.CodeInvalidArgument {
+			t.Fatalf("code: %v", err)
+		}
+	})
+	// Keep original cases loop below.
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
