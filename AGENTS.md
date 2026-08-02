@@ -161,6 +161,34 @@ If documentation is intentionally deferred, say so in the session response and
 leave an explicit TODO with an owner/next step — never imply docs are current
 when they are not.
 
+### Absolute links in READMEs and docs (agents)
+
+**Relative markdown links break outside the repo tree** — notably **GitHub
+Releases**, some renderers, and copy-paste of release notes. Agents **must**
+use **absolute HTTPS URLs** for cross-doc and cross-path links in README and
+documentation (including release notes).
+
+| Rule | Detail |
+|------|--------|
+| **No relative doc links** | Do **not** use `../foo.md`, `./bar.md`, or bare `update.md` / `caching.md` as the link target when pointing at another file in this repo (or any public doc path). Relative paths fail on the Releases page and other non-tree views. |
+| **Use absolute GitHub (or product-site) URLs** | Prefer `https://github.com/hilather/go-jenkins-mcp/blob/<ref>/path/to/file.md` (or `/tree/<ref>/…` for directories). For **release notes**, pin `<ref>` to the **version tag** (e.g. `v0.5.0`). For living docs on `master`, pin `master` (or the default branch). Product site pages may use `https://hilather.github.io/go-jenkins-mcp/…` when that page exists. |
+| **Applies to** | Root `README.md`, everything under `docs/` (especially `docs/release/RELEASE_NOTES_v*.md`), `AGENTS.md` cross-links to external-facing paths when they are user-clickable, and any markdown that may be pasted into GitHub Releases / issues. |
+| **Same change** | When writing or editing release notes / READMEs, fix relative links in the same edit — do not ship a release with broken doc links. |
+| **Verify** | After drafting release notes, spot-check that major links return HTTP 200 against the tag or default branch. |
+
+Example (good):
+
+```markdown
+[caching.md](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/caching.md)
+```
+
+Example (bad — do not use):
+
+```markdown
+[caching.md](../caching.md)
+[update.md](update.md)
+```
+
 ### Root README currency (agents)
 
 The repository root **[`README.md`](README.md)** is the **public landing page**
@@ -474,6 +502,7 @@ REL-001/002).
 | **REL-002** / `release-evidence` / pilot-evidence pack for a version | Release notes path recorded or linked; content matches shipped features |
 | **Package** publish (tar/rpm/deb) for a version | Notes list user-visible / operator-visible changes for that version |
 | Hotfix / patch release | Notes still required: security/fix highlights + residual honesty |
+| **Links in release notes** | **Absolute** GitHub (or product-site) URLs only — pin to the version tag. Relative paths **do not work** on the GitHub Releases page (see *Absolute links* above) |
 
 Day-to-day feature PRs **should** keep docs current (`AGENTS.md` documentation
 rules) so release-note drafting is summarization, not archaeology. Still, **the
