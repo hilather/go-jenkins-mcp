@@ -103,56 +103,9 @@ func collectionPath(c Collection) string {
 }
 
 // NewPeerMux returns an http.Handler for /fleet/v1/* using LocalProvider + mesh token auth.
+// Optional cache lookup routes: NewPeerMuxWithOptions (FLC-030).
 func NewPeerMux(cfg Config, local *LocalProvider) http.Handler {
-	mux := http.NewServeMux()
-	auth := func(next http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			if !meshTokenOK(r.Header.Get(MeshTokenHeader), cfg.MeshToken) {
-				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-				return
-			}
-			next(w, r)
-		}
-	}
-	write := func(w http.ResponseWriter, v any) {
-		w.Header().Set("Content-Type", "application/json")
-		enc := json.NewEncoder(w)
-		_ = enc.Encode(v)
-	}
-	handle := func(c Collection) http.HandlerFunc {
-		return auth(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				http.Error(w, `{"error":"method_not_allowed"}`, http.StatusMethodNotAllowed)
-				return
-			}
-			payload, err := local.SnapshotLocal(r.Context(), c)
-			if err != nil {
-				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-				return
-			}
-			write(w, payload)
-		})
-	}
-	mux.HandleFunc(PeerPathPrefix+"/health", handle(CollectionHealth))
-	mux.HandleFunc(PeerPathPrefix+"/version", handle(CollectionVersion))
-	mux.HandleFunc(PeerPathPrefix+"/metrics", handle(CollectionMetrics))
-	mux.HandleFunc(PeerPathPrefix+"/residual-status", handle(CollectionResidual))
-	mux.HandleFunc(PeerPathPrefix+"/doctor", handle(CollectionDoctor))
-	mux.HandleFunc(PeerPathPrefix+"/cache-status", handle(CollectionCache))
-	mux.HandleFunc(PeerPathPrefix+"/member", auth(func(w http.ResponseWriter, r *http.Request) {
-		self := cfg.Roster.MemberByID(cfg.MemberID)
-		out := map[string]any{
-			"id":         cfg.MemberID,
-			"fleet_id":   cfg.Roster.FleetID,
-			"bundle_seq": cfg.Roster.BundleSeq,
-		}
-		if self != nil {
-			out["profile_id"] = self.ProfileID
-			out["display_name"] = self.DisplayName
-		}
-		write(w, out)
-	}))
-	return mux
+	return NewPeerMuxWithOptions(cfg, local, PeerMuxOptions{})
 }
 
 func meshTokenOK(got, want string) bool {

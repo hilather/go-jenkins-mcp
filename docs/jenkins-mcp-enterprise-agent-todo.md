@@ -4010,7 +4010,10 @@ Operators manage **who** may do **what** in MCP policy via the admin console: bi
 | **FLC-017** | Scoped peer assertions + replay | **Done\*** HMAC claims; nonce store; no credentials in claims |
 | **FLC-021** | Pure zstd export helpers | **Done\*** `store.ExportPureZstd` verifies wire hash |
 | **FLC-060** | Fleet-cache config on operator path | **Done\*** serve flags/env; default off; peer-read handlers **not** live |
-| **FLC-018+**, **FLC-022+**, **FLC-030+** | Authz freshness, stream transfer, peer-read, fill, RF2, … | **Planned** — owner-directed peer-read / fill / RF2 **not Done** |
+| **FLC-018** | Authz freshness gate | **Done\*** `FreshnessGate`; probe fail-closed; no cache elevation |
+| **FLC-042** | Sealed → fleet wire manifest | **Done\*** `PublishSealed` idempotent |
+| **FLC-030** | Owner-directed manifest lookup | **Done\*** peer routes + client; owners only (not broadcast) |
+| **FLC-031…032**, **FLC-022+**, fill/RF2 | Decoded peer-read, logmirror, streams, fill, RF2 | **Planned** — **not** full peer-read GO |
 
 Full acceptance criteria and dependency edges for every `FLC-*` ID live in the machine-readable task index (and the offline planning pack used as source). Agents implement **one task ID per PR** where practical; do not mark peer-cache capability Done without code + tests + residual honesty.
 

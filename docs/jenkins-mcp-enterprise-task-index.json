@@ -5888,7 +5888,7 @@
         "Authorization freshness decision record",
         "Measured probe overhead"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) — fleetcache.FreshnessGate TTL allow-cache + deny/probe fail-closed; no elevation; FLC-031/032 still Planned",
       "source_line": 0,
       "dependency_depth": 5,
       "dependents": [
@@ -6126,7 +6126,7 @@
         "Peer lookup sequence diagram",
         "Latency measurements"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) — owner-directed manifest HEAD/GET /fleet/cache/v1 + ManifestLookupClient; not decoded peer-read (031/032); fill/RF2 Planned",
       "source_line": 0,
       "dependency_depth": 6,
       "dependents": [
@@ -6364,7 +6364,7 @@
         "Publish hook contract",
         "Manifest fixture"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) — fleetcache.PublishSealed from sealed frames; unsealed fail closed; durable catalog residual",
       "source_line": 0,
       "dependency_depth": 6,
       "dependents": [

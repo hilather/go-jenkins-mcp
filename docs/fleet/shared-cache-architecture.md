@@ -1,6 +1,6 @@
 # Fleet shared cache — target architecture (summary)
 
-**Status:** Foundation **Done\*** (budgets, identity, wire validation, placement, managed peer server); owner-directed **peer-read handlers still Planned** (FLC-030…032)  
+**Status:** Foundation + **manifest lookup Done\*** (FLC-030); bounded **decoded** peer-read / logmirror still **Planned** (FLC-031…032)  
 **Audience:** implementers, security, operators  
 **SoT decision:** [ADR 0016](../adr/0016-fleet-p2p-shared-cache.md)  
 **Audit:** [shared-cache-current-state.md](shared-cache-current-state.md)  
@@ -113,9 +113,12 @@ Cursor **stdio** single-member pilots stay `off`. Do not enable by surprise.
 | Scoped peer assertions + replay | **Done\*** — `IssueAssertion`/`VerifyAssertion` HMAC + nonce store (FLC-017) |
 | Pure zstd export helpers | **Done\*** — `ExportPureZstd` / `ExportPureZstdEnsured` (FLC-021) |
 | Fleet-cache mode flags on serve | **Done\*** — default off; `StatusSummary` peer-read residual (FLC-060) |
+| Authz freshness gate | **Done\*** — `FreshnessGate` deny-only probe + TTL; fail closed; no elevation (FLC-018) |
+| Sealed → wire manifest publish | **Done\*** — `PublishSealed` idempotent (FLC-042) |
+| Owner-directed manifest lookup | **Done\*** — `/fleet/cache/v1/objects/{lh}/manifest` + client (FLC-030); **not** decoded peer-read |
 | Roster cache eligibility fields | **Done\*** — optional `cache` on roster v1 (FLC-012) |
 | 3-member lab scaffold | **Done\*** offline — `testdata/fleet-cache-lab/` + `make fleet-cache-lab-*` (FLC-003) |
-| Peer streaming read / logmirror hook | **Planned** (FLC-030…032) — **not** peer-read Done |
+| Bounded decoded peer-read / logmirror hook | **Planned** (FLC-031…032) |
 | Fill lease / RF2 | **Planned** (later gates) |
 | Production per-node identity | mTLS or signing beyond mesh token |
 | Admin BFF/SPA/MCP full parity | FLC-063 residual |
