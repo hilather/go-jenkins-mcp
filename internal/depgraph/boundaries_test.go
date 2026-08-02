@@ -290,6 +290,11 @@ func TestDependencyDirection(t *testing.T) {
 			"internal/apperr", "internal/audit", "internal/auth", "internal/config",
 			"internal/diagnostics", "internal/keyring", "internal/policy",
 			"internal/gateway", "internal/profile", "internal/store", "internal/telemetry",
+			"internal/saml", // POL-007 admin SSO SP
+		},
+		// POL-007: SAML SP pure validation + attribute/role maps (stdlib crypto/xml).
+		"internal/saml": {
+			"internal/apperr", "internal/auth", "internal/contracts", "internal/policy",
 		},
 		// MCP-OPS: shared admin day-2 ops for admin_* tools (not HTTP; not MCP SDK).
 		"internal/adminops": {

@@ -17,6 +17,7 @@ import (
 	"github.com/simonfxr/go-jenkins-mcp/internal/config"
 	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
 	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
+	"github.com/simonfxr/go-jenkins-mcp/internal/saml"
 )
 
 // DefaultAddr is the loopback bind for admin serve (ADR 0014).
@@ -75,6 +76,8 @@ type Config struct {
 	Logger *log.Logger
 	// ShutdownTimeout bounds graceful shutdown after ctx cancel. Default 5s.
 	ShutdownTimeout time.Duration
+	// SAML optional POL-007 admin SSO (config-managed SP). Empty Config.Enabled → off.
+	SAML SAMLOptions
 }
 
 // DefaultConfig returns safe defaults (loopback 127.0.0.1:8787, role viewer).
@@ -187,7 +190,8 @@ func normalizeConfig(cfg Config) Config {
 }
 
 type server struct {
-	cfg Config
+	cfg  Config
+	saml *samlRuntime
 }
 
 // NewHandler builds the admin HTTP handler (API + optional SPA). Does not listen.
@@ -205,11 +209,33 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	}
 
 	s := &server{cfg: cfg}
+	if cfg.SAML.Config.Enabled {
+		if err := cfg.SAML.Config.Validate(); err != nil {
+			return nil, err
+		}
+		if cfg.SAML.Trust.PublicKey == nil && strings.TrimSpace(cfg.SAML.Config.IdPCertificatePEMPath) != "" {
+			trust, err := saml.LoadTrustFromPEMFile(cfg.SAML.Config.IdPCertificatePEMPath)
+			if err != nil {
+				return nil, err
+			}
+			cfg.SAML.Trust = trust
+			s.cfg = cfg
+		}
+		if cfg.SAML.Trust.PublicKey == nil {
+			return nil, apperr.New(apperr.CodeInvalidArgument,
+				"saml enabled requires IdP trust material (idp_certificate_pem_path or injected Trust)")
+		}
+		s.saml = newSAMLRuntime(cfg.SAML)
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /admin/v1/health", s.handleHealth)
 	mux.HandleFunc("GET /admin/v1/version", s.handleVersion)
 	mux.HandleFunc("GET /admin/v1/me", s.handleMe)
+	// POL-007 SAML SP (admin SSO)
+	mux.HandleFunc("GET /admin/v1/saml/status", s.handleSAMLStatus)
+	mux.HandleFunc("GET /admin/v1/saml/login", s.handleSAMLLogin)
+	mux.HandleFunc("POST /admin/v1/saml/acs", s.handleSAMLACS)
 	// HOST-011 / HOST-009: secret-free gateway vault + mode matrix status (read-only).
 	mux.HandleFunc("GET /admin/v1/gateway/vault", s.handleGatewayVault)
 	// HOST-007: unified gateway residual-status (same secret-free map as CLI).
@@ -256,8 +282,8 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	}
 
 	// Outermost: security headers on every response (API + SPA).
-	// Auth gate still applies to /admin/v1/* only.
-	return securityHeaders(authMiddleware(cfg.BearerToken, cfg.Role, mux)), nil
+	// Auth gate still applies to /admin/v1/* only (SAML session or shared secret).
+	return securityHeaders(s.authMiddleware(mux)), nil
 }
 
 // spaFileServer serves static files from root and falls back to index.html for

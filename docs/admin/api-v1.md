@@ -16,9 +16,10 @@ ops parity”.
 
 **Design (admin users v1):** There is **no local admin user directory**. Operators
 share an optional process shared secret plus a **single process-wide role**
-(`--admin-role`). Multi-operator named accounts, passwords, and per-user admin
-RBAC are residual (SSO + multi-fleet config — see [admin README design notes](README.md)
-and **POL-007**). Console auth never elevates Jenkins or MCP tool rights.
+(`--admin-role`). **POL-007 SAML SSO** (optional): config-managed SP +
+group→role map via `JENKINS_MCP_SAML_CONFIG`; ACS `POST /admin/v1/saml/acs`;
+session cookie elevates role without a user DB. Live IdP pin residual.
+Console auth never elevates Jenkins or MCP tool rights.
 
 Optional shared secret (recommended). When configured, every `/admin/v1/*` request must present:
 

@@ -111,6 +111,12 @@ func runAdminServe(args []string) error {
 		return err
 	}
 
+	// POL-007: optional SAML SP from JENKINS_MCP_SAML_CONFIG (multi-fleet file SoT).
+	samlOpts, err := admin.LoadSAMLOptionsFromEnviron()
+	if err != nil {
+		return err
+	}
+
 	assets := strings.TrimSpace(*assetsDir)
 	// Resolve default assets so UIBuild is stamped into health/version (UI-008).
 	resolved := admin.ResolveAssets(assets)
@@ -130,6 +136,7 @@ func runAdminServe(args []string) error {
 		Keyring:         keyringStore(),
 		Logger:          log.Default(),
 		ShutdownTimeout: 0, // package default
+		SAML:            samlOpts,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

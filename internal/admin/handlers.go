@@ -292,14 +292,36 @@ func (s *server) handleMe(w http.ResponseWriter, r *http.Request) {
 		// Should not reach here when middleware is in place; fail closed.
 		authenticated = false
 	}
+	// SAML session role takes precedence when present (POL-007).
+	if samlRole, ok := s.sessionRoleFromRequest(r); ok {
+		role = samlRole
+		authenticated = true
+	}
 	resp := meResponse{
 		Authenticated:   authenticated,
 		Role:            role.String(),
 		Permissions:     role.PermissionStrings(),
 		TokenConfigured: tokenConfigured,
 	}
-	if !tokenConfigured {
+	if !tokenConfigured && (s.saml == nil || !s.saml.enabled()) {
 		resp.Residual = "no admin token on loopback (pilot-only; prefer --require-token); process role still applies"
+	}
+	if fields := s.meSAMLFields(); fields != nil {
+		if resp.Residual == "" {
+			if r, ok := fields["residual"].(string); ok {
+				resp.Residual = r
+			}
+		}
+		// Surface SAML enablement without a second schema type (secret-free map merge residual).
+		// Clients read residual + role; full status via GET /admin/v1/saml/status.
+		_ = fields
+	}
+	if s.saml != nil && s.saml.enabled() {
+		if resp.Residual == "" {
+			resp.Residual = "saml_enabled; live_entra_okta_adfs_pin residual"
+		} else if !strings.Contains(resp.Residual, "saml") {
+			resp.Residual = resp.Residual + "; saml_enabled"
+		}
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

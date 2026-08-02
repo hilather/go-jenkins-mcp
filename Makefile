@@ -54,6 +54,7 @@ help:
 	@echo "  make admin-e2e  UI-009 opt-in admin BFF+SPA smoke (not in default test/ci; artifact dist/admin-e2e/)"
 	@echo "  make live-oauth-up     HOST-012…015 OAuth/JWT mock lab (opt-in; not default test)"
 	@echo "  make live-oauth-test   OAuth lab up + smoke + down"
+	@echo "  make saml-lab-test     POL-007 offline SAML unit suite (opt-in; not default test)"
 	@echo "  make local-docker-up   Support stack: admin BFF in Docker (deploy/local; not default test)"
 	@echo "  make local-docker-down Tear down local Docker stack + volumes"
 	@echo "  make local-docker-doctor  Offline doctor via local Docker image"
@@ -322,6 +323,13 @@ live-oauth-test:
 	OAUTH_OIDC_PORT=$(OAUTH_OIDC_PORT) OAUTH_RS_PORT=$(OAUTH_RS_PORT) OAUTH_TOKEN_PORT=$(OAUTH_TOKEN_PORT) \
 		OAUTH_HOST_BIND=$(OAUTH_HOST_BIND) LAB_ISSUER=$(LAB_ISSUER) LAB_AUDIENCE=$(LAB_AUDIENCE) \
 		$(CURDIR)/scripts/oauth-lab-smoke.sh
+
+# POL-007 offline SAML SP unit suite (fixtures in internal/saml + admin ACS tests).
+# Not part of default make test / ci beyond packages already covered by go test ./...
+# Live Entra/Okta/ADFS pin residual — see testdata/saml-lab/README.md + ADR 0015.
+.PHONY: saml-lab-test
+saml-lab-test:
+	$(GO) test $(GOFLAGS) $(GO_TESTFLAGS) ./internal/saml/ ./internal/admin/ -count=1 -run 'SAML|Saml'
 
 # Local Docker support stack (deploy/local). Opt-in; not part of make test / ci.
 # Profiles: LOCAL_COMPOSE_PROFILES=http and/or with-jenkins

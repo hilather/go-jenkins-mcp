@@ -85,6 +85,7 @@ Built from the community seed [`simonfxr/go-jenkins-mcp`](https://github.com/sim
 
 - **Admin console** — `jenkins-mcp admin serve` + React SPA (`web/admin/`); roles `viewer` / `operator` / `policy_admin`
 - **Shared-secret auth (v1)** — one process-wide role; **no local admin user directory** ([design notes](docs/admin/README.md))
+- **SAML SP SSO (POL-007 Done\* offline)** — config-managed SP (`JENKINS_MCP_SAML_CONFIG`), group→role map, ACS session; live IdP pin residual (ADR 0015)
 - **Apache ECharts only** for metrics charts; Metrics always visualized
 - **Opt-in admin MCP (MCP-OPS)** — `--enable-admin-mcp` registers `admin_*` tools (shared libs with BFF, not HTTP proxy)
 

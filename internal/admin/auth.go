@@ -80,6 +80,8 @@ func bearerFromAuthorization(h string) string {
 //
 // Residual (UI-003): v1 uses Bearer / header shared secret (not cookies), so
 // CSRF is N/A. Future httpOnly cookie sessions will require CSRF tokens.
+//
+// Prefer server.authMiddleware when SAML is enabled (POL-007 session role).
 func authMiddleware(bearerToken string, role Role, next http.Handler) http.Handler {
 	if role == "" {
 		role = RoleViewer
@@ -99,6 +101,81 @@ func authMiddleware(bearerToken string, role Role, next http.Handler) http.Handl
 		ctx := WithRole(r.Context(), role)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// authMiddleware on server supports shared secret and/or SAML session (POL-007).
+func (s *server) authMiddleware(next http.Handler) http.Handler {
+	processRole := s.cfg.Role
+	if processRole == "" {
+		processRole = RoleViewer
+	}
+	bearer := s.cfg.BearerToken
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r == nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid_argument", "bad request")
+			return
+		}
+		path := ""
+		if r.URL != nil {
+			path = r.URL.Path
+		}
+		// Public SAML endpoints (ACS/login/status) — no shared secret required.
+		if isSAMLPublicPath(path) {
+			ctx := WithRole(r.Context(), processRole)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+		if !requiresAdminToken(path) {
+			ctx := WithRole(r.Context(), processRole)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		role := processRole
+		authenticated := false
+
+		// SAML session elevates to mapped role when present.
+		if samlRole, ok := s.sessionRoleFromRequest(r); ok {
+			role = samlRole
+			authenticated = true
+		}
+		// Shared secret still accepted when configured.
+		if bearer != "" && TokenMatches(r, bearer) {
+			authenticated = true
+			// Token keeps process role unless SAML session already set a role.
+			if _, ok := s.sessionRoleFromRequest(r); !ok {
+				role = processRole
+			}
+		}
+
+		// When SAML require: must have SAML session (token alone insufficient if require).
+		if s.saml != nil && s.saml.require() {
+			if _, ok := s.sessionRoleFromRequest(r); !ok {
+				w.Header().Set("WWW-Authenticate", `Bearer realm="jenkins-mcp-admin"`)
+				writeJSONError(w, http.StatusUnauthorized, "authentication", "unauthorized")
+				return
+			}
+			authenticated = true
+		} else if bearer != "" && !authenticated {
+			// Classic shared-secret gate when token configured and SAML not require.
+			w.Header().Set("WWW-Authenticate", `Bearer realm="jenkins-mcp-admin"`)
+			writeJSONError(w, http.StatusUnauthorized, "authentication", "unauthorized")
+			return
+		}
+
+		_ = authenticated
+		ctx := WithRole(r.Context(), role)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func isSAMLPublicPath(path string) bool {
+	switch strings.TrimSpace(path) {
+	case "/admin/v1/saml/acs", "/admin/v1/saml/login", "/admin/v1/saml/status":
+		return true
+	default:
+		return false
+	}
 }
 
 // RequirePermission returns a middleware that responds 403 permission_denied

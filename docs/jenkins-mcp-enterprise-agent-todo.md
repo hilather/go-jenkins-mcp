@@ -823,7 +823,7 @@ Make every MCP RBAC control **definable against both individual verified users a
 
 **Priority:** P1  
 **Dependencies:** POL-006, POL-003, AUTH-004, OAUTH-003 (claim discipline), UI-003, MGR-001  
-**Status:** **Backlog / not started** — OIDC/JWT and gateway group foundations exist; **SAML SP / assertion mapping residual**
+**Status:** **Done\*** offline (2026-08-01) — ADR 0015, `internal/saml`, admin ACS/session, POL-006 group bind tests, `testdata/saml-lab` + `make saml-lab-test`. **Live Entra/Okta/ADFS pin residual.**
 
 **Objective**
 
@@ -856,15 +856,15 @@ Rationale: gitops + signed overlays converge every fleet member; per-pod mutable
 
 **Acceptance criteria**
 
-- [ ] ADR: SAML SP role; Jenkins is never SAML IdP for MCP; stock Jenkins not AS; multi-fleet config SoT documented.
-- [ ] Configurable attribute map: subject + groups → `policy.Subject` / inbound claims without tool-arg spoofing.
-- [ ] Group-based POL-006 denials apply after successful SAML session bind.
-- [ ] Invalid signature / wrong audience/recipient / expired assertion → fail closed (no Basic fallthrough for gated surfaces).
-- [ ] Admin SSO residual path documented vs pilot shared-secret; production prefers SSO when enabled.
-- [ ] **Multi-fleet:** SP settings, group→role map, and POL-006 bindings load from configuration files / signed policy (not a local user directory); secrets via env/secret store only.
-- [ ] Secret-free canaries: assertion, signatures, cookies/tokens never in logs/MCP/admin JSON.
-- [ ] Opt-in mock SAML lab + unit tests for attribute map and fail-closed matrix.
-- [ ] Live Entra/Okta/ADFS pin residual documented (like OAUTH-009) — offline mock ≠ production GO.
+- [x] ADR: SAML SP role; Jenkins is never SAML IdP for MCP; stock Jenkins not AS; multi-fleet config SoT documented. (ADR 0015)
+- [x] Configurable attribute map: subject + groups → `policy.Subject` / inbound claims without tool-arg spoofing.
+- [x] Group-based POL-006 denials apply after successful SAML session bind.
+- [x] Invalid signature / wrong audience/recipient / expired assertion → fail closed (no Basic fallthrough for gated surfaces).
+- [x] Admin SSO residual path documented vs pilot shared-secret; production prefers SSO when enabled.
+- [x] **Multi-fleet:** SP settings, group→role map, and POL-006 bindings load from configuration files / signed policy (not a local user directory); secrets via env/secret store only.
+- [x] Secret-free canaries: assertion, signatures, cookies/tokens never in logs/MCP/admin JSON.
+- [x] Opt-in mock SAML lab + unit tests for attribute map and fail-closed matrix. (`testdata/saml-lab`, `make saml-lab-test`)
+- [x] Live Entra/Okta/ADFS pin residual documented (like OAUTH-009) — offline mock ≠ production GO.
 
 **Out of scope unless explicit go:** SAML for Jenkins UI itself; using SAML to mint Jenkins API tokens; Jenkins-as-SAML-IdP; building a product user-account store that replaces the IdP.
 

@@ -118,17 +118,27 @@ start; restart or redeploy to change role. Multiple humans share that
 token+role for a given host — that is the pilot model (HOST-007 honesty:
 single process role).
 
-**Future (admin only):**
+**SAML admin SSO (POL-007 Done\* offline):**
+
+| Piece | Detail |
+|-------|--------|
+| Config | `JENKINS_MCP_SAML_CONFIG` → JSON SP file (`testdata/saml-lab/config.example.json`) |
+| Trust | `idp_certificate_pem_path` (IdP **public** cert PEM) |
+| Session | Optional `JENKINS_MCP_SAML_SESSION_KEY`; cookie `jenkins_mcp_admin_saml` (process-local; not multi-pod HA) |
+| Routes | `GET /admin/v1/saml/status`, `GET …/login` (live redirect residual), `POST …/acs` (`SAMLResponse`) |
+| Role map | `group_roles` in config; unmapped groups **deny**; shared-secret pilot remains when `require=false` |
+| Residual | Live Entra/Okta/ADFS pin; browser IdP redirect automation |
+
+**Future residual:**
 
 | Path | Intent |
 |------|--------|
-| **SAML/OIDC SSO for operators** (UI-003 residual + **POL-007**) | Replace or complement the shared secret; IdP authenticates the operator |
-| **Multi-fleet: config-managed** (preferred for many hosts) | SAML SP settings, attribute map, and **IdP group → console role** maps live in **versioned configuration** (gitops / signed files), not a per-pod user DB — see [policy-rbac.md § SAML multi-fleet](../policy-rbac.md#saml-and-multi-fleet-configuration-design) and **POL-007** |
-| **Single-host SPA residual** (UI-011) | Optional local editor for pilot overlays; multi-fleet SoT remains config/signed bundles (**MGR-001**) |
+| **UI-011 SPA Access** | Optional local binding editor; fleet SoT remains config (**MGR-001**) |
+| **Live IdP pin** | Production metadata + browser ACS against real IdP |
 
 Admin SSO must not invent group membership: groups come from the assertion
-(or OIDC claims); missing/overage claims fail closed. SP private keys and
-tokens stay in secret stores / env — **not** committed config.
+(or OIDC claims); missing/overage claims fail closed. SP/session secrets stay
+in secret stores / env — **not** committed config. See ADR 0015.
 
 | Surface | SPA status (honest) |
 |---------|---------------------|

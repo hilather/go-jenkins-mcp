@@ -78,7 +78,7 @@ Authz: process **admin role** (same as console) or stricter serve-time gate; des
 | Policy overlay get | `admin_policy_overlay_get` | P1 | |
 | Policy validate/apply | `admin_policy_validate`, `admin_policy_apply` | P1 | policy_admin + confirm on apply |
 | User/group RBAC bindings (POL-006) | `admin_rbac_list_bindings`, `admin_rbac_put_binding`, `admin_rbac_delete_binding` | P1 | Policy language **Done\*** (`subjects.users`/`subjects.groups`); **admin_* CRUD residual** until UI-011 |
-| SAML SP / attribute map (POL-007) | `admin_saml_status`, `admin_saml_config_get` (write residual) | P2 | Secret-free metadata only; residual until POL-007 |
+| SAML SP / attribute map (POL-007) | `admin_saml_status` residual; BFF `GET /admin/v1/saml/status` **Done\*** | P2 | SP validate/map Done\* offline; **admin_saml_*** MCP tools residual; live IdP residual |
 | Metrics snapshot | `admin_metrics` | P0 | Counters/gauges only; residual note |
 | Audit list | `admin_audit_list` | P0 | limit/before/type/external_subject caps |
 | Audit type settings | `admin_audit_settings_get`, `admin_audit_settings_put` | P1 | Mirror GET/PUT `…/audit/settings`; gateway_ops on put; catalog from KnownEventTypes |

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "enabled": true,
+  "require": false,
+  "sp_entity_id": "https://mcp.example.corp/sp",
+  "acs_url": "https://mcp.example.corp/admin/v1/saml/acs",
+  "idp_entity_id": "https://idp.example.corp/metadata",
+  "idp_certificate_pem_path": "/etc/jenkins-mcp/saml/idp.pem",
+  "attribute_map": {
+    "subject_attribute": "",
+    "groups_attribute": "groups",
+    "tenant_attribute": ""
+  },
+  "group_roles": {
+    "mcp-admins": "policy_admin",
+    "mcp-operators": "operator",
+    "mcp-viewers": "viewer"
+  },
+  "max_groups": 64
+}

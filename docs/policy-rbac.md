@@ -191,7 +191,7 @@ enterprise force_read_only
 | Task | Scope | Status |
 |------|--------|--------|
 | **POL-006** | Policy language + evaluator (this section) | **Done\*** |
-| **POL-007** | SAML 2.0 SP path: assertion → subject + groups into policy (not Jenkins-as-IdP); multi-fleet **config-managed** | Backlog |
+| **POL-007** | SAML 2.0 SP path: assertion → subject + groups into policy (not Jenkins-as-IdP); multi-fleet **config-managed** | **Done\*** offline (ADR 0015, `internal/saml`, admin ACS); live IdP pin residual |
 | **UI-011** | Admin Access page + BFF CRUD + `admin_rbac_*` MCP for bindings (pilot/single-host; fleet SoT = config) | Backlog |
 
 **Agent non-negotiable** (root `AGENTS.md`): new RBAC controls must be designed so
@@ -203,7 +203,11 @@ and now drive **POL-006 group bindings** when present on `Subject.Groups`.
 Operators manage binding documents via overlay JSON today; admin SPA editor is
 **UI-011** residual.
 
-### SAML and multi-fleet configuration (design)
+### SAML and multi-fleet configuration (POL-007 Done* offline)
+
+**Status:** Offline SP validation + attribute map + admin ACS/session + POL-006 group bind **Done\***.  
+**Residual:** live Entra/Okta/ADFS browser pin, encrypted assertions, multi-pod session HA, UI-011 SPA CRUD.  
+**Package:** `internal/saml` · ADR 0015 · `testdata/saml-lab/` · `make saml-lab-test` · env `JENKINS_MCP_SAML_CONFIG`.
 
 **Does config-file management of SAML users/groups make sense for multi-fleet?**
 **Yes — with a precise definition of “manage”.**
@@ -219,11 +223,11 @@ Operators manage binding documents via overlay JSON today; admin SPA editor is
 
 **Architectural rules (POL-007 / fleet):**
 
-1. SAML is **SP + attribute map** only — Jenkins is never the SAML IdP/AS (ADR 0003).
-2. Config **maps and restricts**; it does not invent membership. Group claims missing or oversize fail closed (OAUTH-006 spirit).
-3. Multi-fleet prefers **immutable config + signed policy** over mutable per-pod DBs so every gateway/admin host converges on the same bindings.
-4. Admin console v1 remains **shared secret + one process role** until SSO lands; see [admin README — admin users](admin/README.md).
-5. Optional SPA Access UI stays secret-free and cannot widen enterprise `force_read_only`; fleet sites may run SPA read-only and push overlays only via signed apply pipelines.
+1. SAML is **SP + attribute map** only — Jenkins is never the SAML IdP/AS (ADR 0003 / **0015**).
+2. Config **maps and restricts**; it does not invent membership. Group overage/oversize fail closed.
+3. Multi-fleet prefers **immutable config + signed policy** over mutable per-pod DBs.
+4. Shared-secret pilot remains when SAML `require=false`; when `require=true`, SAML session is mandatory for gated `/admin/v1/*` (except ACS/login/status). See [admin README](admin/README.md).
+5. Optional SPA Access UI (UI-011 residual) stays secret-free and cannot widen enterprise `force_read_only`.
 
 ---
 
