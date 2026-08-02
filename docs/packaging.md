@@ -433,6 +433,8 @@ BUILDTIME = UTC ISO-8601
 
 Embedded in the binary via ldflags (`main.version`, `main.commit`, `main.buildTime`) and written into package `BUILD_INFO`.
 
+**DEB/RPM Version sanitization:** when `VERSION` is a bare git SHA (no tags in checkout), package managers get `0.0.0+git.<sha>` so Debian `Version` starts with a digit. Tarball filenames keep the raw `VERSION`. See `scripts/package-linux.sh`.
+
 ### Version CLI (UPD-001)
 
 ```bash
