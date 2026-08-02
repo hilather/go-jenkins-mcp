@@ -2,7 +2,7 @@
 
 **Status:** Product free-lab multi-fleet pack (2026-08-01)  
 **Audience:** platform operators, agents  
-**Related:** [policy-rbac.md](../policy-rbac.md) · [policy-bundles.md](../security/policy-bundles.md) · [free-lab-qualification.md](../gateway/free-lab-qualification.md) · fixtures `testdata/fleet-pack/` · **[fleet-mcp-ops.md](fleet-mcp-ops.md)** (opt-in `fleet_*` MCP + any-node fan-out — **Done\* vertical slice**; not multi-pod HA)
+**Related:** [policy-rbac.md](../policy-rbac.md) · [policy-bundles.md](../security/policy-bundles.md) · [free-lab-qualification.md](../gateway/free-lab-qualification.md) · fixtures `testdata/fleet-pack/` · **[fleet-mcp-ops.md](fleet-mcp-ops.md)** (opt-in `fleet_*` MCP + any-node fan-out — **Done\* vertical slice**; not multi-pod HA) · **[shared-cache-architecture.md](shared-cache-architecture.md)** (optional peer sealed-log cache — **Planned**, ADR [0016](../adr/0016-fleet-p2p-shared-cache.md); default local plane A)
 
 ---
 
@@ -69,6 +69,7 @@ Pilot break-glass: admin console **Access** page / `admin_rbac_*` tools edit **p
 | Multi-pod gateway HA | **Out of scope** (HOST-008 **cancelled**) — multi-fleet *is* the scale model; do not plan multi-replica shared vault/rate |
 | SPA as fleet SoT | **Never** — config/signed policy remains SoT |
 | Cross-member MCP aggregation (`fleet_*`) | **Done\* vertical slice** — [fleet-mcp-ops.md](fleet-mcp-ops.md); opt-in `--fleet-mode` + roster + mesh token; not default pilot; not multi-pod HA |
+| Cross-member **log cache** (FLC peer plane) | **Planned residual** — plane A stays **local by default**; optional pure-Go owner-directed peer read of sealed completed console logs (MVP A first; fill/RF2 later). **Not Done.** Audit: [shared-cache-current-state.md](shared-cache-current-state.md). Absolute: [ADR 0016](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/adr/0016-fleet-p2p-shared-cache.md) |
 
 Verify offline: `go test ./internal/policy/ -run 'Fleet|POL006|RequireSigned|LoadFromEnviron'`.  
 Example fixtures: `testdata/fleet-pack/`.

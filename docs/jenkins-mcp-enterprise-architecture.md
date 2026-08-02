@@ -127,6 +127,8 @@ The requirement is **Zstandard random access through independent frames/checkpoi
 - Building an embeddings or vector-search platform before literal and regular-expression search are proven insufficient.
 - Running arbitrary downloaded artifacts or build scripts on the developer workstation.
 - Guaranteeing semantic root-cause analysis without presenting the underlying evidence and confidence limits.
+- **HOST-008 multi-pod shared vault/session/rate HA** (cancelled — multi-fleet is the scale model).
+- Shipping multi-fleet **peer log-cache** runtime before ADR [0016](adr/0016-fleet-p2p-shared-cache.md) MVP A is implemented and tested (peer cache is **Planned**, default **off**, local plane A remains the default).
 
 ---
 ## 4. Assessment of the starting repository
@@ -1765,6 +1767,8 @@ A production release must not ship until all applicable gates pass.
 | Local client platforms | Tier 1 only: Rocky Linux (all supported majors) + Ubuntu (all supported LTS Desktop/Server); **macOS and Windows excluded** | Native Linux FUSE for L2/ratarmount; no WinFsp dependency |
 | Linux packaging | Signed RPM (Rocky) and DEB (Ubuntu) plus portable tarball; XDG data paths | Matches enterprise Linux software distribution |
 | Linux credentials | Secret Service (`libsecret`); documented headless fallback only under policy | No plaintext config secrets; no Windows Credential Manager path |
+| Multi-fleet scale | N independent single-replica members + shared signed policy; HOST-008 multi-pod HA **cancelled** | Avoid shared vault/session/rate multi-pod complexity |
+| Optional peer sealed-log cache (FLC) | **Planned** pure-Go in-process coordination (ADR [0016](adr/0016-fleet-p2p-shared-cache.md)); default **off**; MVP A = owner-directed **peer read** first; fill/RF2 later; ops `fleet_*` plane stays separate | LB multi-member cold-miss relief without external cache middleware or reopening HOST-008 |
 
 ---
 

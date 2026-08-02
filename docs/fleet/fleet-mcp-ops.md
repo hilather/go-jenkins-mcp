@@ -45,6 +45,7 @@ This plan defines a **separate** tool family, gated on explicit **fleet mode**, 
 | Agent SAML login for fleet tools | Admin MCP remains process role; fleet peer auth is **mesh**, not browser SSO |
 | Unbounded full audit merge | AUD-T SIEM residual; optional later with hard caps |
 | Auto-discovery of peers via mDNS / Jenkins | Spoofable; roster only |
+| Shared / sharded **log body** cache across members | **Different epic (FLC / ADR 0016)** — **Planned**; this doc’s `fleet_*` fan-out must **not** carry progressive log payloads; see [shared-cache-architecture.md](shared-cache-architecture.md) |
 
 ---
 

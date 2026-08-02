@@ -1,7 +1,7 @@
 {
   "schema_version": "1.1",
-  "generated_for_revision": "Engineer authentication, read-only/RBAC, AgentCore 3LO/OBO, seekable-Zstandard/ratarmount-rs; Tier-1 Rocky+Ubuntu, macOS and Windows out of scope (no native FUSE); POL-006/007 UI-011 SAML user/group RBAC backlog",
-  "source_file": "jenkins-mcp-enterprise-agent-todo.md",
+  "generated_for_revision": "0bde63662ebaa4783a14663346ab4b44f44f90d2+flc-phase0",
+  "source_file": "docs/jenkins-mcp-enterprise-agent-todo.md",
   "source_sha256": "da82aba7de161fa3e681dc076c7a447c13b7db9aa15ee702e6f01cdf83417af3",
   "validation": {
     "unique_task_ids": true,
@@ -11,62 +11,74 @@
     "acyclic_dependency_graph": true
   },
   "validation_details": {
-    "duplicate_task_ids": [],
-    "missing_dependency_ids": [],
-    "self_dependency_task_ids": [],
-    "duplicate_dependency_ids_by_task": {},
-    "cycle_task_ids": []
+    "flc_merge": {
+      "added": 44,
+      "snapshot_commit": "0bde63662ebaa4783a14663346ab4b44f44f90d2",
+      "mvp_a_task_count": 29,
+      "note": "FLC namespace reserved; FLC-000/001 docs Done; runtime Planned"
+    }
   },
   "summary": {
-    "task_count": 155,
+    "task_count": 199,
     "conditional_task_count": 5,
     "priority_counts": {
-      "P0": 67,
-      "P1": 57,
+      "P0": 101,
+      "P1": 70,
       "P2": 18,
       "P3": 10
     },
-    "phase_count": 7,
-    "dependency_edge_count": 244,
-    "maximum_dependency_depth": 19,
-    "acceptance_criteria_count": 725,
+    "phase_count": 10,
+    "dependency_edge_count": 449,
+    "maximum_dependency_depth": 22,
+    "acceptance_criteria_count": 907,
     "definition_of_done_checkbox_count": 12,
     "total_markdown_checkbox_count": 577,
-    "topological_wave_count": 20
+    "topological_wave_count": 23
   },
   "phases": [
     {
       "phase": "Phase 0 - Baseline, architecture, and proof",
       "phase_order": 0,
       "conditional": false,
-      "task_count": 12,
+      "task_count": 15,
       "priority_counts": {
-        "P0": 12
+        "P0": 15
       },
-      "acceptance_criteria_count": 59
+      "acceptance_criteria_count": 69
     },
     {
       "phase": "Phase 1 - Secure local read-only MVP",
       "phase_order": 1,
       "conditional": false,
-      "task_count": 34,
+      "task_count": 35,
       "priority_counts": {
-        "P0": 31,
+        "P0": 32,
         "P1": 3
       },
-      "acceptance_criteria_count": 165
+      "acceptance_criteria_count": 172
+    },
+    {
+      "phase": "Phase 2 - Enterprise archive, diagnostics, and integrations",
+      "phase_order": 2,
+      "conditional": false,
+      "task_count": 2,
+      "priority_counts": {
+        "P1": 1,
+        "P2": 1
+      },
+      "acceptance_criteria_count": 6
     },
     {
       "phase": "Phase 2 - External-IdP OAuth resource-server and L2 seekable storage",
       "phase_order": 2,
       "conditional": false,
-      "task_count": 24,
+      "task_count": 25,
       "priority_counts": {
+        "P1": 21,
         "P0": 1,
-        "P1": 20,
         "P2": 3
       },
-      "acceptance_criteria_count": 122
+      "acceptance_criteria_count": 130
     },
     {
       "phase": "Phase 3 - Enterprise Jenkins coverage and diagnostics",
@@ -84,17 +96,19 @@
       "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
       "phase_order": 4,
       "conditional": false,
-      "task_count": 25,
+      "task_count": 29,
       "priority_counts": {
-        "P2": 10,
-        "P3": 4
+        "P2": 11,
+        "P3": 5,
+        "P0": 10,
+        "P1": 3
       },
-      "acceptance_criteria_count": 65
+      "acceptance_criteria_count": 141
     },
     {
       "phase": "Conditional epic - Jenkins-hosted OAuth authorization server (execute only after OAUTH-011 go decision)",
       "phase_order": 5,
-      "conditional": true,
+      "conditional": false,
       "task_count": 5,
       "priority_counts": {
         "P3": 5
@@ -107,110 +121,188 @@
       "conditional": false,
       "task_count": 10,
       "priority_counts": {
-        "P0": 5,
-        "P1": 5
+        "P1": 5,
+        "P0": 5
       },
       "acceptance_criteria_count": 44
+    },
+    {
+      "phase": "Phase 6 - Operator admin console (reactive SPA)",
+      "phase_order": 6,
+      "conditional": false,
+      "task_count": 12,
+      "priority_counts": {
+        "P1": 9,
+        "P0": 1,
+        "P2": 2
+      },
+      "acceptance_criteria_count": 49
+    },
+    {
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "task_count": 44,
+      "priority_counts": {
+        "P0": 33,
+        "P1": 11
+      },
+      "acceptance_criteria_count": 186
     }
   ],
   "topological_order": [
+    "DOC-001",
+    "DOC-002",
+    "FLC-000",
     "FND-001",
+    "HOST-014",
     "QA-001",
     "QA-004",
     "QA-005",
-    "DOC-001",
-    "DOC-002",
     "REL-002",
+    "FLC-001",
     "FND-002",
+    "FLC-002",
+    "FLC-003",
+    "FLC-010",
+    "FLC-012",
+    "FLC-015",
     "FND-003",
     "FND-007",
+    "FLC-011",
+    "FLC-013",
+    "FLC-014",
+    "FLC-016",
+    "FLC-060",
     "FND-004",
     "PERF-001",
+    "FLC-020",
+    "FLC-017",
     "FND-005",
     "FND-006",
     "FND-008",
-    "SEC-001",
-    "ARC-000",
+    "FLC-021",
+    "FLC-018",
+    "FLC-040",
     "CFG-001",
     "MCP-001",
-    "AUTH-000",
-    "CFG-002",
+    "ARC-000",
+    "SEC-001",
+    "FLC-022",
+    "FLC-030",
+    "FLC-042",
     "AUTH-001",
+    "CFG-002",
     "NET-001",
+    "ARC-000a",
+    "AUTH-000",
     "STO-001",
+    "FLC-023",
+    "FLC-031",
     "AUTH-002",
-    "NET-002",
+    "INT-001",
     "POL-001",
     "MCP-002",
+    "NET-002",
+    "ARC-000b",
+    "ARC-000c",
     "STO-002",
-    "INT-001",
+    "FLC-024",
+    "FLC-043",
+    "FLC-032",
     "AUTH-003",
     "NET-003",
     "NET-004",
     "TST-001",
+    "FLC-044",
+    "FLC-050",
+    "FLC-052",
+    "FLC-053",
+    "FLC-061",
+    "FLC-033",
+    "FLC-041",
     "AUTH-004",
     "LOG-001",
     "OAUTH-001",
-    "OAUTH-008",
     "JEN-001",
+    "OAUTH-008",
+    "FLC-051",
+    "FLC-062",
+    "FLC-045",
+    "FLC-070",
     "POL-002",
     "LOG-002",
     "OAUTH-002",
+    "HEALTH-002",
     "JEN-002",
     "JEN-004",
     "TEST-001",
-    "HEALTH-002",
+    "FLC-071",
+    "FLC-063",
+    "MGR-001",
     "POL-003",
     "STO-003",
     "OAUTH-003",
     "JEN-003",
     "HEALTH-001",
-    "MGR-001",
+    "FLC-072",
+    "FLC-080",
+    "FLC-064",
     "POL-004",
     "STO-004",
     "OAUTH-004",
     "OAUTH-005",
-    "PIPE-001",
-    "TEST-002",
-    "SCM-001",
     "ART-001",
+    "PIPE-001",
+    "SCM-001",
+    "TEST-002",
     "DIAG-007",
+    "FLC-081",
+    "FLC-073",
     "POL-005",
+    "POL-006",
+    "ARC-001",
     "LOG-003",
     "OAUTH-006",
     "OAUTH-007",
     "OAUTH-009",
     "OAUTH-010",
-    "ARC-001",
     "GRAPH-001",
     "INT-004",
+    "FLC-082",
+    "ARC-002",
     "LOG-004",
+    "PIPE-002",
     "SEARCH-001",
     "SEC-002",
     "SEC-003",
-    "OAUTH-011",
-    "ARC-002",
-    "PIPE-002",
+    "HOST-013",
     "GWY-001",
-    "SEARCH-002",
-    "AUD-001",
+    "OAUTH-011",
     "ARC-003",
     "ARC-004",
     "ARC-009",
     "ARC-010",
     "ARC-011",
-    "ART-002",
+    "SEARCH-002",
+    "AUD-001",
     "INT-003",
+    "ART-002",
     "GWY-002",
+    "HOST-015",
     "JAS-001",
-    "OBS-001",
-    "ARC-005",
+    "ARC-004a",
     "ARC-012",
+    "ARC-005",
     "DIAG-001",
     "MUT-001",
+    "OBS-001",
     "GWY-003",
+    "HOST-001",
+    "HOST-003",
+    "HOST-004",
     "JAS-002",
-    "OPS-001",
+    "ARC-004b",
     "ARC-006",
     "ARC-007",
     "DIAG-002",
@@ -221,157 +313,232 @@
     "MUT-002",
     "MUT-003",
     "MGR-002",
+    "OPS-001",
+    "HOST-002",
+    "HOST-006",
+    "HOST-009",
+    "HOST-010",
+    "HOST-008",
     "JAS-003",
-    "PKG-001",
-    "ARC-008",
     "PERF-002",
-    "PERF-003",
-    "INT-002",
-    "JAS-004",
     "QA-002",
+    "ARC-008",
+    "INT-002",
+    "PERF-003",
     "QA-006",
-    "GWY-004",
-    "UPD-001",
-    "JAS-005",
+    "PKG-001",
+    "UI-000",
+    "HOST-012",
+    "HOST-011",
+    "JAS-004",
     "QA-003",
+    "GWY-004",
     "REL-001",
-    "POL-006",
+    "UPD-001",
+    "UI-001",
+    "UI-002",
+    "JAS-005",
+    "HOST-005",
+    "UI-003",
+    "UI-005",
+    "UI-008",
+    "HOST-007",
     "POL-007",
-    "UI-011"
+    "UI-004",
+    "UI-006",
+    "UI-007",
+    "UI-011",
+    "UI-009",
+    "UI-010"
   ],
   "topological_waves": [
     [
+      "DOC-001",
+      "DOC-002",
+      "FLC-000",
       "FND-001",
+      "HOST-014",
       "QA-001",
       "QA-004",
       "QA-005",
-      "DOC-001",
-      "DOC-002",
       "REL-002"
     ],
     [
+      "FLC-001",
       "FND-002"
     ],
     [
+      "FLC-002",
+      "FLC-003",
+      "FLC-010",
+      "FLC-012",
+      "FLC-015",
       "FND-003",
       "FND-007"
     ],
     [
+      "FLC-011",
+      "FLC-013",
+      "FLC-014",
+      "FLC-016",
+      "FLC-060",
       "FND-004",
       "PERF-001"
     ],
     [
+      "FLC-017",
+      "FLC-020",
       "FND-005",
       "FND-006",
       "FND-008"
     ],
     [
-      "SEC-001",
       "ARC-000",
       "CFG-001",
-      "MCP-001"
+      "FLC-018",
+      "FLC-021",
+      "FLC-040",
+      "MCP-001",
+      "SEC-001"
     ],
     [
+      "ARC-000a",
       "AUTH-000",
-      "CFG-002",
       "AUTH-001",
+      "CFG-002",
+      "FLC-022",
+      "FLC-030",
+      "FLC-042",
       "NET-001",
       "STO-001"
     ],
     [
+      "ARC-000b",
+      "ARC-000c",
       "AUTH-002",
+      "FLC-023",
+      "FLC-031",
+      "INT-001",
+      "MCP-002",
       "NET-002",
       "POL-001",
-      "MCP-002",
-      "STO-002",
-      "INT-001"
+      "STO-002"
     ],
     [
       "AUTH-003",
+      "FLC-024",
+      "FLC-032",
+      "FLC-043",
       "NET-003",
       "NET-004",
       "TST-001"
     ],
     [
       "AUTH-004",
+      "FLC-033",
+      "FLC-041",
+      "FLC-044",
+      "FLC-050",
+      "FLC-052",
+      "FLC-053",
+      "FLC-061",
+      "JEN-001",
       "LOG-001",
       "OAUTH-001",
-      "OAUTH-008",
-      "JEN-001"
+      "OAUTH-008"
     ],
     [
-      "POL-002",
-      "LOG-002",
-      "OAUTH-002",
+      "FLC-045",
+      "FLC-051",
+      "FLC-062",
+      "FLC-070",
+      "HEALTH-002",
       "JEN-002",
       "JEN-004",
-      "TEST-001",
-      "HEALTH-002"
+      "LOG-002",
+      "OAUTH-002",
+      "POL-002",
+      "TEST-001"
     ],
     [
-      "POL-003",
-      "STO-003",
-      "OAUTH-003",
-      "JEN-003",
+      "FLC-063",
+      "FLC-071",
       "HEALTH-001",
-      "MGR-001"
+      "JEN-003",
+      "MGR-001",
+      "OAUTH-003",
+      "POL-003",
+      "STO-003"
     ],
     [
-      "POL-004",
-      "STO-004",
+      "ART-001",
+      "DIAG-007",
+      "FLC-064",
+      "FLC-072",
+      "FLC-080",
       "OAUTH-004",
       "OAUTH-005",
       "PIPE-001",
-      "TEST-002",
+      "POL-004",
       "SCM-001",
-      "ART-001",
-      "DIAG-007"
+      "STO-004",
+      "TEST-002"
     ],
     [
-      "POL-005",
+      "ARC-001",
+      "FLC-073",
+      "FLC-081",
+      "GRAPH-001",
+      "INT-004",
       "LOG-003",
       "OAUTH-006",
       "OAUTH-007",
       "OAUTH-009",
       "OAUTH-010",
-      "ARC-001",
-      "GRAPH-001",
-      "INT-004"
+      "POL-005",
+      "POL-006"
     ],
     [
+      "ARC-002",
+      "FLC-082",
+      "GWY-001",
+      "HOST-013",
       "LOG-004",
+      "OAUTH-011",
+      "PIPE-002",
       "SEARCH-001",
       "SEC-002",
-      "SEC-003",
-      "OAUTH-011",
-      "ARC-002",
-      "PIPE-002",
-      "GWY-001"
+      "SEC-003"
     ],
     [
-      "SEARCH-002",
-      "AUD-001",
       "ARC-003",
       "ARC-004",
       "ARC-009",
       "ARC-010",
       "ARC-011",
       "ART-002",
-      "INT-003",
+      "AUD-001",
       "GWY-002",
-      "JAS-001"
+      "HOST-015",
+      "INT-003",
+      "JAS-001",
+      "SEARCH-002"
     ],
     [
-      "OBS-001",
+      "ARC-004a",
       "ARC-005",
       "ARC-012",
       "DIAG-001",
-      "MUT-001",
       "GWY-003",
-      "JAS-002"
+      "HOST-001",
+      "HOST-003",
+      "HOST-004",
+      "JAS-002",
+      "MUT-001",
+      "OBS-001"
     ],
     [
-      "OPS-001",
+      "ARC-004b",
       "ARC-006",
       "ARC-007",
       "DIAG-002",
@@ -379,27 +546,56 @@
       "DIAG-004",
       "DIAG-005",
       "DIAG-006",
+      "HOST-002",
+      "HOST-006",
+      "HOST-008",
+      "HOST-009",
+      "HOST-010",
+      "JAS-003",
+      "MGR-002",
       "MUT-002",
       "MUT-003",
-      "MGR-002",
-      "JAS-003"
+      "OPS-001"
     ],
     [
-      "PKG-001",
       "ARC-008",
-      "PERF-002",
-      "PERF-003",
+      "HOST-011",
+      "HOST-012",
       "INT-002",
       "JAS-004",
+      "PERF-002",
+      "PERF-003",
+      "PKG-001",
       "QA-002",
-      "QA-006"
+      "QA-006",
+      "UI-000"
     ],
     [
       "GWY-004",
-      "UPD-001",
       "JAS-005",
       "QA-003",
-      "REL-001"
+      "REL-001",
+      "UI-001",
+      "UI-002",
+      "UPD-001"
+    ],
+    [
+      "HOST-005",
+      "UI-003",
+      "UI-005",
+      "UI-008"
+    ],
+    [
+      "HOST-007",
+      "POL-007",
+      "UI-004",
+      "UI-006",
+      "UI-007"
+    ],
+    [
+      "UI-009",
+      "UI-010",
+      "UI-011"
     ]
   ],
   "tasks": [
@@ -459,8 +655,10 @@
       "dependency_depth": 1,
       "dependents": [
         "ARC-000",
+        "ARC-000a",
         "FND-003",
-        "FND-007"
+        "FND-007",
+        "UI-001"
       ]
     },
     {
@@ -587,7 +785,8 @@
       "source_line": 191,
       "dependency_depth": 4,
       "dependents": [
-        "MCP-001"
+        "MCP-001",
+        "UI-008"
       ]
     },
     {
@@ -648,7 +847,8 @@
         "AUTH-000",
         "CFG-002",
         "MGR-001",
-        "SEC-001"
+        "SEC-001",
+        "UI-000"
       ]
     },
     {
@@ -678,7 +878,8 @@
       "dependents": [
         "LOG-001",
         "OBS-001",
-        "QA-003"
+        "QA-003",
+        "UI-005"
       ]
     },
     {
@@ -709,7 +910,9 @@
       "dependents": [
         "AUTH-000",
         "SEC-002",
-        "STO-001"
+        "STO-001",
+        "UI-000",
+        "UI-003"
       ]
     },
     {
@@ -776,6 +979,7 @@
       "source_line": 330,
       "dependency_depth": 5,
       "dependents": [
+        "ARC-000a",
         "ARC-001",
         "ARC-002",
         "ARC-003",
@@ -812,7 +1016,8 @@
         "CFG-002",
         "NET-001",
         "NET-004",
-        "STO-001"
+        "STO-001",
+        "UI-007"
       ]
     },
     {
@@ -844,7 +1049,8 @@
         "INT-001",
         "MGR-001",
         "OAUTH-001",
-        "POL-001"
+        "POL-001",
+        "UI-004"
       ]
     },
     {
@@ -875,7 +1081,8 @@
       "dependents": [
         "AUTH-002",
         "NET-002",
-        "OAUTH-001"
+        "OAUTH-001",
+        "UI-003"
       ]
     },
     {
@@ -970,7 +1177,8 @@
       "dependents": [
         "OPS-001",
         "POL-002",
-        "POL-003"
+        "POL-003",
+        "POL-007"
       ]
     },
     {
@@ -1130,7 +1338,8 @@
       "source_line": 594,
       "dependency_depth": 7,
       "dependents": [
-        "POL-002"
+        "POL-002",
+        "UI-004"
       ]
     },
     {
@@ -1162,7 +1371,9 @@
       "dependents": [
         "MGR-001",
         "POL-003",
-        "POL-006"
+        "POL-006",
+        "UI-003",
+        "UI-004"
       ]
     },
     {
@@ -1196,7 +1407,8 @@
         "OAUTH-010",
         "POL-004",
         "POL-006",
-        "POL-007"
+        "POL-007",
+        "UI-004"
       ]
     },
     {
@@ -1231,7 +1443,8 @@
         "MUT-001",
         "OAUTH-009",
         "POL-005",
-        "POL-006"
+        "POL-006",
+        "UI-004"
       ]
     },
     {
@@ -1260,7 +1473,11 @@
       "evidence_tests": [],
       "source_line": 686,
       "dependency_depth": 13,
-      "dependents": []
+      "dependents": [
+        "UI-002",
+        "UI-004",
+        "UI-009"
+      ]
     },
     {
       "id": "POL-006",
@@ -1290,7 +1507,7 @@
       "acceptance_criteria_count": 7,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 13,
       "dependents": [
         "POL-007",
         "UI-011"
@@ -1315,7 +1532,7 @@
       "dependency_text": "POL-006, POL-003, AUTH-004, OAUTH-003, UI-003",
       "parallel_safe": null,
       "objective": "SAML 2.0 service provider path maps assertions to subject + groups for POL-006 RBAC; Jenkins is never SAML IdP/AS for MCP.",
-      "implementation": "Optional SAML SP for admin SSO and/or gateway multi-user identity; attribute map; signed assertions required; fail closed on invalid assertion; mock SAML lab opt-in; ADR; no assertion/token secrets in logs. Multi-fleet: SAML SP + group\u2192role + POL-006 bindings via versioned/signed config (not local user DB); secrets via secret store.",
+      "implementation": "Optional SAML SP for admin SSO and/or gateway multi-user identity; attribute map; signed assertions required; fail closed on invalid assertion; mock SAML lab opt-in; ADR; no assertion/token secrets in logs. Multi-fleet: SAML SP + group→role + POL-006 bindings via versioned/signed config (not local user DB); secrets via secret store.",
       "acceptance_criteria": [
         "ADR: SAML SP role; Jenkins not IdP/AS for MCP.",
         "Attribute map to policy subject/groups without tool-arg spoofing.",
@@ -1329,7 +1546,7 @@
       "acceptance_criteria_count": 8,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 21,
       "dependents": [
         "UI-011"
       ],
@@ -1801,7 +2018,10 @@
       "dependency_depth": 15,
       "dependents": [
         "MUT-001",
-        "OBS-001"
+        "OBS-001",
+        "UI-000",
+        "UI-002",
+        "UI-006"
       ]
     },
     {
@@ -1831,7 +2051,10 @@
       "dependency_depth": 16,
       "dependents": [
         "MGR-002",
-        "OPS-001"
+        "OPS-001",
+        "UI-000",
+        "UI-002",
+        "UI-005"
       ]
     },
     {
@@ -1862,7 +2085,10 @@
       "source_line": 1070,
       "dependency_depth": 17,
       "dependents": [
-        "PKG-001"
+        "PKG-001",
+        "UI-000",
+        "UI-002",
+        "UI-007"
       ]
     },
     {
@@ -1897,6 +2123,8 @@
       "dependents": [
         "GWY-004",
         "REL-001",
+        "UI-001",
+        "UI-008",
         "UPD-001"
       ]
     },
@@ -1932,7 +2160,8 @@
         "OAUTH-005",
         "OAUTH-008",
         "OAUTH-009",
-        "POL-005"
+        "POL-005",
+        "UI-009"
       ]
     },
     {
@@ -2022,7 +2251,8 @@
       "dependency_depth": 11,
       "dependents": [
         "OAUTH-004",
-        "OAUTH-005"
+        "OAUTH-005",
+        "POL-007"
       ]
     },
     {
@@ -2205,6 +2435,7 @@
       "dependents": [
         "GWY-003",
         "HOST-010",
+        "HOST-013",
         "OAUTH-011"
       ]
     },
@@ -2242,7 +2473,7 @@
         "qualify/mode_c_agentcore_live_matrix",
         "TestRunDoctor_ModeC_GatewayStatusResidual"
       ],
-      "status_note": "Partial/offline prototype matrix Done*; live Entra 3LO/OBO + AgentCore pin residual \u2014 do not claim live Entra Done",
+      "status_note": "Partial/offline prototype matrix Done*; live Entra 3LO/OBO + AgentCore pin residual — do not claim live Entra Done",
       "source_line": 1344,
       "dependency_depth": 13,
       "dependents": [
@@ -2404,6 +2635,7 @@
       "source_line": 1471,
       "dependency_depth": 15,
       "dependents": [
+        "ARC-004a",
         "ARC-005",
         "ARC-006",
         "ARC-012"
@@ -3594,7 +3826,8 @@
       "source_line": 2350,
       "dependency_depth": 14,
       "dependents": [
-        "GWY-002"
+        "GWY-002",
+        "HOST-015"
       ]
     },
     {
@@ -3727,6 +3960,7 @@
       "dependents": [
         "GWY-004",
         "MGR-002",
+        "UI-004",
         "UPD-001"
       ]
     },
@@ -4213,7 +4447,7 @@
       "acceptance_criteria_count": 3,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 6,
       "dependents": [
         "ARC-000b",
         "ARC-000c"
@@ -4241,10 +4475,8 @@
       "acceptance_criteria_count": 3,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
-      "dependents": [
-        "ARC-000"
-      ]
+      "dependency_depth": 7,
+      "dependents": []
     },
     {
       "id": "ARC-000c",
@@ -4268,9 +4500,10 @@
       "acceptance_criteria_count": 3,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 7,
       "dependents": [
-        "ARC-004a"
+        "ARC-004a",
+        "ARC-004b"
       ]
     },
     {
@@ -4296,7 +4529,7 @@
       "acceptance_criteria_count": 3,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 16,
       "dependents": [
         "ARC-004b"
       ]
@@ -4324,7 +4557,7 @@
       "acceptance_criteria_count": 3,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 17,
       "dependents": []
     },
     {
@@ -4354,7 +4587,7 @@
       "acceptance_criteria_count": 4,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 18,
       "dependents": [
         "UI-001",
         "UI-002"
@@ -4385,12 +4618,13 @@
       "acceptance_criteria_count": 4,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 19,
       "dependents": [
         "UI-004",
         "UI-005",
         "UI-006",
-        "UI-008"
+        "UI-008",
+        "UI-010"
       ]
     },
     {
@@ -4420,13 +4654,14 @@
       "acceptance_criteria_count": 4,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 19,
       "dependents": [
         "UI-003",
         "UI-004",
         "UI-005",
         "UI-006",
-        "UI-007"
+        "UI-007",
+        "UI-008"
       ]
     },
     {
@@ -4455,7 +4690,7 @@
       "acceptance_criteria_count": 4,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 20,
       "dependents": [
         "HOST-007",
         "POL-007",
@@ -4499,9 +4734,10 @@
       "acceptance_criteria_count": 5,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 21,
       "dependents": [
         "UI-009",
+        "UI-010",
         "UI-011"
       ]
     },
@@ -4531,9 +4767,10 @@
       "acceptance_criteria_count": 4,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 20,
       "dependents": [
-        "UI-009"
+        "UI-009",
+        "UI-010"
       ]
     },
     {
@@ -4562,9 +4799,10 @@
       "acceptance_criteria_count": 4,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 21,
       "dependents": [
-        "UI-009"
+        "UI-009",
+        "UI-010"
       ]
     },
     {
@@ -4592,7 +4830,7 @@
       "acceptance_criteria_count": 3,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 21,
       "dependents": []
     },
     {
@@ -4621,7 +4859,7 @@
       "acceptance_criteria_count": 4,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 20,
       "dependents": []
     },
     {
@@ -4652,7 +4890,7 @@
       "acceptance_criteria_count": 4,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 22,
       "dependents": []
     },
     {
@@ -4680,7 +4918,7 @@
       "acceptance_criteria_count": 3,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 22,
       "dependents": []
     },
     {
@@ -4711,7 +4949,7 @@
       "acceptance_criteria_count": 6,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 22,
       "dependents": []
     },
     {
@@ -4744,7 +4982,7 @@
         "TestHTTPHandler_LabJWT_MidSessionAliceBobSwapAndGroups"
       ],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 16,
       "dependents": [
         "HOST-002",
         "HOST-006",
@@ -4779,7 +5017,7 @@
         "TestHOST002_TrustedProxyTrueStillIgnoresXForwarded"
       ],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 17,
       "dependents": []
     },
     {
@@ -4806,7 +5044,7 @@
       "acceptance_criteria_count": 5,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 16,
       "dependents": [
         "HOST-008",
         "HOST-011"
@@ -4839,7 +5077,7 @@
       ],
       "status_note": "Foundation package APIs + offline tests done; residual list-tool serve wire + durable archive namespace",
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 16,
       "dependents": [
         "HOST-008"
       ]
@@ -4867,7 +5105,7 @@
       "acceptance_criteria_count": 4,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 20,
       "dependents": []
     },
     {
@@ -4902,7 +5140,7 @@
       ],
       "status_note": "Done* process-local rate + concurrent; Done* lite same-host FileSubjectRateLimiter; Done* lite rate MaxSubjects hygiene; Done* lite SubjectLimiter MaxSubjects hygiene; multi-pod shared rate/concurrency out of scope (HOST-008 cancelled)",
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 17,
       "dependents": []
     },
     {
@@ -4933,7 +5171,7 @@
       "acceptance_criteria_count": 9,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 21,
       "dependents": []
     },
     {
@@ -4964,7 +5202,7 @@
       ],
       "status_note": "Cancelled / out of scope (2026-08-01): multi-pod HA non-goal; multi-fleet is the enterprise scale model. Same-host flock lite historical Done*.",
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 17,
       "dependents": []
     },
     {
@@ -4981,7 +5219,7 @@
       "dependency_text": "HOST-001, GWY-002",
       "parallel_safe": null,
       "objective": "Multi-user gateway using personal API tokens only (no OAuth/JWT required).",
-      "implementation": "Per-user vault Obtain \u2192 Basic to Jenkins; never shared SA.",
+      "implementation": "Per-user vault Obtain → Basic to Jenkins; never shared SA.",
       "acceptance_criteria": [
         "Provision/rotate/revoke per-user token in vault.",
         "Obtain subject-isolated; cross-subject fails closed.",
@@ -4993,9 +5231,10 @@
       "acceptance_criteria_count": 6,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 17,
       "dependents": [
-        "HOST-011"
+        "HOST-011",
+        "HOST-012"
       ]
     },
     {
@@ -5025,7 +5264,7 @@
       "acceptance_criteria_count": 6,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 17,
       "dependents": [
         "HOST-011"
       ]
@@ -5057,7 +5296,7 @@
       "acceptance_criteria_count": 6,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 18,
       "dependents": []
     },
     {
@@ -5084,7 +5323,7 @@
       "acceptance_criteria_count": 5,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 18,
       "dependents": []
     },
     {
@@ -5110,7 +5349,7 @@
       "acceptance_criteria_count": 4,
       "evidence_tests": [],
       "source_line": 0,
-      "dependency_depth": 0,
+      "dependency_depth": 14,
       "dependents": []
     },
     {
@@ -5164,7 +5403,1702 @@
         "make live-oauth-up/smoke/test/down"
       ],
       "source_line": 0,
+      "dependency_depth": 15,
+      "dependents": []
+    },
+    {
+      "id": "FLC-000",
+      "title": "Commit the repository-grounded cache audit and reserve task IDs",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [],
+      "dependency_text": "None",
+      "parallel_safe": null,
+      "objective": "Put the uploaded snapshot analysis into the repository sources of truth before implementation starts.",
+      "implementation": "- Add the current-state audit at commit 0bde63662ebaa4783a14663346ab4b44f44f90d2.\n- Reserve the FLC task namespace and add dependency edges to the machine-readable graph.\n- Mark all source assumptions as verified, partial, or absent.\n- Link the epic from fleet and caching docs using repository-required absolute URLs.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Audit names exact packages and current behavior for fleet, store, logmirror, policy, audit, and lifecycle.",
+        "Task IDs are unique in the repository task graph.",
+        "No capability is marked implemented.",
+        "The source commit and Go version are recorded."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Run task-index validation for duplicate IDs, missing dependencies, and cycles.",
+        "Documentation link checker or manual absolute-link review.",
+        "Reviewed docs diff",
+        "Validated task-index report"
+      ],
+      "status_note": "Done (docs/ADR Phase 0 land 2026-08-02) — runtime peer cache still Planned",
+      "source_line": 0,
       "dependency_depth": 0,
+      "dependents": [
+        "FLC-001"
+      ]
+    },
+    {
+      "id": "FLC-001",
+      "title": "Approve the fleet-cache ADR and scope boundary",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-000"
+      ],
+      "dependency_text": "FLC-000",
+      "parallel_safe": null,
+      "objective": "Record the irreversible architecture: reuse the existing local cache, add in-process fleet coordination, and ship sealed console logs first.",
+      "implementation": "- Document goals, non-goals, protocol boundary, identity model, consistency model, and origin fallback.\n- State that fleet operator fan-out and payload cache traffic are separate planes.\n- Record that local read-only mode still permits internal cache fills/replication.\n- Record transitional versus production peer-auth posture.\n- Record that the first release does not replicate running logs or other object classes.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "ADR is accepted by architecture, security, and operations owners.",
+        "ADR references current code instead of proposing a replacement database or frame format.",
+        "No external cache service is introduced.",
+        "Rollback to current local-only behavior is explicit."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Docs conformance review against AGENTS.md and existing ADRs.",
+        "Approved ADR",
+        "Decision-owner signatures or review record"
+      ],
+      "status_note": "Done (docs/ADR Phase 0 land 2026-08-02) — runtime peer cache still Planned",
+      "source_line": 0,
+      "dependency_depth": 1,
+      "dependents": [
+        "FLC-002",
+        "FLC-003",
+        "FLC-010",
+        "FLC-012",
+        "FLC-015"
+      ]
+    },
+    {
+      "id": "FLC-002",
+      "title": "Define measurable cache SLOs, budgets, and fallback behavior",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-001"
+      ],
+      "dependency_text": "FLC-001",
+      "parallel_safe": null,
+      "objective": "Turn performance and bandwidth priorities into release gates.",
+      "implementation": "- Define targets for local-hit, peer-hit, and miss overhead percentiles.\n- Define maximum active frame memory, peer streams, file descriptors, and SQLite write latency.\n- Define origin-body deduplication target for simultaneous misses.\n- Define repair bandwidth and cache-lookup timeout before origin fallback.\n- Define compressed, decoded, and MCP output accounting semantics.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Each target has a benchmark or integration measurement method.",
+        "Limits have hard process ceilings and safe defaults.",
+        "A degraded cache cannot indefinitely delay origin fallback.",
+        "SLOs distinguish normal traffic from background repair."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Add config resolution boundary tests after implementation.",
+        "Add benchmark gate script skeleton with pass/fail thresholds.",
+        "SLO document",
+        "Representative workload description",
+        "Release-gate mapping"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 2,
+      "dependents": [
+        "FLC-060",
+        "FLC-070"
+      ]
+    },
+    {
+      "id": "FLC-003",
+      "title": "Add a three-member fleet-cache integration lab",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-001"
+      ],
+      "dependency_text": "FLC-001",
+      "parallel_safe": null,
+      "objective": "Provide the disposable multi-process environment required by repository policy.",
+      "implementation": "- Create three independent members with separate data directories and one fake or pinned Jenkins controller.\n- Generate ephemeral mesh and TLS material at startup; never commit production secrets.\n- Expose deterministic counters for Jenkins body fetches.\n- Add network partition, member kill, disk cap, and corruption helpers.\n- Add make targets for up, test, chaos, and down while keeping default tests offline.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Lab proves independent local data directories.",
+        "A request can be sent through a load-balancing test endpoint to any member.",
+        "Origin fetch count is observable.",
+        "Teardown removes ephemeral secrets and volumes.",
+        "README documents ports, commands, and residuals."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [
+        "Smoke test starts all members and checks existing `/fleet/v1/health`.",
+        "Failure test rejects missing/wrong peer trust.",
+        "Compose files",
+        "Lab README",
+        "Smoke transcript"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 2,
+      "dependents": [
+        "FLC-071"
+      ]
+    },
+    {
+      "id": "FLC-010",
+      "title": "Define canonical controller, locator, and sealed-version identities",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-001"
+      ],
+      "dependency_text": "FLC-001",
+      "parallel_safe": null,
+      "objective": "Create stable cross-node identities that never use local profile or SQLite IDs.",
+      "implementation": "- Define canonical serializer with explicit schema version.\n- Normalize and validate full job names using existing policy/Jenkins helpers.\n- Define controller ID and cache-pool inputs.\n- Define locator hash and sealed manifest digest.\n- Specify conflict behavior and privacy constraints.\n- Add test vectors to docs and code.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Equivalent inputs on different members produce byte-identical canonical serialization and hashes.",
+        "Local profile ID, local generation ID, user identity, and endpoint address are excluded.",
+        "Malformed or ambiguous job/controller values fail closed.",
+        "Golden vectors are stable and versioned."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Unit tests and fuzz tests for normalization/canonicalization.",
+        "Golden-vector compatibility test.",
+        "Collision-domain and delimiter ambiguity tests.",
+        "Protocol identity specification",
+        "Golden vectors"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 2,
+      "dependents": [
+        "FLC-011",
+        "FLC-014",
+        "FLC-018",
+        "FLC-020"
+      ]
+    },
+    {
+      "id": "FLC-011",
+      "title": "Define and validate fleet-cache manifest and protocol v1",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-010"
+      ],
+      "dependency_text": "FLC-010",
+      "parallel_safe": null,
+      "objective": "Create the bounded non-secret contract for sealed logs and their independent frames.",
+      "implementation": "- Define manifest structs and deterministic digest encoding.\n- Separate pure-Zstandard size/hash from local on-disk size/hash.\n- Validate contiguous sequences, raw ranges, line ranges, codec, versions, and caps.\n- Reject peer-provided file paths and local identifiers.\n- Define content types, protocol headers, and error codes.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Manifest parsing is bounded by bytes and frame count.",
+        "Digest covers every field needed to detect content/range substitution.",
+        "Unknown required versions fail closed; compatible optional fields are ignored safely.",
+        "Manifest contains no credentials or local paths."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Table-driven valid/invalid tests.",
+        "Fuzz parser and validator.",
+        "Golden manifest/digest vectors.",
+        "Oversized and integer-overflow tests.",
+        "Protocol v1 document",
+        "Wire examples",
+        "Compatibility test vectors"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 3,
+      "dependents": [
+        "FLC-017",
+        "FLC-020",
+        "FLC-022"
+      ]
+    },
+    {
+      "id": "FLC-012",
+      "title": "Version the roster with cache eligibility and capacity data",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-001"
+      ],
+      "dependency_text": "FLC-001",
+      "parallel_safe": null,
+      "objective": "Allow placement to select only nodes capable of storing the same controller and protocol.",
+      "implementation": "- Add backward-compatible schema-v2 parsing or an explicit migration path.\n- Add cache enabled, controller ID, pool, capacity weight, failure domain, drain state, and protocol capabilities.\n- Validate profile mapping and weight bounds.\n- Require HTTPS for cache-enabled non-loopback peer URLs.\n- Keep secrets prohibited.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Schema-v1 fleets continue operator fan-out with fleet cache disabled unless explicitly mapped.",
+        "Cross-controller members are never eligible together.",
+        "Duplicate IDs/controller mappings and invalid weights fail closed.",
+        "Roster size cap remains enforced."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Unit and fuzz tests for both schema versions.",
+        "Regression tests for HTTP acceptance only in explicit lab/loopback mode.",
+        "Compatibility fixtures.",
+        "Roster schema documentation",
+        "Migration example"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 2,
+      "dependents": [
+        "FLC-013",
+        "FLC-014",
+        "FLC-016",
+        "FLC-060"
+      ]
+    },
+    {
+      "id": "FLC-013",
+      "title": "Implement atomic roster hot reload with last-known-good snapshots",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-012"
+      ],
+      "dependency_text": "FLC-012",
+      "parallel_safe": null,
+      "objective": "Provide placement updates, drain, and repair triggers without restarting every member.",
+      "implementation": "- Create an immutable snapshot provider with current and previous epochs.\n- Reload by file notification or bounded polling using repository hot-reload patterns.\n- Validate fully before atomic swap and keep last known good on error.\n- Reject bundle sequence downgrade by default.\n- Emit callbacks for fleet-cache repair/drain.\n- Expose secret-free reload status.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Readers never observe a partial roster.",
+        "Invalid reload does not disrupt the last good fleet.",
+        "Downgrade and duplicate sequence behavior is deterministic.",
+        "Previous owners remain available for a configured grace period."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Concurrency/race tests.",
+        "Atomic replacement and malformed-write tests.",
+        "Sequence rollback regression test.",
+        "Reload state-machine diagram",
+        "Race-test output"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 3,
+      "dependents": [
+        "FLC-044",
+        "FLC-062",
+        "FLC-071"
+      ]
+    },
+    {
+      "id": "FLC-014",
+      "title": "Implement weighted rendezvous placement with golden vectors",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-010",
+        "FLC-012"
+      ],
+      "dependency_text": "FLC-010, FLC-012",
+      "parallel_safe": null,
+      "objective": "Derive an ordered owner list without a global directory or all-peer broadcast.",
+      "implementation": "- Filter eligible members by fleet, pool, controller, enabled/drain, and protocol.\n- Implement a versioned deterministic weighted rendezvous score.\n- Prefer distinct failure domains for replicas while preserving deterministic order.\n- Support RF1-RF3 with hard bounds.\n- Generate stable golden vectors and distribution tests.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "All members with the same snapshot produce the same owner order.",
+        "Adding/removing one member moves only the expected fraction of keys.",
+        "Weight distribution is statistically within documented tolerance.",
+        "Draining members receive no new primary ownership.",
+        "No process-random hash source is used."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [
+        "Golden-vector tests.",
+        "Distribution/property tests.",
+        "Fuzz tests for empty/duplicate/ineligible sets.",
+        "Benchmarks for roster sizes up to the existing 64-member cap.",
+        "Placement algorithm specification",
+        "Distribution report"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 3,
+      "dependents": [
+        "FLC-030",
+        "FLC-040",
+        "FLC-044"
+      ]
+    },
+    {
+      "id": "FLC-015",
+      "title": "Replace the unmanaged peer listener with a managed server lifecycle",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-001"
+      ],
+      "dependency_text": "FLC-001",
+      "parallel_safe": null,
+      "objective": "Create a production-safe HTTP server foundation for both existing fleet ops and streaming cache routes.",
+      "implementation": "- Construct an explicit `http.Server`.\n- Set read-header, idle, header, and connection limits; avoid a write timeout that breaks admitted long streams.\n- Propagate bind/start errors to serve startup.\n- Add graceful shutdown with bounded drain.\n- Expose hooks for TLS/mTLS and cache route registration.\n- Preserve existing `/fleet/v1` behavior.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Startup fails closed when the configured listener cannot bind.",
+        "Shutdown stops accepting new work and drains or cancels in-flight requests within budget.",
+        "Slow-header and oversized-header clients are rejected.",
+        "Existing fleet operator tests remain compatible."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "HTTP lifecycle unit/integration tests.",
+        "Cancellation and graceful-shutdown tests.",
+        "Leak check for goroutines/connections.",
+        "Server configuration table",
+        "Before/after lifecycle diagram"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 2,
+      "dependents": [
+        "FLC-016",
+        "FLC-022",
+        "FLC-060"
+      ]
+    },
+    {
+      "id": "FLC-016",
+      "title": "Harden peer transport identity and fleet binding",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-012",
+        "FLC-015"
+      ],
+      "dependency_text": "FLC-012, FLC-015",
+      "parallel_safe": null,
+      "objective": "Move production cache traffic from a fleet-wide bearer secret to attributable node identity while preserving a pilot mode.",
+      "implementation": "- Add native mTLS or per-node signing configuration with roster member binding.\n- Verify fleet ID, member ID, certificate/key identity, validity, and rotation.\n- Keep shared-token mode explicitly marked pilot-only and require private TLS for cache payloads.\n- Build one reusable authenticated transport for operator and cache clients.\n- Add replay-resistant request metadata where applicable.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "A peer cannot claim another roster member identity.",
+        "Wrong-fleet, expired, revoked, or untrusted identities fail closed.",
+        "No fallback to unauthenticated HTTP occurs.",
+        "Rotation supports overlap without process-wide trust gaps.",
+        "Secrets never appear in logs/status."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [
+        "mTLS/signing success and failure tests.",
+        "Rotation and wrong-fleet tests.",
+        "Canary tests that tokens/keys are absent from output.",
+        "Docker lab trust tests.",
+        "Threat-model update",
+        "Trust rollout runbook",
+        "Security review record"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 3,
+      "dependents": [
+        "FLC-017",
+        "FLC-030",
+        "FLC-040",
+        "FLC-051",
+        "FLC-071"
+      ]
+    },
+    {
+      "id": "FLC-017",
+      "title": "Implement scoped peer request assertions and replay protection",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-011",
+        "FLC-016"
+      ],
+      "dependency_text": "FLC-011, FLC-016",
+      "parallel_safe": null,
+      "objective": "Bind every cache operation to the requesting node, object, operation, range, budget, subject hash, and policy epoch.",
+      "implementation": "- Define compact signed/MAC assertion structure and canonical encoding.\n- Bind assertions to authenticated member identity and fleet.\n- Enforce short expiry, nonce replay cache, object/range/byte scope, and policy epoch.\n- Hash subject identifiers through existing audit-safe helpers.\n- Define clock-skew bounds and key rotation.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Assertions cannot be widened to another object, operation, or larger range.",
+        "Replay is rejected within the configured window.",
+        "Expired and old-policy assertions fail closed.",
+        "No raw Jenkins or OAuth credential is present."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Unit/fuzz tests for canonical encoding and tampering.",
+        "Replay, expiry, skew, rotation, and wrong-peer tests.",
+        "Secret scanning canary.",
+        "Assertion specification",
+        "Security test matrix"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 4,
+      "dependents": [
+        "FLC-018",
+        "FLC-031",
+        "FLC-040",
+        "FLC-052"
+      ]
+    },
+    {
+      "id": "FLC-018",
+      "title": "Add a cache authorization freshness gate",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-010",
+        "FLC-017"
+      ],
+      "dependency_text": "FLC-010, FLC-017",
+      "parallel_safe": null,
+      "objective": "Prevent local or peer cache hits from extending access after Jenkins or MCP permissions change.",
+      "implementation": "- Define required Jenkins permission/metadata probe for console-log reads.\n- Optionally cache positive decisions for a short bounded TTL keyed by subject, controller, job, operation, and policy epoch.\n- Never cache denials longer than necessary.\n- Invalidate on auth failure, subject invalidation, profile change, and policy reload.\n- Create scoped assertion only after this gate passes.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "A permission revocation is observed within the documented maximum TTL.",
+        "A peer hit never bypasses MCP deny-only rules.",
+        "Authorization cache is isolated by subject and controller.",
+        "Probe failure follows explicit fail-closed/fallback policy."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Two-user isolation tests.",
+        "Permission revocation integration test.",
+        "Policy reload invalidation test.",
+        "No-token logging tests.",
+        "Authorization freshness decision record",
+        "Measured probe overhead"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 5,
+      "dependents": [
+        "FLC-031",
+        "FLC-032",
+        "FLC-052"
+      ]
+    },
+    {
+      "id": "FLC-020",
+      "title": "Add schema migration for wire hashes and fleet object metadata",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-010",
+        "FLC-011"
+      ],
+      "dependency_text": "FLC-010, FLC-011",
+      "parallel_safe": null,
+      "objective": "Extend the existing SQLite store without introducing another metadata system.",
+      "implementation": "- Add nullable pure-Zstandard size and SHA-256 fields to chunks.\n- Add canonical object mapping, import journal, and replica-state tables.\n- Use local generation foreign keys and copy-role/placement-epoch fields.\n- Add indexes for locator lookup, access/eviction, incomplete imports, and repair.\n- Provide typed transactional methods; do not expose raw SQL outside store.\n- Keep future schema fail-closed behavior.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Migration from v7 preserves existing cache data.",
+        "New database reaches the new schema directly.",
+        "Rollback/crash during migration leaves old-or-new transactional state.",
+        "No large payload is stored as a database value.",
+        "Old rows remain readable with lazy wire-hash backfill."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [
+        "Migration tests from every supported prior schema fixture.",
+        "Future-schema rejection test.",
+        "Foreign-key and uniqueness tests.",
+        "Concurrent reader/writer tests.",
+        "Schema diagram",
+        "Migration benchmark and size impact"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 4,
+      "dependents": [
+        "FLC-021",
+        "FLC-023",
+        "FLC-042",
+        "FLC-050",
+        "FLC-051"
+      ]
+    },
+    {
+      "id": "FLC-021",
+      "title": "Persist and export pure compressed frame metadata",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-020"
+      ],
+      "dependency_text": "FLC-020",
+      "parallel_safe": null,
+      "objective": "Make current frames portable across nodes and avoid repeated decrypt/hash work.",
+      "implementation": "- Compute `zstd_size` and `zstd_sha256` before local encryption on every new frame.\n- Persist both with the chunk transaction.\n- Add an exporter that returns metadata and a bounded reader/byte slice for pure compressed data.\n- Lazily backfill old rows after successful export verification.\n- Keep local `frame_sha256` semantics unchanged.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "New plaintext and encrypted frames have both wire and local hashes.",
+        "Export verifies the local envelope before returning pure bytes.",
+        "Old rows backfill idempotently.",
+        "No local key material or AAD fields enter the wire manifest."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Plaintext/encrypted export tests.",
+        "Different-key sender/receiver fixture.",
+        "Corrupt envelope and corrupt compressed hash tests.",
+        "Backfill concurrency test.",
+        "Frame metadata contract",
+        "Before/after database sample"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 5,
+      "dependents": [
+        "FLC-022",
+        "FLC-023",
+        "FLC-030",
+        "FLC-031",
+        "FLC-042",
+        "FLC-053"
+      ]
+    },
+    {
+      "id": "FLC-022",
+      "title": "Implement bounded streaming frame export and peer transfer",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-011",
+        "FLC-015",
+        "FLC-021"
+      ],
+      "dependency_text": "FLC-011, FLC-015, FLC-021",
+      "parallel_safe": null,
+      "objective": "Serve pure compressed frames without whole-log buffering or recompression.",
+      "implementation": "- Add one-frame-at-a-time transfer with strict declared and actual size limits.\n- Use `Accept-Encoding: identity` and correct compressed content type.\n- Hash while writing/reading and propagate cancellation/backpressure.\n- Limit concurrent frame exports globally and per peer.\n- Document memory upper bound from frame cap and stream count.\n- Return structured errors before sending untrusted partial metadata.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "No operation buffers more than one allowed frame plus documented overhead.",
+        "Compressed bytes are identical across peer transfer.",
+        "Cancellation closes body/file and releases semaphore.",
+        "Unexpected extra bytes and early EOF fail closed."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Large-frame streaming tests.",
+        "Slow reader/writer cancellation tests.",
+        "Hash mismatch and size-lie tests.",
+        "Memory benchmark at configured concurrency.",
+        "Memory-budget calculation",
+        "Wire-byte benchmark"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 6,
+      "dependents": [
+        "FLC-023",
+        "FLC-043"
+      ]
+    },
+    {
+      "id": "FLC-023",
+      "title": "Implement crash-safe peer import with receiver-local re-encryption",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-020",
+        "FLC-021",
+        "FLC-022"
+      ],
+      "dependency_text": "FLC-020, FLC-021, FLC-022",
+      "parallel_safe": null,
+      "objective": "Import a sealed object safely into the existing frame store under the receiver local generation and key.",
+      "implementation": "- Create/resume an import from a validated manifest.\n- Allocate or adopt a local sealed generation through typed store methods.\n- For each frame, verify compressed hash/size, decode under limits, verify content/ranges, then locally seal and atomically publish.\n- Regenerate/validate line checkpoints.\n- Commit canonical mapping only after all frames are durable.\n- Make duplicate import idempotent.\n\nMVP gate: Planned (see ADR 0016 MVP cut).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Imported bytes read identically through existing `LogReader`.",
+        "Sender and receiver may use different local encryption keys and generation IDs.",
+        "Partial imports are invisible to normal lookup.",
+        "A stale or conflicting manifest cannot replace a committed version.",
+        "No peer path controls local filesystem names."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [
+        "Fault injection at temp write, fsync, rename, metadata, and final mapping stages.",
+        "Different-key integration tests.",
+        "Duplicate/resume tests.",
+        "Malformed line/range tests.",
+        "Import state machine",
+        "Crash matrix results"
+      ],
+      "status_note": "Planned — Planned (see ADR 0016 MVP cut); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 7,
+      "dependents": [
+        "FLC-024",
+        "FLC-033",
+        "FLC-043",
+        "FLC-053"
+      ]
+    },
+    {
+      "id": "FLC-024",
+      "title": "Extend startup recovery and quarantine for fleet imports",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-023"
+      ],
+      "dependency_text": "FLC-023",
+      "parallel_safe": null,
+      "objective": "Reconcile staged imports, canonical mappings, and replica state after process or disk failure.",
+      "implementation": "- Scan bounded import journals and staging paths.\n- Remove expired/incomplete temp data or resume only when every persisted digest verifies.\n- Quarantine committed mapping with missing/corrupt files and remove it from hit eligibility.\n- Enqueue repair for missing required replicas.\n- Keep recovery metadata/directory based; do not scan every decoded log byte at startup.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "No incomplete object becomes readable after restart.",
+        "Recovery is idempotent.",
+        "Corruption is visible in status/audit and not silently deleted without record.",
+        "Startup work is bounded and benchmarked for large object counts."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Crash fixture matrix.",
+        "Corrupt/missing frame tests.",
+        "Recovery idempotency test.",
+        "Startup benchmark.",
+        "Recovery runbook",
+        "Quarantine format description"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 8,
+      "dependents": []
+    },
+    {
+      "id": "FLC-030",
+      "title": "Implement owner-directed manifest lookup client and server",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-014",
+        "FLC-016",
+        "FLC-021"
+      ],
+      "dependency_text": "FLC-014, FLC-016, FLC-021",
+      "parallel_safe": null,
+      "objective": "Find sealed objects on deterministic owners without broadcasting to the fleet.",
+      "implementation": "- Add HEAD/manifest routes under the dedicated cache prefix.\n- Calculate current owners and bounded previous-epoch owners.\n- Query in deterministic order with per-peer and overall deadlines.\n- Validate protocol headers, fleet/controller/pool identity, and manifest digest.\n- Return typed hit/miss/incompatible/corrupt/unavailable outcomes.\n- Do not call non-owner members.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "A hit is found regardless of which load-balanced member receives the request.",
+        "A miss contacts only the bounded owner set.",
+        "Wrong controller/fleet responses are rejected.",
+        "Partial peer failure does not hide residual information or block origin fallback."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Owner selection contract tests.",
+        "HTTP success/error/cancellation tests.",
+        "Spy test proving non-owners are not contacted.",
+        "Mixed-version tests.",
+        "Peer lookup sequence diagram",
+        "Latency measurements"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 6,
+      "dependents": [
+        "FLC-031",
+        "FLC-032",
+        "FLC-033",
+        "FLC-061",
+        "FLC-062"
+      ]
+    },
+    {
+      "id": "FLC-031",
+      "title": "Implement scoped bounded decoded read endpoints",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-017",
+        "FLC-018",
+        "FLC-021",
+        "FLC-030"
+      ],
+      "dependency_text": "FLC-017, FLC-018, FLC-021, FLC-030",
+      "parallel_safe": null,
+      "objective": "Return small byte, line, or tail evidence without copying a full compressed object to the entry node.",
+      "implementation": "- Define byte-range, line-range, tail-bytes, and tail-lines request forms.\n- Validate scoped assertion and decoded output ceiling before reading.\n- Resolve canonical object to local generation and call existing `LogReader`.\n- Stream raw result bytes with small metadata headers/envelope.\n- Enforce frame-open, decoded-byte, time, and response limits.\n- Record source and byte accounting.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "A 64 KiB request does not transfer the full multi-gigabyte object.",
+        "Unauthorized or out-of-scope range is rejected before disk read.",
+        "Returned data and range metadata match local reads.",
+        "L1-released owner state is reported as not-materialized in v1, not served incorrectly."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Range/line/tail parity tests.",
+        "Authorization scope tests.",
+        "Very long line and boundary-crossing tests.",
+        "Cancellation and output cap tests.",
+        "Read protocol examples",
+        "Frame-open benchmark"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 7,
+      "dependents": [
+        "FLC-032",
+        "FLC-052",
+        "FLC-070",
+        "FLC-071"
+      ]
+    },
+    {
+      "id": "FLC-032",
+      "title": "Integrate fleet lookup before Jenkins origin acquisition",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-018",
+        "FLC-030",
+        "FLC-031"
+      ],
+      "dependency_text": "FLC-018, FLC-030, FLC-031",
+      "parallel_safe": null,
+      "objective": "Insert local/peer resolution into the existing tool-facing log path without replacing logmirror.",
+      "implementation": "- Introduce a coordinator interface used by `MirrorLogAccess` or `logmirror.Access` before origin fill.\n- Preserve current local-hit behavior and metadata.\n- Perform authorization freshness before peer lookup.\n- Use bounded peer read for range/tail when available.\n- Fall back to existing `EnsureMirrored` on miss/unavailable according to mode.\n- Avoid recursive peer/origin calls.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "With feature mode off, behavior is byte-for-byte/current-contract compatible.",
+        "Peer hit performs no Jenkins body fetch.",
+        "Peer timeout falls back within configured budget.",
+        "Policy denial occurs before peer or Jenkins data access.",
+        "Existing tool tests remain green."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [
+        "Adapter unit tests with fake coordinator.",
+        "Tool contract regression tests.",
+        "End-to-end local/peer/origin source tests.",
+        "Integration interface document",
+        "Call-path trace"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 8,
+      "dependents": [
+        "FLC-033",
+        "FLC-041"
+      ]
+    },
+    {
+      "id": "FLC-033",
+      "title": "Add optional verified near-cache promotion",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "FLC-023",
+        "FLC-030",
+        "FLC-032"
+      ],
+      "dependency_text": "FLC-023, FLC-030, FLC-032",
+      "parallel_safe": null,
+      "objective": "Allow a requesting non-owner to retain a bounded local copy when reuse justifies it.",
+      "implementation": "- Define admission policy using object size, repeat access, free space, and object class.\n- Import only after manifest verification and authorization.\n- Mark copy role `near`; never count it toward RF.\n- Support no-store and local-only policy overrides.\n- Evict near copies before owner replicas.\n\nMVP gate: Later RF2/repair/ops gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Single-use small evidence reads do not automatically promote huge logs.",
+        "Promotion never changes owner placement or replication health.",
+        "Admission is bounded and observable.",
+        "Disabling promotion leaves remote bounded reads functional."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Admission unit/property tests.",
+        "Quota interaction test.",
+        "Repeated-access integration test.",
+        "Admission policy table",
+        "Bandwidth/disk comparison"
+      ],
+      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 9,
+      "dependents": []
+    },
+    {
+      "id": "FLC-040",
+      "title": "Implement deterministic primary fill leases with fencing",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "FLC-014",
+        "FLC-016",
+        "FLC-017"
+      ],
+      "dependency_text": "FLC-014, FLC-016, FLC-017",
+      "parallel_safe": null,
+      "objective": "Coordinate one healthy-fleet origin fill without adding consensus or sharing user credentials.",
+      "implementation": "- Make current primary the lease authority for a locator.\n- Issue time-bounded lease ID and monotonically increasing fence.\n- Support join/status for waiters and bounded takeover after expiry.\n- Bind producer member and scoped assertion.\n- Reject completion from stale fence or wrong member.\n- Keep leases in memory unless a measured restart requirement justifies persistence.\n\nMVP gate: Post–MVP A fill-lease gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Concurrent healthy requests yield one active producer.",
+        "Primary restart permits bounded recovery/takeover.",
+        "Stale producer cannot publish over a newer completion.",
+        "Lease state contains no user credential.",
+        "Partition behavior is documented as possibly duplicate but safe."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [
+        "High-concurrency lease tests.",
+        "Expiry/takeover and stale-fence tests.",
+        "Wrong-peer/auth tests.",
+        "Race tests.",
+        "Lease state machine",
+        "Duplicate-fill failure model"
+      ],
+      "status_note": "Planned — Post–MVP A fill-lease gate; no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 5,
+      "dependents": [
+        "FLC-041",
+        "FLC-043",
+        "FLC-045",
+        "FLC-061"
+      ]
+    },
+    {
+      "id": "FLC-041",
+      "title": "Combine fleet lease coordination with local single-flight and origin mirroring",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "FLC-032",
+        "FLC-040"
+      ],
+      "dependency_text": "FLC-032, FLC-040",
+      "parallel_safe": null,
+      "objective": "Ensure the authorized requester uses the existing Jenkins client and frame writer under a fleet lease.",
+      "implementation": "- Claim/join the primary lease after local and owner misses.\n- Keep Jenkins/OAuth credentials on the entry/producer node.\n- Call existing `EnsureMirrored` with existing byte/poll budgets.\n- Heartbeat or renew lease only while progress is made.\n- Allow waiters to retry owner hit after completion.\n- Handle producer cancellation and origin errors with typed lease completion.\n\nMVP gate: Post–MVP A fill-lease gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "A healthy simultaneous miss produces one Jenkins log body acquisition.",
+        "The primary never receives the end-user credential.",
+        "Local singleflight still prevents duplicate polls on producer.",
+        "Origin error does not poison the locator indefinitely.",
+        "Cancellation releases resources and permits takeover."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [
+        "Three-node concurrent miss integration test.",
+        "Credential non-propagation canary.",
+        "Cancellation/error/takeover tests.",
+        "Origin fetch counter assertion.",
+        "Sequence trace",
+        "Fetch-count evidence"
+      ],
+      "status_note": "Planned — Post–MVP A fill-lease gate; no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 9,
+      "dependents": [
+        "FLC-045",
+        "FLC-070",
+        "FLC-071"
+      ]
+    },
+    {
+      "id": "FLC-042",
+      "title": "Publish a sealed manifest from existing local frames",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-020",
+        "FLC-021"
+      ],
+      "dependency_text": "FLC-020, FLC-021",
+      "parallel_safe": null,
+      "objective": "Convert a sealed `log_generations` row and chunks into a canonical fleet object version.",
+      "implementation": "- Add an optional post-seal hook or coordinator-owned publish step.\n- Read ordered chunks and ensure pure-Zstandard metadata exists.\n- Compute/validate manifest digest and whole totals.\n- Insert canonical object mapping idempotently with copy role.\n- Never publish unsealed, gapped, released-without-export, or corrupt generations.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "A successful seal produces one deterministic manifest.",
+        "Re-publishing the same generation is idempotent.",
+        "Unsealed or incomplete generation cannot become a fleet hit.",
+        "Publish failure does not corrupt the local readable log."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Seal/publish unit tests.",
+        "Encrypted and legacy-row publish tests.",
+        "Gap/corruption rejection tests.",
+        "Publish hook contract",
+        "Manifest fixture"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 6,
+      "dependents": [
+        "FLC-043"
+      ]
+    },
+    {
+      "id": "FLC-043",
+      "title": "Implement RF2 compressed-frame replication and atomic receiver commit",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "FLC-022",
+        "FLC-023",
+        "FLC-040",
+        "FLC-042"
+      ],
+      "dependency_text": "FLC-022, FLC-023, FLC-040, FLC-042",
+      "parallel_safe": null,
+      "objective": "Replicate a sealed object to deterministic primary and secondary owners without decompression/recompression on the wire.",
+      "implementation": "- Determine required owners from the publish epoch.\n- Skip already-verified matching replicas.\n- Create/resume import and send only missing frames.\n- Transfer pure compressed bytes and let receiver locally re-encrypt.\n- Commit replica state only after receiver manifest commit.\n- Limit concurrency/retries and make every operation idempotent.\n\nMVP gate: Later RF2/repair/ops gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "RF2 is reached in a healthy three-member fleet.",
+        "A byte-for-byte compressed transfer occurs with no recompression.",
+        "Retry after interruption sends only missing frames.",
+        "A corrupt receiver response cannot mark replica healthy.",
+        "Near copies are not counted."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [
+        "Replication integration tests.",
+        "Interrupted/resume test.",
+        "Different local encryption keys test.",
+        "Wire-byte equality and recompression guard test.",
+        "Replication state diagram",
+        "RF2 test evidence"
+      ],
+      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 8,
+      "dependents": [
+        "FLC-044",
+        "FLC-045",
+        "FLC-050",
+        "FLC-052",
+        "FLC-053",
+        "FLC-061",
+        "FLC-062",
+        "FLC-070",
+        "FLC-071",
+        "FLC-080"
+      ]
+    },
+    {
+      "id": "FLC-044",
+      "title": "Implement lazy repair, previous-owner grace, and drain handoff",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "FLC-013",
+        "FLC-014",
+        "FLC-043"
+      ],
+      "dependency_text": "FLC-013, FLC-014, FLC-043",
+      "parallel_safe": null,
+      "objective": "Restore desired replicas after membership changes without an eager cache-wide storm.",
+      "implementation": "- Scan local required objects incrementally by cursor.\n- Compare desired owners under current epoch with known healthy replicas.\n- Prefer peer-to-peer copy from a healthy owner.\n- Rate-limit repair and prioritize recently accessed objects.\n- Serve from previous owners during grace.\n- Expose drain progress and safe-to-stop state.\n\nMVP gate: Later RF2/repair/ops gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Node loss eventually restores RF without Jenkins origin fetch.",
+        "Roster change does not trigger unbounded simultaneous copies.",
+        "Drain does not accept new primary objects and completes under budget.",
+        "Repair survives restart and is idempotent."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Node-loss/drain lab tests.",
+        "Roster-skew and previous-owner tests.",
+        "Bandwidth limiter test.",
+        "Large-catalog incremental scan benchmark.",
+        "Repair runbook",
+        "Drain sequence evidence"
+      ],
+      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 9,
+      "dependents": [
+        "FLC-051",
+        "FLC-071"
+      ]
+    },
+    {
+      "id": "FLC-045",
+      "title": "Define and test partition, duplicate-fill, and conflict semantics",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-040",
+        "FLC-041",
+        "FLC-043"
+      ],
+      "dependency_text": "FLC-040, FLC-041, FLC-043",
+      "parallel_safe": null,
+      "objective": "Make eventual cache behavior explicit and safe under split views or isolated primaries.",
+      "implementation": "- Define outcomes for same digest, different digest, stale epoch, and stale fence.\n- Deduplicate identical versions.\n- Quarantine conflicting sealed versions and require explicit selection/refresh policy.\n- Never silently merge frames from different manifests.\n- Record duplicate-origin and conflict metrics/audit.\n\nMVP gate: Post–MVP A fill-lease gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "A partition cannot cause corrupt mixed content.",
+        "Stale completion is rejected.",
+        "Identical duplicates converge without extra persisted copies.",
+        "Different manifests are visible as a residual and not arbitrarily overwritten."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Partition simulation tests.",
+        "Same/different digest convergence tests.",
+        "Stale epoch/fence tests.",
+        "Conflict policy decision",
+        "Chaos traces"
+      ],
+      "status_note": "Planned — Post–MVP A fill-lease gate; no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 10,
+      "dependents": []
+    },
+    {
+      "id": "FLC-050",
+      "title": "Make quota and L1 release owner-aware",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "FLC-020",
+        "FLC-043"
+      ],
+      "dependency_text": "FLC-020, FLC-043",
+      "parallel_safe": null,
+      "objective": "Integrate required replicas and near copies with current quota/retention behavior.",
+      "implementation": "- Add copy-role/access metadata to candidate selection.\n- Evict incomplete/near/obsolete copies before required owners.\n- Skip L1 release for active required v1 owner replicas.\n- When hard disk safety removes an owner, mark under-replicated and enqueue repair.\n- Preserve pins and active-reader leases.\n- Include fleet roles in dry-run output without secrets.\n\nMVP gate: Later RF2/repair/ops gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Hard disk threshold still wins.",
+        "Near copies are reclaimed before healthy required replicas under equivalent retention.",
+        "Owner removal cannot remain falsely healthy.",
+        "Existing non-fleet quota behavior is unchanged when feature is off."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Quota ordering tests.",
+        "Disk pressure and repair integration test.",
+        "L1 release regression test.",
+        "Eviction examples",
+        "Capacity planning note"
+      ],
+      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 9,
+      "dependents": [
+        "FLC-063",
+        "FLC-070"
+      ]
+    },
+    {
+      "id": "FLC-051",
+      "title": "Implement fleet object purge and tombstone propagation",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "FLC-016",
+        "FLC-020",
+        "FLC-044"
+      ],
+      "dependency_text": "FLC-016, FLC-020, FLC-044",
+      "parallel_safe": null,
+      "objective": "Remove cached content across owners for retention, incident response, or authorization requirements.",
+      "implementation": "- Define scoped purge by locator/version/controller/pool with strict limits.\n- Require operator role and confirmation for manual destructive purge.\n- Publish bounded tombstones to current and previous owners.\n- Prevent stale repair from resurrecting a tombstoned version during retention window.\n- Keep origin Jenkins data untouched.\n- Audit every attempt and residual peer failure.\n\nMVP gate: Later RF2/repair/ops gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Unauthorized nodes/users cannot purge.",
+        "Purge reaches all reachable owners and reports unreachable residuals.",
+        "Tombstone blocks stale replica resurrection.",
+        "Operation is idempotent and bounded."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Role/confirmation tests.",
+        "Partial fleet and retry tests.",
+        "Repair-versus-tombstone race test.",
+        "Audit secret canary.",
+        "Purge runbook",
+        "Retention/tombstone policy"
+      ],
+      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 10,
+      "dependents": [
+        "FLC-063",
+        "FLC-071"
+      ]
+    },
+    {
+      "id": "FLC-052",
+      "title": "Prove cross-user, cross-profile, cross-controller, and cross-fleet isolation",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-017",
+        "FLC-018",
+        "FLC-031",
+        "FLC-043"
+      ],
+      "dependency_text": "FLC-017, FLC-018, FLC-031, FLC-043",
+      "parallel_safe": null,
+      "objective": "Demonstrate that shared physical bytes do not create shared authorization.",
+      "implementation": "- Create two users with different Jenkins visibility.\n- Create profiles/controllers with identical job/build names.\n- Create wrong-fleet and wrong-pool peers.\n- Exercise local hit, bounded peer hit, import, replication, and purge.\n- Scan outputs, logs, audit, and manifests for credential leakage.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "User B cannot read content populated by user A without independent current authorization.",
+        "Same job/build on another controller never collides.",
+        "Wrong-fleet/pool requests fail closed.",
+        "No token, cookie, password, or raw assertion key appears in observable output."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Automated isolation matrix.",
+        "Fuzz target identity inputs.",
+        "Secret canary scan.",
+        "Security test report",
+        "Threat-model closure"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 9,
+      "dependents": [
+        "FLC-071"
+      ]
+    },
+    {
+      "id": "FLC-053",
+      "title": "Prove cache encryption portability and key isolation",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-021",
+        "FLC-023",
+        "FLC-043"
+      ],
+      "dependency_text": "FLC-021, FLC-023, FLC-043",
+      "parallel_safe": null,
+      "objective": "Validate that peer sharing works when every member uses a different local cache key.",
+      "implementation": "- Configure distinct keys and key versions on every lab member.\n- Replicate pure compressed frames and re-wrap locally.\n- Rotate one receiver key while retaining previous read key.\n- Test missing key, wrong key, corrupt envelope, and restart.\n- Verify wire captures never contain local ciphertext envelopes presented as portable format.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "All nodes read identical decoded content with different local keys.",
+        "Compromise of one local cache key does not decrypt another node on-disk frames.",
+        "Missing key fails local cache closed without leaking material.",
+        "Rotation does not alter wire manifest identity."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Multi-key integration tests.",
+        "Rotation/restart tests.",
+        "Packet/hash inspection assertion.",
+        "Encryption boundary diagram",
+        "Security review evidence"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 9,
+      "dependents": [
+        "FLC-071"
+      ]
+    },
+    {
+      "id": "FLC-060",
+      "title": "Add fleet-cache configuration, rollout modes, and fail-closed validation",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-002",
+        "FLC-012",
+        "FLC-015"
+      ],
+      "dependency_text": "FLC-002, FLC-012, FLC-015",
+      "parallel_safe": null,
+      "objective": "Expose reversible controls with the repository's flag/env/policy precedence.",
+      "implementation": "- Add modes `off`, `shadow`, `read`, `full`.\n- Add RF, timeout, stream, lease, authz TTL, and repair bandwidth settings with absolute caps.\n- Resolve CLI over env while enterprise policy may only lower/disable.\n- Require valid fleet membership/trust/controller mapping for non-off modes.\n- Clarify read-only interaction.\n- Report effective secret-free status in doctor.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Default remains off until rollout approval.",
+        "Invalid or incomplete full mode fails closed at startup.",
+        "Policy cannot be weakened by CLI/env.",
+        "Feature off preserves current behavior and registration.",
+        "No secret values appear in status."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [
+        "Precedence/boundary tests.",
+        "Invalid config tests.",
+        "Policy hot-reload restriction tests.",
+        "README/help snapshot tests.",
+        "Configuration reference",
+        "Cursor/gateway examples"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 3,
+      "dependents": [
+        "FLC-064",
+        "FLC-072"
+      ]
+    },
+    {
+      "id": "FLC-061",
+      "title": "Add fleet-cache metrics, audit events, and structured logs",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-030",
+        "FLC-040",
+        "FLC-043"
+      ],
+      "dependency_text": "FLC-030, FLC-040, FLC-043",
+      "parallel_safe": null,
+      "objective": "Make savings, health, failures, and security decisions measurable without high-cardinality leakage.",
+      "implementation": "- Add counters/gauges for hit source, peer/origin bytes, leases, imports, replicas, repair, auth denials, corruption, and fallback.\n- Separate compressed wire, decoded, and MCP output bytes.\n- Use opaque hashes for subject/target correlation.\n- Add request IDs across coordinator/peer operations.\n- Avoid member/job labels in metric names or label sets.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Operators can calculate origin bytes avoided and RF health.",
+        "Audit captures security-relevant actions and decisions.",
+        "No raw logs, job names where prohibited, URLs with credentials, or tokens appear.",
+        "Counters remain process-local and fleet aggregation residual is honest."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Metric increment tests.",
+        "Audit normalization/filter tests.",
+        "Secret/high-cardinality canary tests.",
+        "Metric dictionary",
+        "Sample secret-free events"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 9,
+      "dependents": [
+        "FLC-062"
+      ]
+    },
+    {
+      "id": "FLC-062",
+      "title": "Expose fleet-cache status, doctor, protocol, and residual health",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-013",
+        "FLC-030",
+        "FLC-043",
+        "FLC-061"
+      ],
+      "dependency_text": "FLC-013, FLC-030, FLC-043, FLC-061",
+      "parallel_safe": null,
+      "objective": "Give operators a bounded view of cache mode, eligible peers, compatibility, and replica health.",
+      "implementation": "- Add cache protocol/capability data to member status.\n- Report mode, controller/pool, placement epoch, eligible/compatible members, under-replication, import/repair backlog, drain state, and auth residual.\n- Keep paths, tokens, raw object names, and log data out.\n- Make status work under partial peer failure.\n- Add doctor checks for trust, roster, disk, schema, and protocol compatibility.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Status distinguishes local cache health from fleet replica health.",
+        "Mixed-version/incompatible peers are explicit.",
+        "Unreachable peers appear as residuals rather than disappearing.",
+        "Response stays under existing bounded operator payload limits."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Status snapshot tests.",
+        "Partial peer/incompatible protocol tests.",
+        "Secret-free output test.",
+        "Status schema",
+        "Operator troubleshooting table"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 10,
+      "dependents": [
+        "FLC-063",
+        "FLC-064",
+        "FLC-072"
+      ]
+    },
+    {
+      "id": "FLC-063",
+      "title": "Add admin BFF, SPA, and admin MCP parity for fleet cache operations",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "FLC-050",
+        "FLC-051",
+        "FLC-062"
+      ],
+      "dependency_text": "FLC-050, FLC-051, FLC-062",
+      "parallel_safe": null,
+      "objective": "Provide operator parity for status, drain, repair, and bounded purge.",
+      "implementation": "- Add read-only status/replica/repair views.\n- Add role-gated drain and repair trigger.\n- Add confirm-gated purge/eviction actions.\n- Reuse common service logic between HTTP and MCP surfaces.\n- Show residual peer failures and effective rollout mode.\n- Emit audit events.\n\nMVP gate: Later RF2/repair/ops gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Viewer/operator/admin roles match documented permissions.",
+        "HTTP and MCP operations return equivalent core results.",
+        "Destructive actions require confirmation and are bounded.",
+        "UI never displays secrets or raw logs."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Service unit tests.",
+        "HTTP/MCP parity tests.",
+        "Role/confirm tests.",
+        "Frontend smoke tests.",
+        "Updated API schema",
+        "UI screenshots or test artifacts"
+      ],
+      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 11,
+      "dependents": [
+        "FLC-064",
+        "FLC-073"
+      ]
+    },
+    {
+      "id": "FLC-064",
+      "title": "Update product, fleet, cache, security, and user documentation",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-060",
+        "FLC-062",
+        "FLC-063"
+      ],
+      "dependency_text": "FLC-060, FLC-062, FLC-063",
+      "parallel_safe": null,
+      "objective": "Keep repository sources of truth and public landing accurate for the new architecture.",
+      "implementation": "- Document current/local versus fleet-shared cache planes.\n- Document rollout modes, trust, controller pools, read-only behavior, quotas, fallback, and troubleshooting.\n- Update residuals honestly for pilot auth and unsupported object classes.\n- Use absolute HTTPS cross-doc links per AGENTS.md.\n- Update root README when feature becomes user-visible.\n- Keep implementation/task status accurate.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "A new operator can configure a three-member canary without hidden knowledge.",
+        "Docs do not claim production before release gates.",
+        "No stale statement says all multi-fleet caches are always isolated after full rollout.",
+        "All cross-doc links follow repository policy."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Link check.",
+        "Docs review against actual flags/status.",
+        "Fresh operator walkthrough.",
+        "Updated runbooks",
+        "Documentation review record"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 12,
+      "dependents": [
+        "FLC-073"
+      ]
+    },
+    {
+      "id": "FLC-070",
+      "title": "Build performance, memory, and bandwidth benchmark gates",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-002",
+        "FLC-031",
+        "FLC-041",
+        "FLC-043",
+        "FLC-050"
+      ],
+      "dependency_text": "FLC-002, FLC-031, FLC-041, FLC-043, FLC-050",
+      "parallel_safe": null,
+      "objective": "Prove enterprise performance and identify bottlenecks in the existing SQLite/frame design under fleet load.",
+      "implementation": "- Benchmark local hit, peer bounded read, frame export/import, RF2 publish, and origin miss.\n- Measure SQLite writer contention with concurrent origin writes/imports/replica updates.\n- Measure CPU, allocations, RSS, open files, goroutines, and wire/decoded bytes.\n- Use representative compressibility, long-line, many-small-log, encrypted, and large-log corpora.\n- Compare lookup timeout impact during degraded peers.\n- Generate machine-readable pass/fail report.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "All SLO gates have measured results.",
+        "No benchmark path has memory proportional to whole log size.",
+        "Peer replication sends no more than compressed frame bytes plus bounded protocol overhead.",
+        "Origin dedup target is met in healthy lab.",
+        "Any SQLite bottleneck has a measured mitigation task rather than a speculative database replacement."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [
+        "Go benchmarks with `-benchmem`.",
+        "Load/soak script.",
+        "CPU/heap/block/mutex profiles.",
+        "Benchmark report",
+        "Profiles",
+        "Regression thresholds"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 10,
+      "dependents": [
+        "FLC-072",
+        "FLC-080"
+      ]
+    },
+    {
+      "id": "FLC-071",
+      "title": "Run multi-node integration, race, and chaos qualification",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-003",
+        "FLC-013",
+        "FLC-016",
+        "FLC-031",
+        "FLC-041",
+        "FLC-043",
+        "FLC-044",
+        "FLC-051",
+        "FLC-052",
+        "FLC-053"
+      ],
+      "dependency_text": "FLC-003, FLC-013, FLC-016, FLC-031, FLC-041, FLC-043, FLC-044, FLC-051, FLC-052, FLC-053",
+      "parallel_safe": null,
+      "objective": "Validate correctness under real process boundaries and expected failures.",
+      "implementation": "- Test load-balanced requests across all members.\n- Kill primary/secondary/producer during each fill/import stage.\n- Partition peers, skew rosters, rotate identities, fill disks, corrupt frames, and restart.\n- Test policy/permission revocation while objects are hot.\n- Test mixed protocol versions and drain.\n- Run long soak with race detector where feasible.\n\nMVP gate: MVP A (peer read foundation / first useful peer-cache release path).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "No unverified/cross-boundary bytes are served.",
+        "Healthy RF is restored after failures.",
+        "Cache failure falls back to authorized Jenkins within budget.",
+        "Recovery leaves no visible partial objects.",
+        "No goroutine/file-descriptor growth beyond thresholds."
+      ],
+      "acceptance_criteria_count": 5,
+      "evidence_tests": [
+        "Automated chaos matrix.",
+        "Race test.",
+        "Soak test.",
+        "Origin fetch-count assertions.",
+        "Qualification report",
+        "Failure traces",
+        "Residual list"
+      ],
+      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 11,
+      "dependents": [
+        "FLC-072",
+        "FLC-080"
+      ]
+    },
+    {
+      "id": "FLC-072",
+      "title": "Execute shadow, read, and full canary rollout",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-060",
+        "FLC-062",
+        "FLC-070",
+        "FLC-071"
+      ],
+      "dependency_text": "FLC-060, FLC-062, FLC-070, FLC-071",
+      "parallel_safe": null,
+      "objective": "Introduce fleet sharing reversibly and compare real savings against risk.",
+      "implementation": "- Run shadow mode and validate identical placement predictions across members.\n- Enable peer-read mode for a small controller pool and compare correctness/source metadata.\n- Enable full RF2 on a canary subset with strict limits.\n- Exercise rollback to off without deleting local cache.\n- Monitor hit ratio, origin bytes, latency, replica health, auth denials, and corruption.\n- Record operator approval before expansion.\n\nMVP gate: Later RF2/repair/ops gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Each stage has entry/exit/rollback criteria.",
+        "Rollback requires no data migration and restores current local behavior.",
+        "No unexplained authorization, corruption, or duplicate-origin alerts remain.",
+        "Measured savings justify continued rollout."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Canary smoke and rollback tests.",
+        "Production-like drain/restart rehearsal.",
+        "Canary report",
+        "Dashboard snapshots",
+        "Approval record"
+      ],
+      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 12,
+      "dependents": [
+        "FLC-073"
+      ]
+    },
+    {
+      "id": "FLC-073",
+      "title": "Complete production release gate and structured code review",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P0",
+      "dependencies": [
+        "FLC-063",
+        "FLC-064",
+        "FLC-072"
+      ],
+      "dependency_text": "FLC-063, FLC-064, FLC-072",
+      "parallel_safe": null,
+      "objective": "Close the epic only after code, tests, security, performance, operations, and documentation are reviewed.",
+      "implementation": "- Run full repository tests under Go 1.25.12, race suites, linters, vulnerability checks, and opt-in fleet lab.\n- Perform architecture, security, storage, and performance reviews.\n- Resolve bug-severity findings and rerun affected gates.\n- Update release notes, root README, task statuses, and residuals.\n- Produce signed/checksummed release artifacts under supported platforms.\n\nMVP gate: Later RF2/repair/ops gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "All P0 acceptance criteria have evidence.",
+        "No open bug-severity review finding remains without explicit owner acceptance.",
+        "Release docs match effective defaults and limitations.",
+        "Rollback/runbook/support procedures are complete."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Full CI and supported-platform matrix.",
+        "Structured review report.",
+        "Release smoke test.",
+        "Release evidence bundle",
+        "Final residual register",
+        "Code review record"
+      ],
+      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 13,
+      "dependents": [
+        "FLC-082"
+      ]
+    },
+    {
+      "id": "FLC-080",
+      "title": "Replicate committed immutable frames for running logs",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "FLC-043",
+        "FLC-070",
+        "FLC-071"
+      ],
+      "dependency_text": "FLC-043, FLC-070, FLC-071",
+      "parallel_safe": null,
+      "objective": "Extend sharing to running builds without introducing a mutable shared file.",
+      "implementation": "- Represent running versions as immutable committed frame ranges plus a small generation head.\n- Replicate only durable frames.\n- Version head updates with fence/epoch and preserve offset regression generation semantics.\n- Allow bounded peer reads of committed prefix.\n- Do not publish buffered bytes.\n\nMVP gate: Later expansion (running logs / object classes).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "No gap/overlap appears across progressive updates.",
+        "Offset regression creates a new logical generation.",
+        "A running peer loss does not corrupt final sealing.",
+        "Completed seal reuses existing compressed frames."
+      ],
+      "acceptance_criteria_count": 4,
+      "evidence_tests": [
+        "Progressive concurrency tests.",
+        "Rewrite/truncation tests.",
+        "Restart and finalization integration test.",
+        "Running-log protocol addendum",
+        "Performance comparison"
+      ],
+      "status_note": "Planned — Later expansion (running logs / object classes); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 12,
+      "dependents": [
+        "FLC-081"
+      ]
+    },
+    {
+      "id": "FLC-081",
+      "title": "Finalize running generations into sealed fleet objects without recompression",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "FLC-080"
+      ],
+      "dependency_text": "FLC-080",
+      "parallel_safe": null,
+      "objective": "Convert replicated committed running frames into the completed-log manifest efficiently.",
+      "implementation": "- Acquire finalization fence.\n- Fetch/flush final suffix through existing logmirror.\n- Verify contiguous frame sequence and final Jenkins state.\n- Create sealed manifest referencing existing pure compressed frames.\n- Retire running head after sealed mapping commits.\n\nMVP gate: Later expansion (running logs / object classes).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "No previously committed frame is decoded/recompressed solely for finalization.",
+        "Exactly one sealed preferred version is published.",
+        "Crash recovery can resume finalization idempotently."
+      ],
+      "acceptance_criteria_count": 3,
+      "evidence_tests": [
+        "Finalization crash matrix.",
+        "Wire-byte/recompression guard test.",
+        "Finalization state machine"
+      ],
+      "status_note": "Planned — Later expansion (running logs / object classes); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 13,
+      "dependents": []
+    },
+    {
+      "id": "FLC-082",
+      "title": "Qualify additional object classes under explicit policy",
+      "phase": "Phase 4b - Multi-fleet peer shared cache (FLC)",
+      "phase_order": 45,
+      "conditional": false,
+      "priority": "P1",
+      "dependencies": [
+        "FLC-073"
+      ],
+      "dependency_text": "FLC-073",
+      "parallel_safe": null,
+      "objective": "Expand beyond console logs only after separate size, sensitivity, and authorization review.",
+      "implementation": "- Inventory candidate object classes and their source authorization.\n- Define canonical identities, retention, size caps, redaction, and promotion rules per class.\n- Default deny unknown classes.\n- Add one class per separately reviewable task/PR.\n- Do not automatically cache arbitrary binary artifacts.\n\nMVP gate: Later expansion (running logs / object classes).\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "acceptance_criteria": [
+        "Every enabled class has explicit security owner approval and tests.",
+        "Unknown/unapproved classes cannot enter peer storage.",
+        "Class limits are independently configurable and observable."
+      ],
+      "acceptance_criteria_count": 3,
+      "evidence_tests": [
+        "Per-class authorization/isolation tests.",
+        "Size and parser abuse tests.",
+        "Object-class approval matrix"
+      ],
+      "status_note": "Planned — Later expansion (running logs / object classes); no runtime Done claim",
+      "source_line": 0,
+      "dependency_depth": 14,
       "dependents": []
     }
   ]

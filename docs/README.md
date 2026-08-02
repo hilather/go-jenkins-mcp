@@ -75,6 +75,9 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [caching.md](caching.md) | Unified cache operator guide (L1/L2, quota, gateway file caches, deploy matrix) |
 | [fleet/multi-fleet-rollout.md](fleet/multi-fleet-rollout.md) | Multi-fleet gitops (shared signed policy, independent members) |
 | [fleet/fleet-mcp-ops.md](fleet/fleet-mcp-ops.md) | Opt-in `fleet_*` MCP + any-node fan-out (mesh-token; not multi-pod HA) |
+| [fleet/shared-cache-current-state.md](fleet/shared-cache-current-state.md) | FLC-000 audit: peer sealed-log cache **Planned** (not Done) |
+| [fleet/shared-cache-architecture.md](fleet/shared-cache-architecture.md) | FLC target architecture + **MVP A** peer-read cut line |
+| [adr/0016-fleet-p2p-shared-cache.md](adr/0016-fleet-p2p-shared-cache.md) | ADR: pure-Go peer cache coordination; HOST-008 still cancelled |
 | [arc/eviction.md](arc/eviction.md) · [arc/cache-pins.md](arc/cache-pins.md) | Eviction CLI + pin CLI detail |
 | [arc/pack-format-v1.md](arc/pack-format-v1.md) | L2 pack format |
 | [arc/ratarmount-rs-pin.json](arc/ratarmount-rs-pin.json) | Candidate pin: `ratarmount-rs` **v0.1.14** |

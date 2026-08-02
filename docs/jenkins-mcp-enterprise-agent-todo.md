@@ -3966,6 +3966,52 @@ Operators manage **who** may do **what** in MCP policy via the admin console: bi
 
 ---
 
+# FLC — Multi-fleet pure-Go peer shared cache (Planned epic)
+
+**ADR:** [0016](adr/0016-fleet-p2p-shared-cache.md) (Accepted)  
+**Audit:** [fleet/shared-cache-current-state.md](fleet/shared-cache-current-state.md) (snapshot `0bde63662ebaa4783a14663346ab4b44f44f90d2`)  
+**Architecture summary:** [fleet/shared-cache-architecture.md](fleet/shared-cache-architecture.md)  
+**Machine graph:** `FLC-*` rows in [jenkins-mcp-enterprise-task-index.json](jenkins-mcp-enterprise-task-index.json)  
+**Operator cache guide residual:** [caching.md](caching.md) · ops plane stays [fleet-mcp-ops.md](fleet/fleet-mcp-ops.md)
+
+### Product framing
+
+- Plane A log cache remains **local by default** (per profile / host).  
+- Optional **in-process** peer coordination may reuse **sealed completed console logs** across multi-fleet members behind a load balancer.  
+- **HOST-008 multi-pod shared vault/session/rate remains cancelled** — this epic does not reopen it.  
+- Default fleet-cache mode is **off**; Cursor stdio pilots must not enable peer cache by surprise.  
+- Operator `fleet_*` JSON fan-out is a **different plane** from cache payload traffic.
+
+### MVP cut line (binding)
+
+| Gate | Scope | First useful peer-cache release? |
+|------|--------|----------------------------------|
+| **MVP A** | Owner-directed peer **read** of sealed completed console logs + authorized Jenkins origin fallback | **Yes** |
+| **Fill** | Fill lease / fencing (one origin body under concurrent miss) | Later |
+| **RF2 / repair / drain** | Multi-replica durability and membership handoff | Later |
+| **FLC-080+** | Running logs / additional object classes | Later |
+
+### Task reservation status
+
+| ID | Title (short) | Status |
+|----|---------------|--------|
+| **FLC-000** | Commit audit + reserve FLC IDs | **Done** (docs Phase 0) |
+| **FLC-001** | ADR + scope + MVP cut | **Done** (docs Phase 0) |
+| **FLC-002**…**FLC-082** | SLOs, lab, protocol, storage, peer read, fill, RF2, ops, expansion | **Planned** — see task-index; **no runtime Done** |
+
+Full acceptance criteria and dependency edges for every `FLC-*` ID live in the machine-readable task index (and the offline planning pack used as source). Agents implement **one task ID per PR** where practical; do not mark peer-cache capability Done without code + tests + residual honesty.
+
+### Non-negotiable rules (from ADR 0016)
+
+1. Reuse `store` / `logmirror` / fleet membership — no second DB, sidecar, or external cache appliance.  
+2. Pure compressed Zstd frames on the wire; local AEAD re-wrap on import.  
+3. Cache hit ≠ authorization; no credentials on peer path.  
+4. Fail open to authorized Jenkins origin within budget.  
+5. Do not use `fleetmcp.FanOut` broadcast for cache lookup.  
+6. Same-change tests, audit, admin residual notes per `AGENTS.md`.
+
+---
+
 # Recommended implementation sequence
 
 1. FND-001 through FND-008, PERF-001, SEC-001, AUTH-000, and ARC-000.

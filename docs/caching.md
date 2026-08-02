@@ -188,9 +188,11 @@ Full tables: [gateway/README.md](gateway/README.md), [gateway/deployment.md](gat
 | Setting | Recommendation |
 |---------|----------------|
 | Policy | **Shared signed overlay** ([fleet/multi-fleet-rollout.md](fleet/multi-fleet-rollout.md)) |
-| Cache | **Local** per host under each user’s XDG — do not NFS-share profile data dirs between laptops |
+| Cache | **Local by default** per host under each user’s XDG — do not NFS-share profile data dirs between laptops |
+| Peer shared cache (FLC) | **Planned residual** (ADR [0016](adr/0016-fleet-p2p-shared-cache.md)) — optional pure-Go owner-directed peer read of **sealed completed console logs** for LB multi-member deploys; default **off**; **not Done**; ops `fleet_*` fan-out is a **different plane** ([fleet-mcp-ops.md](fleet/fleet-mcp-ops.md)) |
+| MVP A (when implemented) | Peer **read** of sealed logs + origin fallback first; fill-lease and RF2/repair are **later** gates — [shared-cache-architecture.md](fleet/shared-cache-architecture.md) |
 | Quota | Raise only if users keep large progressive logs; pin critical generations |
-| Encryption | Per-user keyring keys; do not share data dirs across OS users |
+| Encryption | Per-user keyring keys; do not share data dirs across OS users; peer path must re-wrap AEAD locally (never share ciphertext as portable) |
 
 ### 4.3 Local Docker admin support stack (`deploy/local`)
 
@@ -218,7 +220,8 @@ Do **not** point production home XDG at throwaway lab dirs. Tear-down with volum
 |---------|----------------|
 | Plane A | Persistent volume for `$XDG_DATA_HOME` (or profile `dataDir`) **per replica** |
 | Plane B file caches | Optional same-host multi-process (sidecar + serve) via path envs |
-| Multi-pod | **Out of scope** (HOST-008 cancelled) — one data dir per fleet member; do not share cache across pods |
+| Multi-pod shared vault/session/rate | **Out of scope** (HOST-008 cancelled) — one data dir per fleet member for plane A; do **not** NFS-share store trees |
+| Optional peer log cache (FLC) | **Planned** only — ADR [0016](adr/0016-fleet-p2p-shared-cache.md); not multi-pod HA; not shipped |
 | Quota | Size volume ≥ expected concurrent subjects × log retention; set pins for critical incident packs |
 | Maintenance | Keep enabled; shorter interval only under measured pressure (still ≥ 30s) |
 | Subject rate / limiter | Tune `JENKINS_MCP_GATEWAY_SUBJECT_*` after load tests; process-local slots always |
@@ -285,6 +288,7 @@ Do **not** point production home XDG at throwaway lab dirs. Tear-down with volum
 | Residual | Notes |
 |----------|--------|
 | Multi-pod shared Obtain / principal / rate / JWKS | **Out of scope** (HOST-008 cancelled); same-host file lite only; scale via multi-fleet |
+| Multi-fleet **peer** sealed-log cache (FLC) | **Planned** — audit [fleet/shared-cache-current-state.md](fleet/shared-cache-current-state.md); ADR [0016](adr/0016-fleet-p2p-shared-cache.md); MVP A = peer read first; **not** claimed Done |
 | Per-outcome success-vs-failed retention knobs | Store fields exist; not full operator product surface beyond total-quota/low-disk |
 | ratarmount-rs FUSE dual reader | Optional after ARC-000 production go; native Go L2 required |
 | Full rewrite on encryption rotate | Lite rotation keeps last 2 key versions only |
@@ -317,4 +321,6 @@ jenkins-mcp admin serve --admin-role operator …
 | [user/README.md](user/README.md) | Pilot Cursor path |
 | [admin/README.md](admin/README.md) | Admin env tables |
 | [observability.md](observability.md) | `cache_*` metrics |
+| [fleet/shared-cache-current-state.md](fleet/shared-cache-current-state.md) | FLC-000 audit (peer cache Planned) |
+| [adr/0016-fleet-p2p-shared-cache.md](adr/0016-fleet-p2p-shared-cache.md) | Peer shared-cache decision + MVP cut |
 | [security/product-residuals.md](security/product-residuals.md) | Residual honesty |
