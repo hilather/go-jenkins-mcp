@@ -11,7 +11,11 @@ package store
 // v7: PERF residual — durable compact survey signature summaries (hashes + short
 //
 //	redacted text only; never log bodies / secrets)
-const CurrentSchemaVersion = 7
+//
+// v8: FLC-020 pure-Zstd wire size/hash on chunks (zstd_size / zstd_sha256) for
+//
+//	peer export without treating local AEAD ciphertext as portable
+const CurrentSchemaVersion = 8
 
 // MetaDBFile is the SQLite filename under a profile data directory.
 const MetaDBFile = "metadata.sqlite"
@@ -215,6 +219,16 @@ CREATE INDEX IF NOT EXISTS idx_survey_summary_cache_expires
 
 CREATE INDEX IF NOT EXISTS idx_survey_summary_cache_created
 	ON survey_summary_cache(created_at);
+`,
+	},
+	{
+		Version: 8,
+		SQL: `
+-- FLC-020: pure compressed (pre-AEAD) frame identity for peer export/import.
+-- NULL = legacy row; lazy backfill via OpenFrameCompressed + hash is allowed.
+-- On-disk envelope remains compressed_size / frame_sha256 (may be AEAD).
+ALTER TABLE chunks ADD COLUMN zstd_size INTEGER;
+ALTER TABLE chunks ADD COLUMN zstd_sha256 TEXT;
 `,
 	},
 }

@@ -47,17 +47,25 @@ func (m *Meta) InsertChunk(ctx context.Context, c *Chunk, checkpoints []LineChec
 	}
 
 	return m.WithTx(ctx, func(tx *sql.Tx) error {
+		var zstdSize any
+		var zstdSHA any
+		if c.ZstdSize > 0 {
+			zstdSize = c.ZstdSize
+		}
+		if c.ZstdSHA256 != "" {
+			zstdSHA = c.ZstdSHA256
+		}
 		res, err := tx.ExecContext(ctx, `
 INSERT INTO chunks(
 	generation_id, seq, raw_start, raw_end, line_start, line_end,
 	uncompressed_size, compressed_size, content_sha256, frame_sha256,
 	codec, codec_level, format_version, dict_id, rel_path, created_at,
-	enc_alg, enc_key_version
-) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	enc_alg, enc_key_version, zstd_size, zstd_sha256
+) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			c.GenerationID, c.Seq, c.RawStart, c.RawEnd, c.LineStart, c.LineEnd,
 			c.UncompressedSize, c.CompressedSize, c.ContentSHA256, c.FrameSHA256,
 			c.Codec, c.CodecLevel, c.FormatVersion, nullIfEmpty(c.DictID), c.RelPath, c.CreatedAt,
-			nullIfEmpty(c.EncAlg), c.EncKeyVersion,
+			nullIfEmpty(c.EncAlg), c.EncKeyVersion, zstdSize, zstdSHA,
 		)
 		if err != nil {
 			return apperr.Wrap(apperr.CodeInternal, "failed to insert chunk", err)
@@ -90,7 +98,7 @@ func (m *Meta) ListChunks(ctx context.Context, generationID int64) ([]Chunk, err
 SELECT id, generation_id, seq, raw_start, raw_end, line_start, line_end,
 	uncompressed_size, compressed_size, content_sha256, frame_sha256,
 	codec, codec_level, format_version, dict_id, rel_path, created_at,
-	enc_alg, enc_key_version
+	enc_alg, enc_key_version, zstd_size, zstd_sha256
 FROM chunks
 WHERE generation_id = ?
 ORDER BY seq ASC`, generationID)
@@ -272,11 +280,13 @@ func scanChunk(row scannable) (*Chunk, error) {
 	var dict sql.NullString
 	var encAlg sql.NullString
 	var encVer sql.NullInt64
+	var zstdSize sql.NullInt64
+	var zstdSHA sql.NullString
 	err := row.Scan(
 		&c.ID, &c.GenerationID, &c.Seq, &c.RawStart, &c.RawEnd, &c.LineStart, &c.LineEnd,
 		&c.UncompressedSize, &c.CompressedSize, &c.ContentSHA256, &c.FrameSHA256,
 		&c.Codec, &c.CodecLevel, &c.FormatVersion, &dict, &c.RelPath, &c.CreatedAt,
-		&encAlg, &encVer,
+		&encAlg, &encVer, &zstdSize, &zstdSHA,
 	)
 	if err != nil {
 		return nil, err
@@ -290,7 +300,52 @@ func scanChunk(row scannable) (*Chunk, error) {
 	if encVer.Valid {
 		c.EncKeyVersion = int(encVer.Int64)
 	}
+	if zstdSize.Valid {
+		c.ZstdSize = zstdSize.Int64
+	}
+	if zstdSHA.Valid {
+		c.ZstdSHA256 = zstdSHA.String
+	}
 	return &c, nil
+}
+
+// UpdateChunkWireHash persists pure-zstd size/hash for a chunk row (lazy backfill).
+func (m *Meta) UpdateChunkWireHash(ctx context.Context, chunkID, zstdSize int64, zstdSHA256 string) error {
+	if m == nil || m.db == nil {
+		return apperr.New(apperr.CodeInternal, "metadata store is closed")
+	}
+	if chunkID <= 0 || zstdSize < 1 || zstdSHA256 == "" {
+		return apperr.New(apperr.CodeInvalidArgument, "wire hash fields invalid")
+	}
+	m.writeMu.Lock()
+	defer m.writeMu.Unlock()
+	_, err := m.db.ExecContext(ctx, `
+UPDATE chunks SET zstd_size = ?, zstd_sha256 = ? WHERE id = ?`,
+		zstdSize, zstdSHA256, chunkID)
+	if err != nil {
+		return apperr.Wrap(apperr.CodeInternal, "failed to update chunk wire hash", err)
+	}
+	return nil
+}
+
+// EnsureChunkWireHash returns pure zstd size/hash, backfilling from disk when missing.
+// Does not treat AEAD ciphertext as portable wire bytes.
+func (m *Meta) EnsureChunkWireHash(ctx context.Context, dataDir string, c Chunk, crypto *FrameCrypto) (size int64, sha string, err error) {
+	if c.ZstdSize > 0 && c.ZstdSHA256 != "" {
+		return c.ZstdSize, c.ZstdSHA256, nil
+	}
+	zstdBytes, err := OpenFrameCompressed(dataDir, c, crypto)
+	if err != nil {
+		return 0, "", err
+	}
+	sum := sha256Hex(zstdBytes)
+	size = int64(len(zstdBytes))
+	if c.ID > 0 {
+		if err := m.UpdateChunkWireHash(ctx, c.ID, size, sum); err != nil {
+			return 0, "", err
+		}
+	}
+	return size, sum, nil
 }
 
 // DeleteChunksForGeneration removes all chunk and line_checkpoint rows for a

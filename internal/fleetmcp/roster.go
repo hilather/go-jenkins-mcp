@@ -2,7 +2,6 @@ package fleetmcp
 
 import (
 	"encoding/json"
-	"net/url"
 	"os"
 	"strings"
 
@@ -244,22 +243,9 @@ func memberHasProtocol(c *MemberCache, want string) bool {
 }
 
 func validatePeerURL(raw string) error {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return apperr.New(apperr.CodeInvalidArgument, "roster member peer_url is required")
-	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return apperr.New(apperr.CodeInvalidArgument, "roster member peer_url is invalid")
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return apperr.New(apperr.CodeInvalidArgument, "roster member peer_url must be http or https")
-	}
-	// Reject userinfo (credentials) in peer URLs — secret-free roster.
-	if u.User != nil {
-		return apperr.New(apperr.CodeInvalidArgument, "roster member peer_url must not contain credentials")
-	}
-	return nil
+	// Base roster validation allows http/https + rejects credentials.
+	// Stricter non-loopback HTTPS is ValidatePeerURLTransport (FLC-016).
+	return ValidatePeerURLTransport(raw, PeerURLOptions{AllowInsecureHTTP: true})
 }
 
 // MemberByID returns the member with id or nil.

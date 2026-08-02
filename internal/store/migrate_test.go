@@ -23,6 +23,7 @@ import (
 //   - v5 l1_released defaults to 0 when upgrading; explicit seed when through>=5.
 //   - v6 log_collections / log_collection_members survive; tables appear after upgrade from <6.
 //   - v7 survey_summary_cache appears after upgrade from <7; seeded compact rows survive when through>=7.
+//   - v8 zstd_size / zstd_sha256 columns appear after upgrade from <8 (NULL on legacy chunks).
 
 func TestMigrate_UpgradeFromEveryPriorSchema(t *testing.T) {
 	ctx := context.Background()

@@ -340,6 +340,8 @@ func (f *Frames) commitSliceLocked(ctx context.Context, og *openGen, n int) erro
 	if err != nil {
 		return err
 	}
+	// FLC-020: pure zstd identity (pre-AEAD) for peer export; on-disk may differ when encrypted.
+	zstdSum := sha256Hex(compressed)
 	// ARC-009: optionally seal compressed bytes; FrameSHA256 covers on-disk envelope.
 	onDisk, encAlg, encVer, err := f.Crypto.sealCompressed(og.generationID, og.nextSeq, FrameFormatVersion, compressed)
 	if err != nil {
@@ -367,6 +369,8 @@ func (f *Frames) commitSliceLocked(ctx context.Context, og *openGen, n int) erro
 		CompressedSize:   int64(len(onDisk)),
 		ContentSHA256:    contentSum,
 		FrameSHA256:      frameSum,
+		ZstdSize:         int64(len(compressed)),
+		ZstdSHA256:       zstdSum,
 		Codec:            CodecZstd,
 		CodecLevel:       f.codecLevel(),
 		FormatVersion:    FrameFormatVersion,

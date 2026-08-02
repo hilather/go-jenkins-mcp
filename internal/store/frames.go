@@ -79,12 +79,16 @@ type Chunk struct {
 	CompressedSize   int64
 	ContentSHA256    string // hex SHA-256 of raw uncompressed bytes
 	FrameSHA256      string // hex SHA-256 of on-disk frame file (zstd or AEAD envelope)
-	Codec            string
-	CodecLevel       int
-	FormatVersion    int
-	DictID           string // empty = no dictionary (no cross-frame dependency)
-	RelPath          string // relative to profile data dir
-	CreatedAt        string
+	// ZstdSize / ZstdSHA256 are pure compressed bytes before local AEAD (FLC-020).
+	// Zero/empty means legacy row not yet backfilled; use EnsureChunkWireHash.
+	ZstdSize      int64
+	ZstdSHA256    string
+	Codec         string
+	CodecLevel    int
+	FormatVersion int
+	DictID        string // empty = no dictionary (no cross-frame dependency)
+	RelPath       string // relative to profile data dir
+	CreatedAt     string
 	// EncAlg is empty for plaintext; "aes-256-gcm" when ARC-009 AEAD is applied.
 	// Raw key material is never stored here — only key version id.
 	EncAlg string

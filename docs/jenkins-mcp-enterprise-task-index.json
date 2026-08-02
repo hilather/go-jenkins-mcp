@@ -5690,7 +5690,7 @@
         "Reload state-machine diagram",
         "Race-test output"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) — fleetmcp.RosterSnapshot atomic Apply/Reload LKG + bundle_seq rollback fail-closed; peer-read still Planned",
       "source_line": 0,
       "dependency_depth": 3,
       "dependents": [
@@ -5808,7 +5808,7 @@
         "Trust rollout runbook",
         "Security review record"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) — ValidatePeerURLTransport HTTPS non-loopback; DefaultTrustResidual mesh pilot; unique node mTLS not Done; peer-read still Planned",
       "source_line": 0,
       "dependency_depth": 3,
       "dependents": [
@@ -5928,7 +5928,7 @@
         "Schema diagram",
         "Migration benchmark and size impact"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) — store schema v8 zstd_size/zstd_sha256 + EnsureChunkWireHash backfill; peer export/import still Planned",
       "source_line": 0,
       "dependency_depth": 4,
       "dependents": [

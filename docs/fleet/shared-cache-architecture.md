@@ -107,6 +107,9 @@ Cursor **stdio** single-member pilots stay `off`. Do not enable by surprise.
 | Wire protocol v1 validation | **Done\*** — `ParseWireManifestJSON` / bounds / forbidden local fields (FLC-011) |
 | Weighted rendezvous placement | **Done\*** — `OwnerOrder` / `SelectPrimaryOwners` golden vectors (FLC-014) |
 | Managed peer HTTP server | **Done\*** — `fleetmcp.ListenPeer` / `StartPeerServer` timeouts + shutdown (FLC-015) |
+| Atomic roster hot-reload + LKG | **Done\*** — `RosterSnapshot` bundle_seq fail-closed (FLC-013) |
+| Peer URL HTTPS non-loopback + trust residual | **Done\*** pilot mesh residual honest (FLC-016; mTLS not Done) |
+| Pure zstd wire size/hash schema | **Done\*** — chunks.zstd_size / zstd_sha256 + backfill (FLC-020) |
 | Roster cache eligibility fields | **Done\*** — optional `cache` on roster v1 (FLC-012) |
 | 3-member lab scaffold | **Done\*** offline — `testdata/fleet-cache-lab/` + `make fleet-cache-lab-*` (FLC-003) |
 | Peer streaming read / logmirror hook | **Planned** (FLC-030…032) — **not** peer-read Done |
