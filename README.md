@@ -26,6 +26,27 @@
 
 ---
 
+## Status
+
+| | |
+| --- | --- |
+| **Release** | [**v0.4.0**](https://github.com/hilather/go-jenkins-mcp/releases/tag/v0.4.0) · [notes](docs/release/RELEASE_NOTES_v0.4.0.md) |
+| **Go** | **1.25.x** (see `go.mod`) · MCP Go SDK **v1.7.0** (ADR 0006) |
+| **Phase** | **Phase 0–2 foundations Done\*** · enterprise **Tier A offline** (gateway modes A/B/C mock labs) · **not** live Entra / multi-pod production GO |
+| **Posture** | Pilot-ready **RO stdio** path · mutations and admin MCP **opt-in** · residual honesty required |
+
+| Phase | Progress SoT | Summary |
+| --- | --- | --- |
+| **0** — foundation | [phase0-progress.md](docs/phase0-progress.md) | Package layout, CI, ADRs, MCP SDK pin, perf baseline |
+| **1** — core controls | [phase1-progress.md](docs/phase1-progress.md) | Auth, policy, budgets, logs, store, search, audit, observability |
+| **2** — waves 6–53 | [phase2-progress.md](docs/phase2-progress.md) | List privacy, mutations, resilience, operator caps, fleet pin lite |
+| **Host / gateway** | [server-team-hosted.md](docs/roadmap/server-team-hosted.md) · [JWT/OAuth critical path](docs/roadmap/server-tier-a-jwt-oauth-critical-path.md) | Mode A vault, Mode B JWT RS, Mode C 3LO/OBO offline + mock labs |
+| **Admin / MCP-OPS** | [mcp-ops-parity.md](docs/admin/mcp-ops-parity.md) · [admin README](docs/admin/README.md) | BFF + SPA + opt-in `admin_*` tools |
+
+Incomplete work: [`docs/jenkins-mcp-enterprise-agent-todo.md`](docs/jenkins-mcp-enterprise-agent-todo.md) · seed defects: [`KNOWN_DEFECTS.md`](KNOWN_DEFECTS.md).
+
+---
+
 ## Why this exists
 
 AI agents are excellent at reading build logs — and terrible at handling secrets,
@@ -37,7 +58,8 @@ server that puts Cursor (and compatible hosts) on a short leash against Jenkins:
 | Tokens end up in `mcp.json` / shell history | Personal credentials live in the **OS keyring** after `login` |
 | Agents over-write production | **Read-only by default**; mutations are opt-in with preview/confirm |
 | Logs leak secrets into agent context | Built-in **redaction** on tool output and support bundles |
-| Policy drifts per laptop | **Signed policy overlays** + fail-closed budgets |
+| Policy drifts per laptop | **Signed policy overlays** + fail-closed budgets + per-user/group denials |
+| No operator day-2 surface | **Admin console** + opt-in **`admin_*` MCP** tools for agents |
 | Diagnose-by-vibes | Deep **diagnostic tool surface** (compare, regression window, evidence) |
 
 Built from the community seed [`simonfxr/go-jenkins-mcp`](https://github.com/simonfxr/go-jenkins-mcp) as a **behavioral seed** — not the long-term architecture. See [`UPSTREAM.md`](UPSTREAM.md).
@@ -46,16 +68,41 @@ Built from the community seed [`simonfxr/go-jenkins-mcp`](https://github.com/sim
 
 ## Features
 
-- **Local-first stdio MCP** — Cursor-native process entry; optional HTTP gateway path
+### Data plane (Jenkins MCP)
+
+- **Local-first stdio MCP** — Cursor-native process entry (ADR 0002); optional loopback/gateway HTTP
 - **Profiles without secrets** — URL / TLS / proxy only; tokens never in config files
-- **`login` → Secret Service** — verified identity, keyring-backed storage
-- **RO default** — `force_read_only` posture for pilot and production
-- **Mutation safety** — preview + confirmation tokens when mutations are explicitly enabled
-- **Redaction & audit** — fail-closed logging posture for operators
-- **Signed policy** — enterprise overlays that agents cannot casually bypass
-- **Admin console** — local SPA for operator workflows (pilot path)
-- **Tier-1 packaging** — Rocky Linux + Ubuntu; XDG config/cache layout
-- **Conformance depth** — 50+ waves, 300+ Go test files, release evidence tooling
+- **`login` → Secret Service** — verified whoAmI bind; mid-serve re-verify fail-closed
+- **RO default** — enterprise `force_read_only` cannot be defeated by casual flags
+- **Deny-only RBAC** — tools, jobs, nodes, views, artifacts, branches + budgets (POL-001…005)
+- **Per-user / per-group bindings (POL-006)** — overlay `subjects.users[]` / `subjects.groups[]`; list-row privacy + result caps
+- **Mutation safety** — opt-in `--allow-mutations`; preview → confirm TTL; allowlists
+- **Bounded logs & search** — progressive Zstd frames; no unbounded `ReadAll`
+- **Redaction & audit (AUD-001)** — JSONL audit; operator **type enable/disable**; catalog in `KnownEventTypes`
+- **Diagnostics** — doctor, compare, regression window, support-bundle (secret-free)
+
+### Operator plane (admin)
+
+- **Admin console** — `jenkins-mcp admin serve` + React SPA (`web/admin/`); roles `viewer` / `operator` / `policy_admin`
+- **Shared-secret auth (v1)** — one process-wide role; **no local admin user directory** ([design notes](docs/admin/README.md))
+- **Apache ECharts only** for metrics charts; Metrics always visualized
+- **Opt-in admin MCP (MCP-OPS)** — `--enable-admin-mcp` registers `admin_*` tools (shared libs with BFF, not HTTP proxy)
+
+### Gateway / multi-user (Tier A offline Done\*)
+
+| Mode | Credential | Status |
+| --- | --- | --- |
+| **A** | API-token vault (`gateway vault`) | Offline + disposable Jenkins lab Done\* |
+| **B** | Jenkins-audience JWT RS bearer (`gateway jwt-vault`) | Offline + mock RS lab Done\*; live jwt-auth-filter residual |
+| **C** | AgentCore / 3LO-OBO Obtain | Offline + mock-token lab Done\*; live Entra residual |
+
+Live production pins (real Entra, multi-pod HA) remain residual — see [live-pin-blockers](docs/gateway/live-pin-blockers.md).
+
+### Packaging & platform
+
+- **Tier-1:** Rocky Linux + Ubuntu · **macOS** nice-to-have · **Windows out of scope**
+- Tarball + DEB (`make package`); RPM when `rpmbuild` present
+- Local Docker admin stack: `deploy/local/` + `make local-docker-*` (Cursor stdio stays host-native)
 
 ---
 
@@ -63,24 +110,33 @@ Built from the community seed [`simonfxr/go-jenkins-mcp`](https://github.com/sim
 
 ### 1. Build
 
-Requires Go (see `go.mod`). Unit tests never need live Jenkins credentials.
+Requires **Go 1.25+** (see `go.mod`). Unit tests never need live Jenkins credentials.
 
 ```bash
+export PATH="$HOME/.local/go/bin:$PATH"   # if needed
 make test
 make build
 ./bin/jenkins-mcp version --json
 ```
 
+Optional packages / SPA:
+
+```bash
+make admin-ui          # builds web/admin → web/admin/dist
+make package           # tarball (+ .deb when dpkg-deb available)
+make residual-smoke    # offline residual honesty (not live GO)
+```
+
 ### 2. Profile + login (no secrets in git or shell history)
 
 ```bash
-jenkins-mcp profile add corp --url https://jenkins.example.corp/
-jenkins-mcp login --profile corp          # prompts; stores token in Secret Service
-jenkins-mcp status --profile corp
-jenkins-mcp doctor --profile corp --offline
+./bin/jenkins-mcp profile add corp --url https://jenkins.example.corp/
+./bin/jenkins-mcp login --profile corp          # prompts; stores token in Secret Service
+./bin/jenkins-mcp status --profile corp
+./bin/jenkins-mcp doctor --profile corp --offline
 ```
 
-### 3. Cursor MCP entry (read-only)
+### 3. Cursor MCP entry (read-only pilot)
 
 ```json
 {
@@ -99,7 +155,20 @@ jenkins-mcp doctor --profile corp --offline
 > **Never** put API tokens, `user:token`, or `JENKINS_MCP_AUTH` in `args` / `env`.  
 > That seed bootstrap path is a known defect ([`KNOWN_DEFECTS.md`](KNOWN_DEFECTS.md) KD-003).
 
-Full pilot path: [`docs/user/README.md`](docs/user/README.md) · product walkthrough: [getting started](https://hilather.github.io/go-jenkins-mcp/getting-started.html)
+### 4. Optional day-2 surfaces
+
+```bash
+# Operator admin console (loopback; set token for non-pilot)
+jenkins-mcp admin serve --admin-role operator --admin-token-env JENKINS_MCP_ADMIN_TOKEN
+
+# Agents managing ops without admin HTTP (default off)
+jenkins-mcp serve --profile corp --enable-admin-mcp --admin-role operator
+
+# Opt-in mutations (never with force_read_only enterprise pin)
+jenkins-mcp serve --profile corp --allow-mutations
+```
+
+Full pilot path: [`docs/user/README.md`](docs/user/README.md) · agent ops: [`docs/agent-usage.md`](docs/agent-usage.md) §12 · product walkthrough: [getting started](https://hilather.github.io/go-jenkins-mcp/getting-started.html)
 
 ---
 
@@ -111,7 +180,8 @@ flowchart LR
     Cursor["Cursor / MCP host"]
     MCP["jenkins-mcp<br/>stdio · RO default"]
     Keyring["OS Secret Service"]
-    Store["Local SQLite store"]
+    Store["Local store · audit · cache"]
+    Admin["admin serve + SPA"]
   end
 
   subgraph Jenkins["Jenkins fleet"]
@@ -119,7 +189,8 @@ flowchart LR
     Jobs["Jobs · pipelines · artifacts"]
   end
 
-  Cursor <-->|MCP tools| MCP
+  Cursor <-->|MCP tools · optional admin_*| MCP
+  Admin -->|BFF /admin/v1| MCP
   MCP --> Keyring
   MCP --> Store
   MCP -->|policy · redact · budgets| API
@@ -128,12 +199,14 @@ flowchart LR
 
 | Layer | Responsibility |
 | --- | --- |
-| `cmd/jenkins-mcp` | Process entry (stdio default, optional HTTP) |
-| `internal/tools` | MCP tool registration — no raw HTTP |
+| `cmd/jenkins-mcp` | Process entry (stdio default, optional HTTP, gateway, admin) |
+| `internal/tools` | MCP tool registration — no raw Jenkins HTTP |
 | `internal/jenkins` | Jenkins HTTP client — no MCP imports |
-| `internal/{auth,policy,redact,mutation,store,…}` | Enterprise controls (FND-004/005) |
+| `internal/admin` + `web/admin` | Operator BFF + SPA (ADR 0014) |
+| `internal/adminops` | Shared day-2 ops for BFF **and** `admin_*` MCP tools |
+| `internal/{auth,policy,audit,mutation,store,gateway,…}` | Enterprise controls |
 | `internal/adapter` | Optional integrations — **off by default** |
-| `web/admin` | Operator admin console SPA |
+| `deploy/local`, `testdata/*` | Docker labs (opt-in; not default `make test`) |
 | `site/` | Public product site (GitHub Pages) |
 
 Deep dive: [`docs/jenkins-mcp-enterprise-architecture.md`](docs/jenkins-mcp-enterprise-architecture.md) · ADRs in [`docs/adr/`](docs/adr/)
@@ -143,9 +216,11 @@ Deep dive: [`docs/jenkins-mcp-enterprise-architecture.md`](docs/jenkins-mcp-ente
 ## Security posture
 
 - **Fail closed:** Jenkins allow ∧ global read-only ∧ MCP policy ∧ budgets
-- **Secrets:** keyring only — never in profiles, MCP config, fixtures, or CI logs
+- **Secrets:** keyring / vault / env — never in profiles, MCP config, fixtures, or CI logs
 - **Redaction:** tool results and support bundles scrub sensitive material
+- **Audit:** security-relevant paths emit AUD-001; operators toggle types via admin Audit settings
 - **Mutations:** disabled unless explicitly enabled; confirmation token TTL enforced
+- **Admin users (v1):** shared secret + process role — not a multi-operator account DB
 - **Platforms:** Tier-1 Rocky Linux + Ubuntu · macOS best-effort · **Windows out of scope**
 
 Operator guide: [`docs/security/operator-guide.md`](docs/security/operator-guide.md)  
@@ -160,10 +235,15 @@ Reporting: [`SECURITY.md`](SECURITY.md)
 | --- | --- |
 | [Product site](https://hilather.github.io/go-jenkins-mcp/) | Polished overview, start, architecture, security, docs hub |
 | [User guide](docs/user/README.md) | Install → login → Cursor → diagnose workflows |
-| [Admin guide](docs/admin/README.md) | Packaging, policy, gateway, live lab |
+| [Admin guide](docs/admin/README.md) | Console, policy, gateway residual, admin-user design |
+| [Admin API v1](docs/admin/api-v1.md) | BFF HTTP contract |
+| [MCP-OPS parity](docs/admin/mcp-ops-parity.md) | `admin_*` tool matrix |
+| [Policy / RBAC](docs/policy-rbac.md) | Overlay, POL-006 bindings, multi-fleet SAML design |
+| [Observability](docs/observability.md) | AUD-001 catalog + type filter |
 | [Tool contracts](docs/tool-contracts.md) | MCP tool inventory, budgets, RO vs mutation |
-| [Agent usage](docs/agent-usage.md) | How agents should triage builds |
+| [Agent usage](docs/agent-usage.md) | How agents should triage builds + admin MCP |
 | [Pilot kit](docs/pilot/README.md) | Limited RO pilot evidence (REL-001) |
+| [Release notes](docs/release/) | Per-version highlights (`RELEASE_NOTES_v*.md`) |
 | [Release gates](docs/release/gates.md) | Production release gates (REL-002) |
 | [Packaging](docs/packaging.md) | Tier-1 packages, update-check, XDG paths |
 | [Planning pack](docs/README-jenkins-mcp-enterprise-planning-pack.md) | Architecture + backlog index |
@@ -174,17 +254,19 @@ Reporting: [`SECURITY.md`](SECURITY.md)
 ## Project layout
 
 ```text
-cmd/jenkins-mcp/     Process entry (stdio / optional -http)
-internal/jenkins/    Jenkins HTTP client (no MCP imports)
-internal/tools/      MCP tool registration (no raw HTTP)
-internal/contracts/  Typed refs (FND-005)
-internal/apperr/     Error taxonomy (FND-005)
-internal/{auth,policy,redact,mutation,store,…}/
-web/admin/           Operator admin console
-site/                GitHub Pages product site
-docs/                Architecture, ADRs, guides, backlog
-docs/adr/            Architecture decision records
-deploy/              Local labs and packaging helpers
+cmd/jenkins-mcp/       Process entry (stdio / HTTP / gateway / admin)
+internal/jenkins/      Jenkins HTTP client (no MCP imports)
+internal/tools/        MCP tool registration (no raw HTTP)
+internal/admin/        Admin BFF
+internal/adminops/     Shared admin ops (BFF + admin_* MCP)
+internal/policy/       Overlay, RBAC, POL-006 bindings
+internal/audit/        AUD-001 sinks + type catalog/filter
+internal/gateway/      Multi-user modes A/B/C, vaults, residual
+web/admin/             Operator admin console SPA
+deploy/local/          First-class local Docker admin stack
+testdata/              Opt-in labs (Jenkins compose, oauth-lab, …)
+docs/                  Architecture, ADRs, guides, backlog, release notes
+site/                  GitHub Pages product site
 ```
 
 ---
@@ -192,29 +274,27 @@ deploy/              Local labs and packaging helpers
 ## Development
 
 ```bash
+export PATH="$HOME/.local/go/bin:$PATH"
 make test                         # unit + contract tests (no live Jenkins)
 make build                        # ./bin/jenkins-mcp with version metadata
 make lint                         # format + static checks when configured
+make package-smoke                # offline package script canaries
+make residual-smoke               # offline residual honesty (not live GO)
 ./bin/jenkins-mcp update-check --json
 ./bin/jenkins-mcp release-evidence --offline
+```
+
+SPA (when touching admin UI):
+
+```bash
+cd web/admin && npm test && npm run build
+# or: make admin-ui
 ```
 
 CI (`.github/workflows/ci.yml`) runs format, vet, tests (incl. race on Ubuntu),
 build, package, and `govulncheck`. Untrusted PR jobs never receive Jenkins secrets.
 
 Contributing workflow and backlog rules: [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`AGENTS.md`](AGENTS.md)
-
----
-
-## Status
-
-| | |
-| --- | --- |
-| **Release** | [**v0.2.0**](https://github.com/hilather/go-jenkins-mcp/releases/tag/v0.2.0) |
-| **Phase** | Phase 0 — baseline & architecture lock ([progress](docs/phase0-progress.md)) |
-| **Posture** | Pilot-ready RO path · not a blanket production claim |
-
-Incomplete work is tracked in the enterprise backlog and `KNOWN_DEFECTS.md`.
 
 ---
 

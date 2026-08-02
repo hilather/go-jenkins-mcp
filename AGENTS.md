@@ -18,7 +18,8 @@ file is repo-specific and must not be ignored.
 | Implementation backlog (task SoT) | `docs/jenkins-mcp-enterprise-agent-todo.md` |
 | Machine-readable task graph | `docs/jenkins-mcp-enterprise-task-index.json` |
 | Planning pack overview | `docs/README-jenkins-mcp-enterprise-planning-pack.md` |
-| Phase 0 progress | `docs/phase0-progress.md` |
+| Phase progress | `docs/phase0-progress.md`, `docs/phase1-progress.md`, `docs/phase2-progress.md` |
+| Product landing (public) | root **`README.md`** — release/phase/features/quick start (keep current; see docs non-negotiable) |
 | Operator admin console (BFF + SPA) | ADR 0014; `docs/admin/api-v1.md`; `internal/admin/`; `web/admin/` |
 | Server/team-hosted roadmap | `docs/roadmap/server-team-hosted.md` |
 | Release notes (per version) | `docs/release/RELEASE_NOTES_v*.md` · gates: `docs/release/gates.md` · REL-001/002 |
@@ -145,6 +146,7 @@ required before treating work done).
 | Operator-visible day-2 surfaces (policy, metrics, audit, doctor/cache, profiles, support-bundle, security self-check, budgets/caps) | **Admin console** — see next section (`internal/admin`, `web/admin`, `docs/admin/api-v1.md`) |
 | Task completion / partial work | Backlog checkboxes and task status (see next section) |
 | ADRs / irreversible choices | New or updated ADR per backlog FND-008 / task requirements |
+| **Root `README.md` (product landing)** | **Keep current** when shipping user-visible features, phase/release milestones, build/dev entrypoints, or platform claims — see *Root README currency* below |
 | Docs-only polish | No extra churn; fix anything you know is wrong |
 
 **Do not** claim a capability is done in docs or backlog without code and tests
@@ -154,6 +156,30 @@ source of truth for that surface.
 If documentation is intentionally deferred, say so in the session response and
 leave an explicit TODO with an owner/next step — never imply docs are current
 when they are not.
+
+### Root README currency (agents)
+
+The repository root **[`README.md`](README.md)** is the **public landing page**
+(GitHub + first-time operators/agents). It must not lag product reality.
+
+| When to update `README.md` in the same change | Examples |
+|-----------------------------------------------|----------|
+| **Release / version tag** | Status table **Release** row → new tag + link `docs/release/RELEASE_NOTES_vX.Y.Z.md` |
+| **Phase / milestone claims** | Status **Phase** row + phase progress links (`docs/phase*-progress.md`, roadmap) when a phase board materially advances |
+| **New first-class feature surfaces** | Features list: tools, admin console, `admin_*` MCP, gateway modes, POL-006, audit settings, packaging |
+| **Build / quick start / dev entrypoints** | Go version, `make` targets, Cursor MCP snippet, opt-in flags (`--enable-admin-mcp`, `--allow-mutations`) |
+| **Security / residual honesty** | RO default, residuals (live Entra, multi-pod), platform matrix (no Windows claims) |
+| **Architecture map** | Package layout / mermaid when process surfaces change (gateway, adminops, labs) |
+
+| Practice | Detail |
+|----------|--------|
+| **High level only** | README is highlights + links — not a dump of every backlog ID. Deep SoT stays in `docs/`. |
+| **Match residual honesty** | Do not mark live production GO / Entra pin / multi-pod Done without evidence. |
+| **Release notes ≠ README** | `RELEASE_NOTES_v*` hold full version deltas; README Status + Features summarize **current** product. |
+| **Same change preferred** | Feature PR updates README when the landing page would otherwise be stale (version, phase, feature bullets). |
+| **Skip only for pure internals** | Comment-only, pure test renames, or docs deep-links that do not change landing claims may skip README. |
+
+**Pre-done check:** *Would a new operator reading only `README.md` get the correct release, phase, and feature picture?* If no → update it.
 
 ---
 
@@ -498,10 +524,10 @@ comment):
 4. If security-relevant: wire **audit emit** (AUD-001) or explicit AUD-T residual — see audit section
 5. If operator-relevant: update admin BFF/SPA/api-v1 **and** `admin_*` MCP tools (or MCP-OPS residual) — see admin MCP parity
 6. If external-system/integration: add or extend Docker compose lab (opt-in Makefile) or residual TODO
-7. Update documentation and backlog/todo status
+7. Update documentation and backlog/todo status — including root **README.md** when release/phase/features/quick start would otherwise be stale
 8. Run lint/tests/race as applicable; attach perf evidence if required
 9. Structured code review (/review); fix bug findings; re-test
-10. If **releasing** a version: write/update docs/release/RELEASE_NOTES_vX.Y.Z.md (features + high-level deltas + residuals) — see release notes section
+10. If **releasing** a version: write/update docs/release/RELEASE_NOTES_vX.Y.Z.md **and** README Status/features as needed
 11. If incomplete: write next steps; do not mark DoD complete
 12. Commit code + tests + docs (+ admin + lab scaffolds + release notes when releasing) together when practical
 ```
