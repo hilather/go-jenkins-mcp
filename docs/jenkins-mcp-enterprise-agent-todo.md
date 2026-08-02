@@ -4001,7 +4001,10 @@ Operators manage **who** may do **what** in MCP policy via the admin console: bi
 | **FLC-003** | Three-member lab scaffold | **Done\*** offline (`testdata/fleet-cache-lab/`, `make fleet-cache-lab-smoke`; Docker residual) |
 | **FLC-010** | Canonical locator + sealed manifest identity | **Done\*** pure API + golden tests |
 | **FLC-012** | Roster cache eligibility fields | **Done\*** optional `cache` on roster v1 + filter tests |
-| **FLC-011**, **FLC-013+** | Protocol, hot-reload, peer read, fill, RF2, … | **Planned** — peer-read/fill/RF2 **not Done** |
+| **FLC-011** | Wire protocol v1 validation | **Done\*** `ParseWireManifestJSON` + adversarial tests |
+| **FLC-014** | Weighted rendezvous placement | **Done\*** `OwnerOrder` / golden vectors / domain-aware RF pick |
+| **FLC-015** | Managed peer HTTP server lifecycle | **Done\*** `StartPeerServer` + timeouts + graceful shutdown |
+| **FLC-013**, **FLC-016+**, **FLC-030+** | Hot-reload, mTLS residual, peer-read handlers, fill, RF2, … | **Planned** — owner-directed peer-read / fill / RF2 **not Done** |
 
 Full acceptance criteria and dependency edges for every `FLC-*` ID live in the machine-readable task index (and the offline planning pack used as source). Agents implement **one task ID per PR** where practical; do not mark peer-cache capability Done without code + tests + residual honesty.
 

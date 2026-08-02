@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -2211,11 +2210,22 @@ func runServe(args []string) error {
 		log.Printf("fleet MCP: fleet_* tools enabled member=%s fleet_id=%s (not multi-pod HA; mesh token never logged)",
 			fleetCfg.MemberID, fleetCfg.Roster.FleetID)
 		if listen := strings.TrimSpace(fleetCfg.PeerListen); listen != "" {
+			// FLC-015: managed peer server (timeouts + graceful drain) instead of bare ListenAndServe.
 			mux := fleetmcp.NewPeerMux(fleetCfg, local)
+			peerSrv, peerErrCh, peerErr := fleetmcp.StartPeerServer(listen, mux, fleetmcp.DefaultPeerServerOptions())
+			if peerErr != nil {
+				return fmt.Errorf("fleet peer listen: %w", peerErr)
+			}
+			log.Printf("fleet peer listen %s path_prefix=%s (managed server; not multi-pod HA)", peerSrv.Addr(), fleetmcp.PeerPathPrefix)
 			go func() {
-				log.Printf("fleet peer listen %s path_prefix=%s", listen, fleetmcp.PeerPathPrefix)
-				if err := http.ListenAndServe(listen, mux); err != nil {
-					log.Printf("fleet peer listen stopped: %v", err)
+				<-serveCtx.Done()
+				shCtx, cancel := context.WithTimeout(context.Background(), fleetmcp.DefaultPeerShutdownTimeout)
+				defer cancel()
+				_ = peerSrv.Shutdown(shCtx)
+			}()
+			go func() {
+				if err, ok := <-peerErrCh; ok && err != nil {
+					log.Printf("fleet peer serve error: %v", err)
 				}
 			}()
 		}
