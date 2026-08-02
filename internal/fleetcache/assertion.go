@@ -21,6 +21,8 @@ const (
 	OpFrame  = "frame"
 	OpImport = "import"
 	OpRepair = "repair"
+	// OpFill is fill-lease join/complete (FLC-040); peer wire residual until HTTP routes land.
+	OpFill = "fill"
 )
 
 // DefaultAssertionTTL is the pilot default lifetime for scoped peer assertions.
@@ -228,7 +230,7 @@ func validateClaimsForIssue(c *AssertionClaims) error {
 		return apperr.New(apperr.CodeInvalidArgument, "assertion manifest_digest invalid")
 	}
 	switch c.Operation {
-	case OpHead, OpRead, OpFrame, OpImport, OpRepair:
+	case OpHead, OpRead, OpFrame, OpImport, OpRepair, OpFill:
 	default:
 		return apperr.New(apperr.CodeInvalidArgument, "assertion operation invalid")
 	}

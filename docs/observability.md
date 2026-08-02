@@ -38,7 +38,7 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 | Field | Notes |
 |-------|--------|
 | `time` | RFC3339 UTC |
-| `type` | Catalog SoT: `audit.KnownEventTypes()` — `login_*`, `serve_start`, `tool_*`, `auth_fail`, `audit_settings`, `policy_validate`/`policy_apply`, `admin_cache_evict`/`admin_support_bundle`/`admin_subject_invalidate`/`admin_consent_purge`, `mutation_*` (high-volume `tool_success` filter-default off) |
+| `type` | Catalog SoT: `audit.KnownEventTypes()` — `login_*`, `serve_start`, `tool_*`, `auth_fail`, `audit_settings`, `policy_validate`/`policy_apply`, `admin_cache_evict`/`admin_support_bundle`/`admin_subject_invalidate`/`admin_consent_purge`/`admin_fleet_cache_purge`, `mutation_*` (high-volume `tool_success` filter-default off) |
 | `profileId` | Connection profile id |
 | `principalId` | Verified Jenkins user id (never a token) |
 | `externalSubject` | Optional IdP subject label (gateway multi-user); redacted + length-capped like `principalId` — never a token |
@@ -512,7 +512,7 @@ Stable fields only — **no** prompts, log bodies, job parameters, tokens, or Au
 | Field | Notes |
 |-------|--------|
 | `time` | RFC3339 UTC |
-| `type` | Catalog SoT: `audit.KnownEventTypes()` — `login_*`, `serve_start`, `tool_*`, `auth_fail`, `audit_settings`, `policy_validate`/`policy_apply`, `admin_cache_evict`/`admin_support_bundle`/`admin_subject_invalidate`/`admin_consent_purge`, `mutation_*` (high-volume `tool_success` filter-default off) |
+| `type` | Catalog SoT: `audit.KnownEventTypes()` — `login_*`, `serve_start`, `tool_*`, `auth_fail`, `audit_settings`, `policy_validate`/`policy_apply`, `admin_cache_evict`/`admin_support_bundle`/`admin_subject_invalidate`/`admin_consent_purge`/`admin_fleet_cache_purge`, `mutation_*` (high-volume `tool_success` filter-default off) |
 | `profileId` | Connection profile id |
 | `principalId` | Verified Jenkins user id (never a token) |
 | `externalSubject` | Optional IdP subject label (gateway multi-user); redacted + length-capped like `principalId` — never a token |

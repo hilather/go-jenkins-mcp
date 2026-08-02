@@ -71,28 +71,47 @@ func (m *MirrorLogAccess) EnsureMirrored(ctx context.Context, job string, build 
 	return m.Inner.EnsureMirrored(ctx, job, build)
 }
 
-// ReadRange implements LogAccess.
+// ReadRange implements LogAccess via ResolveAndReadRange (FLC-032):
+// local → optional peer bounded read → EnsureMirrored origin → local.
+// With Inner.Peer nil (default), this is contract-compatible with Ensure+ReadRange.
+//
+// Regression (FLC-032): ResolveAnd* may return (partialLogs, meta, ensureErr) when
+// EnsureMirrored hits CodeQuota/timeout but left durable frames. Prefer that body
+// with nil error (except cancel) — same as pre-FLC readLogsViaAccess, which ignored
+// non-cancel Ensure errors and still ReadRange'd committed frames.
 func (m *MirrorLogAccess) ReadRange(ctx context.Context, job string, build int64, offset, length int64) (string, LogReadMeta, error) {
 	if m == nil || m.Inner == nil {
 		return "", LogReadMeta{}, apperr.New(apperr.CodeInternal, "log access is not configured")
 	}
-	logs, lm, err := m.Inner.ReadRange(ctx, job, build, offset, length)
-	if err != nil {
-		return "", LogReadMeta{}, err
-	}
-	return logs, toLogReadMeta(lm), nil
+	logs, lm, err := m.Inner.ResolveAndReadRange(ctx, job, build, offset, length, logmirror.ResolveOptions{})
+	return preferPartialMirror(logs, lm, err)
 }
 
-// Tail implements LogAccess.
+// Tail implements LogAccess via ResolveAndTail (FLC-032 peer-aware path).
 func (m *MirrorLogAccess) Tail(ctx context.Context, job string, build int64, maxLen int64) (string, LogReadMeta, error) {
 	if m == nil || m.Inner == nil {
 		return "", LogReadMeta{}, apperr.New(apperr.CodeInternal, "log access is not configured")
 	}
-	logs, lm, err := m.Inner.Tail(ctx, job, build, maxLen)
-	if err != nil {
+	logs, lm, err := m.Inner.ResolveAndTail(ctx, job, build, maxLen, logmirror.ResolveOptions{})
+	return preferPartialMirror(logs, lm, err)
+}
+
+// preferPartialMirror keeps durable partial frames when Ensure residual returned
+// with a non-cancel error (CodeQuota, max polls, etc.). Cancel always fails closed.
+func preferPartialMirror(logs string, lm logmirror.LocalReadMeta, err error) (string, LogReadMeta, error) {
+	meta := toLogReadMeta(lm)
+	if err == nil {
+		return logs, meta, nil
+	}
+	if apperr.IsCancelled(err) {
 		return "", LogReadMeta{}, err
 	}
-	return logs, toLogReadMeta(lm), nil
+	// Usable partial: non-empty body, or generation/total evidence of durable frames
+	// (including empty EOF slice past durable end).
+	if len(logs) > 0 || meta.TotalSize > 0 || meta.Generation != 0 || meta.Sealed {
+		return logs, meta, nil
+	}
+	return "", LogReadMeta{}, err
 }
 
 // StageLogMirror optionally appends stage/node log bytes under a distinct key (PIPE-002).
@@ -124,6 +143,10 @@ func asStageLogMirror(logs LogAccess) StageLogMirror {
 // readLogsViaAccess mirrors then reads a range from local frames.
 // ok=false means fall back to the direct Jenkins client (mirror not usable).
 // A non-nil err is a hard failure (e.g. policy_denial) that must not fall back.
+//
+// *MirrorLogAccess uses ResolveAndReadRange (FLC-032): policy CheckStoreRead first,
+// then local → peer → origin inside ReadRange — do not pre-EnsureMirrored (would
+// force origin before peer). Other LogAccess implementations still Ensure then Read.
 func readLogsViaAccess(ctx context.Context, st regState, job string, build, offset, length int) (jenkins.BuildLogs, bool, error) {
 	if st.logs == nil {
 		return jenkins.BuildLogs{}, false, nil
@@ -133,13 +156,15 @@ func readLogsViaAccess(ctx context.Context, st regState, job string, build, offs
 	if err := policy.CheckStoreRead(ctx, st.policy, effectiveSubject(st, ctx), job); err != nil {
 		return jenkins.BuildLogs{}, false, err
 	}
-	if err := st.logs.EnsureMirrored(ctx, job, int64(build)); err != nil {
-		// Budget/timeout with partial data may still allow a local read; try once.
-		// Hard errors fall through to direct client unless policy/cancel.
-		if apperr.IsCancelled(err) {
-			return jenkins.BuildLogs{}, false, mapToolErr(err)
+	if !usesResolvePath(st.logs) {
+		if err := st.logs.EnsureMirrored(ctx, job, int64(build)); err != nil {
+			// Budget/timeout with partial data may still allow a local read; try once.
+			// Hard errors fall through to direct client unless policy/cancel.
+			if apperr.IsCancelled(err) {
+				return jenkins.BuildLogs{}, false, mapToolErr(err)
+			}
+			// Continue to ReadRange — Ensure may have left durable frames.
 		}
-		// Continue to ReadRange — Ensure may have left durable frames.
 	}
 	logs, meta, err := st.logs.ReadRange(ctx, job, int64(build), int64(offset), int64(length))
 	if err != nil {
@@ -172,9 +197,11 @@ func tailLogsViaAccess(ctx context.Context, st regState, job string, build, maxL
 	if err := policy.CheckStoreRead(ctx, st.policy, effectiveSubject(st, ctx), job); err != nil {
 		return jenkins.BuildLogs{}, false, err
 	}
-	if err := st.logs.EnsureMirrored(ctx, job, int64(build)); err != nil {
-		if apperr.IsCancelled(err) {
-			return jenkins.BuildLogs{}, false, mapToolErr(err)
+	if !usesResolvePath(st.logs) {
+		if err := st.logs.EnsureMirrored(ctx, job, int64(build)); err != nil {
+			if apperr.IsCancelled(err) {
+				return jenkins.BuildLogs{}, false, mapToolErr(err)
+			}
 		}
 	}
 	logs, meta, err := st.logs.Tail(ctx, job, int64(build), int64(maxLength))
@@ -196,6 +223,12 @@ func tailLogsViaAccess(ctx context.Context, st regState, job string, build, maxL
 		HasMore:     meta.HasMore,
 		Logs:        logs,
 	}, true, nil
+}
+
+// usesResolvePath reports LogAccess that embeds peer/origin resolve inside ReadRange/Tail.
+func usesResolvePath(logs LogAccess) bool {
+	_, ok := logs.(*MirrorLogAccess)
+	return ok
 }
 
 func toLogReadMeta(lm logmirror.LocalReadMeta) LogReadMeta {

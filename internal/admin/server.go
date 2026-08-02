@@ -246,6 +246,11 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	// HOST-007: Mode C progressive consent metadata purge residual lite
 	// (mirrors CLI gateway consent-purge / consent-expire). gateway_ops; never tokens.
 	mux.HandleFunc("POST /admin/v1/gateway/consent-purge", s.handleGatewayConsentPurge)
+	// FLC-063: fleet-cache status/doctor (viewer+) and confirm-gated purge (operator+).
+	// Process-local; SPA residual; no multi-member HTTP purge fan-out.
+	mux.HandleFunc("GET /admin/v1/fleet-cache/status", s.handleFleetCacheStatus)
+	mux.HandleFunc("GET /admin/v1/fleet-cache/doctor", s.handleFleetCacheDoctor)
+	mux.HandleFunc("POST /admin/v1/fleet-cache/purge", s.handleFleetCachePurge)
 	mux.HandleFunc("GET /admin/v1/metrics", s.handleMetrics)
 	// UI-007: profiles / cache / support-bundle / security self-check
 	mux.HandleFunc("GET /admin/v1/profiles", s.handleProfilesList)

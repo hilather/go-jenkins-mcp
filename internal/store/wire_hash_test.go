@@ -83,8 +83,8 @@ func TestSchemaV8_MigrateFromV7_LazyBackfill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ver != 8 {
-		t.Fatalf("want schema 8 after migrate from 7, got %d", ver)
+	if ver != store.CurrentSchemaVersion {
+		t.Fatalf("want schema %d after migrate from 7, got %d", store.CurrentSchemaVersion, ver)
 	}
 	key := store.LogKey{Profile: "corp", Job: "legacy", Build: 2}
 	g := &store.LogGeneration{Profile: key.Profile, Job: key.Job, Build: key.Build, Generation: 1, MoreData: true}

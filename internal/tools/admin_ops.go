@@ -301,6 +301,55 @@ func registerAdminOpsTools(s *mcp.Server, st regState, svc *adminops.Service) {
 		return structuredResult(out)
 	})
 
+	// FLC-063: fleet-cache status / doctor / confirm-gated purge (process-local).
+	addAdminTool(s, st, &mcp.Tool{
+		Name:        "admin_fleet_cache_status",
+		Description: "Fleet-cache process-local status (FLC-063). Secret-free; mode default off; SPA residual.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
+		out, err := svc.FleetCacheStatus(ctx)
+		if err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		return structuredResult(out)
+	})
+
+	addAdminTool(s, st, &mcp.Tool{
+		Name:        "admin_fleet_cache_doctor",
+		Description: "Fleet-cache doctor checks + nested status (FLC-063). Secret-free; process-local.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
+		out, err := svc.FleetCacheDoctor(ctx)
+		if err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		return structuredResult(out)
+	})
+
+	type fleetCachePurgeArgs struct {
+		Confirm        string `json:"confirm" jsonschema:"Must be exactly PURGE"`
+		LocatorHash    string `json:"locator_hash" jsonschema:"Sealed object locator hash (required)"`
+		ManifestDigest string `json:"manifest_digest,omitempty" jsonschema:"Optional manifest digest scope"`
+		MaxOwners      int    `json:"max_owners,omitempty" jsonschema:"Optional owner bound (default library max)"`
+		Reason         string `json:"reason,omitempty" jsonschema:"Secret-free operator note (scrubbed)"`
+		ProfileID      string `json:"profile_id,omitempty" jsonschema:"Optional audit correlation profile id"`
+	}
+	addAdminTool(s, st, &mcp.Tool{
+		Name:        "admin_fleet_cache_purge",
+		Description: "Destructive fleet-cache object purge (operator). Requires confirm=PURGE. Process-local tombstone; no HTTP peer fan-out; never Jenkins origin.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args fleetCachePurgeArgs) (*mcp.CallToolResult, map[string]any, error) {
+		out, err := svc.FleetCachePurge(ctx, adminops.FleetCachePurgeArgs{
+			Confirm:        args.Confirm,
+			LocatorHash:    args.LocatorHash,
+			ManifestDigest: args.ManifestDigest,
+			MaxOwners:      args.MaxOwners,
+			Reason:         args.Reason,
+			ProfileID:      args.ProfileID,
+		})
+		if err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		return structuredResult(out)
+	})
+
 	type supportBundleArgs struct {
 		ProfileID string `json:"profile_id,omitempty" jsonschema:"Profile id"`
 		Preview   bool   `json:"preview,omitempty" jsonschema:"When true, plan only (no write)"`

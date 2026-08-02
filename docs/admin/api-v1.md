@@ -577,6 +577,85 @@ CLI-only residual. Never put tokens in the form; response never echoes
 admin BFF and MCP serve so purge reaches serve’s file-backed store. Multi-pod
 external shared store remains residual (HOST-008).
 
+## Fleet-cache (FLC-063)
+
+Process-local fleet-cache operator surfaces. Shared library:
+`fleetcache.StatusSnapshot` / `DoctorSnapshot` / `AdminPurge` (also used by
+MCP `admin_fleet_cache_*`). **Mode still defaults off.** Multi-member HTTP peer
+purge fan-out and SPA page remain residual.
+
+| Path | Method | Permission |
+|------|--------|------------|
+| `/admin/v1/fleet-cache/status` | GET | `read` (viewer+) |
+| `/admin/v1/fleet-cache/doctor` | GET | `read` (viewer+) |
+| `/admin/v1/fleet-cache/purge` | POST | `cache_destructive` (operator) + body `confirm: "PURGE"` |
+
+### GET /admin/v1/fleet-cache/status
+
+Secret-free process-local status (same core fields as MCP
+`admin_fleet_cache_status`). Includes:
+
+| Field | Meaning |
+|-------|---------|
+| `mode` | `off` / `shadow` / `read` / `full` (default **off**) |
+| `active` | Non-off mode selected |
+| `local_healthy` / `replica_healthy` | Local plane vs fleet RF honesty |
+| `aggregation` | Process-local metrics residual |
+| `spa_residual` | **SPA page residual** — BFF+MCP Done\* |
+| `drain_residual` / `repair_residual` | Drain/repair **trigger** not exposed on this API |
+| `mode_default_off` | Present when mode is off |
+
+Never tokens, credentialed URLs, or raw logs.
+
+### GET /admin/v1/fleet-cache/doctor
+
+Secret-free doctor envelope:
+
+```json
+{
+  "status": { "mode": "off" },
+  "checks": [
+    { "name": "mode_default_off", "ok": true, "residual": "…" },
+    { "name": "protocol_compat", "ok": true, "residual": "…" },
+    { "name": "admin_spa", "ok": true, "residual": "SPA page residual; BFF+MCP Done* (FLC-063)" }
+  ],
+  "residual": "process-local aggregation; multi-member fan-out residual; mode default off"
+}
+```
+
+### POST /admin/v1/fleet-cache/purge
+
+**Operator only** (`cache_destructive`). Process-local purge + tombstone via
+`fleetcache.AdminPurge` / `ApplyPurgeLocal`. **Does not** delete Jenkins origin
+data. **Does not** HTTP-fan-out purge to peers (`http_peer_prop: false`).
+
+Body:
+
+```json
+{
+  "confirm": "PURGE",
+  "locator_hash": "…64-hex…",
+  "manifest_digest": "",
+  "max_owners": 0,
+  "reason": "optional secret-free note",
+  "profile_id": "optional audit correlation"
+}
+```
+
+| Case | Status |
+|------|--------|
+| Viewer / policy_admin | **403** `permission_denied` |
+| Missing or wrong `confirm` (must be exact `"PURGE"`) | **400** `invalid_argument` |
+| Missing `locator_hash` | **400** `invalid_argument` |
+| Operator + `PURGE` | **200** secret-free result (`status`, `tombstone_put`, `purge_residual`, …) |
+
+Audit event type `admin_fleet_cache_purge` is emitted best-effort (locator as
+`TargetHash` only). Confirm string matches MCP `admin_fleet_cache_purge`.
+
+**Residuals:** SPA fleet-cache page; multi-member HTTP peer purge; drain/repair
+trigger APIs; durable fleet-object mapping sink in admin process (nop sink +
+process-local tombstones when unwired).
+
 ## GET /admin/v1/version
 
 Subset of `jenkins-mcp version --json` (version, commit, buildTime, goVersion, os, arch). No secrets.
@@ -781,7 +860,7 @@ Secret-free. Any authenticated admin role may **read**.
 ```json
 {
   "profileId": "corp",
-  "types": ["login_success", "login_fail", "serve_start", "tool_deny", "tool_error", "tool_success", "auth_fail", "audit_settings", "policy_validate", "policy_apply", "admin_cache_evict", "admin_support_bundle", "admin_subject_invalidate", "admin_consent_purge", "mutation_preview", "mutation_confirm", "mutation_deny"],
+  "types": ["login_success", "login_fail", "serve_start", "tool_deny", "tool_error", "tool_success", "auth_fail", "audit_settings", "policy_validate", "policy_apply", "admin_cache_evict", "admin_support_bundle", "admin_subject_invalidate", "admin_consent_purge", "admin_fleet_cache_purge", "mutation_preview", "mutation_confirm", "mutation_deny"],
   "enabled": {
     "login_success": true,
     "tool_success": false
@@ -959,6 +1038,7 @@ Admin console adversarial / contract coverage is **Go-first** (no Playwright/Cyp
 | `TestUI009_OnlineDoctorWithoutToken_403` | online doctor without shared secret → **403** |
 | `TestUI009_SPADeepLink_ServesIndexShell` | BrowserRouter deep links serve SPA shell |
 | `TestUI009_CacheEvict_Viewer403_OperatorMissingConfirm400` | viewer evict **403**; operator wrong confirm **400** |
+| `TestFleetCache_Purge_Viewer403_OperatorMissingConfirm400` | viewer fleet-cache purge **403**; operator wrong confirm **400** (FLC-063) |
 | `TestUI009_SecretCanaryAbsentAcrossRoutes` | planted secret absent across health/me/metrics/profiles/audit/doctor/cache |
 
 XSS assertion model: BFF always writes JSON via `encoding/json` with `SetEscapeHTML(true)` (`Content-Type: application/json`). Wire body must not contain raw `<script>` markup; decoded fields are **text only** for SPA rendering. CSP `script-src 'self'` further blocks inline script execution if HTML were ever mis-served.

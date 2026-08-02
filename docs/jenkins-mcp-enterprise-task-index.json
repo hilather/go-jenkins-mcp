@@ -1532,7 +1532,7 @@
       "dependency_text": "POL-006, POL-003, AUTH-004, OAUTH-003, UI-003",
       "parallel_safe": null,
       "objective": "SAML 2.0 service provider path maps assertions to subject + groups for POL-006 RBAC; Jenkins is never SAML IdP/AS for MCP.",
-      "implementation": "Optional SAML SP for admin SSO and/or gateway multi-user identity; attribute map; signed assertions required; fail closed on invalid assertion; mock SAML lab opt-in; ADR; no assertion/token secrets in logs. Multi-fleet: SAML SP + group→role + POL-006 bindings via versioned/signed config (not local user DB); secrets via secret store.",
+      "implementation": "Optional SAML SP for admin SSO and/or gateway multi-user identity; attribute map; signed assertions required; fail closed on invalid assertion; mock SAML lab opt-in; ADR; no assertion/token secrets in logs. Multi-fleet: SAML SP + group\u2192role + POL-006 bindings via versioned/signed config (not local user DB); secrets via secret store.",
       "acceptance_criteria": [
         "ADR: SAML SP role; Jenkins not IdP/AS for MCP.",
         "Attribute map to policy subject/groups without tool-arg spoofing.",
@@ -2473,7 +2473,7 @@
         "qualify/mode_c_agentcore_live_matrix",
         "TestRunDoctor_ModeC_GatewayStatusResidual"
       ],
-      "status_note": "Partial/offline prototype matrix Done*; live Entra 3LO/OBO + AgentCore pin residual — do not claim live Entra Done",
+      "status_note": "Partial/offline prototype matrix Done*; live Entra 3LO/OBO + AgentCore pin residual \u2014 do not claim live Entra Done",
       "source_line": 1344,
       "dependency_depth": 13,
       "dependents": [
@@ -5176,7 +5176,7 @@
     },
     {
       "id": "HOST-008",
-      "title": "HA / multi-replica (cancelled — multi-fleet instead)",
+      "title": "HA / multi-replica (cancelled \u2014 multi-fleet instead)",
       "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
       "phase_order": 4,
       "conditional": false,
@@ -5188,7 +5188,7 @@
       "dependency_text": "HOST-003, HOST-004",
       "parallel_safe": null,
       "objective": "Cancelled: multi-pod gateway HA is not a product task; multi-fleet (independent single-replica members + shared signed policy) is the scale model.",
-      "implementation": "Historical same-host file flock lite (vault, FileTokenCache, FileSubjectRateLimiter, FilePrincipalCache, JWKS path) remains Done* packaging. Multi-pod Redis/external shared vault/rate/Obtain/audit aggregation and haMultiReplica runtime are out of scope — use multi-fleet rollout instead of multi-replica gateway.",
+      "implementation": "Historical same-host file flock lite (vault, FileTokenCache, FileSubjectRateLimiter, FilePrincipalCache, JWKS path) remains Done* packaging. Multi-pod Redis/external shared vault/rate/Obtain/audit aggregation and haMultiReplica runtime are out of scope \u2014 use multi-fleet rollout instead of multi-replica gateway.",
       "acceptance_criteria": [
         "Multi-pod HA marked cancelled / out of scope in agent-todo and residual docs.",
         "Single-replica default and haMultiReplica=false honesty retained.",
@@ -5219,7 +5219,7 @@
       "dependency_text": "HOST-001, GWY-002",
       "parallel_safe": null,
       "objective": "Multi-user gateway using personal API tokens only (no OAuth/JWT required).",
-      "implementation": "Per-user vault Obtain → Basic to Jenkins; never shared SA.",
+      "implementation": "Per-user vault Obtain \u2192 Basic to Jenkins; never shared SA.",
       "acceptance_criteria": [
         "Provision/rotate/revoke per-user token in vault.",
         "Obtain subject-isolated; cross-subject fails closed.",
@@ -5431,7 +5431,7 @@
         "Reviewed docs diff",
         "Validated task-index report"
       ],
-      "status_note": "Done (docs/ADR Phase 0 land 2026-08-02) — runtime peer cache still Planned",
+      "status_note": "Done (docs/ADR Phase 0 land 2026-08-02) \u2014 runtime peer cache still Planned",
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": [
@@ -5464,7 +5464,7 @@
         "Approved ADR",
         "Decision-owner signatures or review record"
       ],
-      "status_note": "Done (docs/ADR Phase 0 land 2026-08-02) — runtime peer cache still Planned",
+      "status_note": "Done (docs/ADR Phase 0 land 2026-08-02) \u2014 runtime peer cache still Planned",
       "source_line": 0,
       "dependency_depth": 1,
       "dependents": [
@@ -5503,7 +5503,7 @@
         "Representative workload description",
         "Release-gate mapping"
       ],
-      "status_note": "Done* (2026-08-02) — fleetcache.ResolveConfig defaults + docs/fleet/shared-cache-slos.md; peer I/O runtime still Planned",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.ResolveConfig defaults + docs/fleet/shared-cache-slos.md; peer I/O runtime still Planned",
       "source_line": 0,
       "dependency_depth": 2,
       "dependents": [
@@ -5540,7 +5540,7 @@
         "Lab README",
         "Smoke transcript"
       ],
-      "status_note": "Done* offline (2026-08-02) — testdata/fleet-cache-lab + make fleet-cache-lab-smoke; Docker up residual; peer protocol not Done",
+      "status_note": "Done* offline (2026-08-02) \u2014 testdata/fleet-cache-lab + make fleet-cache-lab-smoke; Docker up residual; peer protocol not Done",
       "source_line": 0,
       "dependency_depth": 2,
       "dependents": [
@@ -5575,7 +5575,7 @@
         "Protocol identity specification",
         "Golden vectors"
       ],
-      "status_note": "Done* (2026-08-02) — internal/fleetcache locator+manifest identity + golden tests; peer-read not Done",
+      "status_note": "Done* (2026-08-02) \u2014 internal/fleetcache locator+manifest identity + golden tests; peer-read not Done",
       "source_line": 0,
       "dependency_depth": 2,
       "dependents": [
@@ -5615,7 +5615,7 @@
         "Wire examples",
         "Compatibility test vectors"
       ],
-      "status_note": "Done* (2026-08-02) — fleetcache.ParseWireManifestJSON + ValidateWireManifest bounds/forbidden fields; peer-read handlers still Planned",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.ParseWireManifestJSON + ValidateWireManifest bounds/forbidden fields; peer-read handlers still Planned",
       "source_line": 0,
       "dependency_depth": 3,
       "dependents": [
@@ -5652,7 +5652,7 @@
         "Roster schema documentation",
         "Migration example"
       ],
-      "status_note": "Done* (2026-08-02) — roster MemberCache eligibility + CacheEligibleMembers; legacy v1 without cache still loads",
+      "status_note": "Done* (2026-08-02) \u2014 roster MemberCache eligibility + CacheEligibleMembers; legacy v1 without cache still loads",
       "source_line": 0,
       "dependency_depth": 2,
       "dependents": [
@@ -5690,7 +5690,7 @@
         "Reload state-machine diagram",
         "Race-test output"
       ],
-      "status_note": "Done* (2026-08-02) — fleetmcp.RosterSnapshot atomic Apply/Reload LKG + bundle_seq rollback fail-closed; peer-read still Planned",
+      "status_note": "Done* (2026-08-02) \u2014 fleetmcp.RosterSnapshot atomic Apply/Reload LKG + bundle_seq rollback fail-closed; peer-read still Planned",
       "source_line": 0,
       "dependency_depth": 3,
       "dependents": [
@@ -5730,7 +5730,7 @@
         "Placement algorithm specification",
         "Distribution report"
       ],
-      "status_note": "Done* (2026-08-02) — fleetcache.OwnerOrder/SelectPrimaryOwners HRW golden vectors; peer-read/fill/RF2 still Planned",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.OwnerOrder/SelectPrimaryOwners HRW golden vectors; peer-read/fill/RF2 still Planned",
       "source_line": 0,
       "dependency_depth": 3,
       "dependents": [
@@ -5767,7 +5767,7 @@
         "Server configuration table",
         "Before/after lifecycle diagram"
       ],
-      "status_note": "Done* (2026-08-02) — fleetmcp managed PeerServer (timeouts+Shutdown); wired in serve; peer-read routes still Planned",
+      "status_note": "Done* (2026-08-02) \u2014 fleetmcp managed PeerServer (timeouts+Shutdown); wired in serve; peer-read routes still Planned",
       "source_line": 0,
       "dependency_depth": 2,
       "dependents": [
@@ -5808,7 +5808,7 @@
         "Trust rollout runbook",
         "Security review record"
       ],
-      "status_note": "Done* (2026-08-02) — ParseRoster/ResolveConfig fail closed on non-loopback http; lab residual JENKINS_MCP_FLEET_ALLOW_INSECURE_HTTP; mesh pilot residual; mTLS unique node identity not Done; peer-read still Planned",
+      "status_note": "Done* (2026-08-02) \u2014 ParseRoster/ResolveConfig fail closed on non-loopback http; lab residual JENKINS_MCP_FLEET_ALLOW_INSECURE_HTTP; mesh pilot residual; mTLS unique node identity not Done; peer-read still Planned",
       "source_line": 0,
       "dependency_depth": 3,
       "dependents": [
@@ -5848,7 +5848,7 @@
         "Assertion specification",
         "Security test matrix"
       ],
-      "status_note": "Done* (2026-08-02) — fleetcache.IssueAssertion/VerifyAssertion HMAC+nonce replay; peer-read handlers still Planned",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.IssueAssertion/VerifyAssertion HMAC+nonce replay; peer-read handlers still Planned",
       "source_line": 0,
       "dependency_depth": 4,
       "dependents": [
@@ -5888,7 +5888,7 @@
         "Authorization freshness decision record",
         "Measured probe overhead"
       ],
-      "status_note": "Done* (2026-08-02) — fleetcache.FreshnessGate TTL allow-cache + deny/probe fail-closed; no elevation; FLC-031/032 still Planned",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.FreshnessGate TTL allow-cache + deny/probe fail-closed; no elevation; FLC-031/032 still Planned",
       "source_line": 0,
       "dependency_depth": 5,
       "dependents": [
@@ -5928,7 +5928,7 @@
         "Schema diagram",
         "Migration benchmark and size impact"
       ],
-      "status_note": "Done* (2026-08-02) — store schema v8 zstd_size/zstd_sha256 + EnsureChunkWireHash backfill; peer export/import still Planned",
+      "status_note": "Done* (2026-08-02) \u2014 store schema v8 zstd_size/zstd_sha256 + EnsureChunkWireHash backfill; peer export/import still Planned",
       "source_line": 0,
       "dependency_depth": 4,
       "dependents": [
@@ -5968,7 +5968,7 @@
         "Frame metadata contract",
         "Before/after database sample"
       ],
-      "status_note": "Done* (2026-08-02) — store.ExportPureZstd + ExportPureZstdEnsured; AEAD not portable wire; peer import still Planned",
+      "status_note": "Done* (2026-08-02) \u2014 store.ExportPureZstd + ExportPureZstdEnsured; AEAD not portable wire; peer import still Planned",
       "source_line": 0,
       "dependency_depth": 5,
       "dependents": [
@@ -6011,7 +6011,7 @@
         "Memory-budget calculation",
         "Wire-byte benchmark"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.ServeFrameExport + StreamAdmission + fleetmcp GET /frames/{seq} + FrameExportClient; one-frame buffer; hash/size fail-closed; FLC-023/fill/RF2 Planned",
       "source_line": 0,
       "dependency_depth": 6,
       "dependents": [
@@ -6051,7 +6051,7 @@
         "Import state machine",
         "Crash matrix results"
       ],
-      "status_note": "Planned — Planned (see ADR 0016 MVP cut); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 schema v9 fleet_object_mapping+import_journal; fleetcache.RunImport; store.ImportPureZstdFrame re-encrypt; LogReader parity; partial invisible; conflict reject; FLC-024/fill/RF2 Planned",
       "source_line": 0,
       "dependency_depth": 7,
       "dependents": [
@@ -6090,7 +6090,7 @@
         "Recovery runbook",
         "Quarantine format description"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 store.RecoverFleetImports wired into Frames.Recover; abort staging journals; quarantine corrupt/incomplete committed mappings; secret-free residuals; fill/RF2/FLC-033 Planned",
       "source_line": 0,
       "dependency_depth": 8,
       "dependents": []
@@ -6126,7 +6126,7 @@
         "Peer lookup sequence diagram",
         "Latency measurements"
       ],
-      "status_note": "Done* (2026-08-02) — owner-directed manifest HEAD/GET /fleet/cache/v1 + ManifestLookupClient; not decoded peer-read (031/032); fill/RF2 Planned",
+      "status_note": "Done* (2026-08-02) \u2014 owner-directed manifest HEAD/GET /fleet/cache/v1 + ManifestLookupClient; not decoded peer-read (031/032); fill/RF2 Planned",
       "source_line": 0,
       "dependency_depth": 6,
       "dependents": [
@@ -6169,7 +6169,7 @@
         "Read protocol examples",
         "Frame-open benchmark"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.ServeDecodedRead + fleetmcp POST /read + DecodedReadClient; parity/deny/cap tests; not fill/RF2",
       "source_line": 0,
       "dependency_depth": 7,
       "dependents": [
@@ -6210,7 +6210,7 @@
         "Integration interface document",
         "Call-path trace"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 logmirror.ResolveAnd* + fleetmcp.PeerLogCoordinator; peer hit skips origin; mode-off compatible; not fill/RF2",
       "source_line": 0,
       "dependency_depth": 8,
       "dependents": [
@@ -6248,7 +6248,7 @@
         "Admission policy table",
         "Bandwidth/disk comparison"
       ],
-      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 AdmitNearCache + FilterRFObservations; default Enabled=false; never counts toward RF; near_admit/near_deny metrics; serve auto-promote residual; mode default off",
       "source_line": 0,
       "dependency_depth": 9,
       "dependents": []
@@ -6268,7 +6268,7 @@
       "dependency_text": "FLC-014, FLC-016, FLC-017",
       "parallel_safe": null,
       "objective": "Coordinate one healthy-fleet origin fill without adding consensus or sharing user credentials.",
-      "implementation": "- Make current primary the lease authority for a locator.\n- Issue time-bounded lease ID and monotonically increasing fence.\n- Support join/status for waiters and bounded takeover after expiry.\n- Bind producer member and scoped assertion.\n- Reject completion from stale fence or wrong member.\n- Keep leases in memory unless a measured restart requirement justifies persistence.\n\nMVP gate: Post–MVP A fill-lease gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "implementation": "- Make current primary the lease authority for a locator.\n- Issue time-bounded lease ID and monotonically increasing fence.\n- Support join/status for waiters and bounded takeover after expiry.\n- Bind producer member and scoped assertion.\n- Reject completion from stale fence or wrong member.\n- Keep leases in memory unless a measured restart requirement justifies persistence.\n\nMVP gate: Post\u2013MVP A fill-lease gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
       "acceptance_criteria": [
         "Concurrent healthy requests yield one active producer.",
         "Primary restart permits bounded recovery/takeover.",
@@ -6285,7 +6285,7 @@
         "Lease state machine",
         "Duplicate-fill failure model"
       ],
-      "status_note": "Planned — Post–MVP A fill-lease gate; no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.FillLeaseAuthority Join/Complete/Status; single producer; fence takeover; stale complete fail-closed; secret-free; partition may duplicate origin residual; FLC-041 logmirror wire Planned",
       "source_line": 0,
       "dependency_depth": 5,
       "dependents": [
@@ -6309,7 +6309,7 @@
       "dependency_text": "FLC-032, FLC-040",
       "parallel_safe": null,
       "objective": "Ensure the authorized requester uses the existing Jenkins client and frame writer under a fleet lease.",
-      "implementation": "- Claim/join the primary lease after local and owner misses.\n- Keep Jenkins/OAuth credentials on the entry/producer node.\n- Call existing `EnsureMirrored` with existing byte/poll budgets.\n- Heartbeat or renew lease only while progress is made.\n- Allow waiters to retry owner hit after completion.\n- Handle producer cancellation and origin errors with typed lease completion.\n\nMVP gate: Post–MVP A fill-lease gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "implementation": "- Claim/join the primary lease after local and owner misses.\n- Keep Jenkins/OAuth credentials on the entry/producer node.\n- Call existing `EnsureMirrored` with existing byte/poll budgets.\n- Heartbeat or renew lease only while progress is made.\n- Allow waiters to retry owner hit after completion.\n- Handle producer cancellation and origin errors with typed lease completion.\n\nMVP gate: Post\u2013MVP A fill-lease gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
       "acceptance_criteria": [
         "A healthy simultaneous miss produces one Jenkins log body acquisition.",
         "The primary never receives the end-user credential.",
@@ -6326,7 +6326,7 @@
         "Sequence trace",
         "Fetch-count evidence"
       ],
-      "status_note": "Planned — Post–MVP A fill-lease gate; no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.CoordinateOriginFill + logmirror.FillBridge; concurrent miss one producer EnsureMirrored; waiters no origin; Release on error/cancel; mode off skips lease; FLC-045/033/RF2 Planned",
       "source_line": 0,
       "dependency_depth": 9,
       "dependents": [
@@ -6364,7 +6364,7 @@
         "Publish hook contract",
         "Manifest fixture"
       ],
-      "status_note": "Done* (2026-08-02) — fleetcache.PublishSealed from sealed frames; unsealed fail closed; durable catalog residual",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.PublishSealed from sealed frames; unsealed fail closed; durable catalog residual",
       "source_line": 0,
       "dependency_depth": 6,
       "dependents": [
@@ -6404,7 +6404,7 @@
         "Replication state diagram",
         "RF2 test evidence"
       ],
-      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.PlanRF2Replication + ReplicateSealed/ReplicateWave; StagingLookupSink resume + FilterImportFrames missing-only transfer; store dual-dir LogReader parity + different FrameCrypto; FramesTransferred equals missing count on resume (TestRF2_ResumeTransfersOnlyMissingFrames); partial interrupt invisible; FLC-044 repair/drain + FLC-033 near-cache + FLC-045 Planned; mode default off",
       "source_line": 0,
       "dependency_depth": 8,
       "dependents": [
@@ -6451,7 +6451,7 @@
         "Repair runbook",
         "Drain sequence evidence"
       ],
-      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.PlanRepair/RunRepair + DrainAllowsPrimary; member-loss RF restore via ReplicateSealed; drain refuse_new_primary + handoff under MaxConcurrentCopies; idempotent when HealthyRF; FLC-033 near-cache + FLC-050/061 Planned; mode default off",
       "source_line": 0,
       "dependency_depth": 9,
       "dependents": [
@@ -6474,7 +6474,7 @@
       "dependency_text": "FLC-040, FLC-041, FLC-043",
       "parallel_safe": null,
       "objective": "Make eventual cache behavior explicit and safe under split views or isolated primaries.",
-      "implementation": "- Define outcomes for same digest, different digest, stale epoch, and stale fence.\n- Deduplicate identical versions.\n- Quarantine conflicting sealed versions and require explicit selection/refresh policy.\n- Never silently merge frames from different manifests.\n- Record duplicate-origin and conflict metrics/audit.\n\nMVP gate: Post–MVP A fill-lease gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
+      "implementation": "- Define outcomes for same digest, different digest, stale epoch, and stale fence.\n- Deduplicate identical versions.\n- Quarantine conflicting sealed versions and require explicit selection/refresh policy.\n- Never silently merge frames from different manifests.\n- Record duplicate-origin and conflict metrics/audit.\n\nMVP gate: Post\u2013MVP A fill-lease gate.\nADR: 0016. Audit: docs/fleet/shared-cache-current-state.md.",
       "acceptance_criteria": [
         "A partition cannot cause corrupt mixed content.",
         "Stale completion is rejected.",
@@ -6489,7 +6489,7 @@
         "Conflict policy decision",
         "Chaos traces"
       ],
-      "status_note": "Planned — Post–MVP A fill-lease gate; no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 EvaluateManifestConflict/DuplicateFill/StaleFence; PlanImport+ReplicateSealed wired; same-digest converge FramesTransferred=0; different digest not overwritten; stale fence reject; store partition matrix tests; metrics emit residual FLC-061; mode default off",
       "source_line": 0,
       "dependency_depth": 10,
       "dependents": []
@@ -6523,7 +6523,7 @@
         "Eviction examples",
         "Capacity planning note"
       ],
-      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.OrderEvictCandidates/ShouldSkipL1Release; hard safety wins; near before required; fleetAware=false stable; store fleet_quota hooks partial (QuotaManager wire residual); mode default off",
       "source_line": 0,
       "dependency_depth": 9,
       "dependents": [
@@ -6562,7 +6562,7 @@
         "Purge runbook",
         "Retention/tombstone policy"
       ],
-      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 PlanPurge/ApplyPurge + MemoryTombstoneStore; ActiveTombstones blocks PlanImport/ReplicateSealed/PlanRepair; unauthorized fail-closed; process-local residual multi-member HTTP purge residual; mode default off",
       "source_line": 0,
       "dependency_depth": 10,
       "dependents": [
@@ -6601,7 +6601,7 @@
         "Security test report",
         "Threat-model closure"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 IsolationCheck + matrix tests cross-user/controller/fleet/pool; FreshnessGate+ReplicateSealed prove bytes\u2260authz; secret-free canaries; mode default off",
       "source_line": 0,
       "dependency_depth": 9,
       "dependents": [
@@ -6638,7 +6638,7 @@
         "Encryption boundary diagram",
         "Security review evidence"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 store crypto_isolation_test dual-key parity; cross-key fail closed; missing key; wire zstd identity stable under rotation; mode default off",
       "source_line": 0,
       "dependency_depth": 9,
       "dependents": [
@@ -6677,7 +6677,7 @@
         "Configuration reference",
         "Cursor/gateway examples"
       ],
-      "status_note": "Done* (2026-08-02) — serve --fleet-cache-mode/env ResolveConfig default off; PeerReadHandlersLive always false; FLC-030 peer-read still Planned",
+      "status_note": "Done* (2026-08-02) \u2014 serve --fleet-cache-mode/env ResolveConfig default off; PeerReadHandlersLive always false; FLC-030 peer-read still Planned",
       "source_line": 0,
       "dependency_depth": 3,
       "dependents": [
@@ -6715,7 +6715,7 @@
         "Metric dictionary",
         "Sample secret-free events"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 fleetcache.FleetCacheMetrics process-local counters + OriginBytesAvoided + RFHealth; SecurityEvent ring scrubbed; ReplicateSealedObserved/AllowObserved facades; multi-member aggregation residual FLC-062+; mode default off",
       "source_line": 0,
       "dependency_depth": 9,
       "dependents": [
@@ -6753,7 +6753,7 @@
         "Status schema",
         "Operator troubleshooting table"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 BuildFleetCacheStatus + DoctorFleetCache; local vs replica health; incompatible/unreachable residuals; StatusSummary nest; admin SPA residual FLC-063; mode default off",
       "source_line": 0,
       "dependency_depth": 10,
       "dependents": [
@@ -6793,7 +6793,7 @@
         "Updated API schema",
         "UI screenshots or test artifacts"
       ],
-      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 BFF GET fleet-cache/status|doctor + POST purge (PURGE); MCP admin_fleet_cache_*; shared StatusSnapshot/AdminPurge; SPA residual; process-local purge; mode default off",
       "source_line": 0,
       "dependency_depth": 11,
       "dependents": [
@@ -6831,7 +6831,7 @@
         "Updated runbooks",
         "Documentation review record"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 docs/fleet/shared-cache-operator.md canary runbook; honesty scrub (no site production GO without live canary (FLC-073 offline Done*); isolation residual); cross-links README/caching/fleet; mode default off",
       "source_line": 0,
       "dependency_depth": 12,
       "dependents": [
@@ -6872,7 +6872,7 @@
         "Profiles",
         "Regression thresholds"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 offline SLO gates wire pure-zstd not decoded; frame-at-a-time import; bounded ReadRange MemStats; OriginBytesAvoided; multi-member lab bandwidth + SQLite contention residual; mode default off",
       "source_line": 0,
       "dependency_depth": 10,
       "dependents": [
@@ -6920,7 +6920,7 @@
         "Failure traces",
         "Residual list"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 offline chaos/qual: member-loss RF restore, partial invisible+recover, isolation, corrupt reject, drain, tombstone, partition conflict, fallback_origin honesty; live Docker multi-host residual; mode default off",
       "source_line": 0,
       "dependency_depth": 11,
       "dependents": [
@@ -6959,7 +6959,7 @@
         "Dashboard snapshots",
         "Approval record"
       ],
-      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 CanaryStage criteria/transitions/preconditions; rollback any\u2192off no migration; fail-closed non-adjacent; live multi-host residual; mode default off",
       "source_line": 0,
       "dependency_depth": 12,
       "dependents": [
@@ -6997,7 +6997,7 @@
         "Final residual register",
         "Code review record"
       ],
-      "status_note": "Planned — Later RF2/repair/ops gate; no runtime Done claim",
+      "status_note": "Done* (2026-08-02) offline \u2014 race green fleet packages; docs/fleet/shared-cache-release-gate.md residual register + rollback; RELEASE_NOTES_v0.6.0 FLC ship surface; no production-on default; live multi-host/mTLS/SPA residual; signed multi-platform artifacts residual",
       "source_line": 0,
       "dependency_depth": 13,
       "dependents": [
@@ -7034,7 +7034,7 @@
         "Running-log protocol addendum",
         "Performance comparison"
       ],
-      "status_note": "Planned — Later expansion (running logs / object classes); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 ValidateProgressiveRanges + PlanRunningDurablePrefix; store progressive append/offset regression/seal wire reuse; live multi-host residual; FLC-081 finalize residual; mode default off",
       "source_line": 0,
       "dependency_depth": 12,
       "dependents": [
@@ -7066,7 +7066,7 @@
         "Wire-byte/recompression guard test.",
         "Finalization state machine"
       ],
-      "status_note": "Planned — Later expansion (running logs / object classes); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 PlanFinalizeFromDurable + FinalizeSealed; FramesReused no recompress; crash mid-finalize invisible; dual-dir wire identity; multi-host residual; FLC-082 Done* object-class deny; mode default off",
       "source_line": 0,
       "dependency_depth": 13,
       "dependents": []
@@ -7096,7 +7096,7 @@
         "Size and parser abuse tests.",
         "Object-class approval matrix"
       ],
-      "status_note": "Planned — Later expansion (running logs / object classes); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) \u2014 AdmitObjectClass/RequireObjectClass default deny; console_log only; size limit; StatusSummary object_classes residual; unknown kinds cannot Hash/locator; extra classes need separate PR",
       "source_line": 0,
       "dependency_depth": 14,
       "dependents": []

@@ -149,20 +149,41 @@ func TestResolveConfig_MillisInteger(t *testing.T) {
 	}
 }
 
-func TestConfig_StatusSummary_DefaultOffNoPeerReadLive(t *testing.T) {
+func TestConfig_StatusSummary_DefaultOffHandlersLibraryLive(t *testing.T) {
 	t.Parallel()
 	cfg, err := fleetcache.ResolveConfig(fleetcache.ResolveOptions{Getenv: func(string) string { return "" }})
 	if err != nil {
 		t.Fatal(err)
 	}
 	st := cfg.StatusSummary()
-	if st["mode"] != "off" || st["peer_read_handlers_live"] != false {
+	// Default mode remains off even though FLC-030/031 handler libraries exist.
+	if st["mode"] != "off" || st["active"] != false {
 		t.Fatalf("%+v", st)
 	}
-	if st["peer_read_handlers"] != "planned" {
+	if st["peer_read_handlers_live"] != true {
+		t.Fatalf("handlers library live: %+v", st)
+	}
+	if st["peer_read_handlers"] != "lookup_decoded_read_frame_export" {
 		t.Fatalf("%+v", st)
 	}
-	// Even read mode does not claim handlers live.
+	// FLC-061: process-local metrics aggregation residual (multi-member = FLC-062+).
+	if st["aggregation"] != fleetcache.MetricsAggregationResidual {
+		t.Fatalf("aggregation residual: %+v", st["aggregation"])
+	}
+	// Residual honesty: epic Done* offline; object_classes observable; no production-on-by-default.
+	res, _ := st["residual"].(string)
+	if res == "" {
+		t.Fatal("missing residual")
+	}
+	if !strings.Contains(res, "default mode off") {
+		t.Fatalf("residual must keep mode off: %q", res)
+	}
+	if !strings.Contains(res, "console_log") && !strings.Contains(fmtString(st["object_classes"]), "console_log") {
+		t.Fatalf("object class residual missing: residual=%q classes=%v", res, st["object_classes"])
+	}
+	if strings.Contains(res, "production GO") && !strings.Contains(res, "residual") {
+		t.Fatalf("must not claim production GO: %q", res)
+	}
 	cfg2, err := fleetcache.ResolveConfig(fleetcache.ResolveOptions{
 		ModeFlag: "read",
 		Getenv:   func(string) string { return "" },
@@ -170,11 +191,11 @@ func TestConfig_StatusSummary_DefaultOffNoPeerReadLive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg2.PeerIOEnabled() && cfg2.PeerReadHandlersLive() {
-		t.Fatal("mode=read must not imply peer-read handlers live")
+	if !cfg2.PeerIOEnabled() || !cfg2.PeerReadHandlersLive() {
+		t.Fatal("mode=read enables peer I/O and reports handlers library live")
 	}
 	st2 := cfg2.StatusSummary()
-	if st2["peer_read_handlers_live"] != false {
+	if st2["peer_read_handlers_live"] != true {
 		t.Fatalf("%+v", st2)
 	}
 	for _, v := range st2 {

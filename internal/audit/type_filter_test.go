@@ -26,6 +26,7 @@ func TestKnownEventTypes_ContainsCoreAndMutation(t *testing.T) {
 		audit.TypeAdminSupportBundle,
 		audit.TypeAdminSubjectInvalid,
 		audit.TypeAdminConsentPurge,
+		audit.TypeAdminFleetCachePurge,
 		"mutation_preview",
 		"mutation_confirm",
 		"mutation_deny",

@@ -4,18 +4,28 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"github.com/hilather/go-jenkins-mcp/internal/fleetcache"
 )
 
 // CachePathPrefix is the dedicated peer cache surface (not ops JSON fan-out).
 const CachePathPrefix = "/fleet/cache/v1"
 
-// PeerMuxOptions extends the fleet peer mux with optional cache lookup routes (FLC-030).
+// PeerMuxOptions extends the fleet peer mux with optional cache lookup/read/frame routes (FLC-030…032, FLC-022).
 type PeerMuxOptions struct {
 	// Catalog when non-nil registers owner-directed HEAD/GET manifest routes.
 	Catalog ManifestCatalog
+	// DecodedRead when non-nil (with AssertionAuth.Key) registers POST decoded read.
+	DecodedRead DecodedReadBackend
+	// FrameExport when non-nil (with AssertionAuth.Key) registers GET pure-zstd frame export (FLC-022).
+	FrameExport FrameExportBackend
+	// FrameAdmission caps concurrent frame exports (nil → DefaultMaxPeerStreams on first use).
+	FrameAdmission *fleetcache.StreamAdmission
+	// AssertionAuth is required for DecodedRead / FrameExport (HMAC key + nonces).
+	AssertionAuth AssertionAuth
 }
 
-// NewPeerMuxWithOptions returns ops + optional cache lookup handlers.
+// NewPeerMuxWithOptions returns ops + optional cache lookup/read/frame handlers.
 func NewPeerMuxWithOptions(cfg Config, local *LocalProvider, opts PeerMuxOptions) http.Handler {
 	mux := http.NewServeMux()
 	auth := func(next http.HandlerFunc) http.HandlerFunc {
@@ -65,60 +75,13 @@ func NewPeerMuxWithOptions(cfg Config, local *LocalProvider, opts PeerMuxOptions
 		write(w, out)
 	}))
 
-	if opts.Catalog != nil {
-		registerCacheLookupRoutes(mux, cfg, opts.Catalog, auth, write)
+	needCache := opts.Catalog != nil ||
+		(opts.DecodedRead != nil && len(opts.AssertionAuth.Key) >= 16) ||
+		(opts.FrameExport != nil && len(opts.AssertionAuth.Key) >= 16)
+	if needCache {
+		registerCacheRoutes(mux, cfg, opts.Catalog, opts.DecodedRead, opts.FrameExport, opts.FrameAdmission, opts.AssertionAuth, auth, write)
 	}
 	return mux
-}
-
-func registerCacheLookupRoutes(mux *http.ServeMux, cfg Config, cat ManifestCatalog, auth func(http.HandlerFunc) http.HandlerFunc, write func(http.ResponseWriter, any)) {
-	// Pattern: /fleet/cache/v1/objects/{locator_hash}/manifest
-	// Go 1.22+ ServeMux wildcards; also support path trim for older style via prefix handler.
-	mux.HandleFunc(CachePathPrefix+"/objects/", auth(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			http.Error(w, `{"error":"method_not_allowed"}`, http.StatusMethodNotAllowed)
-			return
-		}
-		// path: /fleet/cache/v1/objects/<hash>/manifest
-		rest := strings.TrimPrefix(r.URL.Path, CachePathPrefix+"/objects/")
-		parts := strings.Split(strings.Trim(rest, "/"), "/")
-		if len(parts) != 2 || parts[1] != "manifest" {
-			http.Error(w, `{"error":"not_found"}`, http.StatusNotFound)
-			return
-		}
-		lh := strings.ToLower(strings.TrimSpace(parts[0]))
-		if len(lh) != 64 {
-			http.Error(w, `{"error":"invalid_locator"}`, http.StatusBadRequest)
-			return
-		}
-		m, ok := cat.Get(lh)
-		if !ok {
-			if r.Method == http.MethodHead {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-			write(w, map[string]any{"hit": false, "locator_hash": lh})
-			return
-		}
-		// Wrong fleet residual: catalog is local; still stamp fleet id from config when set.
-		if cfg.Roster != nil && cfg.Roster.FleetID != "" && m.FleetID != "" && m.FleetID != cfg.Roster.FleetID {
-			http.Error(w, `{"error":"wrong_fleet"}`, http.StatusConflict)
-			return
-		}
-		if r.Method == http.MethodHead {
-			w.Header().Set("X-Fleet-Cache-Hit", "1")
-			w.Header().Set("X-Fleet-Locator-Hash", lh)
-			if m.ManifestDigest != "" {
-				w.Header().Set("X-Fleet-Manifest-Digest", m.ManifestDigest)
-			}
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		write(w, map[string]any{
-			"hit":      true,
-			"manifest": m,
-		})
-	}))
 }
 
 // ManifestPath builds the peer path for a locator hash.

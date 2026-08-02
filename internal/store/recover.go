@@ -10,7 +10,7 @@ import (
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
-// RecoverResult summarizes startup recovery (STO-004).
+// RecoverResult summarizes startup recovery (STO-004 + FLC-024 fleet import).
 type RecoverResult struct {
 	// OrphanTempsRemoved are deleted *.zst.tmp files.
 	OrphanTempsRemoved int
@@ -18,6 +18,8 @@ type RecoverResult struct {
 	OrphanFramesRemoved int
 	// MissingFiles are chunk rows whose frame file was absent (rows deleted).
 	MissingFiles int
+	// Fleet is secret-free fleet import recovery counters (FLC-024); zero when no fleet tables work.
+	Fleet FleetRecoverResult
 }
 
 // Recover cleans incomplete frame commits and reconciles metadata with disk.
@@ -52,76 +54,82 @@ func recoverDataDir(ctx context.Context, meta *Meta, dataDir string) (RecoverRes
 	}
 	var res RecoverResult
 	framesRoot := filepath.Join(dataDir, FramesDirName)
-	if _, err := os.Stat(framesRoot); os.IsNotExist(err) {
-		// Nothing on disk; still drop chunk rows with missing files (none expected).
-		return res, nil
-	} else if err != nil {
+	if _, err := os.Stat(framesRoot); err != nil && !os.IsNotExist(err) {
 		return res, apperr.Wrap(apperr.CodeInternal, "failed to stat frames dir", err)
-	}
-
-	known, err := meta.ListAllChunkRelPaths(ctx)
-	if err != nil {
-		return res, err
-	}
-	// Normalize keys.
-	knownNorm := make(map[string]int64, len(known))
-	for rel, id := range known {
-		knownNorm[filepath.ToSlash(rel)] = id
-	}
-
-	// Walk frames/ for tmp + orphan zst.
-	err = filepath.WalkDir(framesRoot, func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
+	} else if err == nil {
+		known, err := meta.ListAllChunkRelPaths(ctx)
+		if err != nil {
+			return res, err
 		}
-		if d.IsDir() {
-			return nil
+		// Normalize keys.
+		knownNorm := make(map[string]int64, len(known))
+		for rel, id := range known {
+			knownNorm[filepath.ToSlash(rel)] = id
 		}
-		name := d.Name()
-		if strings.HasSuffix(name, FrameTmpExt) || strings.HasSuffix(name, ".tmp") {
+
+		// Walk frames/ for tmp + orphan zst.
+		err = filepath.WalkDir(framesRoot, func(path string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if d.IsDir() {
+				return nil
+			}
+			name := d.Name()
+			if strings.HasSuffix(name, FrameTmpExt) || strings.HasSuffix(name, ".tmp") {
+				if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+					return apperr.Wrap(apperr.CodeInternal, "failed to remove orphan temp frame", err)
+				}
+				res.OrphanTempsRemoved++
+				return nil
+			}
+			if !strings.HasSuffix(name, FrameExt) {
+				return nil
+			}
+			rel, err := filepath.Rel(dataDir, path)
+			if err != nil {
+				return err
+			}
+			rel = filepath.ToSlash(rel)
+			if _, ok := knownNorm[rel]; ok {
+				return nil
+			}
+			// Orphan committed-looking file without meta.
 			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-				return apperr.Wrap(apperr.CodeInternal, "failed to remove orphan temp frame", err)
+				return apperr.Wrap(apperr.CodeInternal, "failed to remove orphan frame", err)
 			}
-			res.OrphanTempsRemoved++
+			res.OrphanFramesRemoved++
 			return nil
-		}
-		if !strings.HasSuffix(name, FrameExt) {
-			return nil
-		}
-		rel, err := filepath.Rel(dataDir, path)
+		})
 		if err != nil {
-			return err
+			return res, err
 		}
-		rel = filepath.ToSlash(rel)
-		if _, ok := knownNorm[rel]; ok {
-			return nil
+
+		// Meta rows without files.
+		for rel, id := range knownNorm {
+			abs, err := FrameAbsPath(dataDir, rel)
+			if err != nil {
+				// Bad path in DB: drop row.
+				_ = meta.DeleteChunkRow(ctx, id)
+				res.MissingFiles++
+				continue
+			}
+			if _, err := os.Stat(abs); os.IsNotExist(err) {
+				if err := meta.DeleteChunkRow(ctx, id); err != nil {
+					return res, err
+				}
+				res.MissingFiles++
+			}
 		}
-		// Orphan committed-looking file without meta.
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return apperr.Wrap(apperr.CodeInternal, "failed to remove orphan frame", err)
-		}
-		res.OrphanFramesRemoved++
-		return nil
-	})
-	if err != nil {
-		return res, err
 	}
 
-	// Meta rows without files.
-	for rel, id := range knownNorm {
-		abs, err := FrameAbsPath(dataDir, rel)
-		if err != nil {
-			// Bad path in DB: drop row.
-			_ = meta.DeleteChunkRow(ctx, id)
-			res.MissingFiles++
-			continue
-		}
-		if _, err := os.Stat(abs); os.IsNotExist(err) {
-			if err := meta.DeleteChunkRow(ctx, id); err != nil {
-				return res, err
-			}
-			res.MissingFiles++
-		}
+	// FLC-024: fleet import journal + mapping health (always; journal/mapping based).
+	// Schema <9 Open upgrades first; RecoverFleetImports is no-op on empty tables.
+	fleet, err := meta.RecoverFleetImports(ctx, dataDir)
+	if err != nil {
+		// Pre-v9 DBs should not reach here after Open; treat missing tables as no-op only if needed.
+		return res, err
 	}
+	res.Fleet = fleet
 	return res, nil
 }

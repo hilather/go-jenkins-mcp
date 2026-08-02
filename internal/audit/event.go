@@ -22,6 +22,9 @@ const (
 	TypeAdminSupportBundle  = "admin_support_bundle"
 	TypeAdminSubjectInvalid = "admin_subject_invalidate"
 	TypeAdminConsentPurge   = "admin_consent_purge"
+	// TypeAdminFleetCachePurge is fleet-cache confirm-gated purge (FLC-063 BFF/MCP).
+	// Secret-free; locator only as TargetHash.
+	TypeAdminFleetCachePurge = "admin_fleet_cache_purge"
 )
 
 // Decision outcomes recorded on events (not Jenkins grants).

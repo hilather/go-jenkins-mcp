@@ -107,8 +107,9 @@ func (l Locator) validate() error {
 		strings.TrimSpace(l.JobFullNameNormalized) == "" {
 		return apperr.New(apperr.CodeInvalidArgument, "locator missing required fields")
 	}
-	if l.ObjectKind != ObjectKindConsoleLog {
-		return apperr.New(apperr.CodeInvalidArgument, "unsupported object_kind for locator v1")
+	// FLC-082: explicit object-class admission (default deny unknown kinds).
+	if err := RequireObjectClass(l.ObjectKind, 0); err != nil {
+		return err
 	}
 	if l.LocatorSchemaVersion != LocatorSchemaVersion {
 		return apperr.New(apperr.CodeInvalidArgument, "unsupported locator_schema_version")

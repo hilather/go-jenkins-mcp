@@ -91,6 +91,8 @@ Authz: process **admin role** (same as console) or stricter serve-time gate; des
 | Security self-check | `admin_security_selfcheck` | P1 | Offline default |
 | Cache status | `admin_cache_status` | P0 | |
 | Cache evict-plan / evict | `admin_cache_evict_plan`, `admin_cache_evict` | P1 | confirm `EVICT` |
+| Fleet-cache status / doctor | `admin_fleet_cache_status`, `admin_fleet_cache_doctor` | P1 | **Done\*** FLC-063; process-local; mode default off; SPA residual |
+| Fleet-cache purge | `admin_fleet_cache_purge` | P1 | **Done\*** FLC-063; confirm `PURGE`; operator; no HTTP peer fan-out |
 | Support bundle | `admin_support_bundle` | P1 | preview/create; secret-free |
 | Vault inventory (Mode A) | `admin_gateway_vault_status` | P1 | No tokens; same as BFF vault GET |
 | Subject invalidate | `admin_subject_invalidate` | P1 | gateway_ops + confirm |
@@ -143,4 +145,5 @@ When adding or changing **admin BFF/SPA** functionality:
 
 | Date | Note |
 |------|------|
+| 2026-08-02 | FLC-063: `admin_fleet_cache_status` / `_doctor` / `_purge` + BFF routes; SPA residual |
 | 2026-08-01 | Initial gap analysis + MCP-OPS backlog; agent parity rule |

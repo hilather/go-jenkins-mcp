@@ -80,6 +80,7 @@ func NewFreshnessGate(ttl time.Duration, probe AuthzProbe) *FreshnessGate {
 
 // Allow checks policy freshness for a prospective cache use (local or peer).
 // A prior peer/local cache hit must still call Allow — never skip for elevation.
+// Metrics (FLC-061): callers should RecordAuthzDecision(dec) — see AllowObserved.
 func (g *FreshnessGate) Allow(ctx context.Context, key AuthzKey) (AuthzDecision, error) {
 	if g == nil || g.Probe == nil {
 		return AuthzDecision{Allowed: false, ReasonCode: ReasonAuthzProbeFail},
@@ -150,6 +151,13 @@ func (g *FreshnessGate) Allow(ctx context.Context, key AuthzKey) (AuthzDecision,
 		FromCache:         false,
 		CacheHitElevation: false,
 	}, nil
+}
+
+// AllowObserved is Allow plus process-local metrics (FLC-061).
+func (g *FreshnessGate) AllowObserved(ctx context.Context, key AuthzKey) (AuthzDecision, error) {
+	dec, err := g.Allow(ctx, key)
+	RecordAuthzDecision(dec)
+	return dec, err
 }
 
 // InvalidateSubject drops all cached decisions for a subject key hash (policy reload / logout).

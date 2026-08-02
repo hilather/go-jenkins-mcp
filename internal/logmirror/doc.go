@@ -36,6 +36,11 @@
 // l1_released, Machine.ReadRange/TailBytes fall back to L2 pack members via
 // ArchiveRoot (ReadRangeFromPack). Dual ratarmount reader remains residual.
 //
+// FLC-032: optional PeerCoordinator on Access enables ResolveAndReadRange /
+// ResolveAndTail (local → peer bounded decoded read → EnsureMirrored origin).
+// Nil Peer keeps EnsureMirrored/ReadRange/Tail origin-only contract (mode off).
+//
 // Boundaries: may import jenkins + store + archive + apperr; must not import
 // tools or mcpserver. Tool handlers never call progressiveText directly.
+// PeerCoordinator implementations live in fleetmcp/app (not this package).
 package logmirror

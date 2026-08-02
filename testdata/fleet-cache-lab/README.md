@@ -1,8 +1,9 @@
 # Fleet-cache lab (FLC-003) — opt-in three-member scaffold
 
 **Status:** Lab scaffold for multi-member **config + independent data dirs**  
-**Not:** production peer-cache GO · fill-lease · RF2  
-**Default CI:** **not** in `make test` / `make ci`
+**Not:** production peer-cache GO (**FLC-073 residual**)  
+**Default CI:** **not** in `make test` / `make ci`  
+**Operator canary:** [docs/fleet/shared-cache-operator.md](../../docs/fleet/shared-cache-operator.md)
 
 Three independent multi-fleet members share one gitops **roster** (with cache eligibility) and **distinct** XDG data volumes so plane A never shares SQLite/frames across members (HOST-008 remains cancelled).
 
@@ -49,7 +50,8 @@ make fleet-cache-lab-down    # down -v (destroys volumes + ephemeral mesh materi
 
 | Residual | Notes |
 |----------|--------|
-| Peer sealed-log **protocol** | Not implemented yet — members may only expose fleet ops/health when `fleet-mode` is on |
+| Peer sealed-log **library** | Done\* under `internal/fleetcache`; mode default **off** until `--fleet-cache-mode` / env; not production GO (FLC-073) |
+| Live multi-host canary orchestration | FLC-072 offline criteria Done\*; live residual — see operator runbook |
 | Production mTLS / unique node identity | Mesh token lab only |
 | Real Jenkins origin in this compose | Optional later; offline unit path is the CI gate |
 | Stickiness | Intentionally **off** on LB so cold multi-member behavior is visible |
@@ -66,6 +68,7 @@ Never commit production mesh tokens. Rotate `mesh-token.lab` freely; it is dispo
 
 ## See also
 
+- Operator canary [shared-cache-operator.md](../../docs/fleet/shared-cache-operator.md)  
 - ADR [0016](../../docs/adr/0016-fleet-p2p-shared-cache.md)  
 - SLOs [shared-cache-slos.md](../../docs/fleet/shared-cache-slos.md)  
 - Roster example with cache blocks: `roster.json`  

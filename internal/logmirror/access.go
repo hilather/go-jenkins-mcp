@@ -48,6 +48,13 @@ func (o EnsureOptions) normalize() EnsureOptions {
 //
 // tools.LogAccess is implemented by *Access (method set match) when tools
 // use LocalReadMeta; the tools package may wrap with policy CheckStoreRead.
+//
+// Optional Peer (FLC-032) enables ResolveAndReadRange / ResolveAndTail:
+// local → owner-directed peer bounded read → EnsureMirrored origin.
+// Nil Peer keeps EnsureMirrored/ReadRange/Tail contract byte-compatible (mode off).
+//
+// Optional Fill (FLC-041) coordinates EnsureMirrored under a fill lease so concurrent
+// misses share one origin body on the producer; waiters do not each pull Jenkins.
 type Access struct {
 	// Profile stamps every LogKey (same-profile isolation).
 	Profile string
@@ -58,6 +65,10 @@ type Access struct {
 	// Ensure bounds (zero ⇒ defaults).
 	MaxBytes int64
 	MaxPolls int
+	// Peer optional fleet peer coordinator (FLC-032). Nil = origin-only path.
+	Peer PeerCoordinator
+	// Fill optional fill-lease bridge (FLC-041). Nil or mode off = plain EnsureMirrored.
+	Fill *FillBridge
 }
 
 // NewAccess builds an Access bound to one profile + machine.

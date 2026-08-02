@@ -30,7 +30,7 @@
 
 | | |
 | --- | --- |
-| **Release** | [**v0.5.0**](https://github.com/hilather/go-jenkins-mcp/releases/tag/v0.5.0) · [notes](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/release/RELEASE_NOTES_v0.5.0.md) |
+| **Release** | [**v0.6.0**](https://github.com/hilather/go-jenkins-mcp/releases/tag/v0.6.0) · [notes](https://github.com/hilather/go-jenkins-mcp/blob/v0.6.0/docs/release/RELEASE_NOTES_v0.6.0.md) |
 | **Go** | **1.25.x** (see `go.mod`) · MCP Go SDK **v1.7.0** (ADR 0006) |
 | **Posture** | Pilot-ready **RO stdio** · mutations / admin MCP / fleet MCP **opt-in** · residual honesty required |
 | **Free-lab / offline** | Gateway modes A/B/C + SAML lab Done\* — [free-lab-qualification](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/gateway/free-lab-qualification.md) |
@@ -74,6 +74,7 @@ Product module: `github.com/hilather/go-jenkins-mcp`. Origin history (past-tense
 - **Mutation safety** — opt-in `--allow-mutations`; preview → confirm TTL; allowlists
 - **Bounded logs & search** — progressive Zstd frames; no unbounded `ReadAll`
 - **Local cache** — per-profile L1 frames + L2 packs under XDG (default **10 GiB** quota, pins, maintenance); gateway process caches optional same-host file share — [docs/caching.md](docs/caching.md)
+- **Fleet peer cache (opt-in, default off)** — optional multi-member sealed-log peer reuse (`JENKINS_MCP_FLEET_CACHE_MODE` / `--fleet-cache-mode`); mode default off; offline FLC-073 gate Done\*; live multi-host residual — [docs/fleet/shared-cache-operator.md](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/fleet/shared-cache-operator.md)
 - **Redaction & audit (AUD-001)** — JSONL audit; operator **type enable/disable**; catalog in `KnownEventTypes`
 - **Diagnostics** — doctor, compare, regression window, support-bundle (secret-free)
 

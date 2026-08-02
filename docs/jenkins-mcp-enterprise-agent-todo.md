@@ -4013,7 +4013,52 @@ Operators manage **who** may do **what** in MCP policy via the admin console: bi
 | **FLC-018** | Authz freshness gate | **Done\*** `FreshnessGate`; probe fail-closed; no cache elevation |
 | **FLC-042** | Sealed → fleet wire manifest | **Done\*** `PublishSealed` idempotent |
 | **FLC-030** | Owner-directed manifest lookup | **Done\*** peer routes + client; owners only (not broadcast) |
-| **FLC-031…032**, **FLC-022+**, fill/RF2 | Decoded peer-read, logmirror, streams, fill, RF2 | **Planned** — **not** full peer-read GO |
+| **FLC-031** | Bounded decoded peer-read | **Done\*** owner POST read + ceilings + client |
+| **FLC-032** | Logmirror origin integration | **Done\*** ResolveAnd* + PeerLogCoordinator |
+| **FLC-022** | One-frame pure-zstd export/transfer | **Done\*** GET frames/{seq} + admission + client |
+| **FLC-023** | Crash-safe peer import + re-wrap | **Done\*** schema v9 mapping + RunImport + LogReader parity |
+| **FLC-024** | Startup recovery + quarantine | **Done\*** RecoverFleetImports abort staging + quarantine corrupt |
+| **FLC-040** | Primary fill leases + fence | **Done\*** FillLeaseAuthority Join/Complete; stale fence fail-closed |
+| **FLC-041** | Fill + logmirror origin coordinate | **Done\*** CoordinateOriginFill; waiters no origin body |
+| **FLC-043** | RF2 compressed-frame replication | **Done\*** PlanRF2Replication + ReplicateSealed/Wave; resume missing-only transfer; dual-dir parity; skip verified; partial invisible |
+| **FLC-044** | Lazy repair / previous-owner grace / drain | **Done\*** PlanRepair + RunRepair; drain refuse new primary; MaxConcurrentCopies budget; idempotent re-run |
+| **FLC-045** | Partition / duplicate-fill / conflict matrix | **Done\*** EvaluateManifestConflict + stale fence; same-digest converge; different digest not overwritten |
+| **FLC-033** | Near-cache promotion | **Done\*** AdmitNearCache default off; FilterRFObservations; never RF |
+| **FLC-050** | Owner-aware quota / L1 release | **Done\*** OrderEvictCandidates; hard safety; mode-off stable; QuotaManager wire residual |
+| **FLC-051** | Fleet object purge + tombstone | **Done\*** PlanPurge + ActiveTombstones block resurrection; process-local |
+| **FLC-052** | Cross-user/profile/controller/fleet isolation proofs | **Done\*** IsolationCheck matrix; bytes≠authz |
+| **FLC-053** | Encryption portability + key isolation proofs | **Done\*** dual-key parity; cross-key fail; wire identity stable |
+| **FLC-061** | Fleet-cache metrics, audit events, structured logs | **Done\*** process-local counters + security ring; multi-member residual 062+ |
+| **FLC-062** | Fleet-cache status / doctor residuals | **Done\*** BuildFleetCacheStatus + DoctorFleetCache; admin residual 063 |
+| **FLC-070** | Perf/memory/bandwidth SLO gates | **Done\*** offline pure-zstd + bounded-read gates; lab residual |
+| **FLC-071** | Multi-node chaos/race qualification | **Done\*** offline dual-dir/chaos matrix; Docker residual |
+| **FLC-063** | Admin BFF/SPA/MCP fleet-cache ops | **Done\*** BFF+MCP status/doctor/purge; SPA residual |
+| **FLC-072** | Shadow/read/full canary criteria | **Done\*** offline transitions + preconditions; live residual |
+| **FLC-080** | Running-log durable frames | **Done\*** progressive ranges + seal wire reuse; multi-host residual |
+| **FLC-064** | Operator docs pack / canary runbook | **Done\*** shared-cache-operator.md |
+| **FLC-081** | Finalize running without recompress | **Done\*** PlanFinalizeFromDurable + FinalizeSealed |
+| **FLC-073** | Production release gate (offline pack) | **Done\*** release-gate.md + RELEASE_NOTES_v0.6.0; live multi-host residual |
+| **FLC-082** | Object class default-deny policy | **Done\*** console_log only; unknown fail closed |
+
+### Strong next fits (caching library Done\* — deps satisfied)
+
+Core peer-cache library path (**FLC-000…045**, **FLC-060**) is **Done\*** with mode default **off**. Prefer these **Ready** IDs next (one task ID per PR). Do not skip residual honesty or mode-off defaults.
+
+| Priority | ID | Why strong fit now |
+|----------|----|--------------------|
+| **P0 Done\*** | **FLC-061** | Metrics process-local + security ring (**Done\***) — multi-member aggregation residual **FLC-062+** |
+| **P0 Done\*** | **FLC-052** | Isolation proofs (**Done\***) |
+| **P0 Done\*** | **FLC-053** | Crypto / key isolation proofs (**Done\***) |
+| **P1 Done\*** | **FLC-050** | Owner-aware quota role planner (**Done\***; QuotaManager wire residual) |
+| **P1 Done\*** | **FLC-051** | Purge + tombstone (**Done\***; multi-member HTTP residual) |
+| **P0 Done\*** | **FLC-062** | Status/doctor (**Done\***; admin SPA residual 063) |
+| **P1 Done\*** | **FLC-033** | Near-cache admission (**Done\***; default off; never RF) |
+| **P0 Done\*** | **FLC-070** | SLO/bench gates (**Done\*** offline) |
+| **P0 Done\*** | **FLC-071** | Chaos/qual (**Done\*** offline) |
+
+**Suggested order (remaining):** none in FLC epic — residual ops: live multi-host canary, SPA page, mTLS, signed packaging (outside FLC IDs).
+
+**Still residual / not full production GO:** default mode **off**; production mTLS; HOST-008 cancelled; SPA fleet-cache page residual; live multi-host canary soak; signed multi-platform artifacts residual. FLC task IDs **073/082 Done\*** offline.
 
 Full acceptance criteria and dependency edges for every `FLC-*` ID live in the machine-readable task index (and the offline planning pack used as source). Agents implement **one task ID per PR** where practical; do not mark peer-cache capability Done without code + tests + residual honesty.
 

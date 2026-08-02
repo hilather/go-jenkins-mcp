@@ -153,23 +153,31 @@ func (c Config) Active() bool {
 }
 
 // PeerIOEnabled reports whether peer payload I/O is permitted (read or full).
-// Note: true does NOT mean peer-read HTTP handlers are registered (FLC-030 residual).
+// True still requires mode=read|full and operator wiring; default mode remains off.
 func (c Config) PeerIOEnabled() bool {
 	return c.Mode == ModeRead || c.Mode == ModeFull
 }
 
-// PeerReadHandlersLive is always false until FLC-030 wires owner-directed handlers.
-// Mode=read/full alone must not be treated as peer-read Done.
+// PeerReadHandlersLive is true when owner-directed manifest lookup + bounded
+// decoded read library paths exist (FLC-030/031). Default mode remains off;
+// near-cache admission is library Done* (FLC-033) with Enabled=false default;
+// full multi-node / production GO residual (FLC-073); admin SPA page residual
+// (FLC-063 BFF+MCP Done*).
 func (c Config) PeerReadHandlersLive() bool {
-	return false
+	return true
 }
 
 // StatusSummary is a secret-free operator/status map (FLC-060).
+// FLC-061 process-local metrics residual; FLC-062 nests fleet_cache_status (member
+// health / doctor inputs). Multi-member *metrics* aggregation remains process-local.
+// Admin BFF+MCP fleet-cache ops are FLC-063 Done* (SPA page residual only).
 func (c Config) StatusSummary() map[string]any {
 	mode := c.Mode
 	if mode == "" {
 		mode = ModeOff
 	}
+	// Empty-member status snapshot (callers with roster wire BuildFleetCacheStatus).
+	fc := BuildFleetCacheStatus(c, nil, nil, StatusOptions{})
 	return map[string]any{
 		"mode":                    string(mode),
 		"active":                  c.Active(),
@@ -178,8 +186,14 @@ func (c Config) StatusSummary() map[string]any {
 		"max_peer_lookups":        c.MaxPeerLookups,
 		"origin_fallback":         c.OriginFallback,
 		"peer_read_handlers_live": c.PeerReadHandlersLive(),
-		"peer_read_handlers":      "planned", // FLC-030…032 residual
-		"residual":                "fleet-cache config only; peer-read/fill/RF2 not Done; HOST-008 multi-pod HA cancelled",
+		"peer_read_handlers":      "lookup_decoded_read_frame_export", // FLC-022/030/031; FLC-032 coordinator
+		// Process-local metrics only (FLC-061); multi-member metrics aggregation residual.
+		"aggregation":        MetricsAggregationResidual,
+		"fleet_cache_status": fc.Map(), // FLC-062 local vs replica health + residuals
+		// Residual honesty: FLC epic library + offline gates Done*; live multi-host / SPA / mTLS residual;
+		// object classes default-deny with console_log only (FLC-082); mode default off; HOST-008 cancelled.
+		"residual":       "default mode off; FLC epic Done* offline (073 gate pack + 082 class deny); " + ObjectClassStatusResidual() + "; SPA residual; live multi-host residual; mTLS residual; HOST-008 cancelled",
+		"object_classes": ObjectClassStatusResidual(),
 	}
 }
 

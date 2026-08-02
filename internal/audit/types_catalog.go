@@ -33,6 +33,7 @@ func KnownEventTypes() []string {
 		TypeAdminSupportBundle,
 		TypeAdminSubjectInvalid,
 		TypeAdminConsentPurge,
+		TypeAdminFleetCachePurge,
 		// Mutation manager (internal/mutation) uses these type strings.
 		"mutation_preview",
 		"mutation_confirm",

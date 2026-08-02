@@ -75,7 +75,9 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [caching.md](caching.md) | Unified cache operator guide (L1/L2, quota, gateway file caches, deploy matrix) |
 | [fleet/multi-fleet-rollout.md](fleet/multi-fleet-rollout.md) | Multi-fleet gitops (shared signed policy, independent members) |
 | [fleet/fleet-mcp-ops.md](fleet/fleet-mcp-ops.md) | Opt-in `fleet_*` MCP + any-node fan-out (mesh-token; not multi-pod HA) |
-| [fleet/shared-cache-current-state.md](fleet/shared-cache-current-state.md) | FLC-000 audit: peer sealed-log cache **Planned** (not Done) |
+| [fleet/shared-cache-operator.md](fleet/shared-cache-operator.md) | **FLC-064 operator canary runbook** (modes, roster, lab, rollback; not production GO) |
+| [fleet/shared-cache-current-state.md](fleet/shared-cache-current-state.md) | FLC capability honesty matrix (mode default off; FLC-073 offline Done\* / live multi-host residual) |
+| [fleet/shared-cache-release-gate.md](fleet/shared-cache-release-gate.md) | FLC-073 offline release gate pack |
 | [fleet/shared-cache-architecture.md](fleet/shared-cache-architecture.md) | FLC target architecture + **MVP A** peer-read cut line |
 | [adr/0016-fleet-p2p-shared-cache.md](adr/0016-fleet-p2p-shared-cache.md) | ADR: pure-Go peer cache coordination; HOST-008 still cancelled |
 | [fleet/shared-cache-slos.md](fleet/shared-cache-slos.md) | FLC-002 budgets; default mode off; origin fallback |

@@ -35,6 +35,7 @@ export const AUDIT_TYPE_OPTIONS = [
   { value: "admin_support_bundle", label: "admin_support_bundle" },
   { value: "admin_subject_invalidate", label: "admin_subject_invalidate" },
   { value: "admin_consent_purge", label: "admin_consent_purge" },
+  { value: "admin_fleet_cache_purge", label: "admin_fleet_cache_purge" },
   { value: "mutation_preview", label: "mutation_preview" },
   { value: "mutation_confirm", label: "mutation_confirm" },
   { value: "mutation_deny", label: "mutation_deny" },
@@ -58,6 +59,8 @@ export const AUDIT_TYPE_HINTS: Record<string, string> = {
   admin_support_bundle: "Support bundle create (non-preview).",
   admin_subject_invalidate: "Gateway subject principal-cache invalidate.",
   admin_consent_purge: "Progressive consent metadata purge.",
+  admin_fleet_cache_purge:
+    "Fleet-cache object purge (confirm=PURGE). Process-local; locator as TargetHash only.",
   mutation_preview: "Mutation preview issued a confirmation token (token never logged).",
   mutation_confirm: "Mutation confirmed and executed.",
   mutation_deny: "Mutation preview/confirm denied.",

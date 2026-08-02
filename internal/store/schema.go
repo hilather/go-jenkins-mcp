@@ -15,7 +15,9 @@ package store
 // v8: FLC-020 pure-Zstd wire size/hash on chunks (zstd_size / zstd_sha256) for
 //
 //	peer export without treating local AEAD ciphertext as portable
-const CurrentSchemaVersion = 8
+//
+// v9: FLC-023 fleet object mapping + import journal (locator/manifest → local gen)
+const CurrentSchemaVersion = 9
 
 // MetaDBFile is the SQLite filename under a profile data directory.
 const MetaDBFile = "metadata.sqlite"
@@ -229,6 +231,55 @@ CREATE INDEX IF NOT EXISTS idx_survey_summary_cache_created
 -- On-disk envelope remains compressed_size / frame_sha256 (may be AEAD).
 ALTER TABLE chunks ADD COLUMN zstd_size INTEGER;
 ALTER TABLE chunks ADD COLUMN zstd_sha256 TEXT;
+`,
+	},
+	{
+		Version: 9,
+		SQL: `
+-- FLC-023: canonical fleet locator → local sealed generation mapping.
+-- Only status=committed rows are eligible for owner lookup/read hits.
+-- Partial imports stay in fleet_import_journal until Commit (invisible to mapping).
+CREATE TABLE IF NOT EXISTS fleet_object_mapping (
+	locator_hash TEXT NOT NULL PRIMARY KEY,
+	manifest_digest TEXT NOT NULL,
+	fleet_id TEXT NOT NULL,
+	cache_pool TEXT NOT NULL,
+	controller_id TEXT NOT NULL,
+	generation_id INTEGER NOT NULL REFERENCES log_generations(id) ON DELETE CASCADE,
+	status TEXT NOT NULL DEFAULT 'committed',
+	created_at TEXT NOT NULL,
+	CHECK (status IN ('committed', 'quarantined')),
+	CHECK (length(locator_hash) = 64),
+	CHECK (length(manifest_digest) = 64)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fleet_object_mapping_digest
+	ON fleet_object_mapping(manifest_digest);
+
+CREATE INDEX IF NOT EXISTS idx_fleet_object_mapping_gen
+	ON fleet_object_mapping(generation_id);
+
+-- Import journal: incomplete imports are never lookup-eligible.
+CREATE TABLE IF NOT EXISTS fleet_import_journal (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	locator_hash TEXT NOT NULL,
+	manifest_digest TEXT NOT NULL,
+	status TEXT NOT NULL,
+	generation_id INTEGER REFERENCES log_generations(id) ON DELETE SET NULL,
+	frames_done INTEGER NOT NULL DEFAULT 0,
+	frames_total INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	CHECK (status IN ('staging', 'committed', 'aborted')),
+	CHECK (length(locator_hash) = 64),
+	CHECK (length(manifest_digest) = 64)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fleet_import_journal_locator
+	ON fleet_import_journal(locator_hash, status);
+
+CREATE INDEX IF NOT EXISTS idx_fleet_import_journal_status
+	ON fleet_import_journal(status);
 `,
 	},
 }
