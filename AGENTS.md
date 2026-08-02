@@ -182,6 +182,35 @@ The repository root **[`README.md`](README.md)** is the **public landing page**
 
 **Pre-done check:** *Would a new operator reading only `README.md` get the correct release, phase, and feature picture?* If no → update it.
 
+### User-facing and mutation docs currency (agents)
+
+Pilots and agents discover enablement from **user/agent docs**, not only CLI `--help`. Stale “mutations always off” or “no way to enable” guidance is a **documentation bug**.
+
+| Surface | SoT for operators / agents |
+|---------|----------------------------|
+| **User guide** | [`docs/user/README.md`](docs/user/README.md) — install, Cursor RO entry, **§ Mutations (disabled by default; `--allow-mutations`)** |
+| **Agent usage** | [`docs/agent-usage.md`](docs/agent-usage.md) — triage + **§ Mutations and confirmation** (ListTools gate; no invent tokens) |
+| **Tool contracts** | [`docs/tool-contracts.md`](docs/tool-contracts.md) — register/RO vs mutate inventory |
+| **Power-user backlog** | [`docs/mutations/power-user-backlog.md`](docs/mutations/power-user-backlog.md) — MUT-ADMIN residual honesty |
+| **Root README** | High-level opt-in line + quick-start example when flag/default changes |
+
+| When to update (same change) | Examples |
+|------------------------------|----------|
+| New mutation tool or MUT class | tool-contracts table + agent-usage power-user table + user §7 tool list |
+| Change default or flag/env for enablement | user §7 enablement table + agent-usage default wording + README |
+| Preview/confirm / cooldown / rate behavior | agent-usage steps + tool-contracts MUT-001 notes |
+| Stronger RO / force interaction | user + agent-usage + doctor `mutations` check docs in observability if operator-facing |
+| Residual “not exposed” writes | power-user backlog + user “Not exposed” list (no silent capability claims) |
+
+| Rules | Detail |
+|-------|--------|
+| **Default remains off** | Do not document or code mutations as on for pilot Cursor without `--allow-mutations` and without stronger RO. |
+| **Flag is the gate** | Document `--allow-mutations` (and that `--read-only` / `force_read_only` still win for execute). |
+| **Agent honesty** | Agents must not probe missing mutate tools or invent `confirmation_token`s. |
+| **Cross-link** | Prefer one enablement story in user guide; agent-usage and tool-contracts link to it. |
+
+**Pre-done check:** *Can a pilot user enable mutations safely from the user guide alone, and can an agent see they are off by default?* If no → update the docs above.
+
 ---
 
 ## Non-negotiable: keep the admin console current
