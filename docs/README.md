@@ -89,7 +89,7 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [jenkins-mcp-enterprise-agent-todo.md](jenkins-mcp-enterprise-agent-todo.md) | Task backlog SoT |
 | [jenkins-mcp-enterprise-task-index.json](jenkins-mcp-enterprise-task-index.json) | Machine-readable task graph |
 | [README-jenkins-mcp-enterprise-planning-pack.md](README-jenkins-mcp-enterprise-planning-pack.md) | Planning pack overview |
-| [phase0-progress.md](phase0-progress.md) · [phase1-progress.md](phase1-progress.md) · [phase2-progress.md](phase2-progress.md) | Wave boards |
+| [phase0-progress.md](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/phase0-progress.md) · [phase1](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/phase1-progress.md) · [phase2](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/phase2-progress.md) | **Historical** phase/wave boards (Done\* archaeology; not landing-page status) |
 | [release/gates.md](release/gates.md) | REL-002 gates |
 | [release/update.md](release/update.md) | Update-check contract |
 | [adr/README.md](adr/README.md) | Architecture decision records |

@@ -30,20 +30,15 @@
 
 | | |
 | --- | --- |
-| **Release** | [**v0.5.0**](https://github.com/hilather/go-jenkins-mcp/releases/tag/v0.5.0) · [notes](docs/release/RELEASE_NOTES_v0.5.0.md) |
+| **Release** | [**v0.5.0**](https://github.com/hilather/go-jenkins-mcp/releases/tag/v0.5.0) · [notes](https://github.com/hilather/go-jenkins-mcp/blob/v0.5.0/docs/release/RELEASE_NOTES_v0.5.0.md) |
 | **Go** | **1.25.x** (see `go.mod`) · MCP Go SDK **v1.7.0** (ADR 0006) |
-| **Phase** | **Phase 0–2 foundations Done\*** · enterprise **Tier A free-lab / offline Done\*** (gateway modes A/B/C free labs) · **site** Entra / multi-pod production pin = operator residual |
-| **Posture** | Pilot-ready **RO stdio** path · mutations and admin MCP **opt-in** · residual honesty required |
+| **Posture** | Pilot-ready **RO stdio** · mutations / admin MCP / fleet MCP **opt-in** · residual honesty required |
+| **Free-lab / offline** | Gateway modes A/B/C + SAML lab Done\* — [free-lab-qualification](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/gateway/free-lab-qualification.md) |
+| **Site residual** | Entra / production jwt-auth-filter / AgentCore pin = **operator-owned** — [live-pin-blockers](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/gateway/live-pin-blockers.md) |
 
-| Phase | Progress SoT | Summary |
-| --- | --- | --- |
-| **0** — foundation | [phase0-progress.md](docs/phase0-progress.md) | Package layout, CI, ADRs, MCP SDK pin, perf baseline |
-| **1** — core controls | [phase1-progress.md](docs/phase1-progress.md) | Auth, policy, budgets, logs, store, search, audit, observability |
-| **2** — waves 6–53 | [phase2-progress.md](docs/phase2-progress.md) | List privacy, mutations, resilience, operator caps, fleet pin lite |
-| **Host / gateway** | [server-team-hosted.md](docs/roadmap/server-team-hosted.md) · [JWT/OAuth critical path](docs/roadmap/server-tier-a-jwt-oauth-critical-path.md) | Mode A vault, Mode B JWT RS, Mode C 3LO/OBO offline + mock labs |
-| **Admin / MCP-OPS** | [mcp-ops-parity.md](docs/admin/mcp-ops-parity.md) · [admin README](docs/admin/README.md) | BFF + SPA + opt-in `admin_*` tools |
+**Still open / SoT:** [agent backlog](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/jenkins-mcp-enterprise-agent-todo.md) · [product residuals](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/security/product-residuals.md) · multi-fleet [rollout](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/fleet/multi-fleet-rollout.md) · admin [MCP-OPS](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/admin/mcp-ops-parity.md)
 
-Incomplete work: [`docs/jenkins-mcp-enterprise-agent-todo.md`](docs/jenkins-mcp-enterprise-agent-todo.md) · residuals: [product residuals](docs/security/product-residuals.md).
+Historical phase/wave boards (Done\* archaeology, not the product status surface): [phase0](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/phase0-progress.md) · [phase1](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/phase1-progress.md) · [phase2](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/phase2-progress.md) · [docs index](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/README.md).
 
 ---
 

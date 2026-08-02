@@ -196,18 +196,19 @@ The repository root **[`README.md`](README.md)** is the **public landing page**
 
 | When to update `README.md` in the same change | Examples |
 |-----------------------------------------------|----------|
-| **Release / version tag** | Status table **Release** row → new tag + link `docs/release/RELEASE_NOTES_vX.Y.Z.md` |
-| **Phase / milestone claims** | Status **Phase** row + phase progress links (`docs/phase*-progress.md`, roadmap) when a phase board materially advances |
-| **New first-class feature surfaces** | Features list: tools, admin console, `admin_*` MCP, gateway modes, POL-006, audit settings, packaging |
-| **Build / quick start / dev entrypoints** | Go version, `make` targets, Cursor MCP snippet, opt-in flags (`--enable-admin-mcp`, `--allow-mutations`) |
-| **Security / residual honesty** | RO default, residuals (live Entra, multi-pod), platform matrix (no Windows claims) |
+| **Release / version tag** | Status table **Release** row → new tag + absolute link to `docs/release/RELEASE_NOTES_vX.Y.Z.md` |
+| **Posture / free-lab / site residual** | Status rows for RO pilot, free-lab Done\*, site Entra pin residual — **not** historical phase 0–2 wave boards |
+| **New first-class feature surfaces** | Features list: tools, admin console, `admin_*` / `fleet_*` MCP, gateway modes, POL-006, audit settings, packaging |
+| **Build / quick start / dev entrypoints** | Go version, `make` targets, Cursor MCP snippet, opt-in flags (`--enable-admin-mcp`, `--fleet-mode`, `--allow-mutations`) |
+| **Security / residual honesty** | RO default, residuals (live Entra, multi-pod cancelled), platform matrix (no Windows claims) |
 | **Architecture map** | Package layout / mermaid when process surfaces change (gateway, adminops, labs) |
 
 | Practice | Detail |
 |----------|--------|
-| **High level only** | README is highlights + links — not a dump of every backlog ID. Deep SoT stays in `docs/`. |
-| **Match residual honesty** | Product free-lab Done\* ≠ site production pin. Do not mark **site** Entra / multi-pod production Done without **site** evidence; keep free labs ([free-lab-qualification.md](docs/gateway/free-lab-qualification.md)). |
+| **High level only** | README is **current** product + links — not phase archaeology. Phase/wave boards live under `docs/phase*-progress.md` (link once if needed; do not re-table Phase 0–2 on the landing page). |
+| **Match residual honesty** | Product free-lab Done\* ≠ site production pin. Do not mark **site** Entra / multi-pod production Done without **site** evidence; keep free labs ([free-lab-qualification](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/gateway/free-lab-qualification.md)). Multi-pod HA is **cancelled** (multi-fleet). |
 | **Release notes ≠ README** | `RELEASE_NOTES_v*` hold full version deltas; README Status + Features summarize **current** product. |
+| **Absolute links** | Cross-doc links use absolute HTTPS URLs (see *Absolute links* above). |
 | **Same change preferred** | Feature PR updates README when the landing page would otherwise be stale (version, phase, feature bullets). |
 | **Skip only for pure internals** | Comment-only, pure test renames, or docs deep-links that do not change landing claims may skip README. |
 
