@@ -7,7 +7,7 @@
 
 ## Context
 
-The seed (`simonfxr/go-jenkins-mcp`) concentrated most behavior in a single large `main.go`. Enterprise work needs independent testability for Jenkins HTTP, MCP tool contracts, auth/keyring, policy, storage, and diagnostics without circular imports or tools issuing raw HTTP.
+The early import concentrated most behavior in a single large `main.go` (historical; see `docs/HISTORY.md`). Enterprise work needs independent testability for Jenkins HTTP, MCP tool contracts, auth/keyring, policy, storage, and diagnostics without circular imports or tools issuing raw HTTP.
 
 ## Decision
 

@@ -13,9 +13,9 @@ The MCP must call Jenkins as a **person**, not a shared robot account. Shipping 
 
 1. **First supported local credential path:** personal Jenkins **username + API token**, stored in the OS secret store.  
 2. **Tier-1 secret store:** **Linux Secret Service** (`libsecret` / `org.freedesktop.secrets`) on Rocky/Ubuntu Desktop sessions; document headless/server unlock patterns (session keyring, or policy-controlled protected file only when Secret Service is unavailable).  
-3. **Tier-2:** macOS Keychain only when the optional macOS build is exercised.  
+3. **Out of scope:** macOS Keychain and Windows Credential Manager (platform matrix ADR 0008 — Linux only).  
 4. **Forbidden as primary enterprise examples:** long-lived secrets in argv, plaintext config in git, shared/generic service accounts for interactive users.  
-5. Environment-variable secrets (e.g. seed `JENKINS_MCP_AUTH`) are **compatibility / transition only**, policy-controlled, and omitted from enterprise happy-path docs.  
+5. Environment-variable secrets for serve bootstrap are **removed** (fail closed); non-interactive `JENKINS_MCP_LOGIN_*` plant is tests/automation only.  
 6. **Later:** Authorization Code + PKCE against external IdP (Entra); refresh material in keyring; access tokens in memory; Jenkins as resource server. External IdP does not replace the need for per-user identity.
 
 ## Alternatives

@@ -15,10 +15,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry/fleet"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry/fleet"
 )
 
 func testPaths(t *testing.T) config.Paths {

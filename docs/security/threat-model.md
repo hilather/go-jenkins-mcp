@@ -147,7 +147,7 @@ Both modes share: fail-closed intersection authz, RO kill switch, deny-only MCP 
 1. Interactive use is **per-person** Jenkins identity only.  
 2. Effective access = Jenkins allow **∧** global read-only **∧** MCP policy **∧** budgets.  
 3. Stock Jenkins is a **resource server** candidate, not an OAuth authorization server (ADR 0003).  
-4. Tier-1 clients are Rocky Linux + Ubuntu; macOS best-effort.  
+4. Tier-1 clients are Rocky Linux + Ubuntu only; macOS and Windows out of scope.  
 5. Policy overlays are restricting only; production fleets use signed Ed25519
    envelopes (MGR-001) with last-good anti-rollback.  
 6. Build logs/artifacts may contain secrets and hostile content.  

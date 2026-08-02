@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/tools"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/tools"
 )
 
 func TestEnforceBudgetEmpty(t *testing.T) {

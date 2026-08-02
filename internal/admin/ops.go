@@ -11,15 +11,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
-	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
-	"github.com/simonfxr/go-jenkins-mcp/internal/store"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/keyring"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/store"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry"
 )
 
 // EvictConfirmToken is the exact body.confirm string required for destructive
@@ -512,7 +512,7 @@ func (s *server) cacheSummaryFor(ctx context.Context, p *profile.Profile) cacheS
 	}
 	defer func() { _ = meta.Close() }()
 
-	qm, err := store.NewQuotaManager(meta, dataDir, store.QuotaConfig{})
+	qm, err := openQuotaManagerResolved(meta, dataDir)
 	if err != nil {
 		return cacheSummary{
 			ProfileID: id,
@@ -555,7 +555,7 @@ func (s *server) runEvictPlan(ctx context.Context, p *profile.Profile, targetByt
 	}
 	defer func() { _ = meta.Close() }()
 
-	qm, err := store.NewQuotaManager(meta, dataDir, store.QuotaConfig{})
+	qm, err := openQuotaManagerResolved(meta, dataDir)
 	if err != nil {
 		return evictionPlanResponse{}, err
 	}
@@ -598,7 +598,7 @@ func (s *server) runEvictApply(ctx context.Context, p *profile.Profile, targetBy
 	}
 	defer func() { _ = meta.Close() }()
 
-	qm, err := store.NewQuotaManager(meta, dataDir, store.QuotaConfig{})
+	qm, err := openQuotaManagerResolved(meta, dataDir)
 	if err != nil {
 		return evictionPlanResponse{}, err
 	}
@@ -672,6 +672,19 @@ func (s *server) runEvictApply(ctx context.Context, p *profile.Profile, targetBy
 
 // openProfileMeta opens an existing profile data root + meta store.
 // Fail closed: does not create a data directory when missing.
+// openQuotaManagerResolved builds QuotaManager with operator-resolved total/low-disk
+// (env defaults; same helper as serve offline CLI — ARC-007 cache tunables).
+func openQuotaManagerResolved(meta *store.Meta, dataDir string) (*store.QuotaManager, error) {
+	cfg, err := store.ResolveQuotaConfigFromEnviron(
+		os.Getenv(store.EnvCacheTotalQuotaBytes),
+		os.Getenv(store.EnvCacheLowDiskBytes),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return store.NewQuotaManager(meta, dataDir, cfg)
+}
+
 func (s *server) openProfileMeta(p *profile.Profile) (*store.Meta, string, error) {
 	if p == nil {
 		return nil, "", apperr.New(apperr.CodeInvalidArgument, "profile is required")

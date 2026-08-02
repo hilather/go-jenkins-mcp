@@ -3,7 +3,7 @@ package admin_test
 import (
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/admin"
+	"github.com/hilather/go-jenkins-mcp/internal/admin"
 )
 
 func TestParseRole(t *testing.T) {

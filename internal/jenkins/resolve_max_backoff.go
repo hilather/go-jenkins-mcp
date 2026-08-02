@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // ResolveMaxBackoff resolves the GET/HEAD exponential backoff / Retry-After cap

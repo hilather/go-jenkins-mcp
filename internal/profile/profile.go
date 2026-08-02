@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
 )
 
 // CurrentConfigVersion is the schema version written by this binary.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // MetaStats is a non-secret summary of the L1 metadata store (OPS-001 / ARC-007).

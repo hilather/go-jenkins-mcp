@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // Archive inventory bounds (ART-002). Inventory-only — never extract or execute.

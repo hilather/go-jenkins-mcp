@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 )
 
 // Opt-in residual pin against testdata/oauth-lab (HOST-012…015).

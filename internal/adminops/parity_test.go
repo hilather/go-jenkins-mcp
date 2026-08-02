@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/adminops"
+	"github.com/hilather/go-jenkins-mcp/internal/adminops"
 )
 
 // MCP-OPS-006: every catalog tool has a stable admin_* name; residuals documented.

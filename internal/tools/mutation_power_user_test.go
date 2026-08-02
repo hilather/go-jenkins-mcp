@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
-	"github.com/simonfxr/go-jenkins-mcp/internal/mutation"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
-	"github.com/simonfxr/go-jenkins-mcp/internal/tools"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/mutation"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/tools"
 )
 
 func powerUserRegister(t *testing.T, f *mutFixture, mp *policy.MutationPolicy) (*mcp.ClientSession, *mcp.ServerSession, *mutation.Manager, context.Context, context.CancelFunc) {

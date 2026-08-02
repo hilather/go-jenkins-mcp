@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry/fleet"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry/fleet"
 )
 
 // runTelemetry dispatches `jenkins-mcp telemetry <status|show>`.

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 	"golang.org/x/sync/singleflight"
 )
 

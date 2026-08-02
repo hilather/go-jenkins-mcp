@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/mcpserver"
+	"github.com/hilather/go-jenkins-mcp/internal/mcpserver"
 )
 
 // HOST-001 mid-session rebind residual offline expand:

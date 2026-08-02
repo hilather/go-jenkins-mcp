@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // Delay category codes (stable, model-visible). Differentiated by fixture (DIAG-007).

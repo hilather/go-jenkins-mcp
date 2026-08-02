@@ -170,7 +170,7 @@ a multi-tenant end-user control plane or SaaS console.
 | Multi-user MCP gateway pin | **Foundation residual:** `JENKINS_MCP_GATEWAY_MULTI_USER=1` enables per-request Obtain + SubjectKey from HTTP Caller (not a production GO flip). Policy.Subject still process-bound; live Entra residual. Shared admin token ≠ per-user MCP subject. Admin never surfaces tokens/subjects raw. Health/vault expose secret-free `multiUserEnabled` + residual note when env is set. |
 | Gateway Ready / HA | Admin health always reports `gatewayReady: false` and `haMultiReplica: false` (admin BFF ≠ MCP serve `/readyz`; HOST-008 single-replica Tier A). Always `multiPodVaultResidual: true` (multi-pod vault residual honesty — not multi-replica Done). When multi-user env is set, `sessionAffinityRecommended: true` (kustomize sticky scaffold honesty only). When `KUBERNETES_SERVICE_HOST` is set, `kubernetesEnvDetected: true` and `residual` includes multi-pod checklist (sticky, shared vault, rate, Obtain cache). **SPA Overview** surfaces `multiPodVaultResidual` / `kubernetesEnvDetected` on Health and Gateway vault cards, and shows the multi-pod residual checklist card when `kubernetesEnvDetected` is true (secret-free; never multi-replica Done from k8s env alone). Live Ready is on the gateway serve process only. Doctor parity: `gateway_status.multi_pod_vault_residual` — see [gateway/deployment.md §9](../gateway/deployment.md). |
 | CSP under reverse-proxy | Prefer **same-origin** (SPA + `/admin/v1`). Do not strip CSP; re-apply if TLS terminates upstream. |
-| HA admin | Not multi-replica admin plane (HOST-008 Tier B). See [gateway/deployment.md §9](../gateway/deployment.md). |
+| HA admin | Multi-pod admin plane **out of scope** (HOST-008 cancelled; multi-fleet). See [gateway/deployment.md §9](../gateway/deployment.md). |
 
 See also [`api-v1.md`](api-v1.md) health + gateway/vault + gateway/residual-status; [`../gateway/deployment.md`](../gateway/deployment.md); [`../gateway/live-pin-blockers.md`](../gateway/live-pin-blockers.md).
 ---
@@ -216,6 +216,8 @@ Optional deps: Secret Service for tokens; `fuse3` only for future optional L2 mo
 
 ## 2. XDG paths and cache dirs
 
+**How caching works and how to size it per deploy type** (Cursor stdio, multi-fleet, local Docker, gateway, multi-user HTTP): **[caching.md](../caching.md)**. Deep CLI: [arc/eviction.md](../arc/eviction.md), [arc/cache-pins.md](../arc/cache-pins.md), [security/cache-encryption.md](../security/cache-encryption.md).
+
 | Kind | Default |
 |------|---------|
 | Config / profiles | `$XDG_CONFIG_HOME/jenkins-mcp` → `~/.config/jenkins-mcp` |
@@ -234,7 +236,7 @@ Per-profile data root holds:
 
 **Secrets never live under these trees** — API tokens are in Linux Secret Service.
 
-Default total physical quota order of magnitude: **10 GiB** (`store.DefaultTotalQuotaBytes`). See packaging cache notes (ARC-007/008).
+Default total physical quota: **10 GiB** (`store.DefaultTotalQuotaBytes`); operator-tunable via `--cache-total-quota-bytes` / `JENKINS_MCP_CACHE_TOTAL_QUOTA_BYTES` (and low-disk twin). Admin BFF/MCP use the same env resolve as serve. See [caching.md](../caching.md) and packaging cache notes (ARC-007/008).
 
 ---
 
@@ -272,7 +274,7 @@ Optional JSON under the policy path can **only restrict** privileges further (fo
 | `deny_branch_names` | Call-time deny for `branch_name` / seed `branch` (Wave 37). Also omits matching `kind=branch` / `matrix_child` rows from `jenkins_list_jobs` (`policy_filtered` / `policy_omitted_count`; Wave 39 collect+filter+repaginate; Wave 40 policy-bound page tokens). Same pattern language as jobs |
 | `max_result_bytes` | Bounds hard MCP result budget; mid-serve raise/lower ≤ serve-bootstrap ceiling (Wave 31) |
 | `max_tools_per_minute` | Per-subject tools/min cap under `--gateway` (HOST-006); **lower only** vs env bootstrap; omitted = no change. Admin SPA Policy editor (policy_admin / `policy_write`) can set on plain pilot overlays. |
-| `max_tools_burst` | Per-subject burst cap (HOST-006 LowerRate; lower only). Admin SPA Policy editor (same as rate/min). Process-local; multi-replica residual (HOST-008). |
+| `max_tools_burst` | Per-subject burst cap (HOST-006 LowerRate; lower only). Admin SPA Policy editor (same as rate/min). Process-local; multi-pod shared rate out of scope (HOST-008 cancelled). |
 
 **Signed fleets (MGR-001):** prefer `overlay.bundle.json` + Ed25519 public keys under `policy/trusted_keys/` (or `JENKINS_MCP_POLICY_TRUSTED_KEYS`). Invalid, expired, untrusted, or rolled-back bundles fail closed. Operator guide: [`../security/policy-bundles.md`](../security/policy-bundles.md).
 
@@ -414,7 +416,7 @@ jenkins-mcp gateway qualify --offline
 | `JENKINS_MCP_GATEWAY_JENKINS_PRINCIPAL` | Optional; must match whoAmI when set |
 | `JENKINS_MCP_READ_ONLY` | Force read-only |
 
-**Never place in env or compose files:** API tokens, client secrets, refresh tokens, private keys, cookies, `JENKINS_MCP_AUTH`, or seed-style `-auth`. Full tables: [`../gateway/deployment.md`](../gateway/deployment.md).
+**Never place in env or compose files:** API tokens, client secrets, refresh tokens, private keys, cookies, `JENKINS_MCP_AUTH`, or retired `-auth`. Full tables: [`../gateway/deployment.md`](../gateway/deployment.md).
 
 ---
 
@@ -486,6 +488,8 @@ jenkins-mcp serve --profile corp --read-only --identity-reverify-ttl=30s
 or cache miss. See [`../auth-architecture.md`](../auth-architecture.md).
 
 ### Serve-time cache maintenance
+
+Full matrix (quota, pins, gateway caches, Docker share models): **[caching.md](../caching.md)**.
 
 When `jenkins-mcp serve --profile <id>` opens the store:
 

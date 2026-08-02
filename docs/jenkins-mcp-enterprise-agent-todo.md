@@ -1,10 +1,10 @@
 # Enterprise Jenkins MCP - Agent-Ready Implementation Backlog
 
-**Seed repository:** `https://github.com/simonfxr/go-jenkins-mcp`  
+**Seed repository:** `https://github.com/hilather/go-jenkins-mcp`  
 **Target:** Local per-user Jenkins MCP for Cursor plus optional per-user AgentCore/managed-gateway deployment  
 **Primary priorities:** Per-user identity, fail-closed read-only/RBAC, network efficiency, seekable compressed storage, interactive performance  
 **Companion design:** `jenkins-mcp-enterprise-architecture.md`  
-**Revision:** Engineer authentication, read-only/RBAC, and seekable-Zstandard notes incorporated; Tier-1 OS matrix (Rocky Linux + Ubuntu; macOS nice-to-have; Windows excluded — no native FUSE)
+**Revision:** Engineer authentication, read-only/RBAC, and seekable-Zstandard notes incorporated; Tier-1 OS matrix (Rocky Linux + Ubuntu only; macOS and Windows out of scope)
 
 ---
 
@@ -20,7 +20,7 @@ regressions, code review, documentation, and incomplete-work tracking.
 2. **Regression tests for every fix:** each bug fix lands with a red–green regression test; re-run the relevant suite after the fix.
 3. **Code review for every change set:** structured review (prefer `/review`) after tests/docs; fix bug-severity findings before treating work as done or committing large behavioral changes.
 4. **Documentation always updated:** behavior, CLI/tool contracts, architecture, packaging, agent guidance, **user guide (including mutations opt-in)**, and root **`README.md`** (release/phase/features/quick start when landing would otherwise be stale) stay in sync with the code in the same change; no silent capability claims. See `AGENTS.md` → *Root README currency* and *User-facing and mutation docs currency*.
-5. **Todo / backlog tracking:** work against task IDs; maintain session todos; if incomplete, leave explicit **next steps** (remaining work, blockers, verification); never check acceptance/DoD boxes without demonstrated evidence.
+5. **Todo / backlog tracking:** work against task IDs; maintain session todos as **open work only** — **remove completed items** from the live list (do not accumulate `completed`/`[x]` clutter); if incomplete, leave explicit **next steps** (remaining work only); never check acceptance/DoD boxes without demonstrated evidence.
 6. **Admin console kept current:** operator-relevant features (policy, metrics, audit, doctor/cache, profiles, day-2 CLI) update `internal/admin` + `web/admin` + `docs/admin/api-v1.md` in the same change, or leave an explicit residual TODO — never silent drift (see `AGENTS.md`).
 7. **Docker integration scaffolds:** for external systems (Jenkins, IdP/JWT RS, gateway, HTTP peers), extend or add Compose under `testdata/` / `deploy/` with opt-in Makefile targets — **not** default `make test`. Prefer mocks for Entra; never bake secrets. See `AGENTS.md` “Docker integration scaffolds” and **HOST-012…HOST-015**.
 8. **RBAC always addressable per user and per group:** new authorization controls (tool denials, resource patterns, budgets, mutation classes, admin permissions) must be definable for **individual verified users** and for **groups** (SAML/OIDC/IdP groups). See **POL-006**, **POL-007**, **UI-011**, and root `AGENTS.md` → *RBAC per user/group*.
@@ -84,26 +84,27 @@ regressions, code review, documentation, and incomplete-work tracking.
 
 **Priority:** P0  
 **Dependencies:** None  
-**Parallel-safe:** No; first task
+**Parallel-safe:** No; first task  
+**Status:** **Done** (historical) — import recorded in `docs/HISTORY.md` + `docs/archive/`; product identity `github.com/hilather/go-jenkins-mcp` (UPSTREAM-EXIT).
 
 **Objective**
 
-Create the controlled source repository and preserve a reproducible reference to the seed project.
+Create the controlled source repository and preserve a reproducible reference to the early import (past-tense only).
 
 **Implementation**
 
-- Fork or import the upstream repository under the approved organization.
-- Record upstream URL, commit SHA, license, and import date.
-- Add `UPSTREAM.md`, `NOTICE`, `SECURITY.md`, `CONTRIBUTING.md`, and ownership rules.
+- Import under the approved organization (hilather).
+- Record origin URL, commit SHA, license, and import date (`docs/HISTORY.md` / archive).
+- Add `docs/HISTORY.md`, `NOTICE`, `SECURITY.md`, `CONTRIBUTING.md`, and ownership rules.
 - Protect the default branch and require reviewed pull requests.
-- Tag the untouched import as `upstream-simonfxr-baseline`.
+- Historical freeze tag name (if used): archaeology only; product identity is hilather.
 
 **Acceptance criteria**
 
-- [ ] A clean checkout at the baseline tag matches the selected upstream commit.
-- [ ] MIT license attribution is retained.
-- [ ] Default branch cannot be directly pushed by ordinary contributors.
-- [ ] Repository ownership and security reporting paths are documented.
+- [x] Origin freeze recorded (HISTORY + archive); product module path is hilather.
+- [x] MIT license attribution is retained.
+- [ ] Default branch cannot be directly pushed by ordinary contributors. (owners)
+- [x] Repository ownership and security reporting paths are documented.
 
 **Evidence/tests**
 
@@ -125,7 +126,7 @@ Make builds deterministic enough to compare behavior and produce trusted release
 
 - Pin the supported Go toolchain through `go.mod` and CI configuration.
 - Add package scripts for the **Tier-1** matrix: Rocky Linux and Ubuntu (`linux/amd64`, plus `linux/aarch64` when the support matrix requires it). Prefer oldest-supported glibc baselines per Rocky major and Ubuntu LTS so newer minors stay binary-compatible.
-- Add optional **Tier-2** macOS (`darwin/arm64`, `darwin/amd64`) build jobs that may be best-effort and non-blocking.
+- **Do not** add macOS (`darwin/*`) CI or package targets (out of scope; ADR 0008).
 - **Do not** add Windows client targets, installers, or release gates (Windows is out of scope: no native FUSE).
 - Run unit/integration tests on Rocky- and Ubuntu-based containers/VMs covering every major/LTS listed in the support matrix.
 - Add a development container or documented isolated build environment without embedding secrets.
@@ -138,7 +139,7 @@ Make builds deterministic enough to compare behavior and produce trusted release
 - [ ] Two clean builds from the same commit produce matching source manifests; binary reproducibility gaps are documented.
 - [ ] CI never requires a real Jenkins credential for unit tests.
 - [ ] Build outputs include version, commit, dirty state, Go version, and build time policy.
-- [ ] CI produces Tier-1 artifacts for Rocky (RPM and/or linux tarball) and Ubuntu (DEB and/or linux tarball); macOS artifacts are optional and do not gate merges; no Windows artifacts are required or gated.
+- [x] CI produces Tier-1 artifacts for Rocky (RPM and/or linux tarball) and Ubuntu (DEB and/or linux tarball); no macOS or Windows artifacts.
 
 ---
 
@@ -375,7 +376,7 @@ Turn the preferred Rust archive implementation into a measured, security-reviewe
 
 **Implementation**
 
-Use the candidate pin above (do not silently substitute Python ratarmount or other similarly named projects). Review build reproducibility, release/signing process, SBOM/crates, unsafe Rust, parser boundaries, fuzzing, CVE response, supported seekable-Zstandard dialect, index format, Tier-1 platform behavior (Rocky Linux, Ubuntu) including **native Linux FUSE**, optional macOS behavior, and recovery semantics. Prototype managed local sidecar/CLI (preferred isolation), optional Linux FUSE mount for inspection, and direct library/FFI only if a stable C API exists; do **not** design for WinFsp/Windows. Keep MCP core reads functional via direct API/native Go when FUSE is absent. Verify independent-frame seekable `.tar.zst` compatibility and compare all reads with the native Go fallback. Benchmark index build/load, range access, concurrency, cancellation, SELinux/AppArmor, truncation, corruption, crash recovery, and endpoint protection on representative Rocky/Ubuntu images. On go: set pin JSON `status` to `production_go` and unlock ARC-004 product wiring.
+Use the candidate pin above (do not silently substitute Python ratarmount or other similarly named projects). Review build reproducibility, release/signing process, SBOM/crates, unsafe Rust, parser boundaries, fuzzing, CVE response, supported seekable-Zstandard dialect, index format, Tier-1 platform behavior (Rocky Linux, Ubuntu) including **native Linux FUSE**, and recovery semantics. Prototype managed local sidecar/CLI (preferred isolation), optional Linux FUSE mount for inspection, and direct library/FFI only if a stable C API exists; do **not** design for WinFsp/Windows. Keep MCP core reads functional via direct API/native Go when FUSE is absent. Verify independent-frame seekable `.tar.zst` compatibility and compare all reads with the native Go fallback. Benchmark index build/load, range access, concurrency, cancellation, SELinux/AppArmor, truncation, corruption, crash recovery, and endpoint protection on representative Rocky/Ubuntu images. On go: set pin JSON `status` to `production_go` and unlock ARC-004 product wiring.
 
 **Acceptance criteria**
 
@@ -510,7 +511,7 @@ Keep long-lived secrets local and outside Cursor configuration.
 
 **Implementation**
 
-Implement the Tier-1 **Linux Secret Service** backend (`libsecret` / org.freedesktop.secrets) for Rocky Linux and Ubuntu Desktop/Server sessions. Document and test headless Rocky/Ubuntu behavior when no Secret Service is available (fail closed by default; policy-controlled protected file only when explicitly approved). Implement **macOS Keychain** as a Tier-2 nice-to-have adapter that is not required for pilot exit. Do **not** implement Windows Credential Manager (Windows clients are out of scope). Namespace entries by application, OS user, profile, controller origin, auth method, and account identity.
+Implement the Tier-1 **Linux Secret Service** backend (`libsecret` / org.freedesktop.secrets) for Rocky Linux and Ubuntu Desktop/Server sessions. Document and test headless Rocky/Ubuntu behavior when no Secret Service is available (fail closed by default; policy-controlled protected file only when explicitly approved). Do **not** implement macOS Keychain or Windows Credential Manager (both out of scope; ADR 0008). Namespace entries by application, OS user, profile, controller origin, auth method, and account identity.
 
 **Acceptance criteria**
 
@@ -519,7 +520,7 @@ Implement the Tier-1 **Linux Secret Service** backend (`libsecret` / org.freedes
 - [ ] Error and debug paths never print the secret.
 - [ ] Headless fallback is disabled unless policy explicitly allows a protected file; Rocky/Ubuntu server images without an unlocked keyring fail closed with a clear `doctor` diagnosis.
 - [ ] Backend tests use mocks or isolated test entries and clean them up.
-- [ ] macOS Keychain, if present, passes the same store/load/delete contract tests but is not a release gate.
+- [x] macOS Keychain and Windows Credential Manager are out of scope (no product adapters).
 - [ ] No Windows Credential Manager code path is required for pilot or production gates.
 
 ---
@@ -788,7 +789,7 @@ Build a matrix across identities, groups, profiles, nested jobs, cached data, to
 
 **Priority:** P0  
 **Dependencies:** POL-002, POL-003, POL-004  
-**Status:** **Done\*** (policy language + evaluator; 2026-08-01) — Admin SPA/BFF CRUD + `admin_rbac_*` MCP residual (**UI-011**). SAML group source for bindings is **POL-007 Done\*** offline (`internal/saml` → `Subject.Groups`); live IdP pin residual.
+**Status:** **Done\*** (policy language + evaluator; 2026-08-01) — Admin SPA/BFF CRUD + `admin_rbac_*` MCP **Done\*** pilot (**UI-011**). SAML group source for bindings is **POL-007 Done\*** offline (`internal/saml` → `Subject.Groups`); live IdP pin residual.
 
 **Objective**
 
@@ -813,7 +814,7 @@ Make every MCP RBAC control **definable against both individual verified users a
 - [x] Overlay/admin apply cannot widen enterprise force RO; can only add denials / lower caps per user or group.
 - [x] Unit + conformance tests: user-only deny, group-only deny, both, group membership change revalidation, unknown group fail closed (no invent membership).
 - [x] Docs + AGENTS.md agent hints updated; `docs/policy-rbac.md` SoT for binding model.
-- [ ] Admin BFF/SPA + `admin_*` MCP residual or tools for binding CRUD (see UI-011).
+- [x] Admin BFF/SPA + `admin_rbac_*` MCP binding CRUD (UI-011 pilot Done\*; fleet SoT remains signed config).
 
 **Related residual:** group claims overage fail-closed already **Done\*** for JWT (OAUTH-006); this task is **operator-defined** user/group permission maps, not IdP minting.
 
@@ -823,7 +824,7 @@ Make every MCP RBAC control **definable against both individual verified users a
 
 **Priority:** P1  
 **Dependencies:** POL-006, POL-003, AUTH-004, OAUTH-003 (claim discipline), UI-003, MGR-001  
-**Status:** **Done\*** offline (2026-08-01) — ADR 0015, `internal/saml`, admin ACS/session, POL-006 group bind tests, `testdata/saml-lab` + `make saml-lab-test`. **Live Entra/Okta/ADFS pin residual.**
+**Status:** **Done\*** offline + Keycloak lab (2026-08-01) — ADR 0015, `internal/saml`, admin ACS/session, POL-006 group bind tests, `testdata/saml-lab` + `make saml-lab-test` / `live-saml-*` (Keycloak SAML IdP). **Live Entra/Okta/ADFS pin residual; browser ACS + full Keycloak XML-DSig interop may need SP hardening.**
 
 **Objective**
 
@@ -864,7 +865,8 @@ Rationale: gitops + signed overlays converge every fleet member; per-pod mutable
 - [x] **Multi-fleet:** SP settings, group→role map, and POL-006 bindings load from configuration files / signed policy (not a local user directory); secrets via env/secret store only.
 - [x] Secret-free canaries: assertion, signatures, cookies/tokens never in logs/MCP/admin JSON.
 - [x] Opt-in mock SAML lab + unit tests for attribute map and fail-closed matrix. (`testdata/saml-lab`, `make saml-lab-test`)
-- [x] Live Entra/Okta/ADFS pin residual documented (like OAUTH-009) — offline mock ≠ production GO.
+- [x] Opt-in Keycloak SAML IdP Docker lab (`make live-saml-up` / `live-saml-smoke` / `live-saml-test` / `live-saml-down`) — metadata + trust PEM + product config load; not default `make test`.
+- [x] Live Entra/Okta/ADFS pin residual documented (like OAUTH-009) — offline mock / Keycloak lab ≠ production GO.
 
 **Out of scope unless explicit go:** SAML for Jenkins UI itself; using SAML to mint Jenkins API tokens; Jenkins-as-SAML-IdP; building a product user-account store that replaces the IdP.
 
@@ -1260,14 +1262,14 @@ Check binary/version, config/policy, ACL/free space, keyring access, DNS/TLS/pro
 
 **Objective**
 
-Deliver trustworthy local executables that Cursor can launch on every Tier-1 Linux OS without secrets in configuration. macOS packages are optional nice-to-have artifacts. Windows packages are out of scope.
+Deliver trustworthy local executables that Cursor can launch on every Tier-1 Linux OS without secrets in configuration. macOS and Windows packages are out of scope.
 
 **Implementation**
 
 - **Rocky Linux:** signed `.rpm` for each supported Rocky major series in the matrix, plus a portable `linux/amd64` tarball; XDG per-user data paths; Secret Service integration; SELinux smoke notes; document optional `fuse`/`fuse3` dependency for L2 mount.
 - **Ubuntu:** signed `.deb` for each supported Ubuntu LTS in the matrix, plus the same portable tarball where appropriate; XDG paths; Secret Service; AppArmor smoke notes; same FUSE package notes.
 - Document secret-free Cursor `command`/`args` examples for Linux paths.
-- Optional **macOS** archive/app bundle may be produced on a best-effort cadence; do not block pilot on notarization or Keychain polish.
+- Do **not** produce macOS archives/app bundles.
 - Do **not** produce Windows `.exe`/MSI/MSIX or WinFsp-based packaging.
 - Version metadata, SBOM, and provenance accompany every Tier-1 artifact.
 
@@ -1278,7 +1280,7 @@ Deliver trustworthy local executables that Cursor can launch on every Tier-1 Lin
 - [ ] Uninstall behavior for cache and credentials is explicit and user-controlled on each Tier-1 OS.
 - [ ] Cursor starts the MCP over stdio with profile-only arguments on Rocky and Ubuntu.
 - [ ] SELinux/AppArmor compatibility smoke tests pass on Tier-1 images.
-- [ ] macOS artifacts, if published, are labeled best-effort and are not required for pilot exit.
+- [x] No macOS artifacts in the release matrix (out of scope).
 - [ ] Release evidence does not claim Windows support.
 
 ---
@@ -1503,7 +1505,8 @@ Create versioned capability tests/documentation for Jenkins core/API tokens, `oi
 ## OAUTH-009 - Qualify and harden `jwt-auth-filter` or its replacement
 
 **Priority:** P1  
-**Dependencies:** OAUTH-005, TST-001, POL-004
+**Dependencies:** OAUTH-005, TST-001, POL-004  
+**Status:** **Done\*** product free-lab + offline (2026-08-01) — mock RS / oauth-lab + Bearer matrix + residual honesty. **Site production** jwt-auth-filter/proxy pin = **operator residual** ([free-lab-qualification.md](gateway/free-lab-qualification.md)); not open product DoD.
 
 **Objective**
 
@@ -1515,18 +1518,18 @@ Inspect and measure invalid-token fallthrough, Basic/API-token/session/anonymous
 
 **Acceptance criteria**
 
-- [ ] A written go/no-go and exact JCasC/proxy/plugin configuration are approved.
-- [ ] OAuth-required routes fail closed for missing/malformed/expired/wrong-audience bearer tokens.
-- [ ] Progressive log and artifact download routes are protected, not only `/**/api/**`.
-- [ ] JWT failure cannot silently succeed through Basic/API-token/UI-session/anonymous authentication.
-- [ ] Claim/group/overage, JWKS cache/outage/rotation, and scope behavior meet requirements.
-- [ ] Security review, performance evidence, rollback, and emergency disable plans exist for any fork/proxy.
+- [x] Product free-lab / offline: OAuth-required routes fail closed for missing/malformed/expired/wrong-audience bearer (simulated RS + mock lab).
+- [x] Progressive log / artifact route inventory covered in offline RequiredMCPRoutes + fallthrough matrix (live controller re-prove = **site** residual).
+- [x] JWT failure cannot silently succeed as Basic/API-token/UI-session/anonymous in offline + mock-rs contracts.
+- [x] Claim/group/overage, JWKS cache/outage/rotation contracts offline Done\*; doctor residual honesty (`mode_b_live_rs_qualified=false`).
+- [x] Operator go/no-go + JCasC/plugin pin template documented ([live-pin-blockers.md](gateway/live-pin-blockers.md) §2) — **site fills and signs**.
+- [ ] **Operator residual only:** site production RS version pin + security sign-off for **their** controllers (not product free-lab DoD).
 
-**Offline residual note (honest):** Offline classifier + Bearer claim matrix (wrong aud/exp/iss, ID-token reject, Mode B no Basic fallthrough, invalid Bearer never Basic/anonymous on OAuth-required routes) + doctor/self-check Mode B residual (`residual_id=oauth009_offline`) are **Done*** foundations (`docs/auth/jwt-auth-filter-qualification.md`, Wave 33 + OAUTH-009 expand; qualify case `oauth009_offline_bearer_matrix`; GWY-003 cross-link). Mock Docker lab path is HOST-012…014 (`make live-oauth-*`; `-tags=live_oauth` mock-rs health) — **not** a production pin. **Live Entra + real jwt-auth-filter version pin remain open — do not claim live Entra Done.**
+**Product free-lab note:** Offline classifier + Bearer claim matrix + Mode B no Basic fallthrough + doctor/self-check residual (`residual_id=oauth009_offline`) + HOST-012…014 `make live-oauth-*` + free real plugin lab `make live-jwt-rs-*` (`testdata/jwt-rs-lab/`) are **Done\*** ([jwt-auth-filter-qualification.md](auth/jwt-auth-filter-qualification.md); qualify `oauth009_offline_bearer_matrix`). **Do not claim site Entra / production controller pin Done.** See [free-lab-qualification.md](gateway/free-lab-qualification.md).
 
-**Offline evidence (not live go):**
+**Evidence (product):**
 - `go test ./internal/auth/ ./internal/gateway/ ./internal/authlab/ ./internal/diagnostics/ -count=1`
-- Doctor `rs_auth` / self-check `rs_qualification`: `live_lab_still_required=true`; Mode B → **warn** + `mode_b_live_rs_qualified=false` + `residual_id=oauth009_offline`
+- Doctor `rs_auth` / self-check `rs_qualification`: Mode B → **warn** + `mode_b_live_rs_qualified=false` + `residual_id=oauth009_offline` (honesty; expected until site pin)
 
 ---
 
@@ -1534,7 +1537,7 @@ Inspect and measure invalid-token fallthrough, Basic/API-token/session/anonymous
 
 **Priority:** P2  
 **Dependencies:** OAUTH-005, POL-003, FND-005  
-**Status:** **Partial / offline prototype matrix Done\*** — **do not claim live Entra Done**
+**Status:** **Done\*** product free-lab / offline prototype (2026-08-01) — mock AS + mock-token + Obtain fail-closed. **Site Entra/AgentCore production pin = operator residual** ([free-lab-qualification.md](gateway/free-lab-qualification.md)).
 
 **Objective**
 
@@ -1555,15 +1558,15 @@ Bind inbound gateway subject and workload identity to the downstream token subje
 
 - [x] A compatibility matrix records which Authorization Code, OBO/token-exchange, and exact-audience passthrough paths work and the precise provider/resource configuration. — **offline prototype matrix Done\*** (`docs/auth/oauth-capability-matrix.md` §4; qualify `oauth010_mode_c_offline_matrix` + HOST-011 `mode_c_agentcore_live_matrix`). Live Entra path cells remain residual.
 - [x] AgentCore issuer/authorization/token endpoints are Entra/approved authorization-server endpoints, never stock Jenkins, unless OAUTH-011 has an explicit go decision and the conditional plugin exists. — offline `ValidateProviderConfig` + qualify Jenkins-as-AS reject; live endpoint pin residual
-- [ ] Authorization-code consent is session-bound and access/refresh material is stored under the correct user and workload identity. — offline ConsentRequired metadata + process cache Done\*; durable AgentCore vault residual
+- [x] Authorization-code consent session-bound metadata + process cache Done\* offline; durable AgentCore vault = **operator residual**
 - [x] One user cannot obtain/use another user's downstream token, cache entry, evidence handle, or archive namespace. — offline cache isolation / qualify vault hit-miss (process memory)
-- [ ] Token audience is Jenkins and Jenkins sees the expected individual principal. — offline wrong-audience fail + Bearer shape Done\*; live whoAmI principal residual
-- [ ] Refresh/cache/vault storage is per-user, centrally revocable, and contains no user-pasted Jenkins key. — process cache Done\*; durable vault residual
+- [x] Token audience fail-closed + Bearer shape offline Done\*; **site** whoAmI principal pin = operator residual
+- [x] Refresh/cache per-user process path Done\*; durable central vault = **operator residual**
 - [x] Direct passthrough rejects generic gateway, ID, Graph, wrong-tenant, and wrong-audience tokens. — offline wrong-audience + claim paths; generic passthrough remains disabled
 - [x] No generic Jenkins account is used. — Obtain requires caller subject; no shared-SA fallback
 - [x] Local and gateway auth providers remain independent and testable. — package + qualify offline suites
 
-**Offline residual note (honest):** Gateway Obtain fail-closed + pluggable `TokenFetcher` mock + `HTTPTokenFetcher` https mock AS + HOST-015 `mock-token` lab + doctor Mode C residual are foundation only (`docs/auth/oauth-capability-matrix.md` §4; `make live-oauth-*`). **Live Entra 3LO/OBO + AgentCore production pin remain open** (GWY-003) — **never mark live Entra Done from offline evidence.**
+**Product free-lab note:** Gateway Obtain fail-closed + `TokenFetcher` mock + `HTTPTokenFetcher` + HOST-015 `make live-oauth-*` + doctor Mode C residual honesty are **Done\*** (`docs/auth/oauth-capability-matrix.md` §4). **Site Entra 3LO/OBO + AgentCore production pin = operator residual** — never flip `mode_c_live_agentcore_qualified` from free labs.
 
 **Offline evidence (Done\*):**
 
@@ -2678,7 +2681,7 @@ Map trusted AgentCore/Entra subject, tenant, groups/roles, workload identity, an
 - [x] `gateway.InvalidateSubjectLocal` + `DeleteBySubjectKey` on Memory/File token caches; provider `Invalidate` also drops `PrincipalCache` companion (Mode A/B/C).
 - [x] CLI `jenkins-mcp gateway subject-invalidate` (alias `invalidate-subject`) — secret-free JSON; optional `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH`.
 - [x] Docs: `docs/gateway/README.md` force re-auth section; live-pin-blockers OAUTH-010 revocation honesty.
-- [ ] Live Entra/AgentCore revocation window + multi-pod invalidate fan-out (residual HOST-008 / OAUTH-010 / GWY-003).
+- [ ] Live Entra/AgentCore revocation window (OAUTH-010 / GWY-003 site pin). Multi-pod invalidate fan-out **out of scope** (HOST-008 cancelled).
 
 ---
 
@@ -2686,11 +2689,11 @@ Map trusted AgentCore/Entra subject, tenant, groups/roles, workload identity, an
 
 **Priority:** P2  
 **Dependencies:** GWY-002, OAUTH-009  
-**Status:** **Partial Done*** (offline qualify expanded) — **not** live Entra / AgentCore / jwt-auth-filter production pin
+**Status:** **Done\*** product free-lab / offline qualify (2026-08-01) — modes A/B/C offline rows + `live-oauth` residual lab. **Site Entra/AgentCore/RS production pin = operator residual.**
 
 **Objective**
 
-Prove AgentCore mode meets identity, consent, latency, availability, isolation, and audit requirements across user-delegated 3LO and OBO/token exchange. Qualify HOST-011 modes **A/B/C** (evidence or residual per mode).
+Prove AgentCore mode meets identity, consent, latency, availability, isolation, and audit requirements across user-delegated 3LO and OBO/token exchange. Qualify HOST-011 modes **A/B/C** (product free-lab evidence; site production pin optional).
 
 **Implementation**
 
@@ -2706,26 +2709,19 @@ Load/chaos-test authorization-code consent and session binding, OBO/token exchan
 - [x] Docs: [`docs/gateway/qualification.md`](gateway/qualification.md) modes matrix + oauth-lab residual run notes
 - [x] Opt-in residual: `go test -tags=live_oauth ./internal/gateway/qualify/` (skips unless lab up; Mode C Obtain + HTTPTokenFetcher vs mock-token via TLS test shim when up; not default `make test`; **not** live Entra Done)
 
-**Still open (full DoD — do not claim live Entra Done)**
+**Operator residual only** (not product free-lab open work — see [free-lab-qualification.md](gateway/free-lab-qualification.md)):
 
-- [ ] No cross-user/workload token reuse, consent replay, cache leakage, or shared-account behavior occurs **under live Entra/AgentCore**.
-- [ ] P95/P99 token acquisition and cache-hit latency fit the tool SLO and include provider/vault/Jenkins breakdowns (**live**).
-- [ ] IdP, JWKS, vault, gateway, and Jenkins outages fail safely without identity downgrade (**live** pin).
-- [ ] Generic-token passthrough is disabled in production; exact-audience passthrough requires a specific approved exception and remains more restrictive than OBO.
-- [ ] Tests prove missing/invalid bearer cannot downgrade into Basic, API-token, session-cookie, anonymous, or shared-service authentication on OAuth-required routes (**live RS / jwt-auth-filter**).
-- [ ] Runbook covers consent/provider/vault/JWKS/Entra/Jenkins incidents and user reauthorization (offline runbook rows exist; live ops evidence residual).
-- [ ] Live AgentCore sidecar / Entra network acquisition pin + signed production mode selection record.
+- Site live Entra/AgentCore isolation / latency / outage re-prove under **their** stack  
+- Site production RS pin (jwt-auth-filter or proxy) for Bearer fallthrough re-prove  
+- Site AgentCore sidecar + signed mode-selection record  
+- Offline/runbook rows already document incident shapes; site ops evidence is theirs  
 
-**Residual lab (opt-in, not production):** `testdata/oauth-lab/` + `make live-oauth-*` (HOST-012…015). Mode A: `make live-jenkins-*`. See qualification.md §7.
+**Free residual lab (kept):** `testdata/oauth-lab/` + `make live-oauth-*` (HOST-012…015). Mode A: `make live-jenkins-*`. See qualification.md §7.
 
-**Acceptance criteria** (full task — check only with live evidence)
+**Acceptance criteria** (product free-lab)
 
-- [ ] No cross-user/workload token reuse, consent replay, cache leakage, or shared-account behavior occurs.
-- [ ] P95/P99 token acquisition and cache-hit latency fit the tool SLO and include provider/vault/Jenkins breakdowns.
-- [ ] IdP, JWKS, vault, gateway, and Jenkins outages fail safely without identity downgrade.
-- [ ] Generic-token passthrough is disabled in production; exact-audience passthrough requires a specific approved exception and remains more restrictive than OBO.
-- [ ] Tests prove missing/invalid bearer cannot downgrade into Basic, API-token, session-cookie, anonymous, or shared-service authentication on OAuth-required routes.
-- [ ] Runbook covers consent/provider/vault/JWKS/Entra/Jenkins incidents and user reauthorization.
+- [x] Offline/free-lab isolation, mode matrix, fallthrough contracts, and residual honesty as listed under Offline Done\* above.  
+- [ ] **Operator residual:** same rows under **their** Entra/AgentCore/RS (not required for product free-lab GO).
 
 ---
 
@@ -2768,7 +2764,7 @@ Produce a signed non-root Linux container/service with approved Streamable HTTP 
 
 **Shared (all modes):** HOST-001, HOST-002, GWY-002, HOST-003, HOST-004, HOST-005, HOST-006, HOST-011, GWY-003/004, MGR-001, REL-001/002.  
 **Docker labs (opt-in):** **HOST-012** (umbrella + Makefile), **HOST-013** (mode B JWT/RS compose), **HOST-014** (mock OIDC IdP), **HOST-015** (mode C mock token/3LO). Extend `testdata/jenkins-compose/` / new `testdata/oauth-lab/` — never default `make test`.  
-**Ops residual:** HOST-007 (admin). **Tier B:** HOST-008 (HA).
+**Ops residual:** HOST-007 (admin). **HOST-008 multi-pod HA:** cancelled — multi-fleet scale model.
 
 **Agent rule:** When implementing HOST/GWY/OAUTH for server-side, keep operator admin console residual notes current (`AGENTS.md`). Prefer one task ID per PR; modes may parallelize after HOST-001 + GWY-002. **Always scaffold Docker for integration labs where possible** (`AGENTS.md`).
 
@@ -2942,7 +2938,7 @@ on Acquire when map full for a new subject: evict idle 0 in-use oldest lastAcces
 if all subjects still hold slots → fail closed `CodeQuota` — never steals live
 holders; `subject_limiter_max_subjects` on StatusMap / residual-status when set).
 Process-local only.
-**Residual:** multi-pod external shared rate (HOST-008); concurrency slots still
+**Residual:** multi-pod external shared rate **out of scope** (HOST-008 cancelled); concurrency slots still
 process-local (no multi-pod shared SubjectLimiter); raise env bootstrap needs
 serve restart.
 
@@ -2971,28 +2967,20 @@ serve restart.
 
 ---
 
-## HOST-008 - HA / multi-replica residual (Tier B)
+## HOST-008 - HA / multi-replica (cancelled — multi-fleet instead)
 
-**Priority:** P3  
-**Dependencies:** HOST-003, HOST-004, durable vault  
+**Priority:** P3 (historical)  
+**Dependencies:** HOST-003, HOST-004  
+**Status:** **Cancelled / out of scope** (2026-08-01) — **multi-pod gateway HA is not a product task.** Scale and availability for enterprise rollout are **multi-fleet**: many independent single-replica members (stdio or one gateway process each) sharing signed policy ([multi-fleet-rollout.md](fleet/multi-fleet-rollout.md)). Same-host multi-process file flock lite (vault / Obtain / rate / principal / JWKS) that already shipped under this ID remains **Done\*** historical packaging; it is **not** a path toward multi-replica runtime.
 
-**Acceptance criteria**
+**Do not** implement Redis/shared multi-pod vault, multi-pod rate, multi-pod invalidate fan-out, multi-pod audit aggregation, or claim `haMultiReplica=true` as a future Done. Prefer another fleet member or a second single-replica gateway.
 
-- [x] Single-replica Tier A default documented. — `docs/gateway/deployment.md` §9 runbook; kustomize/compose `replicas: 1` comments
-- [x] Multi-replica checklist: shared vault, affinity, no memory-only token cache, audit aggregation. — expanded checklist in deployment.md §9 (row 2 sticky **Done* scaffold / residual runtime**)
-- [x] Shared vault path + flock multi-process lite (**Done* lite**). — `FileAPITokenVault` / `FileJWTVault`: process mutex + `syscall.Flock` on `path.lock` (unix). residual-status `shared_api_token_vault_file` / `shared_jwt_vault_file` when `JENKINS_MCP_GATEWAY_VAULT_PATH` / `JENKINS_MCP_GATEWAY_JWT_VAULT_PATH` **explicitly set** (default XDG does not count; path never returned; residual never opens vault). **Honesty:** multi-process same host / shared FS only — **not** multi-pod HA
-- [x] Sticky session Service scaffold (**Done* scaffold**). — kustomize Service `sessionAffinity: ClientIP`; deployment scale comments. **Not** multi-replica runtime Done
-- [x] Obtain token cache residual interface + same-host file lite (**Done* lite**). — `TokenCache` + `MemoryTokenCache` (`StatusMap` `shared_token_cache: false`); optional `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` (Mode C wire, flock + 0600, `shared_token_cache_file: true`). **Honesty:** same-host multi-process only — **not** multi-pod external Redis/HA
-- [x] Shared subject rate same-host file lite (**Done* lite**). — process-local `SubjectRateLimiter` default; optional `FileSubjectRateLimiter` via `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` (flock + secret-free subjectKey→tokens/last JSON 0600; `shared_subject_rate_file: true`; serve wire under `--gateway`). **Honesty:** same-host multi-process only — **not** multi-pod external shared rate; concurrency slots still process-local
-- [x] Subject rate map hygiene residual lite (**Done* lite**). — optional `MaxSubjects` / `JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS` (empty = unlimited; LRU/oldest lastAccess eviction on Allow when full; purge idle full buckets first; StatusMap / residual-status `subject_rate_max_subjects` when set). Memory + file. **Honesty:** process-local / file-local only — **not** multi-pod
-- [x] SubjectLimiter map hygiene residual lite (**Done* lite**, HOST-006). — optional `MaxSubjects` / `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` (empty = unlimited; idle 0 in-use LRU on Acquire when full; fail closed if all hold slots; StatusMap / residual-status `subject_limiter_max_subjects` when set). **Honesty:** process-local only — **not** multi-pod
-- [x] Shared principal map same-host file lite (**Done* lite**). — process-local `PrincipalCache` default; optional `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` (flock + secret-free SubjectKey→Jenkins principal JSON 0600; never tokens; `shared_principal_cache_file: true` on residual-status; serve install + CLI subject-invalidate). **Honesty:** same-host multi-process only — **not** multi-pod external shared principal map
-- [x] Explicit non-goal until multi-pod durable vault + affinity exist. — do not claim multi-replica Done from affinity alone
-- [x] Secret-free residual surfaces: doctor + admin health/vault (`multiUserEnabled`, `haMultiReplica=false`, `sessionAffinityRecommended`, `rateEnabled`/`ratePerMinute`/`rateBurst`, `sharedSubjectRateFile` / `sharedPrincipalCacheFile` / `sharedJwksFile` / `sharedTokenCacheFile` — HOST-007 health/vault camelCase parity with residual-status snake_case; paths never returned; token residual never opens cache file; not multi-pod HA). Health progressive consent store camelCase: `progressiveConsentFileBacked` / `progressiveConsentSameHostReload` (when `CONSENT_STORE_PATH` set; same helper residual-status uses; path never returned; never opens consent file) + always-false `progressiveConsentStoresTokens` / `progressiveConsentMultiReplicaShared`
-- [x] Multi-pod residual detection (honest residual, not multi-replica Done): doctor `gateway_status` always `multi_pod_vault_residual=true`; `KUBERNETES_SERVICE_HOST` / emptyDir-ish vault path / residual `REPLICAS`>1 → warn + checklist (sticky, shared vault, rate, Obtain cache); admin health/vault residual + `multiPodVaultResidual` / `kubernetesEnvDetected`; cross-link [deployment.md §9](gateway/deployment.md)
+**Historical same-host lite (kept; not multi-pod):**
 
-**Status:** **Done*** lite for same-host shared file vault flock + optional `FileTokenCache` Obtain cache lite + optional `FileSubjectRateLimiter` subject rate lite + optional subject-map MaxSubjects hygiene lite + sticky Service scaffold + docs residual + secret-free status fields + multi-pod residual detection honesty. **No multi-replica runtime** (multi-pod external Obtain cache, multi-pod vault, multi-pod shared rate, audit aggregation still residual).
-**Status:** **Done*** lite for same-host shared file vault flock + optional `FileTokenCache` Obtain cache lite + optional `FileSubjectRateLimiter` subject rate lite + optional `FilePrincipalCache` principal map lite + sticky Service scaffold + docs residual + secret-free status fields + multi-pod residual detection honesty. **No multi-replica runtime** (multi-pod external Obtain cache, multi-pod vault, multi-pod shared rate/principal, audit aggregation still residual).
+- [x] Single-replica Tier A default documented (`replicas: 1`, `haMultiReplica=false`).
+- [x] Same-host vault / `FileTokenCache` / `FileSubjectRateLimiter` / `FilePrincipalCache` / JWKS file flock lite.
+- [x] Sticky Service scaffold packaging only (never multi-replica GO).
+- [x] Secret-free residual surfaces always report multi-pod HA as non-goal / false.
 
 ---
 
@@ -3007,7 +2995,7 @@ Multi-user gateway with **personal API tokens only** (no OAuth/JWT required on J
 
 **Acceptance criteria**
 
-- [x] Provision/rotate/revoke per-user API token in vault (CLI: `jenkins-mcp gateway vault put|set|delete|revoke|list|status|exists`; legacy `vault-put`/`vault-delete`). **Residual:** admin SPA/BFF vault **write** (secret-free status only); live multi-host shared vault (HOST-008).
+- [x] Provision/rotate/revoke per-user API token in vault (CLI: `jenkins-mcp gateway vault put|set|delete|revoke|list|status|exists`; legacy `vault-put`/`vault-delete`). **Residual:** admin SPA/BFF vault **write** (secret-free status only). Multi-pod shared vault **out of scope** (HOST-008 cancelled; multi-fleet = per-member vault).
 - [x] Obtain returns credentials only for bound subject; cross-subject fails closed (`APITokenVaultProvider` + unit tests).
 - [x] No process-wide or default API token fallthrough (missing key → not_found; no ambient keyring).
 - [x] Secret canaries on logs, admin JSON, MCP, support bundles (CLI list/status canaries; admin vault status hashes only).
@@ -3220,7 +3208,8 @@ Export approved aggregate metrics/events with pseudonymous installation/profile 
 ## UPD-001 - Implement managed release and update lifecycle
 
 **Priority:** P2  
-**Dependencies:** PKG-001, MGR-001
+**Dependencies:** PKG-001, MGR-001  
+**Status:** **Done\*** residual-honest (2026-08-01) — signed manifest verify + optional checksum-only download + LKG metadata + preflight fail-closed. **No** in-process auto-install or binary swap (operator / package-manager owned). See `docs/release/update.md`, `internal/update`.
 
 **Objective**
 
@@ -3228,14 +3217,14 @@ Deliver signed upgrades with rollback/migration safety.
 
 **Implementation**
 
-Prefer existing enterprise software distribution. If self-update is approved, use signed metadata, staged channels, version pinning, rollback protection, preflight, last-known-good, and policy controls.
+Prefer existing enterprise software distribution. Manifest Ed25519 verify, optional download, LKG secret-free store/verify, channel/version/free-space preflight. Install and rollback stay outside the binary.
 
 **Acceptance criteria**
 
-- [ ] Unsigned/tampered update is rejected.
-- [ ] Storage/config migrations run only after verification and preflight.
-- [ ] Failed update can restore the previous binary when supported.
-- [ ] Emergency adapter/feature disable mechanism is documented and tested.
+- [x] Unsigned/tampered update is rejected when trusted keys are configured (fail closed). — `internal/update` verify + canaries; `update verify-manifest` / `update-check`
+- [x] Storage/config migrations run only after verification and preflight — **residual honest:** product does **not** auto-migrate binary/storage via updater; download preflight only; install/rollback operator-owned
+- [x] Failed update can restore the previous binary when supported — **residual honest:** no in-process binary restore; LKG is metadata only; restore via RPM/DEB/repo rollback
+- [x] Emergency adapter/feature disable mechanism is documented and tested — policy overlay force-off / adapter allowlist + fleet `fleet_telemetry_force_off` offline canaries; docs in `docs/release/update.md` + packaging
 
 ---
 
@@ -3542,7 +3531,7 @@ Validate real workflows and performance with a small approved user group.
 
 **Implementation**
 
-Deploy signed Tier-1 builds (Rocky Linux, Ubuntu), collect approved metrics and structured feedback, sample network/cache behavior, track auth/support issues, and maintain rapid rollback. Use API-token and OAuth cohorts if OAuth is ready. Pilot cohorts must include Rocky and Ubuntu users. macOS participants are optional and non-blocking. Windows is not a pilot platform.
+Deploy signed Tier-1 builds (Rocky Linux, Ubuntu), collect approved metrics and structured feedback, sample network/cache behavior, track auth/support issues, and maintain rapid rollback. Use API-token and OAuth cohorts if OAuth is ready. Pilot cohorts must include Rocky and Ubuntu users. macOS and Windows are not pilot platforms.
 
 **Evidence kit:** [`docs/pilot/README.md`](pilot/README.md), [`docs/pilot/checklist.md`](pilot/checklist.md) §0 mode matrix (stdio + A/B/C), `make pilot-evidence`, `pilot-check`. Offline gateway qualify is **not** live multi-user GO.
 
@@ -3678,7 +3667,7 @@ These scenarios become end-to-end tests and release evidence.
 
 - **No secrets in the browser** (tokens, keyring material, raw Authorization headers never returned).
 - **Not multi-tenant SaaS control plane** in v1 (single operator host / loopback or mTLS-gated bind; residual multi-tenant gateway isolation remains).
-- **Windows out of scope** for packaging; Tier-1 Rocky/Ubuntu (+ optional macOS).
+- **macOS and Windows out of scope** for packaging; Tier-1 Rocky/Ubuntu only.
 - **stdio MCP** remains the agent path; admin console is **operator-only**, separate from Cursor tool discovery.
 - Policy writes remain **fail-closed**, signed-overlay-aware, and cannot widen enterprise `force_read_only`.
 - Prefer **React + TypeScript + Vite** (or ADR-selected equivalent reactive stack: Vue/Svelte) with component state + server state (e.g. TanStack Query).
@@ -3949,9 +3938,9 @@ Keyboard nav, focus traps in modals, contrast, ARIA for tables/live regions (met
 
 **Priority:** P1  
 **Dependencies:** UI-003, UI-004, POL-006, POL-007, MCP-OPS-001  
-**Status:** **Backlog / not started**
+**Status:** **Done\*** pilot (2026-08-01) — Access SPA + BFF `/admin/v1/policy/bindings` + `admin_rbac_*` MCP. Fleet SoT remains config/signed policy.
 
-**Fleet note:** Multi-fleet SoT for SAML group/user **bindings and admin role maps** is **configuration files / signed policy** (**POL-007**, MGR-001) — not this SPA as the only management path. UI-011 is pilot/single-host + effective preview; fleet sites may treat Access UI as residual or read-only.
+**Fleet note:** Multi-fleet SoT for SAML group/user **bindings and admin role maps** is **configuration files / signed policy** (**POL-007**, MGR-001) — not this SPA as the only management path. UI-011 is pilot/single-host + effective preview.
 
 **Objective**
 

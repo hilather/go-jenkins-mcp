@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/adapter"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/adapter"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // checkAdapterAllowlistProvenanceLite is Wave 44–45 / INT-001 residual honesty:

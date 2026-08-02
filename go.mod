@@ -1,4 +1,4 @@
-module github.com/simonfxr/go-jenkins-mcp
+module github.com/hilather/go-jenkins-mcp
 
 go 1.25.12
 

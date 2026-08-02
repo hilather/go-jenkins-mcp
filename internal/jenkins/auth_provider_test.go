@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 const liveAuthCanary = "LIVE_AUTH_CANARY_token_must_not_appear_in_errors_xyz789ABC"

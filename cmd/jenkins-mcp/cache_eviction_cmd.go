@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
-	"github.com/simonfxr/go-jenkins-mcp/internal/store"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/store"
 )
 
 // ARC-007 eviction CLI:
@@ -68,7 +68,12 @@ func runCacheEvictionPlan(args []string) error {
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	asJSON := fs.Bool("json", false, "Emit secret-free JSON plan")
 	targetBytesFlag := fs.String("target-bytes", "", "Additional bytes to free beyond bringing usage under quota (optional)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true, "target-bytes": true})); err != nil {
+	cacheTotalQuotaFlag := fs.String("cache-total-quota-bytes", "", "Per-profile L1+L2 total physical cache quota in bytes (empty/0=default 10GiB; env JENKINS_MCP_CACHE_TOTAL_QUOTA_BYTES fallback; flag wins; min 64MiB; max 1TiB absolute fail-closed)")
+	cacheLowDiskFlag := fs.String("cache-low-disk-bytes", "", "Free-space threshold for eviction planning in bytes (empty/0=default 1GiB; env JENKINS_MCP_CACHE_LOW_DISK_BYTES fallback; flag wins; min 16MiB; max 1TiB absolute fail-closed)")
+	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
+		"profile": true, "target-bytes": true,
+		"cache-total-quota-bytes": true, "cache-low-disk-bytes": true,
+	})); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -89,7 +94,11 @@ func runCacheEvictionPlan(args []string) error {
 	}
 	defer func() { _ = meta.Close() }()
 
-	qm, err := store.NewQuotaManager(meta, dataDir, store.QuotaConfig{})
+	qcfg, err := resolveCacheQuotaConfig(*cacheTotalQuotaFlag, *cacheLowDiskFlag)
+	if err != nil {
+		return err
+	}
+	qm, err := store.NewQuotaManager(meta, dataDir, qcfg)
 	if err != nil {
 		return err
 	}
@@ -176,9 +185,14 @@ func runCacheEvict(args []string) error {
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	asJSON := fs.Bool("json", false, "Emit secret-free JSON plan/result")
 	targetBytesFlag := fs.String("target-bytes", "", "Additional bytes to free beyond bringing usage under quota (optional)")
+	cacheTotalQuotaFlag := fs.String("cache-total-quota-bytes", "", "Per-profile L1+L2 total physical cache quota in bytes (empty/0=default 10GiB; env JENKINS_MCP_CACHE_TOTAL_QUOTA_BYTES fallback; flag wins; min 64MiB; max 1TiB absolute fail-closed)")
+	cacheLowDiskFlag := fs.String("cache-low-disk-bytes", "", "Free-space threshold for eviction planning in bytes (empty/0=default 1GiB; env JENKINS_MCP_CACHE_LOW_DISK_BYTES fallback; flag wins; min 16MiB; max 1TiB absolute fail-closed)")
 	confirm := fs.Bool("confirm", false, "Required to apply eviction (destructive)")
 	yes := fs.Bool("yes", false, "Alias for --confirm (destructive)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true, "target-bytes": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
+		"profile": true, "target-bytes": true,
+		"cache-total-quota-bytes": true, "cache-low-disk-bytes": true,
+	})); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -206,7 +220,11 @@ func runCacheEvict(args []string) error {
 	}
 	defer func() { _ = meta.Close() }()
 
-	qm, err := store.NewQuotaManager(meta, dataDir, store.QuotaConfig{})
+	qcfg, err := resolveCacheQuotaConfig(*cacheTotalQuotaFlag, *cacheLowDiskFlag)
+	if err != nil {
+		return err
+	}
+	qm, err := store.NewQuotaManager(meta, dataDir, qcfg)
 	if err != nil {
 		return err
 	}
@@ -344,7 +362,12 @@ func runCacheQuota(args []string) error {
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	asJSON := fs.Bool("json", false, "Emit secret-free JSON usage stats")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true})); err != nil {
+	cacheTotalQuotaFlag := fs.String("cache-total-quota-bytes", "", "Per-profile L1+L2 total physical cache quota in bytes (empty/0=default 10GiB; env JENKINS_MCP_CACHE_TOTAL_QUOTA_BYTES fallback; flag wins; min 64MiB; max 1TiB absolute fail-closed)")
+	cacheLowDiskFlag := fs.String("cache-low-disk-bytes", "", "Free-space threshold for eviction planning in bytes (empty/0=default 1GiB; env JENKINS_MCP_CACHE_LOW_DISK_BYTES fallback; flag wins; min 16MiB; max 1TiB absolute fail-closed)")
+	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
+		"profile": true,
+		"cache-total-quota-bytes": true, "cache-low-disk-bytes": true,
+	})); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -357,7 +380,11 @@ func runCacheQuota(args []string) error {
 	}
 	defer func() { _ = meta.Close() }()
 
-	qm, err := store.NewQuotaManager(meta, dataDir, store.QuotaConfig{})
+	qcfg, err := resolveCacheQuotaConfig(*cacheTotalQuotaFlag, *cacheLowDiskFlag)
+	if err != nil {
+		return err
+	}
+	qm, err := store.NewQuotaManager(meta, dataDir, qcfg)
 	if err != nil {
 		return err
 	}
@@ -392,6 +419,15 @@ func runCacheQuota(args []string) error {
 		fmt.Fprintf(os.Stdout, "disk free_bytes=%d low_disk=%v\n", usage.FreeBytes, usage.LowDisk)
 	}
 	return nil
+}
+
+// resolveCacheQuotaConfig resolves offline/serve-aligned QuotaConfig from flag + env.
+// Shared by cache quota / eviction-plan / evict so dry-run and reclaim use one budget.
+func resolveCacheQuotaConfig(flagTotal, flagLow string) (store.QuotaConfig, error) {
+	return store.ResolveQuotaConfig(
+		flagTotal, os.Getenv(store.EnvCacheTotalQuotaBytes),
+		flagLow, os.Getenv(store.EnvCacheLowDiskBytes),
+	)
 }
 
 // openProfileMetaAndDataDir loads profile + opens meta, returning the data dir path.

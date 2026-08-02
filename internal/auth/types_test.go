@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
 )
 
 // Ensures Session is a value type (not a package-level global credential string).

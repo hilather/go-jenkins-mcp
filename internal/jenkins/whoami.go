@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // WhoAmI is the sanitized Jenkins identity response from /whoAmI/api/json.

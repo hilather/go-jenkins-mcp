@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 )
 
 const residualCanary = "residual-status-canary-token-NEVER"

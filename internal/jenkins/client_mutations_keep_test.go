@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 )
 
 func TestClient_SetBuildKeepForever_NoToggleWhenMatching(t *testing.T) {

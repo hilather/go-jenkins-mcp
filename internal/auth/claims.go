@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // MaxStoredGroups is the hard cap on group/role claims retained for policy

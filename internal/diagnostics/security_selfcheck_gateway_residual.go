@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 )
 
 // checkGatewayResidualStatusHonesty is QA residual lite / GWY-003: pure offline

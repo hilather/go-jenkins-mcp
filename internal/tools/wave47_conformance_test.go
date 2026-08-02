@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 )
 
 // Wave 47 / POL-005 + MCP-001 + NET-003 conformance (Track D):

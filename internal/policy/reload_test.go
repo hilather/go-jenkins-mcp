@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 func writeOverlayFile(t *testing.T, path, body string) {

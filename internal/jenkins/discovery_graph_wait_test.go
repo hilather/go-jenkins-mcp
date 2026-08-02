@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 func TestListJobs_NestedFoldersMultibranchMatrix(t *testing.T) {

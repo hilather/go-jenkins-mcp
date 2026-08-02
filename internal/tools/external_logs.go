@@ -7,9 +7,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
 )
 
 // ToolQueryExternalLogs is the optional INT-003 tool name.

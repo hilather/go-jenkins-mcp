@@ -2,9 +2,9 @@
 
 ## Supported platforms
 
-Local client support targets **Rocky Linux** and **Ubuntu** (Tier 1). macOS is
-best-effort. **Windows clients are out of scope** (no native FUSE). See
-`docs/jenkins-mcp-enterprise-architecture.md` §19.
+Local client support targets **Rocky Linux** and **Ubuntu** (Tier 1) only.
+**macOS and Windows clients are out of scope.** See
+`docs/jenkins-mcp-enterprise-architecture.md` §19 and ADR 0008.
 
 ## Reporting a vulnerability
 

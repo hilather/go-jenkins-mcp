@@ -139,7 +139,7 @@ jenkins-mcp doctor --profile corp --offline</code></pre>
           </div>
           <div class="grid-3">
             <article class="card"><h3>Cursor config</h3><p>No tokens in mcp.json command, args, or env. Login once; serve resolves credentials from the keyring.</p></article>
-            <article class="card"><h3>Shell history</h3><p>Do not paste <code>-auth user:token</code> or <code>JENKINS_MCP_AUTH</code> examples into durable scripts (seed defect KD-003).</p></article>
+            <article class="card"><h3>Shell history</h3><p>Do not paste <code>-auth user:token</code> or <code>JENKINS_MCP_AUTH</code> — those bootstrap paths are removed (fail closed).</p></article>
             <article class="card"><h3>Profile JSON</h3><p>XDG config under <code>~/.config/jenkins-mcp/</code> is non-secret connection data only.</p></article>
           </div>
           <div class="callout" style="margin-top:1.5rem">

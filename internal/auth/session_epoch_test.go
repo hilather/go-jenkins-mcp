@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
 )
 
 // Canary must never appear in session.epoch (non-secret file).

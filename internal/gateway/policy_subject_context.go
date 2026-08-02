@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // policySubjectCtxKey stores a per-request policy.Subject for multi-user RBAC

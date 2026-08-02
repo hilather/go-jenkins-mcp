@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // FSStore is a filesystem-backed ArchiveStore for integration-style tests.

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
 )
 
 func TestMemoryOrdering(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/admin"
-	"github.com/simonfxr/go-jenkins-mcp/internal/admin/uiembed"
+	"github.com/hilather/go-jenkins-mcp/internal/admin"
+	"github.com/hilather/go-jenkins-mcp/internal/admin/uiembed"
 )
 
 func TestResolveAssets_ExplicitFlag(t *testing.T) {

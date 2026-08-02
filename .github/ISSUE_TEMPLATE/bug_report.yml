@@ -55,8 +55,7 @@ body:
       options:
         - Rocky Linux
         - Ubuntu
-        - macOS (best-effort)
-        - Other / unknown
+        - Other / unknown (unsupported)
     validations:
       required: true
   - type: checkboxes

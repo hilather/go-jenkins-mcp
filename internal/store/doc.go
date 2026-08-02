@@ -18,7 +18,8 @@
 // split at range edges.
 //
 // L2 packs live under archives/ (see ArchivesDirName). QuotaManager (ARC-007)
-// tracks L1/L2 physical/logical bytes, pins, active-reader leases, dry-run
+// uses QuotaConfig from ResolveQuotaConfig (operator flag/env total + low-disk)
+// and tracks L1/L2 physical/logical bytes, pins, active-reader leases, dry-run
 // EvictPlan, and interrupt-safe journal-lite eviction. Serve-time auto-evict,
 // L1→L2 packing, and L1 release after verified pack live in
 // internal/app.Maintainer.

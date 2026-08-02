@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/mcpserver"
+	"github.com/hilather/go-jenkins-mcp/internal/mcpserver"
 )
 
 // HOST-001: require-subject without identity → 401; shared secret alone insufficient.

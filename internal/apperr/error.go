@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
 )
 
 // Error is the stable application error type.

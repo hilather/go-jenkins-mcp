@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 )
 
 // Regression: HOST-008 Done* lite — two FileAPITokenVault instances (separate
@@ -92,7 +92,7 @@ func TestFileAPITokenVault_MultiInstanceConcurrentPutNoCorrupt(t *testing.T) {
 		}
 	}
 	// Lock file exists after first write (unix); ignore if other OS no-op.
-	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+	if runtime.GOOS == "linux" {
 		st, err := os.Stat(path + ".lock")
 		if err != nil || st.IsDir() {
 			t.Fatalf("expected lock file %s.lock: %v", path, err)
@@ -106,7 +106,7 @@ func TestFileAPITokenVault_MultiInstanceConcurrentPutNoCorrupt(t *testing.T) {
 // Regression: HOST-008 multi-process flock — child holds exclusive lock;
 // parent Put blocks until child unlocks (linux/unix only).
 func TestFileAPITokenVault_MultiProcessFlockBlocks(t *testing.T) {
-	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+	if runtime.GOOS != "linux" {
 		t.Skip("flock multi-process test is unix-only")
 	}
 	dir := t.TempDir()

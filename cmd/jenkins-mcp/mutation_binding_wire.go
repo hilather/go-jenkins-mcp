@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
-	"github.com/simonfxr/go-jenkins-mcp/internal/mutation"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/mutation"
 )
 
 // mutationBindingFromGatewayCtx builds the multi-user mutation confirm Binding

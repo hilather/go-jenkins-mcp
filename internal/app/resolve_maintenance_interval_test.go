@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/app"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/app"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // Wave 49 Track C / ARC-007: ResolveMaintenanceInterval default → env → flag,

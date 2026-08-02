@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // HOST-001: mid-session subject rebind fail-closed on Streamable HTTP.

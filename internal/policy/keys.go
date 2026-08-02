@@ -12,8 +12,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
 )
 
 // EnvPolicyTrustedKeysVar points at a file or directory of trusted public keys.

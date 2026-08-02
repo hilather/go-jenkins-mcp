@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/simonfxr/go-jenkins-mcp/internal/adminops"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/adminops"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // overlayFromMap decodes a JSON-object map into policy.Overlay (MCP tool args).
@@ -25,6 +25,31 @@ func overlayFromMap(m map[string]any) (*policy.Overlay, error) {
 		return nil, apperr.New(apperr.CodeInvalidArgument, "invalid overlay fields")
 	}
 	return &o, nil
+}
+
+// bindingsFromMaps decodes MCP JSON maps into POL-006 user/group bindings.
+func bindingsFromMaps(users, groups []map[string]any) ([]policy.UserBinding, []policy.GroupBinding, error) {
+	var u []policy.UserBinding
+	var g []policy.GroupBinding
+	if len(users) > 0 {
+		raw, err := json.Marshal(users)
+		if err != nil {
+			return nil, nil, apperr.New(apperr.CodeInvalidArgument, "invalid users list")
+		}
+		if err := json.Unmarshal(raw, &u); err != nil {
+			return nil, nil, apperr.New(apperr.CodeInvalidArgument, "invalid user binding fields")
+		}
+	}
+	if len(groups) > 0 {
+		raw, err := json.Marshal(groups)
+		if err != nil {
+			return nil, nil, apperr.New(apperr.CodeInvalidArgument, "invalid groups list")
+		}
+		if err := json.Unmarshal(raw, &g); err != nil {
+			return nil, nil, apperr.New(apperr.CodeInvalidArgument, "invalid group binding fields")
+		}
+	}
+	return u, g, nil
 }
 
 // registerAdminOpsTools attaches admin_* management tools when EnableAdminOps
@@ -359,6 +384,56 @@ func registerAdminOpsTools(s *mcp.Server, st regState, svc *adminops.Service) {
 			return nil, nil, mapToolErr(err)
 		}
 		out, err := svc.PolicyApply(ctx, ov, args.ProfileID, args.Confirm)
+		if err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		return structuredResult(out)
+	})
+
+	// UI-011 / POL-006: multi-fleet user/group binding management (plain overlay; signed residual).
+	addAdminTool(s, st, &mcp.Tool{
+		Name:        "admin_rbac_list_bindings",
+		Description: "List deny-only user/group policy bindings (POL-006). Secret-free; multi-fleet SoT is signed config.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
+		out, err := svc.RbacListBindings(ctx)
+		if err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		return structuredResult(out)
+	})
+
+	type rbacPutArgs struct {
+		ProfileID string           `json:"profile_id,omitempty" jsonschema:"Profile id for audit"`
+		Users     []map[string]any `json:"users,omitempty" jsonschema:"User bindings (jenkins_user_id, deny_tools, ...)"`
+		Groups    []map[string]any `json:"groups,omitempty" jsonschema:"Group bindings (group_id, deny_tools, ...)"`
+		Confirm   string           `json:"confirm" jsonschema:"Must be APPLY"`
+	}
+	addAdminTool(s, st, &mcp.Tool{
+		Name:        "admin_rbac_put_binding",
+		Description: "Replace user/group deny bindings on plain pilot overlay (policy_write). confirm=APPLY. Signed REQUIRE_SIGNED residual.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args rbacPutArgs) (*mcp.CallToolResult, map[string]any, error) {
+		users, groups, err := bindingsFromMaps(args.Users, args.Groups)
+		if err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		out, err := svc.RbacPutBindings(ctx, users, groups, args.ProfileID, args.Confirm)
+		if err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		return structuredResult(out)
+	})
+
+	type rbacDeleteArgs struct {
+		ProfileID string `json:"profile_id,omitempty" jsonschema:"Profile id"`
+		Kind      string `json:"kind" jsonschema:"user or group"`
+		ID        string `json:"id" jsonschema:"jenkins_user_id/external_subject or group_id"`
+		Confirm   string `json:"confirm" jsonschema:"Must be DELETE"`
+	}
+	addAdminTool(s, st, &mcp.Tool{
+		Name:        "admin_rbac_delete_binding",
+		Description: "Delete one user or group binding then rewrite plain overlay subjects (confirm=DELETE).",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args rbacDeleteArgs) (*mcp.CallToolResult, map[string]any, error) {
+		out, err := svc.RbacDeleteBinding(ctx, args.Kind, args.ID, args.ProfileID, args.Confirm)
 		if err != nil {
 			return nil, nil, mapToolErr(err)
 		}

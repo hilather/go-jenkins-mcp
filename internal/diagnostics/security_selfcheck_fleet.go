@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry/fleet"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry/fleet"
 )
 
 // checkFleetTelemetryForceOffResidual is Wave 46 Track C / MGR-002 residual honesty:

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 func itoa(i int) string { return strconv.Itoa(i) }

@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
-	"github.com/simonfxr/go-jenkins-mcp/internal/mutation"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/mutation"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // Regression: multi-user Binding prefers PolicySubject JenkinsUserID (HTTP claim /

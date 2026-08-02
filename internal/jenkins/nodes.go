@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // DefaultNodesPageSize caps node list rows returned in one call (HEALTH-001).

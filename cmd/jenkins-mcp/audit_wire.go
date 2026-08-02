@@ -5,11 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
 )
 
 // profileDataDir resolves the on-disk data root for audit/cache (non-secret).
@@ -81,15 +80,6 @@ func emitServeAuthFail(sink audit.Sink, p *profile.Profile, profileFlag, princip
 	})
 }
 
-func authSourceLabel(usedLegacy bool, sess auth.Session) string {
-	if usedLegacy {
-		return "legacy_bootstrap"
-	}
-	if sess.ProfileID != "" {
-		return "keyring"
-	}
-	return "unknown"
-}
 
 // auditReasonFromErr maps verify failures to stable, non-secret reason codes
 // (AUTH-004 identity mismatch residual).

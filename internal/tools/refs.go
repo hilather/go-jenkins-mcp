@@ -3,8 +3,8 @@ package tools
 import (
 	"errors"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
 )
 
 // DefaultLogLength is the seed default for jenkins_get_build_logs length.

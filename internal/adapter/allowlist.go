@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // EnvAdapterAllowlistMinSignatures is the dual-control lite threshold for

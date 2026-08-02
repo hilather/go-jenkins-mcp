@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 )
 
 // gatewayVaultResponse is GET /admin/v1/gateway/vault (HOST-011 / HOST-009 residual).

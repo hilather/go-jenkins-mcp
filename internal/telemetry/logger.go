@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
 )
 
 // Level is a diagnostic severity.

@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // Wave 42: configurable list_views collect safety page cap when MCP deny_view_names

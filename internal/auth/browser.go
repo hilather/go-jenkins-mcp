@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // BrowserOpener opens a URL in the user's browser (or a test stub).
@@ -16,8 +16,8 @@ import (
 type BrowserOpener func(ctx context.Context, rawURL string) error
 
 // OpenSystemBrowser launches the platform browser for rawURL.
-// Preference order: $BROWSER (if set), then xdg-open (Linux), open (macOS).
-// Windows is out of scope (platform matrix); fails closed.
+// Preference order: $BROWSER (if set), then xdg-open on Linux.
+// macOS and Windows are out of scope (ADR 0008); fails closed.
 func OpenSystemBrowser(ctx context.Context, rawURL string) error {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
@@ -44,20 +44,11 @@ func OpenSystemBrowser(ctx context.Context, rawURL string) error {
 		return nil
 	}
 
-	var bin string
-	var args []string
-	switch runtime.GOOS {
-	case "linux":
-		bin = "xdg-open"
-		args = []string{rawURL}
-	case "darwin":
-		bin = "open"
-		args = []string{rawURL}
-	default:
+	if runtime.GOOS != "linux" {
 		return apperr.New(apperr.CodeCapabilityMissing,
-			"system browser open is unsupported on this platform (Tier-1 is Linux)")
+			"system browser open is unsupported on this platform (supported platforms: Rocky Linux and Ubuntu only)")
 	}
-	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd := exec.CommandContext(ctx, "xdg-open", rawURL)
 	if err := cmd.Start(); err != nil {
 		return apperr.Wrap(apperr.CodeInternal, "failed to open system browser", err)
 	}

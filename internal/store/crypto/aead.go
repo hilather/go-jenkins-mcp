@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // Wire constants for the L1 encrypted frame envelope.

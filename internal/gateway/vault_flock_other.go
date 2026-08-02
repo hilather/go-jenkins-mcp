@@ -2,7 +2,7 @@
 
 package gateway
 
-import "github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+import "github.com/hilather/go-jenkins-mcp/internal/apperr"
 
 // withVaultFileLock is a no-op on non-unix (Windows is out of platform matrix).
 // Process-local mutex still serializes within one process. Multi-process same

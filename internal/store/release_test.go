@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/archive"
-	"github.com/simonfxr/go-jenkins-mcp/internal/logmirror"
-	"github.com/simonfxr/go-jenkins-mcp/internal/store"
+	"github.com/hilather/go-jenkins-mcp/internal/archive"
+	"github.com/hilather/go-jenkins-mcp/internal/logmirror"
+	"github.com/hilather/go-jenkins-mcp/internal/store"
 )
 
 func openReleaseEnv(t *testing.T) (*store.Meta, *store.Frames, *logmirror.Machine, string) {

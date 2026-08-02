@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // ReleaseJournalFile is the interrupt-safe L1 release journal under the data dir.

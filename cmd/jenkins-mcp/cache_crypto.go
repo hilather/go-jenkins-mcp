@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
-	"github.com/simonfxr/go-jenkins-mcp/internal/store"
-	storecrypto "github.com/simonfxr/go-jenkins-mcp/internal/store/crypto"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/keyring"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/store"
+	storecrypto "github.com/hilather/go-jenkins-mcp/internal/store/crypto"
 )
 
 // loadProfileFrameCrypto resolves optional ARC-009 AEAD keys for a profile.

@@ -40,9 +40,9 @@ Multi-fleet sites need **config-managed** SP settings and group→role maps (git
 
 6. **Secret-free forever:** Assertion XML, raw oversize NameIDs, signatures, cookies/tokens never in audit/logs/MCP/admin JSON. Use redacted subject labels / `audit.HashOpaque` for correlation.
 
-7. **Offline lab:** Opt-in mock IdP fixtures under `testdata/saml-lab/` + Makefile; default `make test` stays offline without the lab. **Live Entra/Okta/ADFS pin remains residual** (mock ≠ production GO).
+7. **Offline + Keycloak lab:** Offline unit fixtures + opt-in Keycloak SAML IdP under `testdata/saml-lab/` (`make saml-lab-test`, `make live-saml-*`); default `make test` stays offline without the lab. **Live Entra/Okta/ADFS pin remains residual** (Keycloak lab ≠ production GO). Browser ACS + full IdP XML-DSig interop may need SP hardening beyond fixture verifier.
 
-8. **Package:** Pure logic lives in `internal/saml` (stdlib crypto + XML). Admin BFF wires ACS/status under `/admin/v1/saml/*`. UI-011 SPA CRUD remains residual.
+8. **Package:** Pure logic lives in `internal/saml` (stdlib crypto + XML). Admin BFF wires ACS/status under `/admin/v1/saml/*`. UI-011 Access SPA + `admin_rbac_*` is pilot break-glass (**Done\***); multi-fleet SoT remains signed config.
 
 ## Alternatives considered
 
@@ -51,7 +51,7 @@ Multi-fleet sites need **config-managed** SP settings and group→role maps (git
 | Local user/password DB for SAML users | Contradicts multi-fleet design; IdP owns accounts |
 | Jenkins as SAML IdP / mint API tokens via SAML | ADR 0003 / product non-goal |
 | Full crewjam/saml stack as only path | Heavier dep surface; still need fail-closed product rules — pure validate+map first |
-| SPA-only user management without config SoT | Diverges multi-fleet (UI-011 residual only) |
+| SPA-only user management without config SoT | Diverges multi-fleet (UI-011 is break-glass only; SoT = config) |
 
 ## Consequences
 
@@ -59,7 +59,7 @@ Multi-fleet sites need **config-managed** SP settings and group→role maps (git
 
 **Costs:** ACS/browser interop residual depth; cookie CSRF when cookie sessions ship; operators must maintain SP metadata + role maps in config.
 
-**Residuals:** Live IdP pin; encrypted assertions; multi-pod shared session store; full UI-011 Access SPA; `admin_saml_*` MCP tools (MCP-OPS residual until added).
+**Residuals:** Live IdP pin; encrypted assertions; multi-pod shared session store; `admin_saml_*` MCP tools (MCP-OPS residual). UI-011 Access/bindings path is **Done\*** pilot.
 
 ## Owner
 

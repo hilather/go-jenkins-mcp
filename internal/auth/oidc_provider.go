@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
-	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/keyring"
 	"golang.org/x/sync/singleflight"
 )
 

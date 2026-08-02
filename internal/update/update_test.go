@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/update"
+	"github.com/hilather/go-jenkins-mcp/internal/update"
 )
 
 func testKeyPair(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
@@ -276,6 +276,35 @@ func TestChecksumMismatchFails(t *testing.T) {
 				t.Fatalf("unexpected leftover %s", e.Name())
 			}
 		}
+	}
+}
+
+// TestUPD001_AutoInstallResidualContract locks the UPD-001 product residual:
+// download never claims install; install/rollback stay operator-owned.
+func TestUPD001_AutoInstallResidualContract(t *testing.T) {
+	t.Parallel()
+	// Zero value and explicit field must never advertise auto-install.
+	var zero update.DownloadResult
+	if zero.AutoInstall {
+		t.Fatal("zero DownloadResult.AutoInstall must be false")
+	}
+	// JSON contract for operator tooling (secret-free residual honesty).
+	type wire struct {
+		AutoInstall bool `json:"auto_install"`
+	}
+	b, err := json.Marshal(update.DownloadResult{AutoInstall: false, Version: "1.0.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var w wire
+	if err := json.Unmarshal(b, &w); err != nil {
+		t.Fatal(err)
+	}
+	if w.AutoInstall {
+		t.Fatal("json auto_install must be false")
+	}
+	if strings.Contains(string(b), "token") || strings.Contains(string(b), "password") {
+		t.Fatalf("secret-shaped download result: %s", b)
 	}
 }
 

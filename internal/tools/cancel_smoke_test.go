@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
-	"github.com/simonfxr/go-jenkins-mcp/internal/mcpserver"
-	"github.com/simonfxr/go-jenkins-mcp/internal/tools"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/mcpserver"
+	"github.com/hilather/go-jenkins-mcp/internal/tools"
 )
 
 // FND-006: seed-tool registration path + CallTool cancel reaches handler context.

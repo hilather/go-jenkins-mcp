@@ -57,7 +57,7 @@ cat > /tmp/gen_rm.go <<'EOF'
 package main
 import (
   "os"
-  "github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+  "github.com/hilather/go-jenkins-mcp/internal/jenkins"
 )
 func main() {
   b, err := jenkins.RouteMatrixJSON()

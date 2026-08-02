@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // FileAPITokenVault is a lab/file-backed APITokenVault under a single JSON file

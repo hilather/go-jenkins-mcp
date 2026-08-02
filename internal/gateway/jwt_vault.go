@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // JWTVault stores per-subject Jenkins-audience access tokens for Mode B

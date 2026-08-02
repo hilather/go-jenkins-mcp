@@ -1,11 +1,11 @@
 package tools
 
 import (
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
-	"github.com/simonfxr/go-jenkins-mcp/internal/mcpserver"
-	"github.com/simonfxr/go-jenkins-mcp/internal/mutation"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/mcpserver"
+	"github.com/hilather/go-jenkins-mcp/internal/mutation"
 )
 
 // Wave 43: register offline operator caps snapshot with diagnostics.

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // wantFrom applies the same TrimSpace + NormalizeJobFullName path as policyTargetFromArgs.

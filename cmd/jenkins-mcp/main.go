@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,29 +15,30 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/adapter"
-	"github.com/simonfxr/go-jenkins-mcp/internal/adminops"
-	"github.com/simonfxr/go-jenkins-mcp/internal/app"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
-	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
-	"github.com/simonfxr/go-jenkins-mcp/internal/logmirror"
-	"github.com/simonfxr/go-jenkins-mcp/internal/mcpserver"
-	"github.com/simonfxr/go-jenkins-mcp/internal/mutation"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
-	"github.com/simonfxr/go-jenkins-mcp/internal/search"
-	"github.com/simonfxr/go-jenkins-mcp/internal/store"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry/fleet"
-	"github.com/simonfxr/go-jenkins-mcp/internal/tools"
+	"github.com/hilather/go-jenkins-mcp/internal/adapter"
+	"github.com/hilather/go-jenkins-mcp/internal/adminops"
+	"github.com/hilather/go-jenkins-mcp/internal/app"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/fleetmcp"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/keyring"
+	"github.com/hilather/go-jenkins-mcp/internal/logmirror"
+	"github.com/hilather/go-jenkins-mcp/internal/mcpserver"
+	"github.com/hilather/go-jenkins-mcp/internal/mutation"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/search"
+	"github.com/hilather/go-jenkins-mcp/internal/store"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry/fleet"
+	"github.com/hilather/go-jenkins-mcp/internal/tools"
 	"golang.org/x/term"
 )
 
@@ -208,10 +210,10 @@ Usage:
   jenkins-mcp cache pin pack --profile <id> --pack <id>
   jenkins-mcp cache unpin pack --profile <id> --pack <id>
   jenkins-mcp cache pins --profile <id> [--json]
-  jenkins-mcp cache eviction-plan --profile <id> [--json] [--target-bytes N]
-  jenkins-mcp cache evict --profile <id> [--json] [--target-bytes N] [--confirm|--yes]
-  jenkins-mcp cache eviction-apply --profile <id> [--json] [--target-bytes N] [--confirm|--yes]
-  jenkins-mcp cache quota --profile <id> [--json]
+  jenkins-mcp cache eviction-plan --profile <id> [--json] [--target-bytes N] [--cache-total-quota-bytes N] [--cache-low-disk-bytes N]
+  jenkins-mcp cache evict --profile <id> [--json] [--target-bytes N] [--cache-total-quota-bytes N] [--cache-low-disk-bytes N] [--confirm|--yes]
+  jenkins-mcp cache eviction-apply --profile <id> [--json] [--target-bytes N] [--cache-total-quota-bytes N] [--cache-low-disk-bytes N] [--confirm|--yes]
+  jenkins-mcp cache quota --profile <id> [--json] [--cache-total-quota-bytes N] [--cache-low-disk-bytes N]
   jenkins-mcp oauth validate-profile --profile <id> [--offline]
   jenkins-mcp oauth probe-rs --profile <id> [--offline] --profile <id> [--offline]
   jenkins-mcp telemetry status [--json]
@@ -260,12 +262,13 @@ Usage:
   jenkins-mcp serve --profile <id> [--mutation-max-previews-per-minute N]
   jenkins-mcp serve --profile <id> [--mutation-token-ttl DURATION]
   jenkins-mcp serve --profile <id> [--enable-admin-mcp] [--admin-role viewer|operator|policy_admin]
+  jenkins-mcp serve --profile <id> [--fleet-mode] [--fleet-member-id ID] [--fleet-roster PATH] [--fleet-mesh-token-file PATH] [--fleet-peer-listen ADDR]
   jenkins-mcp serve --profile <id> [--log-level debug|info|warn|error]
   jenkins-mcp admin serve --addr 127.0.0.1:8787 [--profile ID]
   jenkins-mcp admin serve [--admin-token-env=VAR | --admin-token-file=PATH]
   jenkins-mcp admin serve [--admin-role viewer|operator|policy_admin]
   jenkins-mcp admin serve [--assets-dir PATH] [--require-token] [--admin-allow-non-local]
-  jenkins-mcp serve --url URL --auth user:token   # deprecated bootstrap (KD-003)
+  jenkins-mcp serve --url URL   # incomplete without --profile (fail closed)
 
 Read-only is the pilot default (POL-001). Cursor should pass --read-only or
 JENKINS_MCP_READ_ONLY=true. Use --allow-mutations only for tests (blocked by stronger RO).
@@ -317,14 +320,14 @@ Diagnostic-only skip requires --diag-insecure-tls AND JENKINS_MCP_DIAG_INSECURE_
 Linux (Tier-1): credentials live in Secret Service; profiles under
 $XDG_CONFIG_HOME/jenkins-mcp/profiles/. Windows is out of scope.
 
-Environment (deprecated bootstrap only):
-  JENKINS_MCP_AUTH=user:token
-
 Login non-interactive (tests / automation only — never for production secrets in CI logs):
   JENKINS_MCP_LOGIN_USER / JENKINS_MCP_LOGIN_TOKEN
 
-Enterprise: prefer profile + login (keyring). Legacy -auth / JENKINS_MCP_AUTH
-emit a warning and are bootstrap-only (KD-003).
+Headless CI keyring residual (opt-in file backend; prefer OS Secret Service):
+  JENKINS_MCP_KEYRING_FILE=/path/to/secrets.json
+
+Enterprise: profile + login (keyring) is required. Legacy -auth / JENKINS_MCP_AUTH
+are removed (fail closed with migration message).
 `)
 }
 
@@ -875,7 +878,7 @@ func runServe(args []string) error {
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Connection profile id (preferred)")
 	jenkinsURL := fs.String("url", "", "Jenkins base URL (legacy; prefer --profile)")
-	authFlag := fs.String("auth", "", "Deprecated: user:api_token (prefer login + keyring)")
+	authFlag := fs.String("auth", "", "Removed: user:api_token bootstrap (fail closed; use login --profile)")
 	httpAddr := fs.String("http", "", "If set, serve MCP Streamable HTTP at this address (loopback only by default)")
 	httpAllowNonLocal := fs.Bool("http-allow-non-local", false, "Allow --http to bind non-loopback interfaces (tests / residual; requires --http-allowed-origin, --http-allowed-host, and shared secret; not production)")
 	httpTokenEnv := fs.String("http-token-env", "", "Env var name holding optional HTTP shared secret (value never on argv; do not pass token on command line)")
@@ -907,6 +910,13 @@ func runServe(args []string) error {
 	// MCP-OPS-004: opt-in admin_* management tools (default off for pilot RO triage).
 	enableAdminMCP := fs.Bool("enable-admin-mcp", false, "Register admin_* day-2 management MCP tools (MCP-OPS; default off; process admin role from --admin-role / JENKINS_MCP_ADMIN_ROLE)")
 	adminRoleFlag := fs.String("admin-role", "", "Admin MCP/console role viewer|operator|policy_admin (empty=env JENKINS_MCP_ADMIN_ROLE or viewer; MCP-OPS)")
+	// Fleet MCP (opt-in multi-fleet fan-out; not multi-pod HA). Fail closed without roster+member+mesh token.
+	// Bool so bare --fleet-mode enables (String would consume the next flag as its value).
+	fleetModeFlag := fs.Bool("fleet-mode", false, "Enable fleet_* MCP tools (or env JENKINS_MCP_FLEET_MODE=1; requires roster, member-id, mesh token). Bare --fleet-mode is enough.")
+	fleetMemberIDFlag := fs.String("fleet-member-id", "", "This process id in fleet roster (env JENKINS_MCP_FLEET_MEMBER_ID)")
+	fleetRosterFlag := fs.String("fleet-roster", "", "Path to fleet roster.json (env JENKINS_MCP_FLEET_ROSTER)")
+	fleetMeshTokenFile := fs.String("fleet-mesh-token-file", "", "Path to mesh shared secret file (or set JENKINS_MCP_FLEET_MESH_TOKEN); required for fleet mode")
+	fleetPeerListen := fs.String("fleet-peer-listen", "", "Optional peer HTTP listen address for /fleet/v1/* (env JENKINS_MCP_FLEET_PEER_LISTEN; e.g. 127.0.0.1:9443)")
 	// Wave 52 Track A / MUT-001: confirm cooldown (default 5s; min 1s; absolute 5m; 0 → default).
 	mutationConfirmCooldownFlag := fs.String("mutation-confirm-cooldown", "", "Mutation confirm cooldown per target (Go duration; empty/0=default 5s; env JENKINS_MCP_MUTATION_CONFIRM_COOLDOWN fallback; flag wins; min 1s; max 5m absolute fail-closed; 0 means default; cannot disable via 0)")
 	// Wave 52 Track C / MUT-001: process-local Preview sliding-window rate (default 30; absolute 300 fail-closed; 0 → default, not unlimited).
@@ -920,6 +930,9 @@ func runServe(args []string) error {
 	diagInsecureTLS := fs.Bool("diag-insecure-tls", false, "DIAGNOSTIC ONLY: skip TLS verify; also requires JENKINS_MCP_DIAG_INSECURE_TLS=1")
 	noCacheMaint := fs.Bool("no-cache-maintenance", false, "Disable background cache quota/compaction loop (tests)")
 	cacheMaintInterval := fs.String("cache-maintenance-interval", "", "Cache maintenance tick interval (default 5m; env JENKINS_MCP_CACHE_MAINTENANCE_INTERVAL; min 30s max 1h absolute fail-closed)")
+	// ARC-007 cache quota tunables (flag wins over env; empty/0=default 10 GiB total / 1 GiB low-disk).
+	cacheTotalQuotaFlag := fs.String("cache-total-quota-bytes", "", "Per-profile L1+L2 total physical cache quota in bytes (empty/0=default 10GiB; env JENKINS_MCP_CACHE_TOTAL_QUOTA_BYTES fallback; flag wins; min 64MiB; max 1TiB absolute fail-closed)")
+	cacheLowDiskFlag := fs.String("cache-low-disk-bytes", "", "Free-space threshold that triggers eviction planning in bytes (empty/0=default 1GiB; env JENKINS_MCP_CACHE_LOW_DISK_BYTES fallback; flag wins; min 16MiB; max 1TiB absolute fail-closed; ignored when free-space probe unavailable)")
 	identityReverifyTTL := fs.String("identity-reverify-ttl", "", "Mid-serve whoAmI re-verify TTL (default 5m; min 10s max 30m; env JENKINS_MCP_IDENTITY_REVERIFY_TTL; flag overrides env)")
 	// Wave 37: bootstrap MCP result hard-max ceiling (absolute; overlay may only lower).
 	hardMaxBytesFlag := fs.String("hard-max-bytes", "", "Bootstrap MCP result hard-max ceiling in bytes (empty/0=default 1MiB; env JENKINS_MCP_HARD_MAX_BYTES fallback; flag wins; max 64MiB absolute fail-closed; overlay max_result_bytes may only lower within this ceiling)")
@@ -995,12 +1008,16 @@ func runServe(args []string) error {
 		log.Printf("enterprise redact patterns loaded: count=%d", n)
 	}
 
+	// UPSTREAM-EXIT: seed -auth / JENKINS_MCP_AUTH bootstrap removed (fail closed).
+	if err := auth.RejectLegacyBootstrap(*authFlag); err != nil {
+		return err
+	}
+
 	var (
-		baseURL    string
-		sess       auth.Session
-		usedLegacy bool
-		authPr     auth.Profile
-		profDoc    *profile.Profile
+		baseURL string
+		sess    auth.Session
+		authPr  auth.Profile
+		profDoc *profile.Profile
 		// oidcProv retained for mid-serve live credential refresh (wave 14).
 		oidcProv *auth.OIDCProvider
 	)
@@ -1030,48 +1047,13 @@ func runServe(args []string) error {
 		}
 		sess, err = prov.Authenticate(context.Background(), authPr)
 		if err != nil {
-			// Bootstrap: allow deprecated -auth / env only when keyring has no credential.
-			// OIDC profiles must not fall through to Basic legacy bootstrap.
-			if p.AuthMethod == profile.AuthMethodOIDC {
-				return err
-			}
-			legacyRaw := *authFlag
-			if legacyRaw == "" {
-				legacyRaw = os.Getenv(auth.LegacyEnvVar)
-			}
-			if legacyRaw != "" {
-				fmt.Fprintln(os.Stderr, "warning: using deprecated -auth / JENKINS_MCP_AUTH bootstrap (KD-003); prefer jenkins-mcp login --profile")
-				sess, err = auth.LegacySessionFromString(p.ID, legacyRaw)
-				if err != nil {
-					return err
-				}
-				usedLegacy = true
-			} else {
-				return err
-			}
-		}
-	} else {
-		// Fully legacy path: -url + -auth/env without profile.
-		baseURL = *jenkinsURL
-		if baseURL == "" {
-			baseURL = "http://localhost:8080"
-		}
-		legacyRaw := *authFlag
-		if legacyRaw == "" {
-			legacyRaw = os.Getenv(auth.LegacyEnvVar)
-		}
-		if legacyRaw == "" {
-			return apperr.New(apperr.CodeAuthentication,
-				"authentication required: use --profile after login, or deprecated -auth / JENKINS_MCP_AUTH")
-		}
-		fmt.Fprintln(os.Stderr, "warning: serving without --profile using deprecated -auth / JENKINS_MCP_AUTH (KD-003)")
-		var err error
-		sess, err = auth.LegacySessionFromString("", legacyRaw)
-		if err != nil {
 			return err
 		}
-		usedLegacy = true
-		authPr = auth.Profile{URL: baseURL, User: sess.User}
+	} else {
+		// No profile: never accept credential bootstrap on argv/env.
+		_ = jenkinsURL // retained flag for residual diagnostics only
+		return apperr.New(apperr.CodeAuthentication,
+			"authentication required: use --profile after login (profile + keyring); -auth / JENKINS_MCP_AUTH are removed")
 	}
 
 	// GWY-001/002: detect gateway mode early (provider required before serve continues).
@@ -1339,9 +1321,7 @@ func runServe(args []string) error {
 	if principal.FullName != "" {
 		log.Printf("Jenkins principal fullName: %s", principal.FullName)
 	}
-	if usedLegacy {
-		log.Printf("auth source: deprecated legacy bootstrap")
-	} else if gatewayObtainWired {
+	if gatewayObtainWired {
 		log.Printf("auth source: gateway Obtain mode=%s profile=%s", gatewayProv.Mode(), sess.ProfileID)
 	} else {
 		log.Printf("auth source: keyring profile=%s method=%s", sess.ProfileID, sess.Method)
@@ -1689,9 +1669,6 @@ func runServe(args []string) error {
 			authMeth = string(profDoc.AuthMethod)
 			profileID = profDoc.ID.String()
 		}
-		if usedLegacy {
-			authMeth = fleet.AuthMethodLegacy
-		}
 		forceOff := false
 		if polRes.Overlay != nil {
 			forceOff = polRes.Overlay.FleetTelemetryForceOff
@@ -1724,7 +1701,14 @@ func runServe(args []string) error {
 		if err != nil {
 			return err
 		}
-		qm, err := store.NewQuotaManager(storeMeta, profileDataDir, store.QuotaConfig{})
+		qcfg, err := store.ResolveQuotaConfig(
+			*cacheTotalQuotaFlag, os.Getenv(store.EnvCacheTotalQuotaBytes),
+			*cacheLowDiskFlag, os.Getenv(store.EnvCacheLowDiskBytes),
+		)
+		if err != nil {
+			return err
+		}
+		qm, err := store.NewQuotaManager(storeMeta, profileDataDir, qcfg)
 		if err != nil {
 			return apperr.Wrap(apperr.CodeInternal, "failed to open quota manager", err)
 		}
@@ -1742,7 +1726,8 @@ func runServe(args []string) error {
 			defer maintWG.Done()
 			maint.Run(serveCtx)
 		}()
-		log.Printf("Cache maintenance enabled interval=%s (ARC-007/005 residual)", interval)
+		log.Printf("Cache maintenance enabled interval=%s total_quota_bytes=%d low_disk_bytes=%d (ARC-007/005 residual)",
+			interval, qcfg.TotalQuotaBytes, qcfg.LowDiskBytes)
 		defer func() {
 			serveCancel()
 			maintWG.Wait()
@@ -2169,6 +2154,72 @@ func runServe(args []string) error {
 		})
 		log.Printf("MCP-OPS: admin_* tools enabled role=%s (never tokens in results)", role)
 	}
+	// Fleet MCP: opt-in fleet_* fan-out (fail closed on invalid config).
+	var fleetOpsSvc *fleetmcp.Service
+	fleetCfg, ferr := fleetmcp.ResolveConfig(fleetmcp.ResolveOptions{
+		// ModeFlag "1" when CLI --fleet-mode set; empty allows env JENKINS_MCP_FLEET_MODE to enable.
+		ModeFlag:       fleetModeResolveFlag(*fleetModeFlag),
+		MemberIDFlag:   *fleetMemberIDFlag,
+		RosterPathFlag: *fleetRosterFlag,
+		MeshTokenFile:  *fleetMeshTokenFile,
+		PeerListenFlag: *fleetPeerListen,
+		Getenv:         os.Getenv,
+	})
+	if ferr != nil {
+		// Explicit mode attempt that failed must fail serve closed.
+		modeAttempt := *fleetModeFlag || fleetModeEnvTruthy(os.Getenv(fleetmcp.EnvFleetMode))
+		if modeAttempt {
+			return ferr
+		}
+	} else if fleetCfg.Enabled {
+		local := &fleetmcp.LocalProvider{
+			Version:   version,
+			Commit:    commit,
+			BuildTime: buildTime,
+			Metrics:   metrics,
+			Getenv:    os.Getenv,
+			ProfileID: string(subject.ProfileID),
+			DataDir:   profileDataDir,
+			DoctorOffline: func(ctx context.Context) (map[string]any, error) {
+				if profDoc == nil {
+					return map[string]any{"available": false, "residual": "no profile for doctor"}, nil
+				}
+				rep, err := diagnostics.RunDoctor(ctx, diagnostics.DoctorOptions{
+					Profile:     profDoc,
+					SkipNetwork: true,
+					Version:     version,
+					Commit:      commit,
+					BuildTime:   buildTime,
+					Metrics:     metrics,
+					Gate:        gate,
+					Getenv:      os.Getenv,
+				})
+				if err != nil {
+					return map[string]any{"available": false, "residual": "doctor failed"}, nil
+				}
+				// Secret-free lite summary (no raw logs).
+				return map[string]any{
+					"available": true,
+					"offline":   true,
+					"overall":   rep.Overall,
+					"residual":  "fleet doctor offline summary; not multi-pod HA",
+				}, nil
+			},
+		}
+		peers := &fleetmcp.HTTPPeerFetcher{MeshToken: fleetCfg.MeshToken, Timeout: fleetCfg.PeerTimeout}
+		fleetOpsSvc = fleetmcp.New(fleetCfg, local, peers)
+		log.Printf("fleet MCP: fleet_* tools enabled member=%s fleet_id=%s (not multi-pod HA; mesh token never logged)",
+			fleetCfg.MemberID, fleetCfg.Roster.FleetID)
+		if listen := strings.TrimSpace(fleetCfg.PeerListen); listen != "" {
+			mux := fleetmcp.NewPeerMux(fleetCfg, local)
+			go func() {
+				log.Printf("fleet peer listen %s path_prefix=%s", listen, fleetmcp.PeerPathPrefix)
+				if err := http.ListenAndServe(listen, mux); err != nil {
+					log.Printf("fleet peer listen stopped: %v", err)
+				}
+			}()
+		}
+	}
 	tools.Register(server, client, &tools.RegisterOptions{
 		Gate:                       gate,
 		Budgets:                    budgets,
@@ -2199,6 +2250,7 @@ func runServe(args []string) error {
 		MutationPolicy:             serveMutationPolicy,
 		EnableAdminOps:             *enableAdminMCP,
 		AdminOps:                   adminOpsSvc,
+		FleetOps:                   fleetOpsSvc,
 	})
 	if *httpAddr != "" {
 		cfg := mcpserver.DefaultHTTPConfig()

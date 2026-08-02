@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // DefaultTotalQuotaBytes is the default per-profile total physical cache budget (10 GiB).

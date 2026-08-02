@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 const sampleWFAPIDescribe = `{

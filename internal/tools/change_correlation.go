@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/correlate"
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/correlate"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 )
 
 // ToolGetChangeCorrelation is the INT-004 correlation tool name.

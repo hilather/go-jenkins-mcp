@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // Default max artifact size for download (512 MiB). Prevents unbounded disk fill.

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
 )
 
 // QA-001 Wave 21: OAUTH-009 pure RS fallthrough + RFC 9728 PRM parsers.

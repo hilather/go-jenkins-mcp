@@ -150,7 +150,7 @@ Work IDs are **AUD-T-*** (audit trail) to avoid colliding with historical **AUD-
 | ID | Task | Size | Acceptance |
 |----|------|------|------------|
 | **AUD-T-002** | Optional client/source attributes: gateway path prefix, request hash, session fingerprint hash (never raw token) | M | Schema v2 or additive fields; SPA columns residual |
-| **AUD-T-014** | Multi-pod audit aggregation design (central sink) — HOST-008 related | L | Design only until Tier B; no fake Done |
+| **AUD-T-014** | Multi-pod audit aggregation | — | **Cancelled with HOST-008** — multi-fleet = per-member audit JSONL; optional fleet SIEM via AUD-T-010…013 per host |
 
 ---
 
@@ -171,7 +171,7 @@ Work IDs are **AUD-T-*** (audit trail) to avoid colliding with historical **AUD-
 - Logging full Jenkins console text into the audit plane (use log tools + optional ext-logs).  
 - Treating fleet telemetry as audit (different product surface).  
 - Claiming SOC 2 / ISO certification from code alone.  
-- Multi-pod HA audit store (HOST-008 Tier B).
+- Multi-pod HA audit store (HOST-008 **cancelled** — multi-fleet per-member audit only).
 
 ---
 

@@ -60,7 +60,7 @@
           <article class="card">
             <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3" stroke-linecap="round"/></svg></div>
             <h3>Keyring credentials</h3>
-            <p>Personal API tokens verified then stored via Secret Service. Profiles never embed tokens. Deprecated bootstrap auth remains a known seed defect to avoid.</p>
+            <p>Personal API tokens verified then stored via Secret Service. Profiles never embed tokens. Legacy <code>-auth</code> / <code>JENKINS_MCP_AUTH</code> bootstrap is removed (fail closed).</p>
           </article>
           <article class="card">
             <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h16v12H4z"/><path d="M8 10h5M8 14h8" stroke-linecap="round"/></svg></div>
@@ -91,7 +91,7 @@
         <div class="container">
           <div class="callout">
             <strong>What we still will not claim</strong>
-            <p>Live Entra / jwt-auth-filter production pins, loopback HTTP socket client auth by default, multi-tenant gateway mutation isolation, and true t-of-n HSM policy signing remain residual. See KNOWN_DEFECTS and phase boards for the honest ledger.</p>
+            <p>Live Entra / jwt-auth-filter production pins, loopback HTTP socket client auth by default, multi-tenant gateway mutation isolation, and true t-of-n HSM policy signing remain residual. See product residuals and phase boards for the honest ledger.</p>
           </div>
           <div class="grid-2" style="margin-top:1.5rem">
             <a class="card" href="https://github.com/hilather/go-jenkins-mcp/blob/master/docs/security/threat-model.md">

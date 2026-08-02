@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
 )
 
 // Default queue bounds (MGR-002: drop oldest on overflow; never block MCP).

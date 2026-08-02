@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 )
 
 // Kubernetes injects KUBERNETES_SERVICE_HOST into every pod (secret-free env residual).

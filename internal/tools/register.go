@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/simonfxr/go-jenkins-mcp/internal/adminops"
-	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
-	"github.com/simonfxr/go-jenkins-mcp/internal/mutation"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
-	"github.com/simonfxr/go-jenkins-mcp/internal/store"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
+	"github.com/hilather/go-jenkins-mcp/internal/adminops"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/fleetmcp"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/mutation"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/store"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry"
 )
 
 // AuthGate fails closed when the serve session is no longer usable (token
@@ -187,6 +188,9 @@ type RegisterOptions struct {
 	// AdminOps is the day-2 ops service for admin_* tools. Nil ⇒ tools not
 	// registered even when EnableAdminOps is true.
 	AdminOps *adminops.Service
+	// FleetOps registers fleet_* fan-out tools when non-nil and Enabled().
+	// Serve: --fleet-mode + valid roster/trust/member-id (fail closed).
+	FleetOps *fleetmcp.Service
 }
 
 // regState is the effective configuration for one Register call.
@@ -240,6 +244,8 @@ type regState struct {
 	// MCP-OPS admin_* tools (opt-in).
 	enableAdminOps bool
 	adminOps       *adminops.Service
+	// Fleet MCP ops (opt-in fleet mode).
+	fleetOps *fleetmcp.Service
 }
 
 // effectiveSubjectKey returns per-request SubjectKey when SubjectKeyFromContext
@@ -317,6 +323,7 @@ func resolveRegisterOptions(opts *RegisterOptions) regState {
 	st.mutationBindingFromContext = opts.MutationBindingFromContext
 	st.enableAdminOps = opts.EnableAdminOps
 	st.adminOps = opts.AdminOps
+	st.fleetOps = opts.FleetOps
 	// MUT-001: process-scoped manager so preview tokens survive until confirm.
 	// Create once when mutations may register and caller did not inject one.
 	// Wave 30: also create under AllowMutations opt-in while Effective RO so
@@ -687,6 +694,8 @@ func Register(s *mcp.Server, client *jenkins.Client, opts *RegisterOptions) {
 	if st.enableAdminOps {
 		registerAdminOpsTools(s, st, st.adminOps)
 	}
+	// Fleet MCP: fleet_* fan-out tools (opt-in valid fleet config only).
+	registerFleetOpsTools(s, st, st.fleetOps)
 
 	// Wave 28+29: live ListTools filter for AuthGate / deny_tools / subject / RO.
 	InstallListToolsPolicyFilter(s, st)

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/mutation"
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/mutation"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
 )
 
 // QA-001 Wave 21: mutation param normalize/validate pure paths (MUT-002).

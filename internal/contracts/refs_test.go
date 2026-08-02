@@ -3,7 +3,7 @@ package contracts_test
 import (
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
 )
 
 func TestRefValidityAndString(t *testing.T) {

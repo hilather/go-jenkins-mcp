@@ -1,9 +1,9 @@
 # Enterprise Jenkins MCP planning pack
 
-This package turns `simonfxr/go-jenkins-mcp` into an implementation-ready plan for a local, per-user, enterprise Jenkins MCP for Cursor, with an optional near-source AgentCore/managed-gateway deployment.
+This package is the implementation-ready plan for **go-jenkins-mcp** (`github.com/hilather/go-jenkins-mcp`): a local, per-user, enterprise Jenkins MCP for Cursor, with an optional near-source AgentCore/managed-gateway deployment. (Early source was once imported from a community MIT project — past-tense only; see `docs/HISTORY.md`.)
 
 **Revision date:** July 31, 2026  
-**Revision focus:** Engineer authentication findings; Jenkins' lack of native 3LO; external-IdP, AgentCore user-delegated 3LO, and OBO options; global read-only enforcement; deny-only MCP RBAC; wire-bandwidth controls; seekable Zstandard/`ratarmount-rs` storage; and Tier-1 OS matrix (Rocky Linux + Ubuntu; macOS nice-to-have; Windows excluded — no native FUSE).
+**Revision focus:** Engineer authentication findings; Jenkins' lack of native 3LO; external-IdP, AgentCore user-delegated 3LO, and OBO options; global read-only enforcement; deny-only MCP RBAC; wire-bandwidth controls; seekable Zstandard/`ratarmount-rs` storage; and Tier-1 OS matrix (Rocky Linux + Ubuntu only; macOS and Windows out of scope).
 
 ## Deliverables
 
@@ -28,10 +28,10 @@ This package turns `simonfxr/go-jenkins-mcp` into an implementation-ready plan f
 9. Related completed logs are grouped only when identity, controller/profile, authorization, sensitivity, retention, encryption, size, and lifecycle policy match. Packs use seekable multi-frame `.tar.zst`, TAR/member indexes, checksums, and deterministic rollover.
 10. The preferred L2 engine is the engineering-referenced `ratarmount-rs`, behind `ArchiveStore`. Public research did not identify an authoritative repository under that exact name, so production first requires the exact internal dependency and pinned revision, followed by code, license, supply-chain, Tier-1 Linux platform (Rocky/Ubuntu) including native FUSE, recovery, compatibility, and performance qualification. A native Go reader remains mandatory for non-mount paths.
 11. The preferred zero-recompression path copies unchanged compressed L1 payload frames and surrounds them with generated TAR header/padding frames. A standards-compatible one-time repack path remains the correctness fallback.
-12. **Local client OS matrix:** Tier 1 (GA / pilot gate) is Rocky Linux (all currently supported major series) and Ubuntu (all currently supported LTS Desktop/Server; same binary). Tier 2 (nice-to-have, non-blocking) is macOS. **Windows is out of scope** (no native FUSE; WinFsp not assumed). Linux packages are signed RPM (Rocky) and DEB (Ubuntu) plus portable tarball; credentials use Linux Secret Service.
+12. **Local client OS matrix:** Tier 1 (GA / pilot gate) is Rocky Linux (all currently supported major series) and Ubuntu (all currently supported LTS Desktop/Server; same binary). **macOS and Windows are out of scope** (no native FUSE; WinFsp not assumed). Linux packages are signed RPM (Rocky) and DEB (Ubuntu) plus portable tarball; credentials use Linux Secret Service.
 
 ## Recommended starting sequence
 
-Begin with the repository baseline/refactor and performance measurements, including a CI matrix that covers Rocky majors and Ubuntu LTS. Then lock the security architecture (`SEC-001`, `AUTH-000`), implement the global read-only and policy foundations (`POL-001` through `POL-005`), obtain and qualify the exact `ratarmount-rs` dependency (`ARC-000`) on Linux FUSE-capable hosts, and prove bounded progressive transfer plus independent-frame storage before expanding OAuth, gateway, diagnostics, or mutations. Ship signed Rocky/Ubuntu packages in `PKG-001`; treat macOS artifacts as optional; do not build Windows clients.
+Begin with the repository baseline/refactor and performance measurements, including a CI matrix that covers Rocky majors and Ubuntu LTS. Then lock the security architecture (`SEC-001`, `AUTH-000`), implement the global read-only and policy foundations (`POL-001` through `POL-005`), obtain and qualify the exact `ratarmount-rs` dependency (`ARC-000`) on Linux FUSE-capable hosts, and prove bounded progressive transfer plus independent-frame storage before expanding OAuth, gateway, diagnostics, or mutations. Ship signed Rocky/Ubuntu packages in `PKG-001`; do not build macOS or Windows clients.
 
 The Markdown backlog is the task source of truth. The JSON index is intended for dependency-aware agent orchestration. Root `AGENTS.md` is mandatory agent policy (tests, regressions, review, docs, next-step tracking) for every implementation session.

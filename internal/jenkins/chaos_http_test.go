@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // QA-002 expand: deterministic Jenkins HTTP fault injection (no live Jenkins).

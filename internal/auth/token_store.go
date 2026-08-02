@@ -5,8 +5,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/keyring"
 )
 
 // TokenStore persists OIDC TokenBundle material per profile (OAUTH-004).

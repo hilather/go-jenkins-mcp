@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
-	"github.com/simonfxr/go-jenkins-mcp/internal/update"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/update"
 )
 
 func TestBuildVersionInfoJSONShape(t *testing.T) {

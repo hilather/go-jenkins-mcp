@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
 )
 
 const (

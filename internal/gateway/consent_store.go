@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // DefaultConsentSessionTTL is the process-local consent metadata lifetime.

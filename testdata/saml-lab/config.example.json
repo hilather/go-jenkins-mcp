@@ -2,10 +2,10 @@
   "schema_version": 1,
   "enabled": true,
   "require": false,
-  "sp_entity_id": "https://mcp.example.corp/sp",
-  "acs_url": "https://mcp.example.corp/admin/v1/saml/acs",
-  "idp_entity_id": "https://idp.example.corp/metadata",
-  "idp_certificate_pem_path": "/etc/jenkins-mcp/saml/idp.pem",
+  "sp_entity_id": "http://127.0.0.1:8787/sp",
+  "acs_url": "http://127.0.0.1:8787/admin/v1/saml/acs",
+  "idp_entity_id": "http://127.0.0.1:18090/realms/jenkins-mcp-lab",
+  "idp_certificate_pem_path": "REPLACE_WITH_testdata/saml-lab/.generated/idp.pem",
   "attribute_map": {
     "subject_attribute": "",
     "groups_attribute": "groups",
@@ -14,7 +14,10 @@
   "group_roles": {
     "mcp-admins": "policy_admin",
     "mcp-operators": "operator",
-    "mcp-viewers": "viewer"
+    "mcp-viewers": "viewer",
+    "/mcp-operators": "operator",
+    "/mcp-viewers": "viewer",
+    "/mcp-admins": "policy_admin"
   },
   "max_groups": 64
 }

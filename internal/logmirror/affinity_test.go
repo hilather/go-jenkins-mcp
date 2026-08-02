@@ -3,7 +3,7 @@ package logmirror_test
 import (
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/logmirror"
+	"github.com/hilather/go-jenkins-mcp/internal/logmirror"
 )
 
 func TestPlanPackBatches_RolloverByMemberCount(t *testing.T) {

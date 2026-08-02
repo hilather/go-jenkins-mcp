@@ -8,7 +8,7 @@ structure with the architecture in `docs/`.
 
 | Field | Value |
 |-------|--------|
-| Upstream URL | https://github.com/simonfxr/go-jenkins-mcp |
+| Upstream URL | https://github.com/hilather/go-jenkins-mcp |
 | Upstream commit (frozen) | `83f66a9c57c0bc26044f654e589b6361787f0c89` |
 | Upstream commit date | 2026-04-21 08:12:41 +0200 |
 | Upstream summary | Improve Jenkins build and queue workflow for MCP clients. |
@@ -44,7 +44,7 @@ git show upstream-simonfxr-baseline:main.go | sha256sum
 
 ## Module path
 
-Upstream module path at import: `github.com/simonfxr/go-jenkins-mcp`.
+Upstream module path at import: `github.com/hilather/go-jenkins-mcp`.
 
 This fork publishes as `github.com/hilather/go-jenkins-mcp` (or the configured remote).
 The module path may be updated after the baseline tag when packaging begins.

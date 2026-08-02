@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
 )
 
 func TestResolveXDG(t *testing.T) {

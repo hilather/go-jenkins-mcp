@@ -8,12 +8,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
-	storecrypto "github.com/simonfxr/go-jenkins-mcp/internal/store/crypto"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
+	storecrypto "github.com/hilather/go-jenkins-mcp/internal/store/crypto"
 )
 
 func runDoctor(args []string) error {

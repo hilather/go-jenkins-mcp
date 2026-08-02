@@ -1,0 +1,44 @@
+# Disposable Keycloak SAML IdP lab (POL-007).
+# Opt-in only — NOT part of default `make test` / `make ci`.
+#
+# Service:
+#   keycloak  — SAML 2.0 IdP (dev mode) on loopback :18090
+#
+# Usage (repo root):
+#   make live-saml-up
+#   make live-saml-smoke
+#   make live-saml-down
+#
+# Residual: production Entra/Okta/ADFS pin; full browser ACS interop may need
+# SP signature hardening beyond offline fixtures (see README).
+
+name: go-jenkins-mcp-saml-lab
+
+services:
+  keycloak:
+    image: ${SAML_KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.0}
+    command:
+      - start-dev
+      - --import-realm
+      - --http-port=8080
+      - --hostname-strict=false
+      - --health-enabled=true
+    environment:
+      KEYCLOAK_ADMIN: ${SAML_KC_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${SAML_KC_ADMIN_PASSWORD:-admin}
+      # Lab-only; never use these credentials outside disposable compose.
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+    ports:
+      - "${SAML_HOST_BIND:-127.0.0.1}:${SAML_KC_PORT:-18090}:8080"
+    volumes:
+      - ./realm:/opt/keycloak/data/import:ro
+    # Host-side smoke waits on HTTP; container health is best-effort TCP (no curl in image).
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 45s
+    restart: "no"

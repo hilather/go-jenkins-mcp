@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // FileJWTVault is a lab/file-backed JWTVault under a single JSON file with

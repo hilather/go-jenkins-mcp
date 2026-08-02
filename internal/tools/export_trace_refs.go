@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
-	"github.com/simonfxr/go-jenkins-mcp/internal/otelx"
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/otelx"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
 )
 
 // ToolExportTraceRefs is the optional INT-002 export tool name.

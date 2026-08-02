@@ -3,7 +3,7 @@
 
 export PATH := $(HOME)/.local/go/bin:/usr/local/go/bin:$(HOME)/.local/node-v22.14.0-linux-x64/bin:$(PATH)
 
-MODULE      ?= github.com/simonfxr/go-jenkins-mcp
+MODULE      ?= github.com/hilather/go-jenkins-mcp
 BIN_DIR     ?= bin
 DIST_DIR    ?= dist
 BINARY      ?= jenkins-mcp
@@ -54,7 +54,15 @@ help:
 	@echo "  make admin-e2e  UI-009 opt-in admin BFF+SPA smoke (not in default test/ci; artifact dist/admin-e2e/)"
 	@echo "  make live-oauth-up     HOST-012…015 OAuth/JWT mock lab (opt-in; not default test)"
 	@echo "  make live-oauth-test   OAuth lab up + smoke + down"
+	@echo "  make live-jwt-rs-up    OAUTH-009 free lab: Keycloak + jwt-auth-filter (opt-in)"
+	@echo "  make live-jwt-rs-smoke Bearer whoAmI + fail-closed checks"
+	@echo "  make live-jwt-rs-test  jwt-rs lab up + smoke + down -v"
+	@echo "  make live-jwt-rs-down  Tear down jwt-rs free lab"
 	@echo "  make saml-lab-test     POL-007 offline SAML unit suite (opt-in; not default test)"
+	@echo "  make live-saml-up      POL-007 Keycloak SAML IdP lab (opt-in; not default test)"
+	@echo "  make live-saml-smoke   Keycloak up wait + metadata + config gen + unit suite"
+	@echo "  make live-saml-test    live-saml smoke then down -v"
+	@echo "  make live-saml-down    Tear down Keycloak SAML lab"
 	@echo "  make local-docker-up   Support stack: admin BFF in Docker (deploy/local; not default test)"
 	@echo "  make local-docker-down Tear down local Docker stack + volumes"
 	@echo "  make local-docker-doctor  Offline doctor via local Docker image"
@@ -324,12 +332,81 @@ live-oauth-test:
 		OAUTH_HOST_BIND=$(OAUTH_HOST_BIND) LAB_ISSUER=$(LAB_ISSUER) LAB_AUDIENCE=$(LAB_AUDIENCE) \
 		$(CURDIR)/scripts/oauth-lab-smoke.sh
 
+
+# OAUTH-009 free lab: Keycloak OIDC + real Jenkins jwt-auth-filter (opt-in; not default test/ci).
+# Residual: free plugin lab ≠ site Entra / production RS GO — see testdata/jwt-rs-lab/README.md
+# and docs/gateway/free-lab-qualification.md. Mock oauth-lab remains CI-friendly fallback.
+COMPOSE_JWT_RS ?= testdata/jwt-rs-lab/docker-compose.yml
+JWT_RS_KC_PORT ?= 18091
+JWT_RS_JENKINS_PORT ?= 18092
+JWT_RS_HOST_BIND ?= 127.0.0.1
+
+.PHONY: live-jwt-rs-up
+live-jwt-rs-up:
+	@command -v docker >/dev/null || { echo "docker required"; exit 1; }
+	JWT_RS_HOST_BIND=$(JWT_RS_HOST_BIND) JWT_RS_KC_PORT=$(JWT_RS_KC_PORT) JWT_RS_JENKINS_PORT=$(JWT_RS_JENKINS_PORT) \
+		docker compose -f $(COMPOSE_JWT_RS) up -d --build
+	@echo "jwt-rs lab: Keycloak http://$(JWT_RS_HOST_BIND):$(JWT_RS_KC_PORT)  Jenkins http://$(JWT_RS_HOST_BIND):$(JWT_RS_JENKINS_PORT)"
+
+.PHONY: live-jwt-rs-down
+live-jwt-rs-down:
+	@command -v docker >/dev/null || { echo "docker required"; exit 1; }
+	docker compose -f $(COMPOSE_JWT_RS) down -v --remove-orphans
+	@echo "jwt-rs lab stopped"
+
+.PHONY: live-jwt-rs-smoke
+live-jwt-rs-smoke:
+	@chmod +x $(CURDIR)/scripts/jwt-rs-lab-smoke.sh
+	JWT_RS_HOST_BIND=$(JWT_RS_HOST_BIND) JWT_RS_KC_PORT=$(JWT_RS_KC_PORT) JWT_RS_JENKINS_PORT=$(JWT_RS_JENKINS_PORT) \
+		COMPOSE_JWT_RS=$(COMPOSE_JWT_RS) \
+		$(CURDIR)/scripts/jwt-rs-lab-smoke.sh --smoke-only
+
+.PHONY: live-jwt-rs-test
+live-jwt-rs-test:
+	@chmod +x $(CURDIR)/scripts/jwt-rs-lab-smoke.sh
+	JWT_RS_HOST_BIND=$(JWT_RS_HOST_BIND) JWT_RS_KC_PORT=$(JWT_RS_KC_PORT) JWT_RS_JENKINS_PORT=$(JWT_RS_JENKINS_PORT) \
+		COMPOSE_JWT_RS=$(COMPOSE_JWT_RS) \
+		$(CURDIR)/scripts/jwt-rs-lab-smoke.sh --down
+
 # POL-007 offline SAML SP unit suite (fixtures in internal/saml + admin ACS tests).
 # Not part of default make test / ci beyond packages already covered by go test ./...
 # Live Entra/Okta/ADFS pin residual — see testdata/saml-lab/README.md + ADR 0015.
 .PHONY: saml-lab-test
 saml-lab-test:
 	$(GO) test $(GOFLAGS) $(GO_TESTFLAGS) ./internal/saml/ ./internal/admin/ -count=1 -run 'SAML|Saml'
+
+# POL-007 disposable Keycloak SAML IdP lab (opt-in; not default test/ci).
+# Residual: production Entra pin; browser ACS + full XML-DSig interop may need SP hardening.
+COMPOSE_SAML ?= testdata/saml-lab/docker-compose.yml
+SAML_KC_PORT ?= 18090
+SAML_HOST_BIND ?= 127.0.0.1
+
+.PHONY: live-saml-up
+live-saml-up:
+	@command -v docker >/dev/null || { echo "docker required"; exit 1; }
+	SAML_HOST_BIND=$(SAML_HOST_BIND) SAML_KC_PORT=$(SAML_KC_PORT) \
+		docker compose -f $(COMPOSE_SAML) up -d
+	@echo "saml lab: Keycloak http://$(SAML_HOST_BIND):$(SAML_KC_PORT) (lab-only; admin/admin)"
+
+.PHONY: live-saml-down
+live-saml-down:
+	@command -v docker >/dev/null || { echo "docker required"; exit 1; }
+	docker compose -f $(COMPOSE_SAML) down -v --remove-orphans
+	@echo "saml lab stopped"
+
+.PHONY: live-saml-smoke
+live-saml-smoke:
+	@chmod +x $(CURDIR)/scripts/saml-lab-smoke.sh
+	SAML_HOST_BIND=$(SAML_HOST_BIND) SAML_KC_PORT=$(SAML_KC_PORT) \
+		COMPOSE_SAML=$(COMPOSE_SAML) \
+		$(CURDIR)/scripts/saml-lab-smoke.sh --smoke-only
+
+.PHONY: live-saml-test
+live-saml-test:
+	@chmod +x $(CURDIR)/scripts/saml-lab-smoke.sh
+	SAML_HOST_BIND=$(SAML_HOST_BIND) SAML_KC_PORT=$(SAML_KC_PORT) \
+		COMPOSE_SAML=$(COMPOSE_SAML) \
+		$(CURDIR)/scripts/saml-lab-smoke.sh --down
 
 # Local Docker support stack (deploy/local). Opt-in; not part of make test / ci.
 # Profiles: LOCAL_COMPOSE_PROFILES=http and/or with-jenkins

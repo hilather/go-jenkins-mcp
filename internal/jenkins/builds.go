@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // Build history bounds (JEN-003).

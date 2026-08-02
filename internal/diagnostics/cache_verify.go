@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/archive"
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
-	"github.com/simonfxr/go-jenkins-mcp/internal/store"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/archive"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/store"
 )
 
 // DefaultVerifySample is the default number of packs sampled when --full is not set.

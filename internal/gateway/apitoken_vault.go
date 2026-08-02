@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // APITokenVault stores personal Jenkins API tokens keyed by subjectKey.

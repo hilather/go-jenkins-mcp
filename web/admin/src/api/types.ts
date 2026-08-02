@@ -362,6 +362,35 @@ export interface SecuritySelfCheckReport {
   generated_at?: string;
 }
 
+/** POL-006 user deny binding (UI-011). */
+export interface UserBinding {
+  jenkins_user_id?: string;
+  external_subject?: string;
+  deny_tools?: string[];
+  deny_job_prefixes?: string[];
+  deny_node_names?: string[];
+  deny_view_names?: string[];
+  deny_artifact_paths?: string[];
+  deny_branch_names?: string[];
+  max_result_bytes?: number;
+  max_tools_per_minute?: number;
+  max_tools_burst?: number;
+}
+
+/** POL-006 group deny binding (UI-011). */
+export interface GroupBinding {
+  group_id: string;
+  deny_tools?: string[];
+  deny_job_prefixes?: string[];
+  deny_node_names?: string[];
+  deny_view_names?: string[];
+  deny_artifact_paths?: string[];
+  deny_branch_names?: string[];
+  max_result_bytes?: number;
+  max_tools_per_minute?: number;
+  max_tools_burst?: number;
+}
+
 export interface PolicyOverlay {
   version: number;
   force_read_only: boolean;
@@ -379,6 +408,38 @@ export interface PolicyOverlay {
   max_tools_per_minute?: number;
   /** HOST-006: optional per-subject burst (positive int; omit = no overlay change). */
   max_tools_burst?: number;
+  /** POL-006 subject bindings. */
+  subjects?: {
+    users?: UserBinding[];
+    groups?: GroupBinding[];
+  };
+}
+
+/** GET /admin/v1/policy/bindings */
+export interface BindingsGetResponse {
+  available: boolean;
+  path_base?: string;
+  signature_state?: string;
+  users?: UserBinding[];
+  groups?: GroupBinding[];
+  notes?: string[];
+  residual?: string;
+  fleet_sot?: string;
+}
+
+export interface BindingsPutResponse {
+  applied: boolean;
+  path_base?: string;
+  users?: UserBinding[];
+  groups?: GroupBinding[];
+  errors?: PolicyFieldError[];
+  notes?: string[];
+}
+
+export interface BindingsPreviewResponse {
+  allowed: boolean;
+  reason_code?: string;
+  notes?: string[];
 }
 
 /** GET /admin/v1/policy/overlay */

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/admin"
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/admin"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 )
 
 const residualStatusCanary = "admin-residual-status-canary-NEVER-IN-JSON"

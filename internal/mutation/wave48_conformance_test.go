@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/mutation"
+	"github.com/hilather/go-jenkins-mcp/internal/mutation"
 )
 
 // Wave 48 / MUT-001 conformance (Track D):

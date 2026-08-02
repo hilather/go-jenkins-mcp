@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 )
 
 // Default env name for Mode B Jenkins-audience JWT when provisioning via CLI.

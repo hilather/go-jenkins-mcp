@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/admin"
-	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
-	"github.com/simonfxr/go-jenkins-mcp/internal/saml"
+	"github.com/hilather/go-jenkins-mcp/internal/admin"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/saml"
 )
 
 func TestAdminSAML_ACS_RoleMap_AndCanary(t *testing.T) {

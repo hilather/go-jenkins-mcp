@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/store"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/store"
 )
 
 // seedSealedGenForCLI inserts a sealed L1 generation + frame file into an open meta store.
@@ -195,6 +195,81 @@ func TestCacheEvictionPlan_TextAndQuota(t *testing.T) {
 	}
 	if qdoc.Usage.TotalPhysicalBytes < 400 {
 		t.Fatalf("expected physical bytes from fixture: %+v", qdoc.Usage)
+	}
+	// Default resolved total quota is product 10 GiB when unset.
+	if qdoc.Usage.QuotaBytes != store.DefaultTotalQuotaBytes {
+		t.Fatalf("default quota bytes: got %d want %d", qdoc.Usage.QuotaBytes, store.DefaultTotalQuotaBytes)
+	}
+}
+
+// Regression: offline cache quota / plan must honor resolved --cache-total-quota-bytes
+// (same ResolveQuotaConfig as serve maintenance), not always QuotaConfig{}.
+func TestCacheQuota_UsesResolvedTotalQuotaFlag(t *testing.T) {
+	withTestXDG(t)
+	saveSeedProfile(t, "corp")
+	meta, dir := openTestProfileMeta(t, "corp")
+	_ = seedSealedGenForCLI(t, meta, dir, "job-a", 1, 400)
+	if err := meta.Close(); err != nil {
+		t.Fatal(err)
+	}
+	want := store.MinTotalQuotaBytes // 64 MiB
+	out, err := captureCacheKeyStdout(t, func() error {
+		return runCacheQuota([]string{
+			"--profile", "corp", "--json",
+			"--cache-total-quota-bytes", strconv.FormatInt(want, 10),
+		})
+	})
+	if err != nil {
+		t.Fatalf("quota: %v", err)
+	}
+	var qdoc quotaUsageJSON
+	if err := json.Unmarshal([]byte(out), &qdoc); err != nil {
+		t.Fatalf("json: %v out=%q", err, out)
+	}
+	if qdoc.Usage.QuotaBytes != want {
+		t.Fatalf("Usage.QuotaBytes=%d want resolved %d", qdoc.Usage.QuotaBytes, want)
+	}
+}
+
+func TestCacheQuota_RejectInvalidTotalQuota(t *testing.T) {
+	withTestXDG(t)
+	saveSeedProfile(t, "corp")
+	_ = ensureTestProfileDataDir(t, "corp")
+	err := runCacheQuota([]string{"--profile", "corp", "--cache-total-quota-bytes", "-1"})
+	if err == nil {
+		t.Fatal("expected invalid quota to fail closed")
+	}
+	if apperr.CodeOf(err) != apperr.CodeInvalidArgument {
+		t.Fatalf("code: %v err=%v", apperr.CodeOf(err), err)
+	}
+	// Over absolute max.
+	err = runCacheQuota([]string{
+		"--profile", "corp",
+		"--cache-total-quota-bytes", strconv.FormatInt(store.AbsoluteMaxTotalQuotaBytes+1, 10),
+	})
+	if err == nil {
+		t.Fatal("expected over-absolute to fail closed")
+	}
+	if !strings.Contains(err.Error(), "exceeds absolute maximum") {
+		t.Fatalf("msg: %v", err)
+	}
+}
+
+func TestResolveCacheQuotaConfig_EnvAndFlag(t *testing.T) {
+	t.Setenv(store.EnvCacheTotalQuotaBytes, strconv.FormatInt(store.MinTotalQuotaBytes+100, 10))
+	t.Setenv(store.EnvCacheLowDiskBytes, strconv.FormatInt(store.MinLowDiskBytes+50, 10))
+	cfg, err := resolveCacheQuotaConfig("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TotalQuotaBytes != store.MinTotalQuotaBytes+100 {
+		t.Fatalf("env total: %d", cfg.TotalQuotaBytes)
+	}
+	// Flag wins.
+	wantFlag := store.MinTotalQuotaBytes + 200
+	cfg, err = resolveCacheQuotaConfig(strconv.FormatInt(wantFlag, 10), "")
+	if err != nil || cfg.TotalQuotaBytes != wantFlag {
+		t.Fatalf("flag wins: %+v %v", cfg, err)
 	}
 }
 

@@ -1,0 +1,79 @@
+# Disposable Keycloak OIDC + Jenkins LTS with real jwt-auth-filter (OAUTH-009 free lab).
+# Opt-in only — NOT part of default `make test` / `make ci`.
+#
+# Services:
+#   keycloak — OIDC IdP (dev) on loopback :18091
+#   jenkins  — LTS + jwt-auth-filter + JCasC on loopback :18092
+#
+# Usage (repo root):
+#   make live-jwt-rs-up
+#   make live-jwt-rs-smoke
+#   make live-jwt-rs-test   # up + smoke + down -v
+#   make live-jwt-rs-down
+#
+# Residual: free plugin lab ≠ site Entra / production RS pin.
+# Mock oauth-lab remains the lightweight CI-friendly RS peer.
+
+name: go-jenkins-mcp-jwt-rs-lab
+
+services:
+  keycloak:
+    image: ${JWT_RS_KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.0}
+    command:
+      - start-dev
+      - --import-realm
+      - --http-port=8080
+      - --hostname-strict=false
+      - --health-enabled=true
+    environment:
+      KEYCLOAK_ADMIN: ${JWT_RS_KC_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${JWT_RS_KC_ADMIN_PASSWORD:-admin}
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+    ports:
+      - "${JWT_RS_HOST_BIND:-127.0.0.1}:${JWT_RS_KC_PORT:-18091}:8080"
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 45s
+    restart: "no"
+
+  jenkins:
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
+    image: ${JWT_RS_JENKINS_IMAGE:-go-jenkins-mcp/jwt-rs-jenkins:lts}
+    ports:
+      - "${JWT_RS_HOST_BIND:-127.0.0.1}:${JWT_RS_JENKINS_PORT:-18092}:8080"
+    environment:
+      # Disposable lab only — never production secrets.
+      JENKINS_ADMIN_PASSWORD: ${JWT_RS_JENKINS_ADMIN_PASSWORD:-admin}
+      # JWKS URL as seen from inside the Jenkins container (compose network).
+      JWT_RS_JWKS_URL: ${JWT_RS_JWKS_URL:-http://keycloak:8080/realms/jwt-rs-lab/protocol/openid-connect/certs}
+      JWT_RS_AUDIENCE: ${JWT_RS_AUDIENCE:-jenkins-api}
+      JWT_RS_PROTECTED_PATHS: ${JWT_RS_PROTECTED_PATHS:-/**/api/**}
+      CASC_JENKINS_CONFIG: /var/jenkins_home/casc_configs
+      JAVA_OPTS: >-
+        -Djenkins.install.runSetupWizard=false
+        -Djenkins.model.Jenkins.slaveAgentPort=-1
+    volumes:
+      - ./jenkins/casc.yaml:/var/jenkins_home/casc_configs/jwt-rs.yaml:ro
+      - jenkins_home:/var/jenkins_home
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/login >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 48
+      start_period: 120s
+    restart: "no"
+
+volumes:
+  jenkins_home:

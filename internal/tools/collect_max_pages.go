@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // ResolveCollectMaxPages resolves a policy-collect safety page cap shared by

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 )
 
 func TestRouteMatrix_CoversKnownAPIPathMarkers(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // validateDirOwner rejects directories not owned by the current user (Unix).

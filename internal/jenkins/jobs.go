@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // Discovery bounds (JEN-002 / MCP budgets).

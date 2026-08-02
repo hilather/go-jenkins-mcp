@@ -7,7 +7,7 @@ First tagged **read-only pilot** baseline of the enterprise `go-jenkins-mcp` for
 - **Phase 0–1 foundations**: profiles, keyring (Secret Service), whoAmI bind, deny-only RBAC, progressive logs, budgets, cache/store, search, audit, doctor/pilot-check
 - **Phase 2 hardening through Wave 53**: NET resilience operator resolves (JSON body, retries, circuit, concurrent, backoff), soft target absolute **64 MiB**, mutation confirm cooldown / max previews / token TTL, operator_caps honesty
 - **Pilot logging**: `--log-level` / `JENKINS_MCP_LOG_LEVEL` (`debug|info|warn|error`); structured secret-free `tool_dispatch_*` JSON on stderr for offline analysis
-- **Platforms**: Rocky Linux / Ubuntu Tier-1; macOS optional; **Windows out of scope**
+- **Platforms**: Rocky Linux / Ubuntu Tier-1 only; **macOS and Windows out of scope**
 - **Transport**: prefer **stdio** + `--read-only` (loopback HTTP is residual; not the pilot default)
 
 ## Install (portable tarball)

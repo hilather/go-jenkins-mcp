@@ -37,7 +37,7 @@ All use MUT-001 preview → confirm. Overlay allowlists: `allow_mutation_tools`,
 ## Still residual (not production multi-user GO)
 
 - Live Entra / jwt-auth-filter pin / AgentCore Identity vault
-- Multi-pod HA (HOST-008 Tier B)
+- Multi-pod HA (HOST-008) — later **cancelled**; multi-fleet is the scale model
 - MUT-ADMIN: config.xml, credentials, script console, plugins, quiet-down
 
 Pilot default remains read-only stdio + personal API token.

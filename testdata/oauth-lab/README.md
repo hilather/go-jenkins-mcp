@@ -2,8 +2,10 @@
 
 Ephemeral **mock** OIDC IdP, JWT resource server, and AgentCore/token-exchange
 peer for local / optional CI integration of server-side auth modes **B** and
-**C**. **Not production.** Not real Entra, not real `jwt-auth-filter`, not real
-AgentCore.
+**C**. **Not production.** Not real Entra, not real AgentCore.
+
+For a **free real** `jwt-auth-filter` + Keycloak OIDC stack (OAUTH-009 free
+plugin lab), see [`../jwt-rs-lab/`](../jwt-rs-lab/) and `make live-jwt-rs-*`.
 
 **Not part of** default `make test` / `make ci`.
 

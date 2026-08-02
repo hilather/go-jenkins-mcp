@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // DefaultService is the application namespace in the OS secret store.
@@ -27,9 +27,14 @@ func NewStore(backend Backend) *Store {
 	return &Store{Backend: backend, Service: DefaultService}
 }
 
-// Default returns a Store using the OS Secret Service backend.
-// Headless environments without Secret Service fail closed on Get/Set/Delete.
+// Default returns a Store using the OS Secret Service backend, or a headless
+// file backend when EnvKeyringFile (JENKINS_MCP_KEYRING_FILE) is set.
+// Headless environments without Secret Service and without a file path fail
+// closed on Get/Set/Delete.
 func Default() *Store {
+	if fb, err := OpenFromEnviron(); err == nil && fb != nil {
+		return NewStore(fb)
+	}
 	return NewStore(NewSecretService())
 }
 

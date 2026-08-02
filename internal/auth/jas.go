@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // RejectJenkinsAsAuthorizationServer fails closed when asURL is co-hosted with

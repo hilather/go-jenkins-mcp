@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // MemoryStore is an in-process ArchiveStore for deterministic unit tests (ARC-001).

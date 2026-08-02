@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/correlate"
+	"github.com/hilather/go-jenkins-mcp/internal/correlate"
 )
 
 func TestExtractJiraKeysFromParams(t *testing.T) {

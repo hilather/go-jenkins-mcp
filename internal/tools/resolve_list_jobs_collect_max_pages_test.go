@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/tools"
+	"github.com/hilather/go-jenkins-mcp/internal/tools"
 )
 
 // Wave 41: ResolveListJobsCollectMaxPages precedence default → env → flag (flag wins).

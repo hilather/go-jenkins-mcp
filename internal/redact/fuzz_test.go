@@ -6,7 +6,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
 )
 
 // QA-001: additional redaction/sanitize fuzz targets (see also FuzzStripControlSequences).

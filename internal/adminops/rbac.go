@@ -3,8 +3,8 @@ package adminops
 import (
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/admin"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/admin"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // Role aliases admin console roles for MCP ops (same strings as UI-003).

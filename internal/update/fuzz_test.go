@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/update"
+	"github.com/hilather/go-jenkins-mcp/internal/update"
 )
 
 // QA-001 Wave 21: update manifest + LKG parsers (UPD-001).

@@ -3,7 +3,7 @@ package jenkins_test
 import (
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 )
 
 func TestClassifyJenkinsRequest_PowerUserPaths(t *testing.T) {

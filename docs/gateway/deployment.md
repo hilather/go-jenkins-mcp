@@ -50,7 +50,7 @@ This repo ships **compose + env example + docs**, not a production Operator or
 Helm chart. Image build/signing remains organization-owned (see residuals).
 
 **Tier A default:** **single replica** per logical gateway subject/namespace
-(HOST-008). Multi-replica is Tier B residual until durable vault + affinity exist.
+(HOST-008 **cancelled**). Multi-pod HA is out of scope — scale via multi-fleet (single-replica members).
 
 ---
 
@@ -266,7 +266,7 @@ go test ./internal/mcpserver ./cmd/jenkins-mcp -count=1 -run 'HOST001_|LabJWT_Mi
 | `JENKINS_MCP_SUBJECT_PROCESS_MAX_CONCURRENT` | Process-wide slots (empty → 64) | No |
 | `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` | Optional SubjectLimiter map hygiene max (empty → unlimited; idle LRU; fail closed if all hold slots) | No |
 
-**Not HA:** `MULTI_USER=1` is single-process foundation only (HOST-008 multi-replica residual).
+**Not HA:** `MULTI_USER=1` is single-process foundation only (HOST-008 multi-pod **cancelled**).
 
 ### Streamable HTTP (optional; not pilot default)
 
@@ -290,7 +290,7 @@ go test ./internal/mcpserver ./cmd/jenkins-mcp -count=1 -run 'HOST001_|LabJWT_Mi
 | `XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_CACHE_HOME` | Per-user paths for profile + cache |
 
 **Never place in env or compose files:** API tokens, client secrets, refresh
-tokens, private keys, cookies, `JENKINS_MCP_AUTH`, or seed-style `-auth`. Client
+tokens, private keys, cookies, `JENKINS_MCP_AUTH`, or retired `-auth`. Client
 secrets (when live AgentCore lands) belong in OS secret store / vault — not
 profile JSON, not `.env` committed to git.
 
@@ -304,7 +304,7 @@ See also [`.env.example`](../../deploy/gateway/.env.example).
 |----------|--------------------------|-------|
 | Rocky Linux | Supported (Tier-1) | SELinux smoke: unconfined user binary; no custom module shipped |
 | Ubuntu LTS | Supported (Tier-1) | AppArmor: no dedicated profile shipped |
-| macOS | Non-blocking | Not a gateway pilot gate |
+| macOS | **Out of scope** | Not supported (ADR 0008) |
 | **Windows** | **Out of scope** | No native FUSE; no Windows gateway image (ADR 0008) |
 
 ---
@@ -339,7 +339,7 @@ bundle AgentCore. Operators supply the signed image from their registry.
 | Memory request | 128 MiB | |
 | `/tmp` | 64 MiB tmpfs / emptyDir | |
 | File descriptors | OS default; residual site ulimit | Not hardcoded in binary |
-| Replicas | **1** (Tier A) | HOST-008 multi-replica residual |
+| Replicas | **1** (Tier A) | HOST-008 multi-pod **cancelled** — multi-fleet scale |
 
 Tune per site; do not treat these as production SLOs without load evidence.
 
@@ -380,7 +380,9 @@ Obtain Ready and Streamable HTTP mTLS hardening remain residuals.
 
 ---
 
-## 9. HA / multi-replica residual runbook (HOST-008 — Tier B)
+## 9. Single-replica honesty (HOST-008 multi-pod HA **cancelled**)
+
+**Product decision:** multi-pod gateway HA is **out of scope**. Scale with **[multi-fleet](../fleet/multi-fleet-rollout.md)** (N independent `replicas: 1` members + shared signed policy). Same-host multi-process file flock lite below is packaging/history only — **not** a multi-pod path.
 
 ### Tier A default: single replica
 
@@ -388,18 +390,16 @@ Obtain Ready and Streamable HTTP mTLS hardening remain residuals.
 |---------|----------------|
 | Kustomize / compose | **`replicas: 1`** (`deploy/gateway/kustomize/deployment.yaml`) |
 | Service sticky (scaffold) | **`sessionAffinity: ClientIP`** + `sessionAffinityConfig` on `deploy/gateway/kustomize/service.yaml` (**Done* scaffold** only — does not enable multi-replica runtime) |
-| Token / JWT vault | File vault: process-local mutex + **flock** on `path.lock` (HOST-008 **Done* lite** multi-process **same host / shared FS**). Memory vault process-local only. **Not multi-pod** without shared FS + remaining checklist |
-| Token Obtain cache | Default in-process `MemoryTokenCache` (`shared_token_cache: false`). Optional **same-host** `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` (flock + 0600; `shared_token_cache_file: true`). **Not** multi-pod external Redis/HA |
-| Subject limiter / rate | Concurrency slots process-local. Optional **SubjectLimiter MaxSubjects** hygiene via `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` (empty = unlimited; idle 0 in-use LRU; fail closed if all hold slots; process-local only). Rate: default process-local `SubjectRateLimiter` (`shared_subject_rate_file: false`). Optional **same-host** `FileSubjectRateLimiter` via `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` (flock + secret-free JSON 0600; `shared_subject_rate_file: true`). Optional rate **MaxSubjects** via `JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS` (empty = unlimited; LRU/oldest lastAccess; process-local / file-local only). `ha_multi_replica: false` always — multi-pod shared rate residual |
-| Principal map | Default in-process `PrincipalCache` (`shared_principal_cache_file: false`). Optional **same-host** `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` (flock + secret-free JSON 0600; SubjectKey → Jenkins principal only — **never tokens**; `shared_principal_cache_file: true`). **Not** multi-pod external HA |
-| Subject limiter / rate | Concurrency slots process-local. Rate: default process-local `SubjectRateLimiter` (`shared_subject_rate_file: false`). Optional **same-host** `FileSubjectRateLimiter` via `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` (flock + secret-free JSON 0600; `shared_subject_rate_file: true`). `ha_multi_replica: false` always — multi-pod shared rate residual |
-| Audit | Local file / sink per process |
+| Token / JWT vault | File vault: process-local mutex + **flock** on `path.lock` (HOST-008 **Done\* lite** multi-process **same host / shared FS**). Memory vault process-local only. Multi-pod shared vault **out of scope** |
+| Token Obtain cache | Default in-process `MemoryTokenCache` (`shared_token_cache: false`). Optional **same-host** `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` (flock + 0600; `shared_token_cache_file: true`). Multi-pod Redis **out of scope** |
+| Subject limiter / rate | Concurrency slots process-local. Optional file rate + MaxSubjects hygiene (same-host lite). `ha_multi_replica: false` always — multi-pod shared rate **out of scope** |
+| Principal map | Default in-process `PrincipalCache`. Optional **same-host** `FilePrincipalCache`. Multi-pod principal map **out of scope** |
+| Audit | Local file / sink per process (multi-fleet = per member) |
 | Operator readiness | `GET /readyz` + `gateway_ready` on **this** process only |
 
-**Do not** set Deployment `replicas` > 1 for interactive multi-user gateway until
-**all** multi-replica checklist rows below are met with durable shared vault.
-Scaffold comments and docs treat multi-replica HA as an **explicit non-goal**
-until that vault exists. Sticky Service affinity is packaging only — **not** a GO.
+**Do not** set Deployment `replicas` > 1 for interactive multi-user gateway.
+Multi-pod HA is **cancelled** (HOST-008); scale with multi-fleet members. Sticky
+Service affinity is packaging only — **not** multi-pod GO.
 
 ### Why single-replica is the default
 
@@ -413,18 +413,19 @@ until that vault exists. Sticky Service affinity is packaging only — **not** a
 | Process-local rate / slots | Per-pod budgets → uneven enforcement / bypass under multi-replica |
 | Audit files | Incomplete fleet forensics; no single timeline |
 
-### Multi-replica checklist (not Tier A MVP — runtime residual)
+### Historical multi-replica checklist (cancelled path — do not implement)
 
-Raise replicas **only** when every row is satisfied (org-owned design):
+Kept for honesty about what same-host lite covers. **Do not** raise replicas or
+treat rows as open product work; use multi-fleet instead.
 
 | # | Requirement | Why | Status in this repo |
 |---|-------------|-----|---------------------|
 | 1a | **Shared vault path + flock (same host / shared FS)** | CLI + serve (or multi-process lab) on one vault file without corrupt load-modify-save | **Done* lite** — `FileAPITokenVault` / `FileJWTVault` use process mutex + `syscall.Flock` on `path.lock` (unix/Tier-1 Linux). **Honesty:** multi-process same host / shared FS only — **not** multi-pod alone |
-| 1b | **Durable shared token vault** (external / AgentCore Identity / multi-pod) | Memory vaults and emptyDir file vaults are not multi-pod safe | **Residual** (HOST-008 / GWY-001) |
+| 1b | **Durable shared token vault** (external / AgentCore Identity / multi-pod) | Memory vaults and emptyDir file vaults are not multi-pod safe | **Out of scope** (HOST-008 cancelled; multi-fleet per-member vault) |
 | 2 | **Session affinity** (sticky sessions) **or** shared session store | Subject bind / confirm tokens must not split-brain across pods | **Done* scaffold / residual runtime** — kustomize Service `sessionAffinity: ClientIP` + `sessionAffinityConfig.clientIP.timeoutSeconds` (default 10800). Affinity is optional packaging for operators who later scale; **does not** close multi-replica HA without 1b + 3–8. Shared durable session store still residual |
 | 3 | **No reliance on memory token cache alone** | In-process Obtain cache must be shared or disabled under multi-replica | **Done\* lite** same-host: optional `FileTokenCache` (`JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH`, flock + 0600; `StatusMap` `shared_token_cache_file: true`). Default remains `MemoryTokenCache` (`shared_token_cache: false`). **Multi-pod external** Obtain cache (Redis/etc.) still **residual** — not multi-replica Done |
 | 4 | Shared or carefully partitioned **cache / archive** policy | Avoid cross-pod archive handle / pin confusion | **Residual** (STO / HOST-004) |
-| 5 | **Audit aggregation** (central sink) | Per-pod files are not a fleet audit plane | **Residual** multi-pod — per-process JSONL may carry multi-user `externalSubject` / `subjectKeyHash` (opaque correlation foundation; see `docs/observability.md`). **Done\* lite:** admin same-host merge of rotated siblings (`audit.jsonl.N`) on one profile path; fleet merge / multi-pod timeline still residual |
+| 5 | **Audit aggregation** (central sink) | Per-pod files are not a fleet audit plane | **Out of scope** for multi-pod HA — per-member JSONL + optional SIEM sinks (AUD-T); multi-fleet does not require multi-pod merge |
 | 6 | Sticky or shared Obtain / consent correlation | Refresh/consent must not double-mint unsafely | **Residual** (Mode C progressive consent) |
 | 7 | JWKS / identity multi-instance behavior measured | Process-local default; optional same-host public JWKS file | **Done\* lite** same-host: optional `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` (flock + 0600 public keys; `shared_jwks_file: true`). **Multi-pod external** JWKS + live Entra under load still **residual** — not multi-replica Done |
 | 8 | Shared subject rate / concurrency limiters | Process-local default; multi-process same-host optional file rate | **Done\* lite** same-host: optional `FileSubjectRateLimiter` (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`, flock + secret-free JSON; `shared_subject_rate_file: true`). Default memory `SubjectRateLimiter`. Admin `rateEnabled`/`ratePerMinute`/`rateBurst` + `sharedSubjectRateFile`. Concurrency slots still process-local. **Multi-pod external** shared rate still **residual** — not multi-replica Done |
@@ -454,7 +455,7 @@ When (and only if) org design closes 1b–8 and operators set `replicas` > 1:
 | Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false`, `sessionAffinityRecommended`, **`multiPodVaultResidual=true`**, `kubernetesEnvDetected`, `rateEnabled`/`ratePerMinute`/`rateBurst`, `residual` | Admin BFF ≠ MCP serve; rate knobs process-local HOST-006; k8s residual string when `KUBERNETES_SERVICE_HOST` set (parity with doctor checklist) |
 | Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false`, `sessionAffinityRecommended`, **`multiPodVaultResidual=true`**, `kubernetesEnvDetected`, `rateEnabled`/`ratePerMinute`/`rateBurst` + mode matrix | Never tokens; multi-user / k8s residual notes when env set; file vault flock multi-process lite only |
 
-**Doctor multi-pod residual fields (HOST-008 honesty — not multi-replica Done):**
+**Doctor multi-pod residual fields (HOST-008 honesty — multi-pod runtime cancelled; always non-GO):**
 
 | Detail field | Meaning |
 |--------------|---------|
@@ -492,7 +493,7 @@ See [roadmap § HOST-008](../roadmap/server-team-hosted.md) and
 | Measurable near-source bandwidth benefit study | PERF / pilot metrics |
 | Durable token vault (AgentCore Identity) | GWY-001 completion (offline mock + memory cache only today) |
 | Live Entra / AgentCore obtain pin | GWY-003 / OAUTH-010 — `TokenFetcher` / mock AS prove contracts offline |
-| Multi-replica HA | HOST-008 Tier B |
+| Multi-replica HA | HOST-008 **cancelled** (multi-fleet) |
 | **Consolidated live pin blockers** | [live-pin-blockers.md](live-pin-blockers.md) (OAUTH-009 / OAUTH-010 / HOST-008) |
 
 **Do not claim** production GWY-004 DoD complete from this scaffold alone.

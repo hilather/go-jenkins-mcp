@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
-	"github.com/simonfxr/go-jenkins-mcp/internal/tools"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/tools"
 )
 
 func TestPrepareTestReportForModel_RedactsFailureText(t *testing.T) {

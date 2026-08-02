@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // Wave 48 / POL-005 policy-layer canaries (Track D):

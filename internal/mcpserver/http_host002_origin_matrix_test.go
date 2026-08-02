@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/mcpserver"
+	"github.com/hilather/go-jenkins-mcp/internal/mcpserver"
 )
 
 // TestHOST002_StreamableHTTPOriginHostMatrix is the expanded offline HOST-002

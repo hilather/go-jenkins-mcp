@@ -3,7 +3,7 @@ package policy
 import (
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
 )
 
 // AnonymousJenkinsUser is rejected as a policy subject (POL-003).
@@ -56,6 +56,12 @@ func NewSubject(profileID contracts.ProfileID, jenkinsUserID string, verified bo
 		JenkinsUserID: strings.TrimSpace(jenkinsUserID),
 		Verified:      verified,
 	}
+}
+
+// NewSubjectFromString is NewSubject for callers that only have a profile id string
+// (e.g. admin preview path) without importing contracts.
+func NewSubjectFromString(profileID, jenkinsUserID string, verified bool) Subject {
+	return NewSubject(contracts.ProfileID(strings.TrimSpace(profileID)), jenkinsUserID, verified)
 }
 
 // WithExternal returns a copy with an optional external IdP subject attached.

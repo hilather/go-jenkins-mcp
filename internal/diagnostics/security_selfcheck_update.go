@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/update"
+	"github.com/hilather/go-jenkins-mcp/internal/update"
 )
 
 // checkUpdateLKGResidual is Wave 47 Track C / UPD-001 residual honesty:

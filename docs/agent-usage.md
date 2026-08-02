@@ -236,6 +236,8 @@ Prefer this for “what ticket/PR is this?” only after diagnose when SCM/param
 
 ## 8. Freshness and cache
 
+Operator SoT for L1/L2 store, quota, pins, gateway process caches, and per-deploy configuration: **[caching.md](caching.md)**.
+
 - Capabilities / health may be cached with TTL; pass refresh only when the user reports version/plugin change.
 - Log tools may prefer local mirror (LOG-004) then fall back to Jenkins — cite incomplete/mirror notes when present.
 - `corrupt_cache` / doctor failures: tell the user to run CLI `doctor` / `cache verify` rather than inventing repair steps that rewrite packs.
@@ -300,8 +302,38 @@ jenkins-mcp serve --profile <id> --enable-admin-mcp --admin-role operator
 |------------|----------|--------|
 | Read | `admin_health`, `admin_me`, `admin_gateway_residual_status`, `admin_list_profiles`, `admin_policy_effective`, `admin_metrics`, `admin_audit_list`, `admin_doctor`, `admin_cache_status` | Secret-free; never tokens |
 | Write | `admin_cache_evict` (`confirm=EVICT`), `admin_consent_purge` (`CLEAR_ALL`), `admin_subject_invalidate`, `admin_audit_settings_put`, `admin_support_bundle` | Process role gates; AUD-001 on writes |
-| Residual | `admin_rbac_*`, `admin_saml_*` | Until POL-006/007 |
+| Done* pilot | `admin_rbac_list_bindings`, `admin_rbac_put_binding`, `admin_rbac_delete_binding` | UI-011 / POL-006; fleet SoT = signed config |
+| Residual | `admin_saml_*` | POL-007 MCP residual |
 
 **Rules:** Do not scrape `http://127.0.0.1:8787/admin/v1`. Prefer `admin_*` when
 registered. Confirm tokens are exact strings. `admin_policy_apply` durable write
 to signed enterprise bundles remains residual (validate path Done\*).
+
+---
+
+## 13. Fleet-wide ops via MCP (`fleet_*`)
+
+Multi-fleet members are **independent processes**. To read health/metrics across
+the fleet from **one** MCP attachment, enable **fleet mode** (default **off**):
+
+```text
+export JENKINS_MCP_FLEET_MODE=1
+export JENKINS_MCP_FLEET_MEMBER_ID=edge-a
+export JENKINS_MCP_FLEET_ROSTER=/etc/jenkins-mcp/fleet/roster.json
+export JENKINS_MCP_FLEET_MESH_TOKEN=…   # or --fleet-mesh-token-file (mode 0600)
+# Optional: peer listen so other members can fan-in to this process
+export JENKINS_MCP_FLEET_PEER_LISTEN=127.0.0.1:9443
+
+jenkins-mcp serve --profile site-a --read-only --stdio --fleet-mode \
+  --fleet-member-id edge-a --fleet-roster /etc/jenkins-mcp/fleet/roster.json
+```
+
+| Tool | Returns |
+|------|---------|
+| `fleet_list_members` | Roster + reachability probe |
+| `fleet_health` / `fleet_version` / `fleet_metrics` | Per-member payloads + `incomplete` if any peer fails |
+| `fleet_residual_status` / `fleet_doctor` / `fleet_cache_status` | Same fan-out honesty |
+
+**Rules:** Tool args **cannot** invent peer hosts (roster only). Mesh token never
+appears in results. **Not** multi-pod HA — request-time fan-out only. See
+[fleet/fleet-mcp-ops.md](fleet/fleet-mcp-ops.md).

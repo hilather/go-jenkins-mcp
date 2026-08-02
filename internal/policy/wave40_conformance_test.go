@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // Wave 40 / POL-005 conformance expansion for Wave 39–40 list privacy.

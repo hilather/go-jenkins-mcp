@@ -30,9 +30,9 @@
 
 | | |
 | --- | --- |
-| **Release** | [**v0.4.0**](https://github.com/hilather/go-jenkins-mcp/releases/tag/v0.4.0) · [notes](docs/release/RELEASE_NOTES_v0.4.0.md) |
+| **Release** | [**v0.5.0**](https://github.com/hilather/go-jenkins-mcp/releases/tag/v0.5.0) · [notes](docs/release/RELEASE_NOTES_v0.5.0.md) |
 | **Go** | **1.25.x** (see `go.mod`) · MCP Go SDK **v1.7.0** (ADR 0006) |
-| **Phase** | **Phase 0–2 foundations Done\*** · enterprise **Tier A offline** (gateway modes A/B/C mock labs) · **not** live Entra / multi-pod production GO |
+| **Phase** | **Phase 0–2 foundations Done\*** · enterprise **Tier A free-lab / offline Done\*** (gateway modes A/B/C free labs) · **site** Entra / multi-pod production pin = operator residual |
 | **Posture** | Pilot-ready **RO stdio** path · mutations and admin MCP **opt-in** · residual honesty required |
 
 | Phase | Progress SoT | Summary |
@@ -43,7 +43,7 @@
 | **Host / gateway** | [server-team-hosted.md](docs/roadmap/server-team-hosted.md) · [JWT/OAuth critical path](docs/roadmap/server-tier-a-jwt-oauth-critical-path.md) | Mode A vault, Mode B JWT RS, Mode C 3LO/OBO offline + mock labs |
 | **Admin / MCP-OPS** | [mcp-ops-parity.md](docs/admin/mcp-ops-parity.md) · [admin README](docs/admin/README.md) | BFF + SPA + opt-in `admin_*` tools |
 
-Incomplete work: [`docs/jenkins-mcp-enterprise-agent-todo.md`](docs/jenkins-mcp-enterprise-agent-todo.md) · seed defects: [`KNOWN_DEFECTS.md`](KNOWN_DEFECTS.md).
+Incomplete work: [`docs/jenkins-mcp-enterprise-agent-todo.md`](docs/jenkins-mcp-enterprise-agent-todo.md) · residuals: [product residuals](docs/security/product-residuals.md).
 
 ---
 
@@ -62,7 +62,7 @@ server that puts Cursor (and compatible hosts) on a short leash against Jenkins:
 | No operator day-2 surface | **Admin console** + opt-in **`admin_*` MCP** tools for agents |
 | Diagnose-by-vibes | Deep **diagnostic tool surface** (compare, regression window, evidence) |
 
-Built from the community seed [`simonfxr/go-jenkins-mcp`](https://github.com/simonfxr/go-jenkins-mcp) as a **behavioral seed** — not the long-term architecture. See [`UPSTREAM.md`](UPSTREAM.md).
+Product module: `github.com/hilather/go-jenkins-mcp`. Origin history (past-tense import only): [docs/HISTORY.md](docs/HISTORY.md).
 
 ---
 
@@ -78,6 +78,7 @@ Built from the community seed [`simonfxr/go-jenkins-mcp`](https://github.com/sim
 - **Per-user / per-group bindings (POL-006)** — overlay `subjects.users[]` / `subjects.groups[]`; list-row privacy + result caps
 - **Mutation safety** — opt-in `--allow-mutations`; preview → confirm TTL; allowlists
 - **Bounded logs & search** — progressive Zstd frames; no unbounded `ReadAll`
+- **Local cache** — per-profile L1 frames + L2 packs under XDG (default **10 GiB** quota, pins, maintenance); gateway process caches optional same-host file share — [docs/caching.md](docs/caching.md)
 - **Redaction & audit (AUD-001)** — JSONL audit; operator **type enable/disable**; catalog in `KnownEventTypes`
 - **Diagnostics** — doctor, compare, regression window, support-bundle (secret-free)
 
@@ -94,14 +95,15 @@ Built from the community seed [`simonfxr/go-jenkins-mcp`](https://github.com/sim
 | Mode | Credential | Status |
 | --- | --- | --- |
 | **A** | API-token vault (`gateway vault`) | Offline + disposable Jenkins lab Done\* |
-| **B** | Jenkins-audience JWT RS bearer (`gateway jwt-vault`) | Offline + mock RS lab Done\*; live jwt-auth-filter residual |
-| **C** | AgentCore / 3LO-OBO Obtain | Offline + mock-token lab Done\*; live Entra residual |
+| **B** | Jenkins-audience JWT RS bearer (`gateway jwt-vault`) | Offline + free mock RS lab Done\*; **site** jwt-auth-filter pin operator residual |
+| **C** | AgentCore / 3LO-OBO Obtain | Offline + free mock-token lab Done\*; **site** Entra pin operator residual |
 
-Live production pins (real Entra, multi-pod HA) remain residual — see [live-pin-blockers](docs/gateway/live-pin-blockers.md).
+**Product free-lab bar** (kept): [free-lab-qualification](docs/gateway/free-lab-qualification.md).  
+**Site production pin** (optional operator runbook): [live-pin-blockers](docs/gateway/live-pin-blockers.md).
 
 ### Packaging & platform
 
-- **Tier-1:** Rocky Linux + Ubuntu · **macOS** nice-to-have · **Windows out of scope**
+- **Tier-1 only:** Rocky Linux + Ubuntu · **macOS and Windows out of scope**
 - Tarball + DEB (`make package`); RPM when `rpmbuild` present
 - Local Docker admin stack: `deploy/local/` + `make local-docker-*` (Cursor stdio stays host-native)
 
@@ -154,7 +156,7 @@ make residual-smoke    # offline residual honesty (not live GO)
 ```
 
 > **Never** put API tokens, `user:token`, or `JENKINS_MCP_AUTH` in `args` / `env`.  
-> That seed bootstrap path is a known defect ([`KNOWN_DEFECTS.md`](KNOWN_DEFECTS.md) KD-003).
+> That bootstrap path is **removed** (fail closed); use `login --profile` + keyring only.
 
 ### 4. Optional day-2 surfaces
 
@@ -256,7 +258,7 @@ Deep dive: [`docs/jenkins-mcp-enterprise-architecture.md`](docs/jenkins-mcp-ente
 - **Audit:** security-relevant paths emit AUD-001; operators toggle types via admin Audit settings
 - **Mutations:** disabled unless explicitly enabled; confirmation token TTL enforced
 - **Admin users (v1):** shared secret + process role — not a multi-operator account DB
-- **Platforms:** Tier-1 Rocky Linux + Ubuntu · macOS best-effort · **Windows out of scope**
+- **Platforms:** Tier-1 Rocky Linux + Ubuntu only · **macOS and Windows out of scope**
 
 Operator guide: [`docs/security/operator-guide.md`](docs/security/operator-guide.md)  
 Threat model: [`docs/security/threat-model.md`](docs/security/threat-model.md)  
@@ -333,15 +335,13 @@ Contributing workflow and backlog rules: [`CONTRIBUTING.md`](CONTRIBUTING.md) ·
 
 ---
 
-## Upstream
+## History
 
-Behavioral seed: [`simonfxr/go-jenkins-mcp`](https://github.com/simonfxr/go-jenkins-mcp)  
-Frozen commit + hashes: [`UPSTREAM.md`](UPSTREAM.md)  
-Seed README / tool list: [`README.upstream.md`](README.upstream.md)  
-Expected seed defects: [`KNOWN_DEFECTS.md`](KNOWN_DEFECTS.md)
+Past-tense import notes and license attribution: [docs/HISTORY.md](docs/HISTORY.md) · archive: [docs/archive/](docs/archive/).  
+Living residual risk: [docs/security/product-residuals.md](docs/security/product-residuals.md).
 
 ---
 
 ## License
 
-[MIT](LICENSE). Upstream attribution in `LICENSE`, `NOTICE`, and `UPSTREAM.md`.
+[MIT](LICENSE). Copyright notices in `LICENSE`, `NOTICE`, and [docs/HISTORY.md](docs/HISTORY.md).

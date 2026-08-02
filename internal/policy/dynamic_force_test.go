@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 func TestDynamicForceSetMidLife_ForceTrueToFalse(t *testing.T) {

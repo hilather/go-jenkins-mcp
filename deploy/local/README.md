@@ -77,6 +77,8 @@ lab admin token before treating the stack as “locked down.”
 
 ## Agent + cache models (configure deliberately)
 
+**Operator SoT for all cache planes and deploy types:** [docs/caching.md](../../docs/caching.md) (plane A log store, plane B gateway caches, quota, shared-XDG caveats).
+
 Three supported lab layouts. Pick one; do not assume admin Docker alone warms
 Cursor’s default host cache.
 

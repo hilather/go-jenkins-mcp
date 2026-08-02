@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/adapter"
+	"github.com/hilather/go-jenkins-mcp/internal/adapter"
 )
 
 // checkAdapterFrameworkResidual is Wave 43 / INT-001 residual honesty:

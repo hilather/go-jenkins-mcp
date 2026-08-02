@@ -3,7 +3,7 @@ package telemetry_test
 import (
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry"
 )
 
 func TestResolveLogLevel(t *testing.T) {

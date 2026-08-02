@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/logmirror"
-	"github.com/simonfxr/go-jenkins-mcp/internal/store"
+	"github.com/hilather/go-jenkins-mcp/internal/logmirror"
+	"github.com/hilather/go-jenkins-mcp/internal/store"
 )
 
 func openMachineWithFrames(t *testing.T, src logmirror.ProgressiveSource, target int) (

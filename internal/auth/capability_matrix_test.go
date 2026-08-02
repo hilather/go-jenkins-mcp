@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
 )
 
 // OAUTH-008: path levels match architecture decisions.

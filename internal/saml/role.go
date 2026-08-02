@@ -3,7 +3,7 @@ package saml
 import (
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // ResolveAdminRole maps IdP groups to an admin console role using Config.GroupRoles.

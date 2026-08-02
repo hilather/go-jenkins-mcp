@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/app"
+	"github.com/hilather/go-jenkins-mcp/internal/app"
 )
 
 // Wave 53 / ARC-007 cache maintenance conformance (Track D):

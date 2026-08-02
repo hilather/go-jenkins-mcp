@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // policySubjectFromGatewayCtx builds the multi-user policy.Subject for

@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
 	// Blank import registers Wave 38 hard_max_resolve_residual + Wave 43
 	// operator_caps_snapshot canaries (tools init).
-	_ "github.com/simonfxr/go-jenkins-mcp/internal/tools"
+	_ "github.com/hilather/go-jenkins-mcp/internal/tools"
 )
 
 func TestSecuritySelfCheck_OfflineCanaries(t *testing.T) {

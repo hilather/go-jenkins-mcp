@@ -2,22 +2,23 @@ package adminops
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/admin"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
-	"github.com/simonfxr/go-jenkins-mcp/internal/store"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
+	"github.com/hilather/go-jenkins-mcp/internal/admin"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/store"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry"
 )
 
 // Config wires process identity for admin MCP ops (secret-free).
@@ -713,7 +714,14 @@ func (s *Service) runEvict(ctx context.Context, profileID string, targetBytes in
 		return nil, err
 	}
 	defer meta.Close()
-	qm, err := store.NewQuotaManager(meta, dataDir, store.QuotaConfig{})
+	qcfg, err := store.ResolveQuotaConfigFromEnviron(
+		os.Getenv(store.EnvCacheTotalQuotaBytes),
+		os.Getenv(store.EnvCacheLowDiskBytes),
+	)
+	if err != nil {
+		return nil, err
+	}
+	qm, err := store.NewQuotaManager(meta, dataDir, qcfg)
 	if err != nil {
 		return nil, err
 	}
@@ -1009,8 +1017,10 @@ func ToolCatalog() []string {
 		"admin_gateway_vault_status",
 		"admin_subject_invalidate",
 		"admin_consent_purge",
-		// Residual until POL-006/007:
-		// "admin_rbac_list_bindings", "admin_rbac_put_binding", "admin_rbac_delete_binding",
+		"admin_rbac_list_bindings",
+		"admin_rbac_put_binding",
+		"admin_rbac_delete_binding",
+		// Residual until POL-007 MCP:
 		// "admin_saml_status", "admin_saml_config_get",
 	}
 }
@@ -1018,10 +1028,162 @@ func ToolCatalog() []string {
 // ResidualTools documents tools not yet implemented (matrix honesty).
 func ResidualTools() map[string]string {
 	return map[string]string{
-		"admin_rbac_list_bindings":  "POL-006 residual",
-		"admin_rbac_put_binding":    "POL-006 residual",
-		"admin_rbac_delete_binding": "POL-006 residual",
-		"admin_saml_status":         "POL-007 residual",
-		"admin_saml_config_get":     "POL-007 residual",
+		"admin_saml_status":     "POL-007 residual",
+		"admin_saml_config_get": "POL-007 residual",
 	}
+}
+
+// RbacListBindings returns user/group deny bindings from process policy (UI-011 / POL-006).
+// Secret-free; never tokens. Multi-fleet SoT remains signed config.
+func (s *Service) RbacListBindings(_ context.Context) (map[string]any, error) {
+	if err := RequirePermission(s.Role(), PermRead); err != nil {
+		return nil, err
+	}
+	out := map[string]any{
+		"fleet_sot": "configuration/signed policy (MGR-001); SPA/MCP is pilot break-glass only",
+		"users":     []any{},
+		"groups":    []any{},
+	}
+	res, err := policy.LoadFromEnviron()
+	if err != nil {
+		out["available"] = false
+		out["residual"] = "policy load residual: " + err.Error()
+		// Do not leak paths/keys
+		if len(out["residual"].(string)) > 200 {
+			out["residual"] = "policy load residual (fail closed)"
+		}
+		return out, nil
+	}
+	if res.Overlay == nil {
+		out["available"] = false
+		out["residual"] = "no overlay loaded"
+		return out, nil
+	}
+	out["available"] = true
+	out["signature_state"] = res.SignatureState
+	if res.Overlay.Subjects != nil {
+		out["users"] = res.Overlay.Subjects.Users
+		out["groups"] = res.Overlay.Subjects.Groups
+	}
+	return out, nil
+}
+
+// RbacPutBindings replaces subjects on plain overlay when plain write allowed.
+// Requires policy_write. Same multi-fleet refuse path as BFF PlainApplyBlocked
+// (REQUIRE_SIGNED, trusted keys, signed bundle path).
+func (s *Service) RbacPutBindings(ctx context.Context, users []policy.UserBinding, groups []policy.GroupBinding, profileID, confirm string) (map[string]any, error) {
+	if err := RequirePermission(s.Role(), PermPolicyWrite); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(confirm) != "APPLY" {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "rbac put requires confirm=APPLY")
+	}
+	subjects := &policy.SubjectBindings{Users: users, Groups: groups}
+	if err := subjects.Validate(); err != nil {
+		return nil, err
+	}
+	paths, err := s.resolvePaths()
+	if err != nil {
+		s.emitWriteAudit(profileID, audit.TypePolicyApply, "rbac_put", audit.DecisionSuccess, "validated_memory_only")
+		return map[string]any{
+			"applied":  false,
+			"valid":    true,
+			"users":    users,
+			"groups":   groups,
+			"residual": "paths unavailable; bindings validated only (no durable write)",
+		}, nil
+	}
+	// BFF/MCP parity: refuse plain write on multi-fleet signed paths.
+	if blocked, msg := admin.PlainApplyBlocked(paths); blocked {
+		s.emitWriteAudit(profileID, audit.TypePolicyApply, "rbac_put", audit.DecisionDeny, "plain_apply_blocked")
+		return nil, apperr.New(apperr.CodeAuthorization, msg)
+	}
+	// Build overlay via LoadFromEnviron or empty pilot shell
+	res, _ := policy.LoadFromEnviron()
+	var base *policy.Overlay
+	if res.Overlay != nil {
+		cp := *res.Overlay
+		base = &cp
+	} else {
+		base = &policy.Overlay{Version: 1, Mode: policy.ModePilot, ForceReadOnly: true}
+	}
+	base.Subjects = subjects
+	if err := base.Validate(); err != nil {
+		return nil, err
+	}
+	outPath := paths.DefaultPolicyFile()
+	if envPath := strings.TrimSpace(os.Getenv(policy.EnvPolicyFileVar)); envPath != "" && !strings.HasSuffix(strings.ToLower(envPath), ".bundle.json") {
+		outPath = envPath
+	}
+	raw, err := json.MarshalIndent(base, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(outPath), 0o700); err != nil {
+		return nil, apperr.Wrap(apperr.CodeInternal, "policy dir", err)
+	}
+	if err := os.WriteFile(outPath, raw, 0o600); err != nil {
+		s.emitWriteAudit(profileID, audit.TypePolicyApply, "rbac_put", audit.DecisionDeny, "write_failed")
+		return nil, apperr.Wrap(apperr.CodeInternal, "write policy overlay", err)
+	}
+	s.emitWriteAudit(profileID, audit.TypePolicyApply, "rbac_put", audit.DecisionSuccess, "applied")
+	return map[string]any{
+		"applied":   true,
+		"path_base": filepath.Base(outPath),
+		"users":     users,
+		"groups":    groups,
+		"notes":     []string{"plain pilot overlay subjects written; multi-fleet production uses signed bundles"},
+	}, nil
+}
+
+// RbacDeleteBinding removes one user or group binding by id (confirm=DELETE).
+func (s *Service) RbacDeleteBinding(ctx context.Context, kind, id, profileID, confirm string) (map[string]any, error) {
+	if err := RequirePermission(s.Role(), PermPolicyWrite); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(confirm) != "DELETE" {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "rbac delete requires confirm=DELETE")
+	}
+	kind = strings.ToLower(strings.TrimSpace(kind))
+	id = strings.TrimSpace(id)
+	if id == "" || (kind != "user" && kind != "group") {
+		return nil, apperr.New(apperr.CodeInvalidArgument, "kind must be user|group and id required")
+	}
+	list, err := s.RbacListBindings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	users, _ := list["users"].([]policy.UserBinding)
+	// users may be []any from map - re-load overlay
+	res, _ := policy.LoadFromEnviron()
+	var base *policy.Overlay
+	if res.Overlay != nil {
+		cp := *res.Overlay
+		base = &cp
+	} else {
+		return map[string]any{"deleted": false, "residual": "no overlay"}, nil
+	}
+	if base.Subjects == nil {
+		return map[string]any{"deleted": false, "residual": "no subjects"}, nil
+	}
+	switch kind {
+	case "user":
+		next := make([]policy.UserBinding, 0, len(base.Subjects.Users))
+		for _, u := range base.Subjects.Users {
+			if !strings.EqualFold(u.JenkinsUserID, id) && u.ExternalSubject != id {
+				next = append(next, u)
+			}
+		}
+		base.Subjects.Users = next
+	case "group":
+		next := make([]policy.GroupBinding, 0, len(base.Subjects.Groups))
+		for _, g := range base.Subjects.Groups {
+			if g.GroupID != id {
+				next = append(next, g)
+			}
+		}
+		base.Subjects.Groups = next
+	}
+	_ = users
+	return s.RbacPutBindings(ctx, base.Subjects.Users, base.Subjects.Groups, profileID, "APPLY")
 }

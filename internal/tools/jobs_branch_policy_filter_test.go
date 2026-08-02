@@ -3,8 +3,8 @@ package tools
 import (
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // Wave 37: unit filter for deny_branch_names on list_jobs rows.

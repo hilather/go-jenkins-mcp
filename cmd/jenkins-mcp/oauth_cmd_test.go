@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
 )
 
 func TestOAuthValidateProfile_FlagsAndOffline(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // DefaultClockSkew is the allowed skew for exp / nbf validation (OAUTH-003).

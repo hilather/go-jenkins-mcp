@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // TokenFetcher obtains a Jenkins-audience credential for a validated caller

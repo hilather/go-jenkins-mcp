@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // Bounds for stage/node log retrieval (PIPE-002 / MCP budgets).

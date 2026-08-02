@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
 )
 
 // TestWave43_OperatorCapsAndAdapter_Hard asserts Wave 43 Done* self-check items.

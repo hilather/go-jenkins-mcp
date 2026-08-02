@@ -61,6 +61,11 @@ health/version/me, residual-status, profiles, policy effective/overlay/validate/
 security self-check, cache status/plan/evict, support-bundle, vault status,
 subject-invalidate, consent-purge. Default pilot RO stdio keeps admin tools **off**.
 
+**Fleet fan-out (separate namespace):** opt-in `--fleet-mode` + roster + mesh token
+registers **`fleet_*`** tools (`fleet_metrics`, `fleet_health`, …) — request-time
+aggregation across multi-fleet members, **not** multi-pod HA. See
+[fleet/fleet-mcp-ops.md](../fleet/fleet-mcp-ops.md).
+
 ---
 
 ## 4. Parity matrix (target)
@@ -77,7 +82,7 @@ Authz: process **admin role** (same as console) or stricter serve-time gate; des
 | Effective policy | `admin_policy_effective` | P0 | Mirror show-effective |
 | Policy overlay get | `admin_policy_overlay_get` | P1 | |
 | Policy validate/apply | `admin_policy_validate`, `admin_policy_apply` | P1 | policy_admin + confirm on apply |
-| User/group RBAC bindings (POL-006) | `admin_rbac_list_bindings`, `admin_rbac_put_binding`, `admin_rbac_delete_binding` | P1 | Policy language **Done\*** (`subjects.users`/`subjects.groups`); **admin_* CRUD residual** until UI-011 |
+| User/group RBAC bindings (POL-006) | `admin_rbac_list_bindings`, `admin_rbac_put_binding`, `admin_rbac_delete_binding` | P1 | **Done\*** pilot (UI-011); multi-fleet SoT remains signed config |
 | SAML SP / attribute map (POL-007) | `admin_saml_status` residual; BFF `GET /admin/v1/saml/status` **Done\*** | P2 | SP validate/map Done\* offline; **admin_saml_*** MCP tools residual; live IdP residual |
 | Metrics snapshot | `admin_metrics` | P0 | Counters/gauges only; residual note |
 | Audit list | `admin_audit_list` | P0 | limit/before/type/external_subject caps |

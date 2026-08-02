@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/authlab"
+	"github.com/hilather/go-jenkins-mcp/internal/authlab"
 )
 
 func TestGenerateAndMintRoundTrip(t *testing.T) {

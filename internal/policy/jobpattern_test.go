@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // Wave 26 / POL-002: deny_job_prefixes glob-lite matrix + Wave 29 mid-path **/.

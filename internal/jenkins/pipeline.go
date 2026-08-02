@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // Bounds for Pipeline stage graph retrieval (PIPE-001 / MCP budgets).

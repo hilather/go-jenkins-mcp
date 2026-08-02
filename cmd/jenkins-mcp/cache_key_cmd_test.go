@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
-	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
-	storecrypto "github.com/simonfxr/go-jenkins-mcp/internal/store/crypto"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/keyring"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
+	storecrypto "github.com/hilather/go-jenkins-mcp/internal/store/crypto"
 )
 
 // withTestXDG installs isolated XDG dirs and a Memory keyring for cache-key CLI tests.

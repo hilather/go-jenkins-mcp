@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 )
 
 // HOST-008: FileTokenCache round-trip, isolation, TTL, 0600, StatusMap, canary.

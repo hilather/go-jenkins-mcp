@@ -1,0 +1,4 @@
+# Free jwt-rs lab: real bearer RS filter + JCasC.
+# Never pin production secrets here.
+configuration-as-code:latest
+jwt-auth-filter:latest

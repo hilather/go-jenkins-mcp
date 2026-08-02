@@ -70,6 +70,8 @@ Optional honesty automation (not default `make test` / `make ci`):
 
 ## 5. Cache verify
 
+Operator guide (quota, pins, Docker share models): [caching.md](../caching.md).
+
 - [ ] `jenkins-mcp cache status --profile <id>` — dataDir OK, schema OK
 - [ ] `jenkins-mcp cache verify --profile <id> --sample 3` — `pack_fail=0` or empty archives
 - [ ] If pack failures: `cache repair --index-only` then re-verify; quarantine path documented if corrupt

@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // Gate is the Check() contract shared with tools.AuthGate (duck-typed; auth

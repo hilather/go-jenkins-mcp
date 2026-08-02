@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // MaxPolicyDraftBytes caps validate/apply request bodies (fail closed).
@@ -576,11 +576,24 @@ func loadCurrentPolicyBaseline(paths config.Paths) (*policy.Overlay, bool, []str
 	return &o, o.ForceReadOnly, notes, nil
 }
 
+// PlainApplyBlocked reports whether plain overlay / bindings write must be refused
+// (multi-fleet signed path). Used by BFF and adminops MCP for parity.
+//
+// Refuses when: POLICY_REQUIRED, REQUIRE_SIGNED_POLICY, trusted public keys are
+// configured, or the resolved policy file is a signed bundle.
+func PlainApplyBlocked(paths config.Paths) (bool, string) {
+	return plainApplyBlocked(paths)
+}
+
 // plainApplyBlocked reports whether plain overlay write must be refused.
 func plainApplyBlocked(paths config.Paths) (bool, string) {
 	// JENKINS_MCP_POLICY_REQUIRED → production-style enforcement.
 	if policyRequiredFromEnv() {
 		return true, "JENKINS_MCP_POLICY_REQUIRED is set: plain overlay write refused; use CLI policy sign on host"
+	}
+	// JENKINS_MCP_REQUIRE_SIGNED_POLICY → multi-fleet signed path; no plain SPA write.
+	if policy.ParseEnvReadOnly(os.Getenv(policy.EnvRequireSignedPolicyVar)) {
+		return true, "JENKINS_MCP_REQUIRE_SIGNED_POLICY is set: plain overlay/bindings write refused; use CLI policy sign on host"
 	}
 	// Trusted public keys present → signed bundles required for serve.
 	keys, err := policy.LoadTrustedKeysFromEnviron(&paths)
@@ -593,6 +606,12 @@ func plainApplyBlocked(paths config.Paths) (bool, string) {
 	if err == nil {
 		if raw, rerr := os.ReadFile(path); rerr == nil && policy.LooksLikeBundle(raw) {
 			return true, "resolved policy is a signed bundle; plain browser apply refused (CLI sign on host)"
+		}
+	}
+	// Env path pointing at a signed bundle (even if ResolvePolicyPath differs).
+	if envPath := strings.TrimSpace(os.Getenv(policy.EnvPolicyFileVar)); envPath != "" {
+		if raw, rerr := os.ReadFile(envPath); rerr == nil && policy.LooksLikeBundle(raw) {
+			return true, "JENKINS_MCP_POLICY_FILE is a signed bundle; plain overlay write refused (CLI sign on host)"
 		}
 	}
 	return false, ""

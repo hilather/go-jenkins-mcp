@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "mode": "pilot",
+  "force_read_only": true,
+  "fleet_telemetry_force_off": false,
+  "deny_tools": [],
+  "deny_job_prefixes": ["secret-folder"],
+  "subjects": {
+    "users": [
+      {
+        "jenkins_user_id": "alice",
+        "deny_tools": ["jenkins_get_build_logs"],
+        "deny_job_prefixes": ["alice-only-secret"]
+      }
+    ],
+    "groups": [
+      {
+        "group_id": "contractors",
+        "deny_tools": ["jenkins_get_build_logs", "jenkins_get_console_log"],
+        "deny_job_prefixes": ["prod/**"]
+      },
+      {
+        "group_id": "mcp-viewers",
+        "max_result_bytes": 65536
+      }
+    ]
+  }
+}

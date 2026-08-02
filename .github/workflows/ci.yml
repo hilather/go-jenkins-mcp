@@ -5,7 +5,6 @@
 #   - govulncheck                        — vulnerability scan
 #
 # Optional / non-blocking (continue-on-error or workflow_dispatch only):
-#   - macos-optional    — Tier-2 best-effort
 #   - package-smoke     — PKG-001 offline tarball smoke (bare Ubuntu only)
 #   - fuzz-smoke        — QA-001 short native fuzz (FUZZTIME=1s on PR path)
 #   - stdio-smoke       — FND-006 offline MCP binary host-lifecycle (Wave 26+33; not Cursor product)
@@ -128,19 +127,6 @@ jobs:
       - name: Run govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
-  # Optional best-effort macOS (Tier-2) — does not block merge if workflow is required only for check+govulncheck
-  macos-optional:
-    name: macos-optional
-    runs-on: macos-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - run: go test -count=1 ./...
-      # Module root has no package main; binary lives under cmd/jenkins-mcp.
-      - run: go build -o bin/jenkins-mcp ./cmd/jenkins-mcp
 
   # Wave 23 / FND-007 expand: PKG-001 offline package smoke (bare Ubuntu only).
   # Does not run in Rocky container (no dpkg tooling assumptions; keeps Rocky job lean).

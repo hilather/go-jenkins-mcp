@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
 )
 
 func TestExtractCandidates_SampleMavenFailure(t *testing.T) {

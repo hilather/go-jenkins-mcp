@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway/qualify"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway/qualify"
 )
 
 func TestRunOffline_AllPass(t *testing.T) {

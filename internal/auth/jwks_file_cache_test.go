@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
 )
 
 func TestJWKSCachePathConfiguredFromEnviron(t *testing.T) {

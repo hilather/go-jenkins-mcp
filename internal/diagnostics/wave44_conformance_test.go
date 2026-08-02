@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
 )
 
 // Wave 44 / QA-005 + MCP-001 conformance (Track D):

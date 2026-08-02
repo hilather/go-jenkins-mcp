@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/admin"
+	"github.com/hilather/go-jenkins-mcp/internal/admin"
 )
 
 func TestTokenMatches_BearerAndHeader(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
 )
 
 func TestLoginOIDC_RequiresOIDCProfile(t *testing.T) {

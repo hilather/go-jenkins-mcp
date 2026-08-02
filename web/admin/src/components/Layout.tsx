@@ -16,6 +16,7 @@ const navItems: { to: string; label: string; end?: boolean }[] = [
   { to: "/", label: "Overview", end: true },
   { to: "/profiles", label: "Profiles" },
   { to: "/policy", label: "Policy" },
+  { to: "/access", label: "Access" },
   { to: "/metrics", label: "Metrics" },
   { to: "/audit", label: "Audit" },
   { to: "/doctor", label: "Doctor" },

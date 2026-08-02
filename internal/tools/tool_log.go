@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry"
 )
 
 // effectiveLogger returns the process tool logger: RegisterOptions.Logger first,

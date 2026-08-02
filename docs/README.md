@@ -32,6 +32,7 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [roadmap/server-tier-a-jwt-oauth-critical-path.md](roadmap/server-tier-a-jwt-oauth-critical-path.md) | Server Tier A critical path: Modes A/B/C JWT/OAuth (multi-node deferred) |
 | [tool-contracts.md](tool-contracts.md) | MCP tool inventory, budgets, error codes, side effects |
 | [packaging.md](packaging.md) | RPM/DEB/tar, XDG paths, update-check, HTTP mode notes, local Docker pointer |
+| [caching.md](caching.md) | **Log store + gateway caches** — how they work and config per deployment type |
 | [policy-rbac.md](policy-rbac.md) | Deny-only RBAC + overlay schema |
 | [auth-architecture.md](auth-architecture.md) | Auth surfaces; Jenkins is not a 3LO AS |
 | [observability.md](observability.md) | Metrics, doctor, telemetry wiring |
@@ -46,7 +47,7 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [security/privacy-data-retention.md](security/privacy-data-retention.md) | Data classes & retention (QA-006) |
 | [security/audit-trail-review.md](security/audit-trail-review.md) | Audit trail vs industry standards + **AUD-T** backlog (SIEM residual) |
 | [security/threat-model.md](security/threat-model.md) | Assets, actors, trust boundaries |
-| [security/cache-encryption.md](security/cache-encryption.md) | Optional L1 AEAD residual |
+| [security/cache-encryption.md](security/cache-encryption.md) | Optional L1 AEAD (see also [caching.md](caching.md)) |
 
 ## Auth / OAuth residuals
 
@@ -64,12 +65,17 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [gateway/README.md](gateway/README.md) | Managed gateway foundation |
 | [gateway/deployment.md](gateway/deployment.md) | Deploy scaffold + non-secret env |
 | [gateway/qualification.md](gateway/qualification.md) | Offline qualify residual |
-| [gateway/live-pin-blockers.md](gateway/live-pin-blockers.md) | Live production GO residual (OAUTH-009/010, HOST-008) |
+| [gateway/live-pin-blockers.md](gateway/live-pin-blockers.md) | Live production GO residual (OAUTH-009/010; HOST-008 multi-pod cancelled) |
+| [fleet/multi-fleet-rollout.md](fleet/multi-fleet-rollout.md) | Enterprise scale (shared policy, N single-replica members) |
 | [adapters/README.md](adapters/README.md) | Optional adapters (default off) |
 | [admin/mcp-ops-parity.md](admin/mcp-ops-parity.md) | Admin console ↔ **MCP `admin_*` tools** parity backlog (MCP-OPS-*) |
 | [adapters/ext-logs.md](adapters/ext-logs.md) | External logs + Jenkins ACL preflight |
 | [adapters/work-items.md](adapters/work-items.md) | Change / work-item correlation |
 | [adapters/otel-correlate.md](adapters/otel-correlate.md) | Trace refs |
+| [caching.md](caching.md) | Unified cache operator guide (L1/L2, quota, gateway file caches, deploy matrix) |
+| [fleet/multi-fleet-rollout.md](fleet/multi-fleet-rollout.md) | Multi-fleet gitops (shared signed policy, independent members) |
+| [fleet/fleet-mcp-ops.md](fleet/fleet-mcp-ops.md) | Opt-in `fleet_*` MCP + any-node fan-out (mesh-token; not multi-pod HA) |
+| [arc/eviction.md](arc/eviction.md) · [arc/cache-pins.md](arc/cache-pins.md) | Eviction CLI + pin CLI detail |
 | [arc/pack-format-v1.md](arc/pack-format-v1.md) | L2 pack format |
 | [arc/ratarmount-rs-pin.json](arc/ratarmount-rs-pin.json) | Candidate pin: `ratarmount-rs` **v0.1.14** |
 | [arc/ratarmount-rs-qualification.md](arc/ratarmount-rs-qualification.md) | ARC-000 pin + qualification checklist |

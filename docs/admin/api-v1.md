@@ -151,7 +151,7 @@ Mode C):
 | `credentialMode` | **HOST-008 residual:** primary `JENKINS_MCP_GATEWAY_CREDENTIAL_MODE` id (empty when invalid). Mode id only — never tokens. |
 | `multiUserEnabled` | **HOST-008 residual:** `true` when `JENKINS_MCP_GATEWAY_MULTI_USER` is truthy. Foundation residual only — **not** production multi-user GO. |
 | `gatewayReady` | Always **`false` on admin BFF** (separate process from MCP serve). Live Obtain Ready is `GET /readyz` on the gateway serve process. |
-| `haMultiReplica` | Always **`false`** (HOST-008 Tier A single-replica default; multi-replica runtime not implemented). |
+| `haMultiReplica` | Always **`false`** (HOST-008 multi-pod **cancelled**; single-replica + multi-fleet only). |
 | `sessionAffinityRecommended` | **HOST-008 residual:** `true` when multi-user env is set. Recommends kustomize Service sticky scaffold (`sessionAffinity: ClientIP`) if replicas are ever scaled — **not** multi-replica Done. Scaffold packaging only. |
 | `multiPodVaultResidual` | Always **`true`** (HOST-008 multi-pod durable vault residual honesty). Parity with doctor `gateway_status.multi_pod_vault_residual`. **Not** multi-replica Done. See [gateway/deployment.md §9](../gateway/deployment.md). **SPA Overview** displays this bool on Health and Gateway vault cards. |
 | `kubernetesEnvDetected` | **`true`** when `KUBERNETES_SERVICE_HOST` is set (in-cluster residual). Residual string then includes multi-pod checklist summary (sticky, shared vault, rate, Obtain cache). Never tokens. **SPA Overview** shows a multi-pod residual checklist card when true (secret-free; not multi-replica Done). |
@@ -205,7 +205,7 @@ Authorization headers, or raw subject keys.
 | `mode` | Primary credential mode id |
 | `enabledModes` | Allow-list of mode ids (secret-free) |
 | `multiUserEnabled` | `JENKINS_MCP_GATEWAY_MULTI_USER` truthy parse (foundation residual; not production GO) |
-| `haMultiReplica` | Always `false` (HOST-008 Tier A; multi-replica not implemented) |
+| `haMultiReplica` | Always `false` (HOST-008 multi-pod cancelled; multi-fleet scale) |
 | `sessionAffinityRecommended` | `true` when multi-user env set (HOST-008 sticky Service scaffold honesty; not multi-replica Done) |
 | `multiPodVaultResidual` | Always `true` (HOST-008 multi-pod vault residual; parity with doctor `multi_pod_vault_residual`) |
 | `kubernetesEnvDetected` | `true` when `KUBERNETES_SERVICE_HOST` set; residual notes multi-pod checklist (not HA Done) |
@@ -230,7 +230,7 @@ env parse only — it does **not** certify multi-user MCP production readiness.
 When the env is set, `residual` includes an honesty note (no tokens) and
 `sessionAffinityRecommended` is `true` (kustomize sticky scaffold honesty only).
 Operators rely on gateway/REL evidence for live multi-user claims. Multi-replica
-remains HOST-008 Tier B (`haMultiReplica: false`).
+remains **out of scope** (HOST-008 cancelled; `haMultiReplica: false`).
 
 ## GET /admin/v1/gateway/residual-status
 
@@ -322,7 +322,7 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 | `residual_ids` | Structured residual ids for operator grepping |
 | `multi_user_enabled` | `JENKINS_MCP_GATEWAY_MULTI_USER` truthy parse (foundation residual) |
 | `gateway_ready` | Always `false` on admin BFF (Ready is serve `/readyz`) |
-| `ha_multi_replica` | Always `false` (HOST-008 Tier A) |
+| `ha_multi_replica` | Always `false` (HOST-008 multi-pod cancelled) |
 | `session_affinity_recommended` | `true` when multi-user env set (scaffold honesty) |
 | `multi_pod_vault_residual` | Always `true` (HOST-008 multi-pod vault residual) |
 | `kubernetes_env_detected` | `true` when `KUBERNETES_SERVICE_HOST` set (value never embedded) |
@@ -978,3 +978,14 @@ Starts a real `jenkins-mcp admin serve` on an ephemeral loopback port against a 
 
 - Full **browser** Playwright/Cypress suite (DOM XSS “does not execute”, HAR scrub automation, multi-page SPA flows) is **not** shipped — defer until product requires browser CI.
 - CSRF remains **N/A** for v1 Bearer/header auth; cookie sessions would need CSRF tests.
+
+
+## Policy bindings (UI-011 / POL-006)
+
+| Method | Path | Role | Notes |
+|--------|------|------|-------|
+| GET | `/admin/v1/policy/bindings` | viewer+ | List `subjects.users` / `subjects.groups` from plain overlay; secret-free; `fleet_sot` honesty |
+| PUT/POST | `/admin/v1/policy/bindings` | policy_admin | Replace subjects on plain pilot overlay; refused when `REQUIRE_SIGNED_POLICY` / trusted keys / signed bundle |
+| POST | `/admin/v1/policy/bindings/preview` | viewer+ | Dry-run deny-only evaluate for hypothetical subject+groups+tool/job |
+
+Multi-fleet production SoT remains signed config ([multi-fleet-rollout.md](../fleet/multi-fleet-rollout.md)). SPA Access is break-glass only.

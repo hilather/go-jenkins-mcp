@@ -1,6 +1,6 @@
 # jwt-auth-filter qualification (OAUTH-009)
 
-**Status:** Offline classifier + Bearer claim matrix `Done*` (Wave 33 + OAUTH-009 expand); **live Jenkins / Entra / jwt-auth-filter lab residual** for production pin — **do not claim live Entra Done**  
+**Status:** Offline classifier + Bearer claim matrix + free mock RS lab `Done*` (product free-lab bar). **Site** production Jenkins / Entra / jwt-auth-filter pin = **operator residual** — [free-lab-qualification.md](../gateway/free-lab-qualification.md); **do not claim site Entra Done**  
 **Related:** [oauth-capability-matrix.md](oauth-capability-matrix.md), [auth-architecture.md](../auth-architecture.md), [../gateway/qualification.md](../gateway/qualification.md) (GWY-003), **[../gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md)** (consolidated live production GO residual), architecture §6.8  
 **Code:** `internal/auth/rs_qualification.go` (+ `rs_fallthrough.go`, `rs_jwks_contract.go`, `rs_inventory.go`, `rs_prm.go`); `internal/gateway/oauth009_offline_test.go`; `internal/gateway/qualify` case `oauth009_offline_bearer_matrix`  
 **Tests:** `go test ./internal/auth ./internal/gateway ./internal/gateway/qualify -count=1` · `-run 'OAUTH009|Fallthrough|RS|OfflineFallthrough|ModeB'`  
@@ -43,6 +43,7 @@ approved reverse-proxy JWT RS, or a hardened fork).
 | Multi-issuer / `alg=none` | **Yes** — `ValidateAccessToken` | RS plugin must match |
 | RFC 9728 protected resource metadata | **Parser + edge validation** (fixture JSON; no live fetch) | Controller publication + discovery path |
 | Mock OIDC + mock RS Docker lab | Opt-in `make live-oauth-*` (HOST-012…014); `-tags=live_oauth` mock-rs health | **Not** production Entra / jwt-auth-filter |
+| **Free real plugin lab** (Keycloak + `jwt-auth-filter`) | Opt-in `make live-jwt-rs-*` · `testdata/jwt-rs-lab/` | **Not** site Entra / production controller pin |
 | Plugin/LTS version pins, go/no-go sign-off | No | **Required** before production `oidc_bearer` / Mode B live |
 
 ### Offline Bearer claim matrix (Jenkins-shaped paths)

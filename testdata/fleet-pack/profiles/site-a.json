@@ -1,0 +1,7 @@
+{
+  "configVersion": 1,
+  "id": "site-a",
+  "displayName": "Fleet member A (example)",
+  "jenkinsURL": "https://jenkins-a.example.invalid/",
+  "authMethod": "api_token"
+}

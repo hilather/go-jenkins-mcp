@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 )
 
 // Wave 50 Track A: ResolveMaxConcurrent precedence default → env → flag (flag wins).

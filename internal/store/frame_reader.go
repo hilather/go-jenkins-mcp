@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/klauspost/compress/zstd"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // ReadResult is a bounded local read from L1 frames (LOG-003).

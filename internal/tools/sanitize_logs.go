@@ -1,8 +1,8 @@
 package tools
 
 import (
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
 )
 
 // ContentKindTestFailure labels untrusted JUnit failure text (TEST-001 / SEC-002).

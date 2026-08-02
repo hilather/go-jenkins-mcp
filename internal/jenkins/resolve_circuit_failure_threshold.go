@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // ResolveCircuitFailureThreshold resolves consecutive 5xx/transport failures

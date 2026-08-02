@@ -3,8 +3,8 @@ package diagnostics
 import (
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry"
 )
 
 // Status is the severity of a single doctor check.

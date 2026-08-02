@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
 )
 
 // runRedact dispatches `jenkins-mcp redact <validate-patterns>`.

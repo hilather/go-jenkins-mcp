@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // tokenBlobVersion is the keyring JSON schema version for TokenBundle.

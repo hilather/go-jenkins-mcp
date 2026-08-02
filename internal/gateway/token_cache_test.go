@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 )
 
 func TestMemoryTokenCache_RoundTripAndTTL(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // MCP-001 opaque list pagination: get_jobs, list_jobs, list_builds.

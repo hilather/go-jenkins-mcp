@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1",
-  "generated_for_revision": "Engineer authentication, read-only/RBAC, AgentCore 3LO/OBO, seekable-Zstandard/ratarmount-rs; Tier-1 Rocky+Ubuntu, macOS nice-to-have, Windows excluded (no native FUSE); POL-006/007 UI-011 SAML user/group RBAC backlog",
+  "generated_for_revision": "Engineer authentication, read-only/RBAC, AgentCore 3LO/OBO, seekable-Zstandard/ratarmount-rs; Tier-1 Rocky+Ubuntu, macOS and Windows out of scope (no native FUSE); POL-006/007 UI-011 SAML user/group RBAC backlog",
   "source_file": "jenkins-mcp-enterprise-agent-todo.md",
   "source_sha256": "da82aba7de161fa3e681dc076c7a447c13b7db9aa15ee702e6f01cdf83417af3",
   "validation": {
@@ -414,7 +414,7 @@
       "dependency_text": "None",
       "parallel_safe": "No; first task",
       "objective": "Create the controlled source repository and preserve a reproducible reference to the seed project.",
-      "implementation": "- Fork or import the upstream repository under the approved organization.\n- Record upstream URL, commit SHA, license, and import date.\n- Add `UPSTREAM.md`, `NOTICE`, `SECURITY.md`, `CONTRIBUTING.md`, and ownership rules.\n- Protect the default branch and require reviewed pull requests.\n- Tag the untouched import as `upstream-simonfxr-baseline`.",
+      "implementation": "- Fork or import the upstream repository under the approved organization.\n- Record upstream URL, commit SHA, license, and import date.\n- Add `docs/HISTORY.md`, `NOTICE`, `SECURITY.md`, `CONTRIBUTING.md`, and ownership rules.\n- Protect the default branch and require reviewed pull requests.\n- Tag the untouched import as `historical-import-baseline (archaeology)`.",
       "acceptance_criteria": [
         "A clean checkout at the baseline tag matches the selected upstream commit.",
         "MIT license attribution is retained.",
@@ -445,13 +445,13 @@
       "dependency_text": "FND-001",
       "parallel_safe": null,
       "objective": "Make builds deterministic enough to compare behavior and produce trusted releases.",
-      "implementation": "- Pin the supported Go toolchain through `go.mod` and CI configuration.\n- Add package scripts for the **Tier-1** matrix: Rocky Linux and Ubuntu (`linux/amd64`, plus `linux/aarch64` when the support matrix requires it). Prefer oldest-supported glibc baselines per Rocky major and Ubuntu LTS so newer minors stay binary-compatible.\n- Add optional **Tier-2** macOS (`darwin/arm64`, `darwin/amd64`) build jobs that may be best-effort and non-blocking.\n- **Do not** add Windows client targets, installers, or release gates (Windows is out of scope: no native FUSE).\n- Run unit/integration tests on Rocky- and Ubuntu-based containers/VMs covering every major/LTS listed in the support matrix.\n- Add a development container or documented isolated build environment without embedding secrets.\n- Enable module checksum verification and fail on dirty generated files.\n- Add `make`/Taskfile targets for build, test, race, lint, benchmark, SBOM, and package (including `rpm` and `deb` artifact targets).",
+      "implementation": "- Pin the supported Go toolchain through `go.mod` and CI configuration.\n- Add package scripts for the **Tier-1** matrix: Rocky Linux and Ubuntu (`linux/amd64`, plus `linux/aarch64` when the support matrix requires it). Prefer oldest-supported glibc baselines per Rocky major and Ubuntu LTS so newer minors stay binary-compatible.\n- **Do not** add macOS or Windows client targets, installers, or release gates (ADR 0008).\n- Run unit/integration tests on Rocky- and Ubuntu-based containers/VMs covering every major/LTS listed in the support matrix.\n- Add a development container or documented isolated build environment without embedding secrets.\n- Enable module checksum verification and fail on dirty generated files.\n- Add `make`/Taskfile targets for build, test, race, lint, benchmark, SBOM, and package (including `rpm` and `deb` artifact targets).",
       "acceptance_criteria": [
         "A fresh environment can build and test using one documented command on Rocky and Ubuntu baselines.",
         "Two clean builds from the same commit produce matching source manifests; binary reproducibility gaps are documented.",
         "CI never requires a real Jenkins credential for unit tests.",
         "Build outputs include version, commit, dirty state, Go version, and build time policy.",
-        "CI produces Tier-1 artifacts for Rocky (RPM and/or linux tarball) and Ubuntu (DEB and/or linux tarball); macOS artifacts are optional and do not gate merges; no Windows artifacts are required or gated."
+        "CI produces Tier-1 artifacts for Rocky (RPM and/or linux tarball) and Ubuntu (DEB and/or linux tarball); no macOS or Windows artifacts."
       ],
       "acceptance_criteria_count": 5,
       "evidence_tests": [],
@@ -891,14 +891,14 @@
       "dependency_text": "AUTH-001",
       "parallel_safe": null,
       "objective": "Keep long-lived secrets local and outside Cursor configuration.",
-      "implementation": "Implement the Tier-1 **Linux Secret Service** backend (`libsecret` / org.freedesktop.secrets) for Rocky Linux and Ubuntu Desktop/Server sessions. Document and test headless Rocky/Ubuntu behavior when no Secret Service is available (fail closed by default; policy-controlled protected file only when explicitly approved). Implement **macOS Keychain** as a Tier-2 nice-to-have adapter that is not required for pilot exit. Do **not** implement Windows Credential Manager (Windows clients are out of scope). Namespace entries by application, OS user, profile, controller origin, auth method, and account identity.",
+      "implementation": "Implement the Tier-1 **Linux Secret Service** backend (`libsecret` / org.freedesktop.secrets) for Rocky Linux and Ubuntu Desktop/Server sessions. Document and test headless Rocky/Ubuntu behavior when no Secret Service is available (fail closed by default; policy-controlled protected file only when explicitly approved). Do **not** implement macOS Keychain or Windows Credential Manager (both out of scope; ADR 0008). Namespace entries by application, OS user, profile, controller origin, auth method, and account identity.",
       "acceptance_criteria": [
         "API tokens can be stored, loaded, replaced, and deleted under the current OS user on Rocky/Ubuntu with Secret Service.",
         "Another local user cannot read the credential through normal APIs.",
         "Error and debug paths never print the secret.",
         "Headless fallback is disabled unless policy explicitly allows a protected file; Rocky/Ubuntu server images without an unlocked keyring fail closed with a clear `doctor` diagnosis.",
         "Backend tests use mocks or isolated test entries and clean them up.",
-        "macOS Keychain, if present, passes the same store/load/delete contract tests but is not a release gate.",
+        "macOS Keychain and Windows Credential Manager are out of scope.",
         "No Windows Credential Manager code path is required for pilot or production gates."
       ],
       "acceptance_criteria_count": 7,
@@ -1879,15 +1879,15 @@
       ],
       "dependency_text": "FND-007, AUTH-003, OPS-001",
       "parallel_safe": null,
-      "objective": "Deliver trustworthy local executables that Cursor can launch on every Tier-1 Linux OS without secrets in configuration. macOS packages are optional nice-to-have artifacts. Windows packages are out of scope.",
-      "implementation": "- **Rocky Linux:** signed `.rpm` for each supported Rocky major series in the matrix, plus a portable `linux/amd64` tarball; XDG per-user data paths; Secret Service integration; SELinux smoke notes; document optional `fuse`/`fuse3` dependency for L2 mount.\n- **Ubuntu:** signed `.deb` for each supported Ubuntu LTS in the matrix, plus the same portable tarball where appropriate; XDG paths; Secret Service; AppArmor smoke notes; same FUSE package notes.\n- Document secret-free Cursor `command`/`args` examples for Linux paths.\n- Optional **macOS** archive/app bundle may be produced on a best-effort cadence; do not block pilot on notarization or Keychain polish.\n- Do **not** produce Windows `.exe`/MSI/MSIX or WinFsp-based packaging.\n- Version metadata, SBOM, and provenance accompany every Tier-1 artifact.",
+      "objective": "Deliver trustworthy local executables that Cursor can launch on every Tier-1 Linux OS without secrets in configuration. macOS and Windows packages are out of scope.",
+      "implementation": "- **Rocky Linux:** signed `.rpm` for each supported Rocky major series in the matrix, plus a portable `linux/amd64` tarball; XDG per-user data paths; Secret Service integration; SELinux smoke notes; document optional `fuse`/`fuse3` dependency for L2 mount.\n- **Ubuntu:** signed `.deb` for each supported Ubuntu LTS in the matrix, plus the same portable tarball where appropriate; XDG paths; Secret Service; AppArmor smoke notes; same FUSE package notes.\n- Document secret-free Cursor `command`/`args` examples for Linux paths.\n- Do **not** produce macOS archives or Windows `.exe`/MSI/MSIX/WinFsp packaging.\n- Version metadata, SBOM, and provenance accompany every Tier-1 artifact.",
       "acceptance_criteria": [
         "Installed binary signature validates on Rocky RPM and Ubuntu DEB baselines listed in the support matrix.",
         "Ordinary operation requires no root rights unless deployment policy mandates them.",
         "Uninstall behavior for cache and credentials is explicit and user-controlled on each Tier-1 OS.",
         "Cursor starts the MCP over stdio with profile-only arguments on Rocky and Ubuntu.",
         "SELinux/AppArmor compatibility smoke tests pass on Tier-1 images.",
-        "macOS artifacts, if published, are labeled best-effort and are not required for pilot exit.",
+        "No macOS artifacts in the release matrix (out of scope).",
         "Release evidence does not claim Windows support."
       ],
       "acceptance_criteria_count": 7,
@@ -4150,7 +4150,7 @@
       "dependency_text": "Phase 1 complete, QA-005/006 scoped approval, PKG-001, DOC-001",
       "parallel_safe": null,
       "objective": "Validate real workflows and performance with a small approved user group.",
-      "implementation": "Deploy signed Tier-1 builds (Rocky Linux, Ubuntu), collect approved metrics and structured feedback, sample network/cache behavior, track auth/support issues, and maintain rapid rollback. Use API-token and OAuth cohorts if OAuth is ready. Pilot cohorts must include Rocky and Ubuntu users. macOS participants are optional and non-blocking. Windows is not a pilot platform.",
+      "implementation": "Deploy signed Tier-1 builds (Rocky Linux, Ubuntu), collect approved metrics and structured feedback, sample network/cache behavior, track auth/support issues, and maintain rapid rollback. Use API-token and OAuth cohorts if OAuth is ready. Pilot cohorts must include Rocky and Ubuntu users. macOS and Windows are not pilot platforms.",
       "acceptance_criteria": [
         "No shared credentials are used.",
         "Network and result-size targets are measured on real workflows.",
@@ -4900,7 +4900,7 @@
         "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_CrossInstanceSharedBudget",
         "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_MaxSubjectsEvictOldest"
       ],
-      "status_note": "Done* process-local rate + concurrent; Done* lite same-host FileSubjectRateLimiter; Done* lite rate MaxSubjects hygiene; Done* lite SubjectLimiter MaxSubjects hygiene; multi-pod shared rate/concurrency residual (HOST-008)",
+      "status_note": "Done* process-local rate + concurrent; Done* lite same-host FileSubjectRateLimiter; Done* lite rate MaxSubjects hygiene; Done* lite SubjectLimiter MaxSubjects hygiene; multi-pod shared rate/concurrency out of scope (HOST-008 cancelled)",
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": []
@@ -4938,7 +4938,7 @@
     },
     {
       "id": "HOST-008",
-      "title": "HA / multi-replica residual (Tier B)",
+      "title": "HA / multi-replica (cancelled — multi-fleet instead)",
       "phase": "Phase 4 - Controlled mutations, AgentCore gateway, and optional integrations",
       "phase_order": 4,
       "conditional": false,
@@ -4949,32 +4949,20 @@
       ],
       "dependency_text": "HOST-003, HOST-004",
       "parallel_safe": null,
-      "objective": "Define multi-replica only after durable vault.",
-      "implementation": "Single-replica Tier A default; multi-replica checklist; file vault flock Done* lite; optional FileTokenCache Obtain cache same-host lite (JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH); optional FileSubjectRateLimiter same-host lite (JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH); optional MaxSubjects subject-map hygiene lite (JENKINS_MCP_GATEWAY_SUBJECT_RATE_MAX_SUBJECTS); sticky Service sessionAffinity Done* scaffold (residual runtime). Multi-pod external Obtain cache / shared rate / Redis still residual.",
+      "objective": "Cancelled: multi-pod gateway HA is not a product task; multi-fleet (independent single-replica members + shared signed policy) is the scale model.",
+      "implementation": "Historical same-host file flock lite (vault, FileTokenCache, FileSubjectRateLimiter, FilePrincipalCache, JWKS path) remains Done* packaging. Multi-pod Redis/external shared vault/rate/Obtain/audit aggregation and haMultiReplica runtime are out of scope — use multi-fleet rollout instead of multi-replica gateway.",
       "acceptance_criteria": [
-        "Single-replica Tier A default documented.",
-        "Multi-replica checklist (vault, affinity, audit, Obtain cache).",
-        "Shared vault path + flock multi-process lite (not multi-pod Done).",
-        "Obtain FileTokenCache same-host flock lite (not multi-pod external Done).",
-        "Shared subject rate FileSubjectRateLimiter same-host flock lite (not multi-pod Done).",
-        "Subject rate MaxSubjects map hygiene residual lite (not multi-pod Done).",
-        "Sticky session Service scaffold (ClientIP) Done* packaging only.",
-        "Non-goal until multi-pod durable vault + sticky sessions exist."
+        "Multi-pod HA marked cancelled / out of scope in agent-todo and residual docs.",
+        "Single-replica default and haMultiReplica=false honesty retained.",
+        "Same-host multi-process flock lite retained as Done* historical (not multi-pod path).",
+        "Scale guidance points at multi-fleet signed policy, not HOST-008 multi-replica."
       ],
-      "acceptance_criteria_count": 8,
+      "acceptance_criteria_count": 4,
       "evidence_tests": [
         "internal/gateway/file_token_cache_test.go:TestFileTokenCache_RoundTripIsolationTTL",
-        "internal/gateway/file_token_cache_test.go:TestFileTokenCache_StatusMapSecretFree",
-        "internal/gateway/file_token_cache_test.go:TestFileTokenCache_MultiInstanceConcurrentSetNoCorrupt",
-        "internal/gateway/file_token_cache_test.go:TestCredentialProviderFromEnviron_ModeC_FileTokenCache",
-        "internal/gateway/file_token_cache_test.go:TestMemoryTokenCache_StatusMapSharedFalse",
-        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_CrossInstanceSharedBudget",
-        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_FileContentsSecretFree",
-        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_StatusMapSecretFree",
-        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_MaxSubjectsEvictOldest",
-        "internal/gateway/subject_rate_test.go:TestSubjectRateLimiter_MaxSubjectsEvictOldest"
+        "internal/gateway/file_subject_rate_test.go:TestFileSubjectRateLimiter_CrossInstanceSharedBudget"
       ],
-      "status_note": "Done* lite same-host vault flock + FileTokenCache Obtain lite + FileSubjectRateLimiter rate lite + MaxSubjects hygiene lite + sticky scaffold; multi-pod external residual (not multi-replica Done)",
+      "status_note": "Cancelled / out of scope (2026-08-01): multi-pod HA non-goal; multi-fleet is the enterprise scale model. Same-host flock lite historical Done*.",
       "source_line": 0,
       "dependency_depth": 0,
       "dependents": []

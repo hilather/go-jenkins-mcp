@@ -1,0 +1,128 @@
+{
+  "id": "jenkins-mcp-lab",
+  "realm": "jenkins-mcp-lab",
+  "displayName": "go-jenkins-mcp SAML lab",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "roles": {
+    "realm": [
+      { "name": "mcp-operators", "description": "Lab group → admin operator" },
+      { "name": "mcp-viewers", "description": "Lab group → admin viewer" },
+      { "name": "mcp-admins", "description": "Lab group → admin policy_admin" }
+    ]
+  },
+  "groups": [
+    { "name": "mcp-operators", "path": "/mcp-operators" },
+    { "name": "mcp-viewers", "path": "/mcp-viewers" },
+    { "name": "mcp-admins", "path": "/mcp-admins" }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@example.com",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Lab",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice-lab",
+          "temporary": false
+        }
+      ],
+      "groups": ["/mcp-operators"],
+      "realmRoles": ["mcp-operators"]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "email": "bob@example.com",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Viewer",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bob-lab",
+          "temporary": false
+        }
+      ],
+      "groups": ["/mcp-viewers"],
+      "realmRoles": ["mcp-viewers"]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "http://127.0.0.1:8787/sp",
+      "name": "jenkins-mcp-admin-sp",
+      "description": "Local admin BFF SAML SP (POL-007 lab)",
+      "enabled": true,
+      "protocol": "saml",
+      "publicClient": true,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "http://127.0.0.1:8787/admin/v1/saml/acs",
+        "http://localhost:8787/admin/v1/saml/acs"
+      ],
+      "attributes": {
+        "saml_name_id_format": "email",
+        "saml.assertion.signature": "true",
+        "saml.server.signature": "true",
+        "saml.client.signature": "false",
+        "saml.authnstatement": "true",
+        "saml_force_name_id_format": "true",
+        "saml_assertion_consumer_url_post": "http://127.0.0.1:8787/admin/v1/saml/acs",
+        "saml.encrypt": "false",
+        "saml.multivalued.roles": "false",
+        "post.binding.response": "true",
+        "post.binding.authnrequest": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "email",
+          "protocol": "saml",
+          "protocolMapper": "saml-user-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "attribute.nameformat": "Basic",
+            "user.attribute": "email",
+            "friendly.name": "email",
+            "attribute.name": "email"
+          }
+        },
+        {
+          "name": "groups",
+          "protocol": "saml",
+          "protocolMapper": "saml-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "single": "false",
+            "full.path": "false",
+            "attribute.nameformat": "Basic",
+            "attribute.name": "groups",
+            "friendly.name": "groups"
+          }
+        },
+        {
+          "name": "role-list",
+          "protocol": "saml",
+          "protocolMapper": "saml-role-list-mapper",
+          "consentRequired": false,
+          "config": {
+            "single": "false",
+            "attribute.nameformat": "Basic",
+            "attribute.name": "Role"
+          }
+        }
+      ]
+    }
+  ]
+}

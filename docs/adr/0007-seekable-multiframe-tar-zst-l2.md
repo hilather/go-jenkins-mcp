@@ -33,7 +33,7 @@ L1 independent frames handle hot/recent logs. Cold capacity and inode pressure n
 |-------------|---------|
 | Single-frame tar.zst | No frame-level seek; full decompress for small ranges. |
 | Zip / plain tar.gz only | Weaker alignment with independent-frame design and ratarmount preference. |
-| FUSE-only reader | Breaks headless CI, non-FUSE hosts, and macOS Tier-2 story. |
+| FUSE-only reader | Breaks headless CI and non-FUSE hosts. |
 | Bind to un-audited ratarmount binary now | Supply-chain and compatibility risk before ARC-000. |
 
 ## Consequences

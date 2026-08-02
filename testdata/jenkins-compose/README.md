@@ -111,7 +111,7 @@ chmod +x scripts/jenkins-fixture-rebuild.sh
 - Default password `test` is **only** for disposable local/CI labs.
 - Token files live in the container volume; `down -v` destroys them.
 - Do not paste tokens into docs, git, CI logs, or support bundles.
-- Windows is out of scope (no FUSE / Tier-1 claim); Linux (and optional macOS Docker Desktop) only.
+- macOS and Windows are out of scope; Linux only for host tooling (ADR 0008).
 
 ## Related
 

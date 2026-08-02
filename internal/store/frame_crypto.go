@@ -1,8 +1,8 @@
 package store
 
 import (
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/store/crypto"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/store/crypto"
 )
 
 // FrameCrypto is the optional AEAD configuration for L1 frames (ARC-009).

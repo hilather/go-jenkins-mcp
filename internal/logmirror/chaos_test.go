@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/archive"
-	"github.com/simonfxr/go-jenkins-mcp/internal/logmirror"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/archive"
+	"github.com/hilather/go-jenkins-mcp/internal/logmirror"
 )
 
 func TestChaos_TruncatedProgressiveMidFetch_ResumeOK(t *testing.T) {

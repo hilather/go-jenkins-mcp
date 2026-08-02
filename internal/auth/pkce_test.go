@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
 )
 
 func TestPKCE_S256RoundTrip(t *testing.T) {

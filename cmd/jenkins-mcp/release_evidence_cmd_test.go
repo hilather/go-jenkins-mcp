@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/update"
+	"github.com/hilather/go-jenkins-mcp/internal/update"
 )
 
 func TestParseGoModRequire(t *testing.T) {
@@ -51,7 +51,7 @@ func TestBuildReleaseEvidenceOfflineCore(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv(update.EnvUpdateLKGPath, filepath.Join(t.TempDir(), "no-lkg.json"))
 
-	goMod := `module github.com/simonfxr/go-jenkins-mcp
+	goMod := `module github.com/hilather/go-jenkins-mcp
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.1.0
@@ -597,7 +597,7 @@ func TestBuildReleaseEvidence_GatewayResidualStatusEmbed(t *testing.T) {
 		}
 	}
 
-	goMod := `module github.com/simonfxr/go-jenkins-mcp
+	goMod := `module github.com/hilather/go-jenkins-mcp
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.1.0

@@ -1,0 +1,30 @@
+# JCasC for disposable jwt-auth-filter lab (OAUTH-009 free plugin path).
+# Env substitution: JWT_RS_JWKS_URL, JWT_RS_AUDIENCE, JWT_RS_PROTECTED_PATHS,
+# JENKINS_ADMIN_PASSWORD (lab only).
+#
+# Residual: free lab ≠ site Entra / production controller pin.
+
+jenkins:
+  systemMessage: "go-jenkins-mcp jwt-rs free lab (disposable; not production)"
+  numExecutors: 0
+  mode: NORMAL
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${JENKINS_ADMIN_PASSWORD:-admin}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+security:
+  jwtBearer:
+    issuers:
+      - jwksUrl: "${JWT_RS_JWKS_URL:-http://keycloak:8080/realms/jwt-rs-lab/protocol/openid-connect/certs}"
+        allowedAudience: "${JWT_RS_AUDIENCE:-jenkins-api}"
+        protectedPaths: "${JWT_RS_PROTECTED_PATHS:-/**/api/**}"
+        usernameClaim: "preferred_username"
+        nameClaim: "name"
+        emailClaim: "email"
+        groupsClaim: "groups"

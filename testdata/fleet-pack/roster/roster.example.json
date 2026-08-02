@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "fleet_id": "example-corp",
+  "bundle_seq": 1,
+  "members": [
+    {
+      "id": "edge-a",
+      "display_name": "Edge A",
+      "peer_url": "http://127.0.0.1:9443",
+      "profile_id": "site-a"
+    },
+    {
+      "id": "edge-b",
+      "display_name": "Edge B",
+      "peer_url": "http://127.0.0.1:9444",
+      "profile_id": "site-b"
+    }
+  ]
+}

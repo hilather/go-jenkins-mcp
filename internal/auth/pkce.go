@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // PKCE (RFC 7636) pure helpers for future Authorization Code + S256 browser

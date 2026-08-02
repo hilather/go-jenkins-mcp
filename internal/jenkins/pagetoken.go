@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // Opaque list page tokens (MCP-001 residual / HOST-004 multi-tenant isolation).

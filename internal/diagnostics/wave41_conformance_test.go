@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/mcpserver"
+	"github.com/hilather/go-jenkins-mcp/internal/mcpserver"
 )
 
 // Wave 41 / POL-005: HTTP deny-anonymous is env alias for RequireToken (default off).

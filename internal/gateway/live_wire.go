@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // EnvGatewayLive opts into Mode C AgentCore Live acquisition via HTTPTokenFetcher

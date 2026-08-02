@@ -68,7 +68,7 @@ No forced renames of existing tools or remove of CLI flags in this release.
 | Residual | Status |
 |----------|--------|
 | Live Entra / production jwt-auth-filter / AgentCore Identity vault | **Not** production GO |
-| Multi-pod HA / multi-replica admin (HOST-008 Tier B) | Residual |
+| Multi-pod HA / multi-replica admin (HOST-008) | **Cancelled / out of scope** — multi-fleet scale model |
 | Admin multi-operator named accounts / SAML SSO | Residual (shared secret + process role today) |
 | `admin_policy_apply` durable write under signed enterprise bundles | Partial residual (validate + role gate Done*) |
 | `admin_rbac_*` / SAML SP management tools | Residual until UI-011 / POL-007 |

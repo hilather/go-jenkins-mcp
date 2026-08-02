@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 )
 
 // checkJenkinsResilienceResidual is Wave 45 Track C / NET-003 residual honesty:

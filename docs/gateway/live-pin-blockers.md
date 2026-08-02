@@ -1,9 +1,12 @@
-# Live pin blockers — production GO residual runbook
+# Live pin blockers — operator production pin runbook
 
-**Status:** Residual **runbook only** — offline Done\* foundations exist; **live
-production GO is not claimed**.  
-**Audience:** security, platform operators, release owners, implementation agents  
-**Related:** [README.md](README.md) · [qualification.md](qualification.md) ·
+**Status:** **Operator-owned production pin** residual runbook. Product **free-lab /
+offline Tier A** is **Done\*** and is **not** blocked on corporate Entra, AgentCore,
+or customer Jenkins labs (see [free-lab-qualification.md](free-lab-qualification.md)).  
+**Audience:** site security / platform operators (when they need production GO);
+agents must not treat this file as open product engineering DoD.  
+**Related:** [free-lab-qualification.md](free-lab-qualification.md) ·
+[README.md](README.md) · [qualification.md](qualification.md) ·
 [deployment.md](deployment.md) · [jwt-auth-filter qualification](../auth/jwt-auth-filter-qualification.md) ·
 [oauth-capability-matrix](../auth/oauth-capability-matrix.md) ·
 [server-team-hosted roadmap](../roadmap/server-team-hosted.md) ·
@@ -15,15 +18,17 @@ production GO is not claimed**.
 
 | Claim | Reality |
 |-------|---------|
-| Offline `gateway qualify --offline` green | **Contracts only** — not live Entra, not production RS, not multi-pod HA |
-| `make residual-smoke` green | Residual **ids still present** + qualify residual-status honesty case — **not** a live GO |
-| Mode B JWT vault Ready | Offline Obtain → Bearer for lab tokens — **not** jwt-auth-filter pin |
-| Mode C Live opt-in + mock AS | Wire-shaped HTTP — **not** AgentCore Identity vault / production Entra |
+| Offline `gateway qualify --offline` green | **Product contracts** — not site Entra / production RS / multi-pod HA |
+| Free labs (`live-jenkins-*`, `live-oauth-*`, `live-saml-*`) green | **Product free-lab qualification** — not corporate production pin |
+| `make residual-smoke` green | Residual **ids still present** + honesty — **not** site production GO |
+| Mode B JWT vault Ready | Offline/lab Obtain → Bearer — **not** site jwt-auth-filter pin |
+| Mode C Live opt-in + mock AS | Wire-shaped HTTP — **not** AgentCore / production Entra |
 | Kustomize `sessionAffinity` + `replicas: 1` | Packaging honesty — **not** multi-replica runtime |
-| Doctor `mode_*_live_*_qualified=false` | **Correct** until live evidence lands — do not “fix” offline |
+| Doctor `mode_*_live_*_qualified=false` | **Correct** until **that site** attaches production evidence — do not “fix” from free labs |
 
-**Do not** mark OAUTH-009, OAUTH-010, GWY-003, or HOST-008 multi-pod **Done**
-from docs, mocks, or offline smoke alone.
+**Product:** free-lab + offline paths may be **Done\*** without Entra.  
+**Operator:** do **not** mark site production GO or flip `mode_*_live_*_qualified`
+from mocks / free labs alone.
 
 ### Terminology canaries (always)
 
@@ -40,24 +45,24 @@ See [ADR 0003](../adr/0003-jenkins-not-oauth-authorization-server.md),
 
 ---
 
-## 1. What blocks production GO (summary)
+## 1. What blocks **site production** GO (operator summary)
 
-Production-shaped **team/server-hosted** gateway (Tier A multi-user, modes B/C,
-or multi-pod) remains blocked until the matching residual rows below are closed
-with **attached evidence**. Local Cursor **stdio** + personal API token (Mode A
-local path) is a separate pilot surface (ADR 0002) and is **not** unblocked by
-closing gateway live pins.
+These rows block a **site** from claiming production multi-user gateway GO on
+**their** controllers/IdP. They do **not** block product free-lab Tier A Done\*
+([free-lab-qualification.md](free-lab-qualification.md)).
 
-| Blocker cluster | Task IDs | Blocks | Offline Done\* today | Live still required |
-|-----------------|----------|--------|----------------------|---------------------|
-| **Jenkins RS pin** | **OAUTH-009**, HOST-010, GWY-003 Mode B | Mode B production; any Bearer-to-Jenkins path claiming RS safety | Fallthrough classifier, claim matrix, Mode B vault, doctor residual ids | LTS + plugin version, JCasC, full route re-prove, JWKS under load |
-| **Entra + AgentCore obtain** | **OAUTH-010**, GWY-001/003 Mode C | Mode C production Obtain / 3LO / OBO | Mock AS, ConsentRequired metadata, ModeMatrix residual | App reg, Conditional Access, real 3LO/OBO, durable vault |
-| **Multi-pod HA** | **HOST-008** Tier B | `replicas` > 1 interactive gateway | Single-replica docs; same-host flock lite; sticky Service scaffold | Shared multi-pod vault, shared Obtain cache, rate, audit |
-| **Mode matrix ops** | HOST-011, REL-002 residual ids | Claiming “all modes live” from offline | Fail-closed mode switch offline | Per-mode live pin evidence + signed mode-selection record |
+Local Cursor **stdio** + personal API token remains the default pilot surface
+(ADR 0002).
 
-**Tier A default:** single replica, modes qualified **per site** (not all modes
-required). **Tier B** multi-replica is explicitly non-goal until HOST-008
-checklist 1b–8 close.
+| Blocker cluster | Task IDs | Blocks **site** claim | Product free-lab / offline | Operator live still required for **their** prod |
+|-----------------|----------|----------------------|----------------------------|--------------------------------------------------|
+| **Jenkins RS pin** | **OAUTH-009**, HOST-010, GWY-003 Mode B | Mode B against **their** Jenkins | Fallthrough classifier, claim matrix, Mode B vault, oauth-lab mock RS, residual ids | **Their** LTS + plugin/proxy version, JCasC, route re-prove |
+| **Entra + AgentCore obtain** | **OAUTH-010**, GWY-001/003 Mode C | Mode C against **their** Entra/AgentCore | Mock AS, ConsentRequired, ModeMatrix, live-oauth mock-token | App reg, Conditional Access, real 3LO/OBO, durable vault |
+| **Multi-pod HA** | **HOST-008 cancelled** | ~~`replicas` > 1~~ **not a product path** | Single-replica + multi-fleet | Scale with **[multi-fleet](../fleet/multi-fleet-rollout.md)** (N independent members), not multi-pod HA |
+| **Mode matrix ops** | HOST-011, REL-002 | Claiming “all modes live” in prod | Fail-closed offline + free labs | Per-mode **site** evidence + mode-selection record |
+
+**Tier A product default:** single replica; free labs + offline. **Site** enables
+modes only after **their** pin evidence. **Multi-pod HA is out of scope** (HOST-008 cancelled); enterprise scale is multi-fleet.
 
 ---
 
@@ -236,48 +241,35 @@ make live-oauth-test   # mock-token peer; opt-in; not production Entra
 
 ---
 
-## 4. HOST-008 — multi-pod checklist residual
+## 4. HOST-008 — multi-pod HA (**cancelled / non-goal**)
 
-**Detail SoT:** [deployment.md §9](deployment.md).  
-**Tier A default:** **`replicas: 1`**. Sticky Service affinity is **scaffold only**.
+**Status:** **Out of scope** (2026-08-01). Multi-pod gateway HA is **not** a product task.  
+**Scale model:** **[multi-fleet](../fleet/multi-fleet-rollout.md)** — many independent single-replica members (stdio or one gateway each) + shared signed policy.  
+**Detail SoT:** [deployment.md §9](deployment.md) (single-replica honesty).  
+**Default:** **`replicas: 1`**, `haMultiReplica=false` forever under this product decision.
 
-### 4.1 What is Done\* lite / scaffold (not multi-pod GO)
+### 4.1 Historical same-host lite (not a multi-pod path)
 
 | Item | Status | Honesty |
 |------|--------|---------|
 | Docs + kustomize/compose `replicas: 1` | Done\* | Default single replica |
 | File vault process mutex + `flock` on `path.lock` | Done\* lite | **Same host / shared FS** only |
-| Service `sessionAffinity: ClientIP` | Done\* scaffold | Packaging; does not enable HA runtime |
-| Doctor / admin `haMultiReplica=false` | Done\* | Always false until multi-replica runtime |
+| Service `sessionAffinity: ClientIP` | Done\* scaffold | Packaging only; does **not** enable multi-pod |
+| Doctor / admin `haMultiReplica=false` | Done\* | Always false; multi-pod runtime **cancelled** |
+| Optional file Obtain / rate / principal / JWKS paths | Done\* lite | Same-host multi-process only |
 
-### 4.2 Multi-pod raise checklist (all required)
+### 4.2 What operators should do instead of `replicas > 1`
 
-Raise Deployment `replicas` > 1 **only** when every row is met with org-owned design:
-
-| # | Requirement | Status in this repo |
-|---|-------------|---------------------|
-| 1a | Shared vault path + flock (same host / shared FS) | **Done\* lite** — not multi-pod alone |
-| 1b | **Durable shared token vault** (external / AgentCore Identity / multi-pod RWX) | **Residual** |
-| 2 | Session affinity **or** shared session store | Scaffold affinity only; durable store residual |
-| 3 | No reliance on **memory** Obtain cache alone | **Done\* lite** same-host `FileTokenCache` (`JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH`, flock + 0600); multi-pod external Obtain cache still **residual** |
-| 4 | Shared or carefully partitioned cache / archive policy | Residual (STO / HOST-004) |
-| 5 | Audit aggregation (central sink) | Residual |
-| 6 | Sticky or shared consent / Obtain correlation | Residual (Mode C progressive consent) |
-| 7 | JWKS / identity multi-instance measured | **Done\* lite** same-host file (`JENKINS_MCP_HTTP_JWKS_CACHE_PATH`, flock + public keys 0600; `shared_jwks_file: true`); multi-pod external JWKS + live Entra under load still **residual** |
-| 8 | Shared subject rate / concurrency limiters | **Done\* lite** same-host `FileSubjectRateLimiter` (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`, flock + secret-free JSON 0600; `shared_subject_rate_file: true`); process-local default; multi-pod external shared rate still **residual**; concurrency slots still process-local (`subject_slots_process_local: true` always on residual-status; optional `subject_limiter_max_subjects` when env set — SPA Overview/Doctor residual cards) |
+| Need | Approach |
+|------|----------|
+| More users / sites | Another multi-fleet **member** (profile + policy bundle) |
+| Higher availability | Second independent single-replica process/host (not shared-memory HA) |
+| Shared deny policy | Signed overlay gitops ([multi-fleet-rollout.md](../fleet/multi-fleet-rollout.md)) |
+| Shared multi-pod vault/rate | **Not product** — do not raise interactive gateway replicas |
 
 **Do not** treat `JENKINS_MCP_GATEWAY_MULTI_USER=1` as multi-replica HA.  
-**Do not** claim multi-replica Done from sticky YAML alone.
-
-### 4.3 Failure modes if scaled early
-
-| Risk | Symptom |
-|------|---------|
-| Memory cache only | Double-mint / re-consent thrash across pods |
-| emptyDir vault | Split vaults; wrong-subject miss |
-| No sticky sessions | Confirm / page tokens 401 on pod B |
-| Process-local rate | Uneven enforcement / budget bypass |
-| Per-pod audit files | Incomplete fleet forensics |
+**Do not** claim multi-replica Done from sticky YAML alone.  
+**Do not** implement multi-pod Redis/shared vault as HOST-008 follow-up without an explicit product decision reverse of this cancel.
 
 ---
 
@@ -343,7 +335,7 @@ jenkins-mcp doctor --profile <id> --offline --json  # optional: gateway_residual
 |-------------|---------|
 | `multi_user_offline` | Multi-user foundation offline only — not production multi-user GO |
 | `oauth009_offline` | Bearer / RS offline matrix Done\*; live jwt-auth-filter pin open |
-| `host008_single_replica` | Tier A single-replica; multi-pod HA residual |
+| `host008_single_replica` | Single-replica honesty; multi-pod HA **cancelled** (multi-fleet) |
 | `gateway_modes_live` | Modes A/B/C live pin / mode-selection record still open |
 
 `make residual-smoke` **fails** if these ids drop from offline release-evidence.
@@ -424,7 +416,7 @@ implementation task — never a docs-only toggle.
    no  → continue
 
 2. Gateway Mode A only (personal API token vault)?
-   yes → vault isolation + HOST-003 wire; still no multi-pod without HOST-008
+   yes → vault isolation + HOST-003 wire; single-replica only (HOST-008 multi-pod cancelled)
    no  → continue
 
 3. Mode B (Bearer JWT to Jenkins)?
@@ -435,9 +427,9 @@ implementation task — never a docs-only toggle.
    yes → complete §3 OAUTH-010 Entra + AgentCore pin + GWY-003 live qualify
         incomplete → NO GO for Mode C
 
-5. replicas > 1?
-   yes → complete §4 HOST-008 rows 1b–8
-        incomplete → keep replicas: 1
+5. Need scale / more sites?
+   yes → multi-fleet members (shared signed policy); keep each gateway replicas: 1
+        do **not** raise multi-pod HA (HOST-008 cancelled)
 
 6. REL / pilot: modes piloted recorded; residual-smoke still lists residual ids
    missing honesty → fix docs/automation before claiming GO
@@ -452,12 +444,13 @@ implementation task — never a docs-only toggle.
 | [jwt-auth-filter-qualification.md](../auth/jwt-auth-filter-qualification.md) | OAUTH-009 offline + live lab detail |
 | [oauth-capability-matrix.md](../auth/oauth-capability-matrix.md) | Mode C offline matrix; plugin roles |
 | [qualification.md](qualification.md) | GWY-003 offline suite + live pin checklists |
-| [deployment.md](deployment.md) §9 | HOST-008 HA residual runbook |
+| [deployment.md](deployment.md) §9 | Single-replica honesty (HOST-008 multi-pod **cancelled**) |
+| [multi-fleet-rollout.md](../fleet/multi-fleet-rollout.md) | Enterprise scale model (replaces multi-pod HA) |
 | [README.md](README.md) | Gateway foundation + mode wiring |
 | [server-team-hosted.md](../roadmap/server-team-hosted.md) | Program path; HOST/OAUTH task order |
 | [pilot/checklist.md](../pilot/checklist.md) §0 | Modes piloted + residual ids |
 | [release/gates.md](../release/gates.md) | REL residual honesty smoke |
-| [KNOWN_DEFECTS](../KNOWN_DEFECTS.md) KD-009 | Live RS lab residual tracking |
+| [KNOWN_DEFECTS](../docs/security/product-residuals.md) KD-009 | Live RS lab residual tracking |
 | `deploy/gateway/` | Compose/kustomize scaffold (no live AgentCore image) |
 | `testdata/oauth-lab/` | Mock OIDC/RS/token peers (opt-in) |
 
@@ -465,7 +458,7 @@ implementation task — never a docs-only toggle.
 |------|-------------------------------|
 | OAUTH-009 | Security + Jenkins platform (plugin/JCasC) |
 | OAUTH-010 | Security + IdP + AgentCore platform |
-| HOST-008 | Platform / SRE (vault + affinity + audit) |
+| HOST-008 | **Cancelled** — multi-fleet scale; not multi-pod HA |
 | GWY-003 live | Engineering + security (per-mode pin evidence) |
 | REL-001/002 | Pilot + release evidence packaging |
 

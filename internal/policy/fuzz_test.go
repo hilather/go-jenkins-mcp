@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // QA-001 Wave 21: policy overlay JSON load + deny_job_prefixes matching (POL-002/004).

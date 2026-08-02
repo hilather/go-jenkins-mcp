@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/admin/uiembed"
+	"github.com/hilather/go-jenkins-mcp/internal/admin/uiembed"
 )
 
 // PackagedAssetsDir is the default filesystem install path for admin SPA assets

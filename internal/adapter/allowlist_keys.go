@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // EnvAdapterAllowlistTrustedKeys points at a file or directory of trusted

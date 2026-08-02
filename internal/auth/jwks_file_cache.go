@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // EnvHTTPJWKSCachePath is the optional same-host multi-process JWKS snapshot

@@ -3,8 +3,8 @@ package auth_test
 import (
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
 )
 
 func TestSessionGuard_RevokeAndLogout(t *testing.T) {

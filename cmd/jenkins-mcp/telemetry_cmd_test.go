@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry/fleet"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry/fleet"
 )
 
 func TestTelemetryStatusDisabledByDefault(t *testing.T) {

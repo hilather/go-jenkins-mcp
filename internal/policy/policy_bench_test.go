@@ -3,8 +3,8 @@ package policy_test
 import (
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // BenchmarkPolicyEvaluate_Allow is a CI-safe microbench for QA-003 regression.

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // policyTargetFromArgs builds a policy.Target from typed MCP tool arguments

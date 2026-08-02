@@ -207,7 +207,7 @@ Description: Enterprise Jenkins MCP server (local stdio)
  Local per-user Jenkins MCP for Cursor on Tier-1 Linux (Rocky/Ubuntu).
  Credentials use OS Secret Service; profiles use XDG paths. No Windows package.
  Optional admin console assets under /usr/share/jenkins-mcp/admin-ui (UI-008).
-Homepage: https://github.com/simonfxr/go-jenkins-mcp
+Homepage: https://github.com/hilather/go-jenkins-mcp
 Recommends: libsecret-1-0
 EOF
   DEB_OUT="$DIST/${NAME}_${VERSION}_${DEB_ARCH}.deb"
@@ -251,7 +251,7 @@ Version:        ${RPM_VERSION}
 Release:        1%{?dist}
 Summary:        Enterprise Jenkins MCP server (local stdio)
 License:        MIT
-URL:            https://github.com/simonfxr/go-jenkins-mcp
+URL:            https://github.com/hilather/go-jenkins-mcp
 Source0:        %{name}-%{version}.tar.gz
 BuildArch:      ${RPM_ARCH}
 

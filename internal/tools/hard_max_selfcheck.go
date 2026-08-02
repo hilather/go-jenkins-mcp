@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
 )
 
 // Wave 38 / MCP-001: register absolute hard-max resolve canary with diagnostics.

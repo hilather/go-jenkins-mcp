@@ -379,7 +379,7 @@ Errors must never include tokens. Prefer structured codes over scraping free tex
 | Surface | Policy |
 |---------|--------|
 | Seed tool names | Stable for pilot; renames require ADR + DOC-002 update |
-| Legacy `-auth` / `JENKINS_MCP_AUTH` | Deprecated bootstrap (KD-003); warn + retire |
+| Legacy `-auth` / `JENKINS_MCP_AUTH` | **Removed** (fail closed); use `login --profile` + keyring |
 | `jenkins_get_jobs` vs `jenkins_list_jobs` | Prefer `list_jobs` for folder-aware discovery; both support opaque `page_token` |
 | Mutation registration | Always gated; never “enabled by default” in docs |
 | Single-frame `.tar.zst` as “random access” | **Rejected** terminology; L2 is multi-frame seekable only |

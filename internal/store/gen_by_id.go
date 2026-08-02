@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // GetGenerationByID loads a generation row by SQLite id (SEARCH-001 scope).

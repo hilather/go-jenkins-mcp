@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
 )
 
 func TestKnownEventTypes_ContainsCoreAndMutation(t *testing.T) {

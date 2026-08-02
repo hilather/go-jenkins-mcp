@@ -7,7 +7,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // versionInfo is secret-free build metadata for `jenkins-mcp version --json` (UPD-001).

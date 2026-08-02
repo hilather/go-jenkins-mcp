@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/adapter"
+	"github.com/hilather/go-jenkins-mcp/internal/adapter"
 )
 
 func TestOtelExport_DisabledByDefault(t *testing.T) {

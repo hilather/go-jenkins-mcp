@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
 )
 
 // Overlay schema / env (CFG-002 / MGR-001).
@@ -164,7 +164,7 @@ type Overlay struct {
 	// Subjects holds optional per-user and per-group deny-only bindings (POL-006).
 	// Global fields above always apply; matching bindings only add denials /
 	// lower budgets. Never elevates force_read_only or Jenkins access.
-	// Admin CRUD / SPA: UI-011 residual until operator UI ships.
+	// Admin CRUD / SPA: UI-011 Access + admin_rbac_* pilot Done*; fleet SoT remains signed config.
 	Subjects *SubjectBindings `json:"subjects,omitempty"`
 }
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/mcpserver"
+	"github.com/hilather/go-jenkins-mcp/internal/mcpserver"
 )
 
 // Wave 44 Track C: ResolveHTTPMaxBodyBytes precedence default → env → flag (flag wins).

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/klauspost/compress/zstd"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // zstd content frame magic (little-endian 0xFD2FB528).

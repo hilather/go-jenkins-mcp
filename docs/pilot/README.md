@@ -2,7 +2,7 @@
 
 This package is the **pilot readiness evidence kit** for go-jenkins-mcp on
 **Tier-1 Linux only**: Rocky Linux and Ubuntu (Desktop/Server share one binary).
-**Windows is out of scope.** macOS is optional and non-blocking.
+**macOS and Windows are out of scope.** Tier-1: Rocky Linux + Ubuntu only.
 
 Real Rocky/Ubuntu pilot installs happen on operator hosts. This repository
 provides:
@@ -200,7 +200,7 @@ Operator detail: [../admin/README.md](../admin/README.md).
 
 ## Success criteria (pilot exit evidence)
 
-Record for **both** Rocky and Ubuntu cohorts (macOS optional):
+Record for **both** Rocky and Ubuntu cohorts:
 
 - [ ] Install succeeds; `jenkins-mcp version --json` shows expected build
 - [ ] `profile add` + `login` use **personal** API tokens only (no shared creds; no `JENKINS_MCP_AUTH`)

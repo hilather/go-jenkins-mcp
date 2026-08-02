@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
 )
 
 // AuditSettingsResponse is GET /admin/v1/profiles/{id}/audit/settings (secret-free).

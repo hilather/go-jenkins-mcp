@@ -31,7 +31,9 @@ jenkins-mcp cache quota --profile <id> [--json]
 |------|--------|
 | `--profile` | Required; missing profile fails closed |
 | `--json` | Secret-free structured output |
-| `--target-bytes N` | Optional; additional reclaim goal beyond bringing usage under the default total quota (`store.DefaultTotalQuotaBytes`, 10 GiB). Non-negative integer. |
+| `--target-bytes N` | Optional; additional reclaim goal beyond bringing usage under the **resolved** total quota (default 10 GiB). Non-negative integer. |
+| `--cache-total-quota-bytes N` | Optional; same resolve as serve (`store.ResolveQuotaConfig`; env `JENKINS_MCP_CACHE_TOTAL_QUOTA_BYTES`; empty/0=default; min 64 MiB; max 1 TiB fail closed). |
+| `--cache-low-disk-bytes N` | Optional; free-space plan threshold (env `JENKINS_MCP_CACHE_LOW_DISK_BYTES`; empty/0=default 1 GiB; min 16 MiB; max 1 TiB). Offline CLI usually has no DiskFree probe. |
 | `--confirm` / `--yes` | **Required to apply**. Without either flag, `cache evict` / `eviction-apply` are dry-run only and never call `Evict`. |
 | **Data dir** | Must already exist (serve or prior cache open); CLI does **not** create an empty tree |
 
@@ -67,7 +69,7 @@ No credentials, tokens, job log bodies, frame payloads, or absolute secret-beari
 4. **`Evict`** the plan. Store re-checks pins/leases/unsealed on each L1/L2 delete; journal keeps metadata consistent on interrupt.
 5. Context cancel returns `cancelled` and may leave a journal for later recover (serve tick or next apply).
 
-Default quota config matches serve (`QuotaConfig{}` → 10 GiB total). Offline CLI does not apply a custom low-disk probe unless configured in-process (serve/tests).
+Default quota config matches serve via `store.ResolveQuotaConfig` (empty/0 → 10 GiB total / 1 GiB low-disk). Offline CLI does not apply a free-space probe unless `DiskFree` is wired (serve/tests); low-disk flag still sets the threshold when a probe exists.
 
 ## Serve vs offline
 
@@ -86,7 +88,7 @@ Default quota config matches serve (`QuotaConfig{}` → 10 GiB total). Offline C
 | **MCP tool surface** | Eviction plan/apply via MCP tools not in this track |
 | **Interactive prompt** | No tty “type yes” prompt; flags only (`--confirm` / `--yes`) |
 
-Related: pins CLI [`cache-pins.md`](cache-pins.md).
+Related: pins CLI [`cache-pins.md`](cache-pins.md); unified operator guide [`caching.md`](../caching.md).
 
 ## Verify
 

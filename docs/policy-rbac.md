@@ -114,7 +114,7 @@ Register (`AllowMutationsOptIn` false).
 ## Per-user and per-group bindings (POL-006)
 
 **Status:** **Done\*** (policy language + evaluator). Admin SPA/BFF binding CRUD
-residual (**UI-011**). **SAML group source** is **POL-007 Done\*** offline
+managed via Access SPA / `admin_rbac_*` (**UI-011 Done\*** pilot). **SAML group source** is **POL-007 Done\*** offline
 (`internal/saml` maps assertion groups → `Subject.Groups`); live IdP pin residual.
 
 Operator-defined **named permission sets per user and per group** attach to the
@@ -193,7 +193,7 @@ enterprise force_read_only
 |------|--------|--------|
 | **POL-006** | Policy language + evaluator (this section) | **Done\*** |
 | **POL-007** | SAML 2.0 SP path: assertion → subject + groups into policy (not Jenkins-as-IdP); multi-fleet **config-managed** | **Done\*** offline (ADR 0015, `internal/saml`, admin ACS); live IdP pin residual |
-| **UI-011** | Admin Access page + BFF CRUD + `admin_rbac_*` MCP for bindings (pilot/single-host; fleet SoT = config) | Backlog |
+| **UI-011** | Admin Access page + BFF CRUD + `admin_rbac_*` MCP for bindings (pilot/single-host; fleet SoT = config) | **Done\*** pilot break-glass (2026-08-01); fleet SoT remains signed config |
 
 **Agent non-negotiable** (root `AGENTS.md`): new RBAC controls must be designed so
 they can be defined **per verified user** and **per group** — never only as an
@@ -202,13 +202,15 @@ undifferentiated global toggle without a residual task id.
 Group *claims* from JWT/gateway already attribute identity (OAUTH-006 / GWY-002)
 and now drive **POL-006 group bindings** when present on `Subject.Groups`.
 Operators manage binding documents via overlay JSON today; admin SPA editor is
-**UI-011** residual.
+**UI-011** Done\* pilot Access SPA + BFF + `admin_rbac_*` (fleet SoT still config/signed policy).
 
-### SAML and multi-fleet configuration (POL-007 Done* offline)
+### SAML and multi-fleet configuration (POL-007 Done* offline + Keycloak lab)
 
-**Status:** Offline SP validation + attribute map + admin ACS/session + POL-006 group bind **Done\***.  
-**Residual:** live Entra/Okta/ADFS browser pin, encrypted assertions, multi-pod session HA, UI-011 SPA CRUD.  
-**Package:** `internal/saml` · ADR 0015 · `testdata/saml-lab/` · `make saml-lab-test` · env `JENKINS_MCP_SAML_CONFIG`.
+**Status:** Offline SP validation + attribute map + admin ACS/session + POL-006 group bind **Done\***; opt-in Keycloak SAML IdP lab **Done** (`make live-saml-*`).  
+**Residual:** live Entra/Okta/ADFS browser pin; full browser ACS + Keycloak XML-DSig interop may need SP hardening; encrypted assertions; multi-pod session HA. **UI-011** Access SPA/BFF/`admin_rbac_*` is **Done\*** pilot (fleet SoT remains config).  
+**Package:** `internal/saml` · ADR 0015 · env `JENKINS_MCP_SAML_CONFIG`.  
+**Labs:** offline `make saml-lab-test`; opt-in Keycloak IdP `make live-saml-up` / `live-saml-smoke` / `live-saml-test` / `live-saml-down` (`testdata/saml-lab/`).
+**Multi-fleet pack:** [fleet/multi-fleet-rollout.md](fleet/multi-fleet-rollout.md) · fixtures `testdata/fleet-pack/`.
 
 **Does config-file management of SAML users/groups make sense for multi-fleet?**
 **Yes — with a precise definition of “manage”.**
@@ -220,7 +222,7 @@ Operators manage binding documents via overlay JSON today; admin SPA editor is
 | **IdP group → console role** (admin SSO) | **Same config plane** | e.g. map `mcp-admin-ops` → `operator`, `mcp-policy-admins` → `policy_admin`; default deny if no map match |
 | **IdP group / user → MCP denials** | **Policy overlay** (`subjects.groups` / `subjects.users`, preferably **signed** MGR-001) | Same deny-only language as POL-006; roll out to fleet via config management + hot-reload / last-good |
 | **Secrets** | Secret store / env / file mode 0600 | SP signing/decryption keys, client secrets — **never** in git plain text; never in audit/admin JSON |
-| **Single-host SPA CRUD** | Pilot residual (**UI-011**) | Useful for lab/break-glass; **must not** be required for multi-fleet consistency |
+| **Single-host SPA / MCP bindings** | **UI-011 Done\*** pilot break-glass | Useful for lab; **must not** be required for multi-fleet consistency (SoT = signed config) |
 
 **Architectural rules (POL-007 / fleet):**
 
@@ -228,7 +230,7 @@ Operators manage binding documents via overlay JSON today; admin SPA editor is
 2. Config **maps and restricts**; it does not invent membership. Group overage/oversize fail closed.
 3. Multi-fleet prefers **immutable config + signed policy** over mutable per-pod DBs.
 4. Shared-secret pilot remains when SAML `require=false`; when `require=true`, SAML session is mandatory for gated `/admin/v1/*` (except ACS/login/status). See [admin README](admin/README.md).
-5. Optional SPA Access UI (UI-011 residual) stays secret-free and cannot widen enterprise `force_read_only`.
+5. SPA Access UI / `admin_rbac_*` (UI-011 Done\* pilot) stays secret-free and cannot widen enterprise `force_read_only`; refused when require-signed / trusted keys / signed bundle active.
 
 ---
 

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 )
 
 // fakeMetrics is a concurrent-safe MetricsHook for unit tests (OBS-001 / Wave 27).

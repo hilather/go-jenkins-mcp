@@ -4,8 +4,7 @@
 |-------|--------|
 | **Task** | PKG-001 |
 | **Platforms** | Rocky Linux (supported majors), Ubuntu (supported LTS) |
-| **Out of scope** | **Windows** packages (no native FUSE; ADR 0008) |
-| **Tier 2** | macOS artifacts optional / non-blocking |
+| **Out of scope** | **macOS** and **Windows** packages (ADR 0008) |
 
 ## Artifacts
 
@@ -111,7 +110,7 @@ Prefer **enterprise software distribution** (signed RPM/DEB/repos). The binary d
 | CLI | `jenkins-mcp update show-lkg [--json]` — offline LKG inspect |
 | On match | Reports `newer_available`, `latest_version`, `lkg_*`, `changelog_url`, `signature_state` |
 | LKG | `$XDG_DATA_HOME/jenkins-mcp/update/last_known_good.json` — secret-free (version, channel, sha256, basename, key ids); no URLs/private keys |
-| Residual | No auto-install; no binary rollback/swap in-process; LKG is metadata only |
+| Residual | No auto-install; no binary rollback/swap in-process; LKG is metadata only; emergency disable via policy/adapter force-off (not updater) — see [release/update.md](release/update.md) |
 
 **Primary schema (schema_version 2, signed):** see [`release/update.md`](release/update.md).
 
@@ -180,8 +179,13 @@ If CI did not produce an RPM (`skip rpm: rpmbuild not installed`), use the porta
 
 ### Cache / quota operator notes (ARC-007/008)
 
+**Unified operator guide (all deployment types):** [caching.md](caching.md) — two cache planes, XDG layout, quota/maintenance, gateway file caches, Cursor/Docker/multi-fleet/gateway matrix, residuals.
+
 - Per-profile data root holds L1 `frames/`, SQLite `metadata.sqlite`, L2 `archives/*.tar.zst` (+ `.idx.json`).
-- Default total physical quota constant: **10 GiB** (`store.DefaultTotalQuotaBytes`); serve-time `QuotaManager` uses defaults when maintenance is enabled.
+- Default total physical quota: **10 GiB** (`store.DefaultTotalQuotaBytes`); low-disk threshold default **1 GiB**. Operator tunables (flag wins over env; empty/`0` = default; fail-closed bounds):
+  - `--cache-total-quota-bytes` / `JENKINS_MCP_CACHE_TOTAL_QUOTA_BYTES` — min **64 MiB**, max **1 TiB**
+  - `--cache-low-disk-bytes` / `JENKINS_MCP_CACHE_LOW_DISK_BYTES` — min **16 MiB**, max **1 TiB**
+  - Shared resolve: serve maintenance, offline `cache quota` / `eviction-plan` / `evict`, admin BFF/MCP (`store.ResolveQuotaConfig`)
 - Serve loop (with `--profile`): recovers eviction journal, evicts when over quota, optionally packs sealed unpinned L1 into L2 (keeps L1 until release residual). Interval default **5m**.
 - Disable maintenance: `--no-cache-maintenance` or `JENKINS_MCP_NO_CACHE_MAINTENANCE=1`. Interval: `--cache-maintenance-interval` / `JENKINS_MCP_CACHE_MAINTENANCE_INTERVAL`.
 - Result hard-max bootstrap ceiling (Wave 37/38): `--hard-max-bytes N` or `JENKINS_MCP_HARD_MAX_BYTES` (flag wins; empty/0 = default 1 MiB). Process absolute fail-closed cap **64 MiB** (`AbsoluteMaxHardMaxBytes`); oversize flag/env rejected at serve start. Overlay `max_result_bytes` may only lower within the bootstrap ceiling; raise serve-bootstrap ceiling (≤ 64 MiB) by re-serving with a higher flag/env. Invalid values fail closed at serve start.
@@ -204,7 +208,7 @@ If CI did not produce an RPM (`skip rpm: rpmbuild not installed`), use the porta
   - `cache unpin generation|pack …`
   - `cache pins --profile <id> [--json]` (secret-free)
   - Fail closed when profile or data directory is missing.
-- Offline eviction (ARC-007): `cache eviction-plan --profile <id> [--json] [--target-bytes N]` calls `PlanEviction` only (never `Evict`). `cache evict` / `cache eviction-apply` default to the same dry-run; destructive apply requires `--confirm` or `--yes` (recover journal → re-plan → `Evict`). `cache quota --profile <id> [--json]` prints usage stats. Serve-time maintenance remains the primary reclaim path; CLI apply is an operator escape hatch.
+- Offline eviction (ARC-007): `cache eviction-plan --profile <id> [--json] [--target-bytes N] [--cache-total-quota-bytes N] [--cache-low-disk-bytes N]` calls `PlanEviction` only (never `Evict`). `cache evict` / `cache eviction-apply` default to the same dry-run; destructive apply requires `--confirm` or `--yes` (recover journal → re-plan → `Evict`). `cache quota --profile <id> [--json] [--cache-total-quota-bytes N]` prints usage stats (quota bytes from resolve). Serve-time maintenance remains the primary reclaim path; CLI apply is an operator escape hatch.
 - `cache verify` / `cache repair` are offline integrity maintenance (no secrets in reports).
 
 ## Paths (XDG)
@@ -260,7 +264,7 @@ jenkins-mcp login --profile corp
 jenkins-mcp doctor --profile corp --offline
 ```
 
-**Do not** use seed-style `-auth user:token` or `JENKINS_MCP_AUTH` in pilot configs (known defect KD-003; being retired).
+**Do not** use `-auth user:token` or `JENKINS_MCP_AUTH` — removed (fail closed). Use profile + login only.
 
 ## HTTP mode (optional — not pilot default)
 
@@ -323,7 +327,7 @@ Operators verifying pilot builds should check `SHA256SUMS` against the downloade
 
 ## macOS
 
-Best-effort `go build` / optional CI job only. Not a pilot gate. Not notarized by default.
+**Out of scope.** No darwin packages, notarization, or Keychain product support (ADR 0008).
 
 ## Windows
 
@@ -367,7 +371,7 @@ production image from this repo.
 
 | Artifact | Path | Notes |
 |----------|------|--------|
-| Deployment guide | [gateway/deployment.md](gateway/deployment.md) | HOST-002 reverse-proxy matrix, HOST-005 readiness, HOST-008 HA residual |
+| Deployment guide | [gateway/deployment.md](gateway/deployment.md) | HOST-002 reverse-proxy matrix, HOST-005 readiness; multi-pod HA cancelled (multi-fleet) |
 | Compose example | [deploy/gateway/docker-compose.yml](../deploy/gateway/docker-compose.yml) | Non-root, read-only root, CPU/mem limits, secret-free env |
 | Env example | [deploy/gateway/.env.example](../deploy/gateway/.env.example) | **Non-secret vars only** |
 | Dockerfile | [deploy/gateway/Dockerfile](../deploy/gateway/Dockerfile) | Distroless nonroot; build from repo root |
@@ -380,7 +384,7 @@ docker compose -f deploy/gateway/docker-compose.yml config
 
 **Residuals (explicit):** live AgentCore sidecar/binary pin; image signing
 (cosign/registry provenance); Streamable HTTP mTLS hardening; multi-replica HA
-(HOST-008). See [gateway/deployment.md](gateway/deployment.md).
+(HOST-008 multi-pod **cancelled** — multi-fleet scale). See [gateway/deployment.md](gateway/deployment.md).
 
 ## User / admin / security docs
 
@@ -388,6 +392,7 @@ docker compose -f deploy/gateway/docker-compose.yml config
 |-----|----------|
 | [user/README.md](user/README.md) | Cursor stdio setup, login, RO default, common tools |
 | [admin/README.md](admin/README.md) | Packages, SELinux/AppArmor, cache, maintenance, pilot-check |
+| [caching.md](caching.md) | Log store + gateway caches; config by deployment type |
 | [security/operator-guide.md](security/operator-guide.md) | Tokens, keyring, support bundles, threat-model pointer |
 | [tool-contracts.md](tool-contracts.md) | MCP tool inventory and budgets |
 | [agent-usage.md](agent-usage.md) | Agent triage workflow |
@@ -396,12 +401,12 @@ docker compose -f deploy/gateway/docker-compose.yml config
 
 ## Optional cache encryption (ARC-009)
 
-See [docs/security/cache-encryption.md](security/cache-encryption.md). Keys stay in Secret Service; never in profile JSON.
+See [docs/security/cache-encryption.md](security/cache-encryption.md) and the encryption section of [caching.md](caching.md). Keys stay in Secret Service; never in profile JSON.
 
 ### MCP protocol pin and offline matrix (FND-006)
 
 | Offline protocol matrix (unit CI) | `go test ./internal/tools/ ./internal/mcpserver/ -count=1 -run 'ProtocolMatrix\|MCPProtocolMatrix'` — Initialize, ListTools RO, CallTool success/invalid/unknown/cancel, loopback HTTP Initialize/ListTools |
-| Offline stdio **binary** host-lifecycle smoke (opt-in / optional CI) | `make stdio-smoke` → `scripts/mcp-stdio-smoke.sh` + `scripts/mcpstdiosmoke` — real `jenkins-mcp` over stdio (`mcp.CommandTransport`), httptest Jenkins, **host-lifecycle matrix**: Initialize, ListTools RO, CallTool success (`jenkins_get_jobs`), invalid args, unknown tool, cancel mid-flight (hanging fixture + client cancel), ListTools again, clean shutdown + secret canary scrub. Uses deprecated `JENKINS_MCP_AUTH` bootstrap (no Secret Service). Wave 25 baseline + Wave 33 expansion. Optional CI job `stdio-smoke` keeps `continue-on-error` (not merge-gate). |
+| Offline stdio **binary** host-lifecycle smoke (opt-in / optional CI) | `make stdio-smoke` → `scripts/mcp-stdio-smoke.sh` + `scripts/mcpstdiosmoke` — real `jenkins-mcp` over stdio (`mcp.CommandTransport`), httptest Jenkins, **host-lifecycle matrix**: Initialize, ListTools RO, CallTool success (`jenkins_get_jobs`), invalid args, unknown tool, cancel mid-flight (hanging fixture + client cancel), ListTools again, clean shutdown + secret canary scrub. Uses profile + `JENKINS_MCP_KEYRING_FILE` headless file keyring (no Secret Service required). Wave 25 baseline + Wave 33 expansion. Optional CI job `stdio-smoke` keeps `continue-on-error` (not merge-gate). |
 
 | Residual id | Status | Notes |
 |-------------|--------|--------|
@@ -474,7 +479,7 @@ Prefer **enterprise software distribution** (signed RPM/DEB/repos). The binary d
 | On match | Reports `newer_available`, `latest_version`, `lkg_*`, `changelog_url`, `signature_state` |
 | LKG | `$XDG_DATA_HOME/jenkins-mcp/update/last_known_good.json` — secret-free (version, channel, sha256, basename, key ids); no URLs/private keys |
 | LKG re-verify | Default artifact path: update data dir + `path_basename`; `--file` for custom download outdir; doctor check `update_lkg` (skip if absent) |
-| Residual | No auto-install; no binary rollback/swap in-process; LKG is metadata only |
+| Residual | No auto-install; no binary rollback/swap in-process; LKG is metadata only; emergency disable via policy/adapter force-off (not updater) — see [release/update.md](release/update.md) |
 
 **Primary schema (schema_version 2, signed):** see [`release/update.md`](release/update.md).
 
@@ -514,3 +519,4 @@ Emits secret-free JSON schema **`jenkins-mcp.release-evidence.v2`**: version/com
 - jenkins_list_artifacts JSON body bound (Wave 43): `--artifacts-list-body-bytes N` or `JENKINS_MCP_ARTIFACTS_LIST_BODY_BYTES` (flag wins; empty/0 = default **2097152** / 2 MiB). Absolute fail-closed cap **8388608** / 8 MiB. Raise when large inventories near AbsoluteMax hard cap hit the body limit before the count hard cap (fail closed on truncated/invalid JSON).
 
 - Cache maintenance interval (Wave 49): `--cache-maintenance-interval` / `JENKINS_MCP_CACHE_MAINTENANCE_INTERVAL` (default **5m**; absolute fail-closed **30s–1h** via `app.ResolveMaintenanceInterval`).
+- Cache total quota / low-disk (ARC-007 tunables): `--cache-total-quota-bytes` / `JENKINS_MCP_CACHE_TOTAL_QUOTA_BYTES` (default **10 GiB**; min **64 MiB**; max **1 TiB**); `--cache-low-disk-bytes` / `JENKINS_MCP_CACHE_LOW_DISK_BYTES` (default **1 GiB**; min **16 MiB**; max **1 TiB**); empty/`0` = default; flag wins; `store.ResolveQuotaConfig` shared by serve + offline cache CLI + admin.

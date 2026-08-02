@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
 )
 
 // EnvGatewayMultiUser enables per-request multi-user Obtain on gateway serve

@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // CallerFromBoundSubject builds a gateway.Caller from a bound policy.Subject (HOST-003).

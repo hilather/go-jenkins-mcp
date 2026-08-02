@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-const modulePath = "github.com/simonfxr/go-jenkins-mcp"
+const modulePath = "github.com/hilather/go-jenkins-mcp"
 
 // Architecture packages that must exist as importable packages (FND-004).
 var requiredPackages = []string{
@@ -43,6 +43,7 @@ var requiredPackages = []string{
 	"internal/apperr",
 	"internal/admin",
 	"internal/adminops",
+	"internal/fleetmcp",
 }
 
 func moduleRoot(t *testing.T) string {
@@ -276,7 +277,7 @@ func TestDependencyDirection(t *testing.T) {
 		// Wave 45 Track B: operator_caps_snapshot reports auth + mcpserver constants
 		// (identity re-verify TTL bounds, Streamable HTTP MaxBodyBytes); both are
 		// cycle-free leaves (auth/mcpserver do not import tools).
-		"internal/tools": {"internal/jenkins", "internal/apperr", "internal/contracts", "internal/policy", "internal/audit", "internal/telemetry", "internal/redact", "internal/search", "internal/logmirror", "internal/diagnostics", "internal/mutation", "internal/otelx", "internal/correlate", "internal/store", "internal/auth", "internal/mcpserver", "internal/adminops"},
+		"internal/tools": {"internal/jenkins", "internal/apperr", "internal/contracts", "internal/policy", "internal/audit", "internal/telemetry", "internal/redact", "internal/search", "internal/logmirror", "internal/diagnostics", "internal/mutation", "internal/otelx", "internal/correlate", "internal/store", "internal/auth", "internal/mcpserver", "internal/adminops", "internal/fleetmcp"},
 		// depgraph is test-only package for this suite; production imports of it are empty.
 		"internal/otelx":     {},
 		"internal/correlate": {}, // INT-004 pure extractors (no network, no jenkins).
@@ -301,6 +302,10 @@ func TestDependencyDirection(t *testing.T) {
 			"internal/admin", "internal/apperr", "internal/audit", "internal/config",
 			"internal/diagnostics", "internal/gateway", "internal/policy",
 			"internal/profile", "internal/store", "internal/telemetry",
+		},
+		// Fleet MCP: roster + peer fan-out for fleet_* tools (not multi-pod HA).
+		"internal/fleetmcp": {
+			"internal/apperr", "internal/diagnostics", "internal/store", "internal/telemetry",
 		},
 		// UI-008: embed-only SPA assets; stdlib only (no other internal imports).
 		"internal/admin/uiembed": {},

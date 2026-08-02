@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/store"
-	storecrypto "github.com/simonfxr/go-jenkins-mcp/internal/store/crypto"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/store"
+	storecrypto "github.com/hilather/go-jenkins-mcp/internal/store/crypto"
 )
 
 // testFrameKey is a deterministic non-production test vector (never a real secret).

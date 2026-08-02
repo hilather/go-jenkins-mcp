@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // Ed25519SignatureVerifier verifies signed policy bundle envelopes (MGR-001).

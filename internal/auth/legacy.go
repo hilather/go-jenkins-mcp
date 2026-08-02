@@ -3,17 +3,19 @@ package auth
 import (
 	"os"
 	"strings"
-	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
-// LegacyEnvVar is the seed environment variable for user:token (KD-003).
-// Deprecated: prefer profile + keyring login. Retained as bootstrap/opt-in only.
+// LegacyEnvVar is the retired environment variable for user:token bootstrap.
+// Presence of this env (or CLI -auth) fails closed — use profile + keyring login.
 const LegacyEnvVar = "JENKINS_MCP_AUTH"
 
+// LegacyRetiredMessage is the operator-facing migration text (secret-free).
+const LegacyRetiredMessage = "legacy -auth / JENKINS_MCP_AUTH bootstrap is removed; run jenkins-mcp login --profile <id> then serve --profile <id> (credentials in OS Secret Service or JENKINS_MCP_KEYRING_FILE for headless CI)"
+
 // ParseUserToken parses "user:api_token". The token is returned but must not be logged.
+// Retained for input validation helpers; serve never accepts this as a bootstrap path.
 func ParseUserToken(raw string) (user, token string, err error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -31,24 +33,14 @@ func ParseUserToken(raw string) (user, token string, err error) {
 	return user, token, nil
 }
 
-// LegacySessionFromEnv builds a Session from JENKINS_MCP_AUTH when set.
-// Empty env returns a non-authenticated error. Deprecated bootstrap path only.
-func LegacySessionFromEnv(profileID contracts.ProfileID) (Session, error) {
-	return LegacySessionFromString(profileID, os.Getenv(LegacyEnvVar))
-}
-
-// LegacySessionFromString builds a Session from a raw "user:token" string
-// (CLI -auth or env). Deprecated; do not use for enterprise happy path.
-func LegacySessionFromString(profileID contracts.ProfileID, raw string) (Session, error) {
-	user, token, err := ParseUserToken(raw)
-	if err != nil {
-		return Session{}, err
+// RejectLegacyBootstrap fails closed when retired CLI -auth or JENKINS_MCP_AUTH is present.
+// Call at serve entry so secrets never become a session.
+func RejectLegacyBootstrap(authFlag string) error {
+	if strings.TrimSpace(authFlag) != "" {
+		return apperr.New(apperr.CodeAuthentication, LegacyRetiredMessage)
 	}
-	return Session{
-		ProfileID: profileID,
-		Method:    MethodAPIToken,
-		User:      user,
-		Secret:    token,
-		ExpiresAt: time.Now().Add(12 * time.Hour),
-	}, nil
+	if strings.TrimSpace(os.Getenv(LegacyEnvVar)) != "" {
+		return apperr.New(apperr.CodeAuthentication, LegacyRetiredMessage)
+	}
+	return nil
 }

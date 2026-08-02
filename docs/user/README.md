@@ -1,7 +1,7 @@
 # User guide — go-jenkins-mcp (Cursor stdio)
 
 **Audience:** developers and pilot users on **Tier-1 Linux** (Rocky Linux, Ubuntu).  
-**Windows is out of scope.** macOS is optional / best-effort.  
+**macOS and Windows are out of scope.** Tier-1: Rocky Linux + Ubuntu only.  
 **Wave 20 (DOC-001):** pilot path kept in sync with waves 16–19 code; no false production claims.
 
 This guide gets you from install → personal login → Cursor MCP → common diagnosis workflows **without ever putting a token in Cursor config, CLI history examples, or git**.
@@ -17,6 +17,7 @@ Related:
 | [Pilot kit](../pilot/README.md) | Limited RO pilot evidence (REL-001) |
 | [Pilot checklist](../pilot/checklist.md) | Per-host install → diagnose → cache → rollback |
 | [Packaging](../packaging.md) | Install artifacts and XDG paths |
+| [Caching](../caching.md) | Log store + gateway caches; configure for Cursor, Docker, fleet, gateway |
 
 ---
 
@@ -99,7 +100,7 @@ evidence exists.
 - profile JSON under `~/.config/jenkins-mcp/`
 - long-lived desktop environment variables (test-only login env exists for automation; see security guide)
 
-**Do not use** deprecated bootstrap `-auth user:token` or `JENKINS_MCP_AUTH` in pilot or production configs (seed defect KD-003). Prefer `login --profile` + Secret Service only.
+**Do not use** `-auth user:token` or `JENKINS_MCP_AUTH` — those bootstrap paths are **removed** (fail closed). Use `login --profile` + Secret Service only (headless CI may set `JENKINS_MCP_KEYRING_FILE`).
 
 ---
 
@@ -137,6 +138,8 @@ Notes:
 - Optional adapters (`ext-logs`, `work-items`, `otel-correlate`) are **off** unless the host adds `--enable-adapter=…` — pilot Cursor configs should stay RO + core tools only unless an exception is approved.
 
 ### Shared cache with local Docker admin (optional)
+
+Operator SoT for all cache planes and deploy types: **[caching.md](../caching.md)** (especially § Cursor stdio and § local Docker).
 
 Default host stdio uses `~/.config|share|cache/jenkins-mcp`. The local Docker admin stack uses **separate** named volumes unless you opt into **shared XDG** so Cursor and Docker share profile + L1/log cache:
 
@@ -292,8 +295,7 @@ Full stable codes: `internal/apperr` / [tool-contracts.md](../tool-contracts.md#
 
 ## 9. Platform residual
 
-- **Tier 1:** Rocky Linux + Ubuntu  
-- **Tier 2:** macOS nice-to-have  
-- **Out of scope:** Windows (no native FUSE; ADR 0008)
+- **Tier 1:** Rocky Linux + Ubuntu only  
+- **Out of scope:** macOS and Windows (ADR 0008)
 
 Pilot evidence and rollback: [pilot kit](../pilot/README.md) · [checklist](../pilot/checklist.md).

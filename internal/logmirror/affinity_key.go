@@ -8,7 +8,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/store"
+	"github.com/hilather/go-jenkins-mcp/internal/store"
 )
 
 // MaxAffinityGroupLen bounds catalog AffinityGroup labels (no secrets, stable).

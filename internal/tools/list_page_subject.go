@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 )
 
 // HOST-004 serve wire: subject-bound opaque page tokens for list tools.

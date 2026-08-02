@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // MaxTokenFetchBodyBytes bounds AS/mock token endpoint JSON (never log body).

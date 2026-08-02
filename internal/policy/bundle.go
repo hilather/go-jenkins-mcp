@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // verifyEd25519 is a thin wrapper so ed25519.Verify is not re-imported in every file.

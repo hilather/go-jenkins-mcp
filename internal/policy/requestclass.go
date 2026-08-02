@@ -1,6 +1,6 @@
 package policy
 
-import "github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+import "github.com/hilather/go-jenkins-mcp/internal/jenkins"
 
 // Re-export Jenkins request classification for policy-layer callers (POL-004).
 // Canonical implementation lives in package jenkins so the client can classify

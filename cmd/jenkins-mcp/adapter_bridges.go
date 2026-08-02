@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/adapter"
-	"github.com/simonfxr/go-jenkins-mcp/internal/tools"
+	"github.com/hilather/go-jenkins-mcp/internal/adapter"
+	"github.com/hilather/go-jenkins-mcp/internal/tools"
 )
 
 // extLogsBridge maps tools.ExternalLogQuerier → adapter.ExternalLogQuery with

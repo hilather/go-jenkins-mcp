@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
 )
 
 func TestWriterRedactsBearerAndAPIToken(t *testing.T) {

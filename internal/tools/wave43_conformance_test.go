@@ -3,7 +3,7 @@ package tools
 import (
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 )
 
 // Wave 43 / POL-005 conformance:

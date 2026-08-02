@@ -7,9 +7,9 @@ import (
 	gokeyring "github.com/zalando/go-keyring"
 )
 
-// SecretService is the Tier-1 Linux backend using org.freedesktop.secrets
-// via github.com/zalando/go-keyring (also maps to macOS Keychain on darwin
-// as a Tier-2 nice-to-have; no Windows Credential Manager path is required).
+// SecretService is the Linux backend using org.freedesktop.secrets via
+// github.com/zalando/go-keyring. Product support is Rocky/Ubuntu only (ADR 0008);
+// macOS and Windows secret stores are out of scope.
 type SecretService struct{}
 
 // NewSecretService returns the OS secret-service backend.

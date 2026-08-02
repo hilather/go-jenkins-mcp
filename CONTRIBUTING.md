@@ -111,7 +111,6 @@ OAuth secrets.
 |--------------------|--------|------|-------------|-------|
 | `lint-test-build` | `check` | push / PR | **Yes** | Ubuntu host + Rocky 9 container; gofmt, vet, test, race (Ubuntu only), build, `make package`; optional perf step (continue-on-error) |
 | `govulncheck` | `govulncheck` | push / PR | **Yes** | `golang.org/x/vuln` scan of `./...` |
-| `macos-optional` | `macos-optional` | push / PR | No | Tier-2 best-effort; `continue-on-error` |
 | `package-smoke` | `package-smoke` | push / PR | No | Bare Ubuntu only; `make package-smoke` (PKG-001 offline); `continue-on-error` |
 | `fuzz-smoke` | `fuzz-smoke` | push / PR | No | `make fuzz-smoke FUZZTIME=1s`; `continue-on-error` |
 | `stdio-smoke (host-lifecycle offline)` | `stdio-smoke` | push / PR | No | Wave 26+33 FND-006 offline MCP binary host-lifecycle (`make stdio-smoke`); `continue-on-error`; **not** Cursor product binary CI |
@@ -145,4 +144,4 @@ Repository owners configure GitHub branch protection for `master`/`main`.
 ## License
 
 Contributions are under the MIT license (`LICENSE`) with attribution in
-`NOTICE` and `UPSTREAM.md`.
+`NOTICE` and `docs/HISTORY.md`.

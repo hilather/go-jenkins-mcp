@@ -1,8 +1,8 @@
 package tools
 
 import (
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
-	"github.com/simonfxr/go-jenkins-mcp/internal/telemetry"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/telemetry"
 )
 
 // JenkinsMetricsHook adapts *telemetry.Metrics to jenkins.MetricsHook (OBS-001).

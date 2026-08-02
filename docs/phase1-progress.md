@@ -44,12 +44,15 @@ go test -race -count=1 ./internal/search/ ./internal/store/ ./internal/logmirror
 
 ## Next steps
 
-See **`docs/phase2-progress.md`** for ARC / JEN / PIPE / TEST / DIAG / OPS / HEALTH wave.
+Open work only (completed Phase 1 items removed; see status board above for Done\*).
 
-- [ ] **MUT-001** mutation preview/confirm (still RO by default)  
-- [ ] **PKG-001** signed Rocky/Ubuntu packages  
-- [ ] **ARC-000** qualify pin `hilather/ratarmount-rs` **v0.1.14** (`eeff850…`) — see `docs/arc/ratarmount-rs-pin.json`  
-- [ ] **ARC-000a/b/c** build/SBOM, security review, Tier-1 sidecar+FUSE prototype  
-- [ ] **ARC-004 / ARC-004a/b** adapter after ARC-000 production go  
-- [ ] **ARC-012** seek-table / pin dialect compatibility  
+See **`docs/phase2-progress.md`** for waves 6–53 landed work.
+
+- [ ] **PKG-001** signed Rocky/Ubuntu packages (signing / Tier-1 package validation residual)
+- [ ] **ARC-000** qualify pin `hilather/ratarmount-rs` **v0.1.14** (`eeff850…`) — see `docs/arc/ratarmount-rs-pin.json`
+- [ ] **ARC-000a/b/c** build/SBOM, security review, Tier-1 sidecar+FUSE prototype
+- [ ] **ARC-004 / ARC-004a/b** adapter after ARC-000 production go
+- [ ] **ARC-012** seek-table / pin dialect compatibility
+
+MUT-001…003 / power-user mutations: foundation Done\* — open residual only **MUT-ADMIN** (security go); see `docs/mutations/power-user-backlog.md`.
 

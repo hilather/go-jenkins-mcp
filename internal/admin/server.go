@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/admin/uiembed"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
-	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
-	"github.com/simonfxr/go-jenkins-mcp/internal/saml"
+	"github.com/hilather/go-jenkins-mcp/internal/admin/uiembed"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/keyring"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/saml"
 )
 
 // DefaultAddr is the loopback bind for admin serve (ADR 0014).
@@ -260,6 +260,11 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("GET /admin/v1/policy/overlay", s.handlePolicyOverlayGET)
 	mux.HandleFunc("POST /admin/v1/policy/validate", s.handlePolicyValidate)
 	mux.HandleFunc("POST /admin/v1/policy/apply", s.handlePolicyApply)
+	// UI-011: user/group binding list + plain-overlay write + effective preview
+	mux.HandleFunc("GET /admin/v1/policy/bindings", s.handlePolicyBindingsGET)
+	mux.HandleFunc("PUT /admin/v1/policy/bindings", s.handlePolicyBindingsPUT)
+	mux.HandleFunc("POST /admin/v1/policy/bindings", s.handlePolicyBindingsPUT)
+	mux.HandleFunc("POST /admin/v1/policy/bindings/preview", s.handlePolicyBindingsPreview)
 	mux.HandleFunc("GET /admin/v1/profiles/{id}/audit", s.handleAudit)
 	// AUD-001 type enable/disable (catalog + filter file); write requires gateway_ops.
 	mux.HandleFunc("GET /admin/v1/profiles/{id}/audit/settings", s.handleAuditSettingsGET)

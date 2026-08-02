@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/adminops"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
-	"github.com/simonfxr/go-jenkins-mcp/internal/config"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/adminops"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/config"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
 )
 
 func TestService_MeAndHealth_SecretFree(t *testing.T) {
@@ -157,6 +157,8 @@ func TestToolCatalog_CoversP0(t *testing.T) {
 		"admin_gateway_residual_status", "admin_list_profiles", "admin_get_profile",
 		"admin_policy_effective", "admin_metrics", "admin_audit_list",
 		"admin_doctor", "admin_cache_status",
+		// UI-011 / POL-006 multi-fleet bindings
+		"admin_rbac_list_bindings", "admin_rbac_put_binding", "admin_rbac_delete_binding",
 	}
 	set := map[string]struct{}{}
 	for _, n := range cat {
@@ -167,9 +169,9 @@ func TestToolCatalog_CoversP0(t *testing.T) {
 			t.Fatalf("missing P0 tool %s", n)
 		}
 	}
-	// Residuals documented
+	// POL-007 SAML MCP residual still documented
 	res := adminops.ResidualTools()
-	if res["admin_rbac_list_bindings"] == "" {
-		t.Fatal("POL-006 residual missing")
+	if res["admin_saml_status"] == "" {
+		t.Fatal("POL-007 residual missing")
 	}
 }

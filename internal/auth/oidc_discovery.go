@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
 )
 
 // MaxDiscoveryBodyBytes bounds OIDC discovery JSON responses (fail closed).

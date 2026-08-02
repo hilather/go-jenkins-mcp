@@ -5,7 +5,7 @@ package auth
 import (
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // withJWKSFileLock is a no-op on non-unix (Windows is out of platform matrix).

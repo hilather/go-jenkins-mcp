@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // QuarantineDirName is the subdirectory under an FS store root for corrupt packs.

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
 )
 
 // handleGatewayResidualStatus is GET /admin/v1/gateway/residual-status (HOST-007).

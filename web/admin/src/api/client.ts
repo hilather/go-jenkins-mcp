@@ -27,11 +27,16 @@ import type {
   HealthResponse,
   MeResponse,
   MetricsResponse,
+  BindingsGetResponse,
+  BindingsPreviewResponse,
+  BindingsPutResponse,
+  GroupBinding,
   OverlayGetResponse,
   PolicyApplyResponse,
   PolicyOverlay,
   PolicyValidateRequest,
   PolicyValidateResponse,
+  UserBinding,
   ProfileListResponse,
   ProfileSummary,
   SecuritySelfCheckReport,
@@ -539,4 +544,39 @@ export function formatDenyListText(items?: string[]): string {
     return "";
   }
   return items.join("\n");
+}
+
+
+/** UI-011: list POL-006 user/group bindings (secret-free). */
+export async function fetchPolicyBindings(): Promise<BindingsGetResponse> {
+  return adminFetch<BindingsGetResponse>("/policy/bindings");
+}
+
+/** UI-011: replace subjects on plain overlay (policy_admin). */
+export async function putPolicyBindings(body: {
+  users?: UserBinding[];
+  groups?: GroupBinding[];
+  profileId?: string;
+}): Promise<BindingsPutResponse> {
+  return adminFetch<BindingsPutResponse>("/policy/bindings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** UI-011: dry-run deny-only evaluate for a hypothetical subject. */
+export async function previewPolicyBindings(body: {
+  jenkins_user_id?: string;
+  external_subject?: string;
+  groups?: string[];
+  tool_name?: string;
+  job_name?: string;
+  profileId?: string;
+}): Promise<BindingsPreviewResponse> {
+  return adminFetch<BindingsPreviewResponse>("/policy/bindings/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }

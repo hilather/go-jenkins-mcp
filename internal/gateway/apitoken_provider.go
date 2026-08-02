@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // ModeAPITokenVault is HOST-009 mode A: per-subject personal Jenkins API token

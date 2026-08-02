@@ -40,6 +40,8 @@ jenkins-mcp cache pins --profile <id> [--json]
 | **MCP tool surface** | Pin/unpin via MCP tools not in this track (CLI operator path only) |
 | **Full ARC-007** | Per-outcome retention knobs and low-disk probe on offline CLI remain broader residual; dry-run plan + confirm-gated apply are in [`eviction.md`](eviction.md) |
 
+Related: eviction CLI [`eviction.md`](eviction.md); unified operator guide [`caching.md`](../caching.md).
+
 ## Verify
 
 ```bash

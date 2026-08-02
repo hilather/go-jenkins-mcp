@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/diagnostics"
+	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
 )
 
 func TestSecuritySelfCheck_CLI_JSON(t *testing.T) {

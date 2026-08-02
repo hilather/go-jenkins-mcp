@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zstd"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // GenerationMember is one sealed log (or evidence blob) to promote into an L2 pack.

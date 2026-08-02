@@ -1,9 +1,9 @@
 # Agent instructions — go-jenkins-mcp
 
 You are working in **go-jenkins-mcp**, an enterprise Jenkins MCP for Cursor
-(local per-user stdio) with an optional managed-gateway path. The seed is
-`simonfxr/go-jenkins-mcp`; treat it as a behavioral reference, not the long-term
-architecture.
+(local per-user stdio) with an optional managed-gateway path. Module path:
+`github.com/hilather/go-jenkins-mcp`. Do **not** treat any external community
+seed as architecture SoT — see `docs/HISTORY.md` for past-tense origin only.
 
 This file is **mandatory policy** for every coding agent session in this repo
 (Grok, Claude, Codex, Cursor, and subagents). Global rules still apply; this
@@ -24,14 +24,17 @@ file is repo-specific and must not be ignored.
 | Server/team-hosted roadmap | `docs/roadmap/server-team-hosted.md` |
 | Release notes (per version) | `docs/release/RELEASE_NOTES_v*.md` · gates: `docs/release/gates.md` · REL-001/002 |
 | Agent policy (this file) | `AGENTS.md` |
+| Project history (origin only) | `docs/HISTORY.md` (archive under `docs/archive/`) |
+| Product residuals | `docs/security/product-residuals.md` |
 | Implemented code (when present) | `cmd/`, `internal/`, `pkg/` |
 
 Do not invent decisions that contradict the architecture Key Decisions, the
 platform matrix, or the backlog task contracts. Prefer **one task ID per PR**
 unless a task explicitly permits pairing.
 
-**Platform matrix (summary):** Tier 1 = Rocky Linux + Ubuntu; Tier 2 = macOS
-nice-to-have; **Windows out of scope** (no native FUSE). See architecture §19.
+**Platform matrix (summary):** Tier 1 = Rocky Linux + Ubuntu only.
+**macOS and Windows are out of scope** (no native FUSE on Windows; macOS not
+supported). See architecture §19 and ADR 0008.
 
 ---
 
@@ -66,7 +69,7 @@ them in CI.
 | Expectation | Detail |
 |-------------|--------|
 | **When required** | Network clients, HTTP peers, IdP/JWT RS, Jenkins controller, gateway, DB-like peers, reverse proxies, multi-container deploys — add or extend a scaffold under `testdata/` or `deploy/` in the **same change** (or leave an explicit residual TODO). |
-| **Existing pattern** | `testdata/jenkins-compose/` + `make live-jenkins-up/test/down` (TST-001); OAuth mock lab `testdata/oauth-lab/` + `make live-oauth-*` (HOST-012…015). Reuse/extend these rather than inventing one-off scripts. |
+| **Existing pattern** | `testdata/jenkins-compose/` + `make live-jenkins-up/test/down` (TST-001); OAuth mock lab `testdata/oauth-lab/` + `make live-oauth-*` (HOST-012…015); SAML Keycloak lab `testdata/saml-lab/` + `make live-saml-*` (POL-007); free jwt-auth-filter + Keycloak `testdata/jwt-rs-lab/` + `make live-jwt-rs-*` (OAUTH-009). Reuse/extend these rather than inventing one-off scripts. |
 | **First-class local admin/support deploy** | **`deploy/local/`** + `make local-docker-up/down/doctor/smoke` is the **first-class local MCP admin/support Docker stack** (admin BFF/SPA on loopback, optional `http` / `with-jenkins` profiles via `LOCAL_COMPOSE_PROFILES=http,with-jenkins`). SoT: `deploy/local/README.md`. **Cursor MCP stdio remains host-native** (ADR 0002). For a **warm shared log/cache** between Cursor and Docker, document **Model 2 shared XDG** (`docker-compose.shared-xdg.example.yml` + host `XDG_*` in mcp.json) — do not assume default named volumes are visible to host stdio. Opt-in only; **not** in default `make test`. |
 | **OAuth / JWT labs** | Plan and scaffold: mock OIDC IdP + Jenkins RS path for mode B; mock token/3LO endpoint for mode C — see **HOST-012…HOST-015** / `docs/roadmap/server-team-hosted.md`. Real Entra remains residual; mocks must still enforce audience/iss/exp fail-closed. |
 | **Secrets** | Ephemeral only; never bake production tokens/passwords into images or compose files. Use generated disposable secrets written into the container volume at boot (same as API-token lab). `deploy/local/.env` is gitignored. |
@@ -175,7 +178,7 @@ The repository root **[`README.md`](README.md)** is the **public landing page**
 | Practice | Detail |
 |----------|--------|
 | **High level only** | README is highlights + links — not a dump of every backlog ID. Deep SoT stays in `docs/`. |
-| **Match residual honesty** | Do not mark live production GO / Entra pin / multi-pod Done without evidence. |
+| **Match residual honesty** | Product free-lab Done\* ≠ site production pin. Do not mark **site** Entra / multi-pod production Done without **site** evidence; keep free labs ([free-lab-qualification.md](docs/gateway/free-lab-qualification.md)). |
 | **Release notes ≠ README** | `RELEASE_NOTES_v*` hold full version deltas; README Status + Features summarize **current** product. |
 | **Same change preferred** | Feature PR updates README when the landing page would otherwise be stale (version, phase, feature bullets). |
 | **Skip only for pure internals** | Comment-only, pure test renames, or docs deep-links that do not change landing claims may skip README. |
@@ -483,7 +486,7 @@ release step itself** must produce complete notes for the version.
 | **Identity** | Version, date, tag, baseline / previous version |
 | **Highlights** | New features and major behavior changes in plain language (tools, admin, auth modes, MCP-OPS, audit, storage, mutations, gateway, …) |
 | **Breaking / migration** | Schema, flag, env, policy, tool renames — anything operators must act on |
-| **Security / residual honesty** | Fail-closed defaults; what is **not** production GO (live Entra, multi-pod, etc.) |
+| **Security / residual honesty** | Fail-closed defaults; free-lab vs **site** production pin residual (Entra/multi-pod operator-owned) |
 | **Verify** | Commands operators/agents can run (`make lint`, tests, residual-smoke, …) |
 
 ### Rules (always)
@@ -527,11 +530,12 @@ ambiguous.
 | Rule | Detail |
 |------|--------|
 | **Pick a task** | Prefer a single task ID from `docs/jenkins-mcp-enterprise-agent-todo.md` (and the JSON index for dependencies). |
-| **In-session todos** | Maintain a live todo list for multi-step work; mark items `in_progress` / `completed` as you go. |
-| **Partial completion** | If a task, PR, or session ends incomplete: leave clear **next steps** (what remains, blockers, suggested follow-up task IDs, and how to verify). |
+| **In-session todos** | Maintain a live todo list for multi-step work (pending / `in_progress` only). **When an item is done, remove it from the list** — do **not** keep a growing pile of `completed` entries. Empty list = nothing left on the working set. |
+| **Remove completed** | On every todo update, **delete** finished items. Never leave session/plan/working checklists full of checked-off work; residual history belongs in commit messages, PR text, or backlog **Status** notes — not the live todo list. |
+| **Partial completion** | If a task, PR, or session ends incomplete: leave clear **next steps** (what remains, blockers, suggested follow-up task IDs, and how to verify). Next-step lists must contain **only open** items (`[ ]`); strip finished lines. |
 | **Do not false-complete** | Do not check backlog acceptance criteria or DoD boxes unless they were demonstrated (tests run, evidence attached). |
-| **Carry forward** | When resuming, read existing next-step notes before inventing a new plan. |
-| **Session summary** | End incomplete work with: done / not done / next steps / residual risk. |
+| **Carry forward** | When resuming, read existing next-step notes before inventing a new plan; prune any completed next-steps first. |
+| **Session summary** | End incomplete work with: done / not done / next steps / residual risk (done is prose; next steps are open todos only). |
 
 Suggested next-step note shape (in PR description, session reply, or backlog
 comment):

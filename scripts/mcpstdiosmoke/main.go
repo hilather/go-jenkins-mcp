@@ -14,8 +14,9 @@
 //  7. ListTools again after calls (session still healthy)
 //  8. Clean shutdown; stderr/stdout canary scrub
 //
-// Auth uses deprecated JENKINS_MCP_AUTH bootstrap (KD-003) so headless CI does
-// not require Secret Service. Pilot path remains profile + keyring login.
+// Auth uses profile + keyring: headless CI plants credentials via
+// JENKINS_MCP_KEYRING_FILE (file backend) after login against the fixture.
+// Legacy -auth / JENKINS_MCP_AUTH bootstrap is removed (UPSTREAM-EXIT).
 //
 // Residual: real Cursor host / product-binary stdio CI remains open.
 // Offline host-lifecycle matrix is Done* (this smoke + unit protocol matrix).
@@ -72,10 +73,11 @@ var mutationTools = []string{
 }
 
 const (
-	// canaryToken is the API token used for deprecated JENKINS_MCP_AUTH bootstrap.
+	// canaryToken is the API token stored in the headless file keyring for smoke.
 	// It must never appear in MCP model-visible results/errors or server logs that
 	// are not mere protocol wire dumps of client-supplied arguments.
 	canaryToken = "CANARY_stdio_smoke_token_must_not_appear_xyz"
+	smokeProfile = "stdio-smoke"
 	// plantCanary is planted only in invalid CallTool arguments (not used as auth).
 	// Model-visible tool errors must not echo it. Distinct from canaryToken so MCP
 	// protocol debug lines that echo client args do not false-positive auth scrub.
@@ -127,10 +129,18 @@ func run() error {
 	xdgConfig := filepath.Join(work, "config")
 	xdgData := filepath.Join(work, "data")
 	xdgCache := filepath.Join(work, "cache")
+	keyringFile := filepath.Join(work, "keyring.json")
 	for _, d := range []string{xdgConfig, xdgData, xdgCache} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return err
 		}
+	}
+
+	env := childEnv(work, xdgConfig, xdgData, xdgCache, keyringFile)
+
+	// Plant profile + credential via supported login path (file keyring for headless CI).
+	if err := plantProfileLogin(bin, root, fix.URL, env); err != nil {
+		return err
 	}
 
 	// Capture server stderr for canary checks (LoggingTransport + app logs).
@@ -138,13 +148,13 @@ func run() error {
 
 	cmd := exec.Command(bin,
 		"serve",
-		"--url", fix.URL,
+		"--profile", smokeProfile,
 		"--stdio",
 		"--read-only",
 		"--no-cache-maintenance",
 	)
 	cmd.Dir = root
-	cmd.Env = childEnv(work, xdgConfig, xdgData, xdgCache)
+	cmd.Env = env
 	cmd.Stderr = &stderr
 
 	// Host-lifecycle budget: cancel hang + several CallTools need headroom.
@@ -500,16 +510,17 @@ func resolveBinary(root string) (bin string, cleanup func(), err error) {
 	return out, func() { _ = os.RemoveAll(tmp) }, nil
 }
 
-func childEnv(home, xdgConfig, xdgData, xdgCache string) []string {
-	// Filter parent env: drop legacy auth / login secrets so only our canary is set.
+func childEnv(home, xdgConfig, xdgData, xdgCache, keyringFile string) []string {
+	// Filter parent env: drop legacy auth / login secrets so only planted canary is used.
 	skip := map[string]struct{}{
-		"JENKINS_MCP_AUTH":        {},
-		"JENKINS_MCP_LOGIN_TOKEN": {},
-		"JENKINS_MCP_LOGIN_USER":  {},
-		"HOME":                    {},
-		"XDG_CONFIG_HOME":         {},
-		"XDG_DATA_HOME":           {},
-		"XDG_CACHE_HOME":          {},
+		"JENKINS_MCP_AUTH":         {},
+		"JENKINS_MCP_LOGIN_TOKEN":  {},
+		"JENKINS_MCP_LOGIN_USER":   {},
+		"JENKINS_MCP_KEYRING_FILE": {},
+		"HOME":                     {},
+		"XDG_CONFIG_HOME":          {},
+		"XDG_DATA_HOME":            {},
+		"XDG_CACHE_HOME":           {},
 	}
 	var env []string
 	for _, e := range os.Environ() {
@@ -519,20 +530,71 @@ func childEnv(home, xdgConfig, xdgData, xdgCache string) []string {
 		}
 		env = append(env, e)
 	}
-	auth := smokeUser + ":" + canaryToken
 	env = append(env,
 		"HOME="+home,
 		"XDG_CONFIG_HOME="+xdgConfig,
 		"XDG_DATA_HOME="+xdgData,
 		"XDG_CACHE_HOME="+xdgCache,
-		// Deprecated bootstrap (KD-003): headless CI without Secret Service.
-		"JENKINS_MCP_AUTH="+auth,
+		// Headless CI residual: file keyring (not Secret Service).
+		"JENKINS_MCP_KEYRING_FILE="+keyringFile,
 		"JENKINS_MCP_READ_ONLY=true",
 		"JENKINS_MCP_NO_CACHE_MAINTENANCE=1",
 		// Bound identity re-verify so short smoke is stable.
 		"JENKINS_MCP_IDENTITY_REVERIFY_TTL=30m",
 	)
 	return env
+}
+
+// plantProfileLogin creates a profile and runs login against the fixture Jenkins
+// so serve --profile uses the supported keyring path (file backend under KEYRING_FILE).
+func plantProfileLogin(bin, root, jenkinsURL string, env []string) error {
+	// profile add <id> --url URL
+	add := exec.Command(bin, "profile", "add", smokeProfile, "--url", jenkinsURL)
+	add.Dir = root
+	add.Env = env
+	if out, err := add.CombinedOutput(); err != nil {
+		// Some profile add variants use different flags — try JSON write fallback.
+		if err2 := writeSmokeProfile(env, jenkinsURL); err2 != nil {
+			return fmt.Errorf("profile add: %w\n%s\nfallback: %v", err, out, err2)
+		}
+	}
+	login := exec.Command(bin, "login", "--profile", smokeProfile, "--user", smokeUser)
+	login.Dir = root
+	loginEnv := append(append([]string{}, env...),
+		"JENKINS_MCP_LOGIN_USER="+smokeUser,
+		"JENKINS_MCP_LOGIN_TOKEN="+canaryToken,
+	)
+	login.Env = loginEnv
+	if out, err := login.CombinedOutput(); err != nil {
+		return fmt.Errorf("login --profile: %w\n%s", err, out)
+	}
+	return nil
+}
+
+func writeSmokeProfile(env []string, jenkinsURL string) error {
+	var xdg string
+	for _, e := range env {
+		if k, v, ok := strings.Cut(e, "="); ok && k == "XDG_CONFIG_HOME" {
+			xdg = v
+			break
+		}
+	}
+	if xdg == "" {
+		return fmt.Errorf("XDG_CONFIG_HOME missing from env")
+	}
+	dir := filepath.Join(xdg, "jenkins-mcp", "profiles")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	body := fmt.Sprintf(`{
+  "configVersion": 1,
+  "id": %q,
+  "jenkinsURL": %q,
+  "authMethod": "api_token",
+  "username": %q
+}
+`, smokeProfile, jenkinsURL, smokeUser)
+	return os.WriteFile(filepath.Join(dir, smokeProfile+".json"), []byte(body), 0o600)
 }
 
 func findRepoRoot() (string, error) {

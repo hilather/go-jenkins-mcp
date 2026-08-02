@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
-	"github.com/simonfxr/go-jenkins-mcp/internal/keyring"
-	"github.com/simonfxr/go-jenkins-mcp/internal/profile"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/keyring"
+	"github.com/hilather/go-jenkins-mcp/internal/profile"
 )
 
 const canaryToken = "CANARY_TOKEN_do_not_leak_in_errors_abc123XYZ"
@@ -125,27 +125,6 @@ func TestNewProvider(t *testing.T) {
 	_, err = auth.NewProvider(profile.AuthMethodAgentCoreDelegated, kr)
 	if err == nil {
 		t.Fatal("expected not implemented")
-	}
-}
-
-func TestLegacyParse(t *testing.T) {
-	t.Parallel()
-	u, tok, err := auth.ParseUserToken("alice:mytoken")
-	if err != nil || u != "alice" || tok != "mytoken" {
-		t.Fatalf("%q %q %v", u, tok, err)
-	}
-	// Token may contain colons
-	u, tok, err = auth.ParseUserToken("alice:a:b:c")
-	if err != nil || tok != "a:b:c" {
-		t.Fatalf("%q %v", tok, err)
-	}
-	_, _, err = auth.ParseUserToken("nocolon")
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	sess, err := auth.LegacySessionFromString("legacy", "bob:tok")
-	if err != nil || sess.User != "bob" || sess.Secret != "tok" {
-		t.Fatal(err)
 	}
 }
 

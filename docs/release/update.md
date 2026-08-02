@@ -20,11 +20,11 @@
 
 | Residual | Notes |
 |----------|--------|
-| Automatic install / binary swap | Operator or package manager only — CLI never executes the artifact |
-| Rollback of previous binary | Prefer package manager history / OS snapshots; LKG is metadata only, not a restore path |
-| Storage/config migrations gated on update | Migrations run on process start of installed version, not via this CLI |
+| Automatic install / binary swap | **Out of scope for UPD-001.** Operator or package manager only — CLI never executes the artifact; `DownloadResult.AutoInstall` is always `false` (tested) |
+| Rollback of previous binary | Prefer package manager history / OS snapshots; LKG is **metadata only**, not a restore path (`update show-lkg` / `verify-lkg`) |
+| Storage/config migrations gated on update | Migrations run on process start of the **installed** version, not via this CLI |
 | Multi-sig / HSM-backed release keys | Org-owned; CLI verifies Ed25519 public keys only |
-| Emergency adapter disable | Documented under policy/adapter allowlists (separate from update) |
+| Emergency feature / adapter disable | **Not** an update-installer feature. Use: (1) enterprise policy overlay (deny tools / `force_read_only` / `fleet_telemetry_force_off`); (2) adapter allowlist omit + signature fail-closed (`JENKINS_MCP_ADAPTER_ALLOWLIST_*`); (3) stop serving / package rollback. Offline canaries: `fleet_telemetry_force_off_residual`, adapter allowlist tests |
 
 ---
 
@@ -233,4 +233,6 @@ export PATH="$HOME/.local/go/bin:$PATH"
 go test ./internal/update/ ./cmd/jenkins-mcp/ -count=1
 ```
 
-Coverage includes: valid sign/verify, tamper, expired, unsigned with/without keys, checksum mismatch, download without auto-install, unwritable outdir, LKG store/load (secret-free), LKG on-disk re-verify (match/mismatch/missing/explicit `--file`), downgrade reject/opt-in, channel pin preflight, free-space reject, credential URL reject.
+Coverage includes: valid sign/verify, tamper, expired, unsigned with/without keys, checksum mismatch, download without auto-install (`AutoInstall` always false), unwritable outdir, LKG store/load (secret-free), LKG on-disk re-verify (match/mismatch/missing/explicit `--file`), downgrade reject/opt-in, channel pin preflight, free-space reject, credential URL reject.
+
+Emergency disable is **not** implemented as an update path — see residual table; policy/adapter offline tests remain the evidence.

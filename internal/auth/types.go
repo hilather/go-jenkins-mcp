@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/contracts"
+	"github.com/hilather/go-jenkins-mcp/internal/contracts"
 )
 
 // Method identifies how credentials were obtained for a profile.

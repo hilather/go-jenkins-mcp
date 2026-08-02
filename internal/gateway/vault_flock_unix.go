@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // withVaultFileLock serializes multi-process access to a shared file path via

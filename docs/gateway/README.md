@@ -6,7 +6,7 @@
 **Multi-user opt-in:** `JENKINS_MCP_GATEWAY_MULTI_USER=1` → per-request Caller → Obtain (see §3b).  
 **Real Entra / AgentCore Identity vault pin residual** (GWY-003 / OAUTH-010) — do **not** mark GWY-001 fully Done.  
 **GWY-004:** deployment **scaffold** (compose/kustomize/docs + `.env.example` lab flags: MULTI_USER, JWKS max stale, path prefix, REQUIRE_SIGNED_POLICY, subject concurrency) only — no live AgentCore image; live pins residual.  
-**Related:** [deployment.md](deployment.md), [qualification.md](qualification.md), **[live-pin-blockers.md](live-pin-blockers.md)** (OAUTH-009/010 + HOST-008 production GO residual runbook), [auth-architecture.md](../auth-architecture.md) §2.3, [ADR 0003](../adr/0003-jenkins-not-oauth-authorization-server.md), [policy-rbac.md](../policy-rbac.md), architecture §§1–2 / §6.6, **[server/team-hosted roadmap](../roadmap/server-team-hosted.md)** (Tier A path, HOST-*, 30/60/90).
+**Related:** [deployment.md](deployment.md), [qualification.md](qualification.md), **[free-lab-qualification.md](free-lab-qualification.md)** (product free-lab bar), **[live-pin-blockers.md](live-pin-blockers.md)** (operator production pin residual), [auth-architecture.md](../auth-architecture.md) §2.3, [ADR 0003](../adr/0003-jenkins-not-oauth-authorization-server.md), [policy-rbac.md](../policy-rbac.md), architecture §§1–2 / §6.6, **[server/team-hosted roadmap](../roadmap/server-team-hosted.md)** (Tier A free-lab path, HOST-*), **[caching.md](../caching.md)** (profile log store vs gateway token/principal/JWKS/rate caches; same-host file envs).
 
 ---
 
@@ -114,7 +114,7 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 | Consent metadata purge/expire CLI (`gateway consent-purge` / `consent-expire`) | **Done\*** — TTL purge / `--session-id` / `--all --confirm=CLEAR_ALL`; secret-free summary; never tokens; same-host file lite |
 | Browser 3LO interactive UX automation | **Residual** — not automated; operator/agent opens `authorization_url` out-of-band |
 | AgentCore durable consent / token vault | **Residual** (not this process-local metadata store) |
-| Multi-replica / multi-pod consent correlation | **Residual** (HOST-008) — same-host file flock only; not multi-pod shared store |
+| Multi-replica / multi-pod consent correlation | **Out of scope** (HOST-008 cancelled) — same-host file flock only; multi-fleet per member |
 
 **Process-local consent metadata store** (`internal/gateway/consent_store.go` + `consent_store_file.go`):
 
@@ -173,7 +173,7 @@ multi-pod fan-out.
 | Admin BFF `POST /admin/v1/gateway/subject-invalidate` + Overview SPA form | **Done\*** residual lite (HOST-007) — same cache semantics as CLI; requires `gateway_ops` (operator/policy_admin); secret-free StatusMap; multi-pod residual |
 | Admin BFF `POST /admin/v1/gateway/consent-purge` + Overview Mode C SPA form | **Done\*** residual lite (HOST-007) — same purge semantics as CLI; clear_all requires `confirm: "CLEAR_ALL"` (SPA type-to-confirm); `gateway_ops`; secret-free counts; never tokens / session_id echo; multi-pod residual |
 | Live IdP / AgentCore token revocation | **Residual** (OAUTH-010 / GWY-003) |
-| Multi-pod / multi-replica invalidate fan-out | **Residual** (HOST-008) |
+| Multi-pod / multi-replica invalidate fan-out | **Out of scope** (HOST-008 cancelled) — same-host file paths or per-member invalidate |
 | Clear of a remote serve process memory-only caches without shared file paths | **Residual** — share `FilePrincipalCache` / `FileTokenCache` paths for same-host CLI/admin↔serve purge |
 
 ```bash
@@ -353,7 +353,7 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 
 ## 3c. Multi-tenant isolation foundations (HOST-004 / HOST-006)
 
-**Scope:** single-process MVP. Multi-replica / shared durable cache is **HOST-008 residual**.
+**Scope:** single-process MVP. Multi-replica / shared durable multi-pod cache is **out of scope** (HOST-008 cancelled; multi-fleet).
 
 ### HOST-004 — cache and continuation isolation
 
@@ -395,7 +395,7 @@ HTTP claim). **Residual:** durable L1/L2 archive namespace (STO / HOST-008).
 | `Hold` / `WithSubjectSlot` | Acquire → work → Release (prefer over bare Acquire) |
 | `SubjectRateLimiter` | Per-`subjectKey` token-bucket rate under process rate ceiling |
 | `Allow` | Consume one dispatch token (fail closed `CodeQuota`) |
-| `StatusMap` | Non-secret doctor summary (`ha_multi_replica: false` — HOST-008 residual) |
+| `StatusMap` | Non-secret doctor summary (`ha_multi_replica: false` — HOST-008 cancelled / multi-fleet) |
 | Mutation confirm Binding | Profile + Principal + ExternalSubject + Tenant; cooldown keys include full binding |
 
 **Concurrency defaults:** **8** concurrent per subject, **64** process-wide
@@ -455,7 +455,7 @@ PrincipalCache after Obtain (prefer cache over HTTP claim). **Admin residual
 knobs Done\* (read-only):** `rateEnabled` / `ratePerMinute` / `rateBurst` on
 health + vault. **Done\* SPA Policy editor:** plain pilot overlay
 `max_tools_per_minute` / `max_tools_burst` (policy_admin / `policy_write`; lower
-only; empty omit). **Residual:** multi-pod shared rate/slots (HOST-008); same-host file rate is
+only; empty omit). Multi-pod shared rate/slots **out of scope** (HOST-008 cancelled); same-host file rate is
 **Done\* lite** via `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`. Raise env bootstrap
 still needs serve restart.
 
@@ -619,8 +619,9 @@ Done. Live Entra JWKS under load / multi-replica session store (HOST-008).
 | Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT, session fingerprint, JWKS TTL refresh + MaxStaleAge, multi-user Obtain + **policy.Subject rebind foundation** + **protect→inner Alice/Bob** (`multi_user_http_test.go`) + **tools/call JSON-RPC Alice/Bob AuthProviderCtx e2e** (`multi_user_tools_call_test.go`, session-scoped Connect ctx) + **mid-session rebind residual expand** (`http_host001_rebind_expand_test.go`: PathPrefix strip + group claim change fail-closed + order-stable groups OK + health exempt; multi-user PathPrefix Alice/Bob swap; lab JWT Alice/Bob + group change in `TestHTTPHandler_LabJWT_MidSessionAliceBobSwapAndGroups`); residual: multi-instance JWKS HA, **live Entra / jwt-auth-filter (not offline expand Done)**, live Entra groups claim completeness, durable multi-replica session store, per-POST (intra-session) handler-ctx rebind if SDK adds it |
 | Reverse-proxy non-local matrix | HOST-002 **Partial Done***: docs + `PathPrefix` strip + dual health + offline origin pin + expanded Host/Origin matrix residual lite (`TestHOST002_StreamableHTTPOriginHostMatrix`: missing Origin, wrong/exact Origin, Host allow-list, X-Forwarded-Host/Origin ignore, TrustedProxy true no-op, PathPrefix does not weaken Origin) + `TrustedProxy` default false; **live edge residual** (no live edge claim); no CORS wildcards |
 | Health/readiness envelope | HOST-005 **partial** — `/healthz` + `/readyz` + compose/k8s limits; Obtain Ready on `/readyz` when `--gateway` |
-| Multi-replica HA | HOST-008 Tier B residual (single-replica Tier A; sticky Service Done* scaffold; multi-pod vault residual) — checklist: [live-pin-blockers.md](live-pin-blockers.md) §4 |
-| **Live production pin blockers** | [live-pin-blockers.md](live-pin-blockers.md) — OAUTH-009 RS, OAUTH-010 Entra/AgentCore, HOST-008 multi-pod; residual-smoke honesty |
+| Multi-replica HA | **HOST-008 cancelled** (out of scope) — single-replica only; scale via [multi-fleet](../fleet/multi-fleet-rollout.md); same-host flock lite historical Done\* |
+| **Free-lab qualification (product)** | [free-lab-qualification.md](free-lab-qualification.md) — offline + free Docker labs DoD |
+| **Operator production pin residual** | [live-pin-blockers.md](live-pin-blockers.md) — site Entra / RS / multi-pod; residual-smoke honesty |
 | **Program path to team-hosted** | [roadmap/server-team-hosted.md](../roadmap/server-team-hosted.md) |
 
 **HOST-003 wiring (Ready path):** closed for Mode A and Mode C Live-opt-in foundation
@@ -792,7 +793,7 @@ List/status never print tokens. Put rejects **ID tokens**. Lab end-to-end:
 (`TestLiveOAuth_ModeB_*` mint → vault → Obtain Bearer → mock-rs whoAmI).
 
 **Residual (explicit):** Live **jwt-auth-filter** / real Entra issuance pin is
-**OAUTH-009** — offline vault + mock RS lab do **not** close production RS qualification.
+**OAUTH-009** — offline vault + free mock RS lab close **product free-lab** bar; they do **not** close **site** production RS pin ([free-lab-qualification.md](free-lab-qualification.md)).
 See [../auth/jwt-auth-filter-qualification.md](../auth/jwt-auth-filter-qualification.md).
 `ModeMatrix.Residual` notes this when Mode B is enabled. Doctor/self-check must
 remain honest when RS is not live-qualified.

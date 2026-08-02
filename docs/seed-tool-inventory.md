@@ -1,6 +1,6 @@
 # Seed MCP tool inventory (FND-003)
 
-Frozen against upstream `83f66a9c57c0bc26044f654e589b6361787f0c89` / `README.upstream.md`.
+Frozen against upstream `83f66a9c57c0bc26044f654e589b6361787f0c89` / `docs/archive/README.upstream.md`.
 
 | Tool | Required args | Optional (defaults) | Side effects | Contract coverage |
 |------|---------------|---------------------|--------------|-------------------|

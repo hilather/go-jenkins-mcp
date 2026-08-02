@@ -3,7 +3,7 @@ package logmirror
 import (
 	"context"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/store"
+	"github.com/hilather/go-jenkins-mcp/internal/store"
 )
 
 // LogKey is an alias of store.LogKey for mirror callers.

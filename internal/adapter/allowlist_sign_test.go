@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/adapter"
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/adapter"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 func testAllowlistKeyPair(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {

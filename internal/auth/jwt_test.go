@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/auth"
 )
 
 const jwtCanary = "CANARY_JWT_ACCESS_TOKEN_must_not_appear_in_errors_XYZ789"

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/gateway"
+	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 )
 
 // OAUTH-010 / GWY-001: progressive consent residual honesty (env/static, secret-free).

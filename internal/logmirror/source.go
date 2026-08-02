@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 )
 
 // JenkinsSource adapts *jenkins.Client to ProgressiveSource (LOG-001 bounds).

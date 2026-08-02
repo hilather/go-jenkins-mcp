@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // PackRolloverBounds limits how large one affinity pack may grow (ARC-011).

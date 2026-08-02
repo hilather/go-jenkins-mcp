@@ -8,6 +8,7 @@ import { AuditPage } from "./pages/AuditPage";
 import { DoctorPage } from "./pages/DoctorPage";
 import { ProfilesPage } from "./pages/ProfilesPage";
 import { CachePage } from "./pages/CachePage";
+import { AccessPage } from "./pages/AccessPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,6 +28,7 @@ export function App() {
             <Route index element={<OverviewPage />} />
             <Route path="profiles" element={<ProfilesPage />} />
             <Route path="policy" element={<PolicyPage />} />
+            <Route path="access" element={<AccessPage />} />
             <Route path="metrics" element={<MetricsPage />} />
             <Route path="audit" element={<AuditPage />} />
             <Route path="doctor" element={<DoctorPage />} />

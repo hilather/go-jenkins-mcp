@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/admin"
+	"github.com/hilather/go-jenkins-mcp/internal/admin"
 )
 
 func TestMe_WithAndWithoutToken(t *testing.T) {

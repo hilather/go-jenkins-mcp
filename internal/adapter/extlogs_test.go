@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/adapter"
+	"github.com/hilather/go-jenkins-mcp/internal/adapter"
 )
 
 func TestExtLogs_DisabledByDefault(t *testing.T) {

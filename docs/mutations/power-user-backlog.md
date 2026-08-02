@@ -207,14 +207,16 @@ All new tools: add to `policy.MutationToolNames` / `IsMutationTool` / seed class
 
 ## 7. Cross-cutting DoD (every tool epic)
 
-- [x] Client method in `internal/jenkins` (crumb, no POST auto-retry, secret-free errors)
-- [x] Tool handler via MUT-001 Manager (preview/confirm)
-- [x] `policy` classification + RO registration
-- [x] Unit + RO/force + wrong-state + replay + audit canary tests
-- [x] Route-matrix / classifier entry
-- [x] `tool-contracts.md` + `agent-usage.md` + user mutations section
-- [x] Doctor still honest (mutations register vs executable)
-- [x] No admin SPA requirement for v1 (CLI/MCP only)
+Standing gates for **new** mutation tools (not a session todo queue — all of these must remain true):
+
+- Client method in `internal/jenkins` (crumb, no POST auto-retry, secret-free errors)
+- Tool handler via MUT-001 Manager (preview/confirm)
+- `policy` classification + RO registration
+- Unit + RO/force + wrong-state + replay + audit canary tests
+- Route-matrix / classifier entry
+- `tool-contracts.md` + `agent-usage.md` + user mutations section
+- Doctor still honest (mutations register vs executable)
+- No admin SPA requirement for v1 (CLI/MCP only)
 
 ---
 
@@ -253,35 +255,19 @@ Estimate: M0 small; M1–M2 medium; M3–M4 medium; each tool ~1–3 days with t
 
 ---
 
-## 10. Checklist summary (copyable)
+## 10. Open checklist (copyable)
 
-### Foundation
-- [x] **MUT-001F** Formal MUT-001 AC closure + agent-todo evidence
-- [x] **MUT-001C** Classifier + route-matrix for all planned write paths
+Shipped MUT-001F/C and MUT-010…017 — **removed from this working list** (see §1 / status boards). Open residual only:
 
-### New tools / families
-- [x] **MUT-010** Interrupt modes term/kill (or unified interrupt tool)
-- [x] **MUT-011** Rebuild from prior build params
-- [x] **MUT-012** Pipeline replay (no script-edit by default)
-- [x] **MUT-013** Enable/disable job (buildable)
-- [x] **MUT-014** Keep-forever + build description
-- [x] **MUT-015** start_job residual (required params, Active Choices honesty, correlation residual)
-- [x] **MUT-016** Cancel queue items for job / stuck (capped)
-- [x] **MUT-017** Mutation tool/job/mode allowlists + optional families flag
-
-### Always
-- [ ] Off by default; force RO wins
-- [ ] Preview/confirm/cooldown/rate/audit/no-retry
-- [ ] Docs + contracts + agent-usage
+### Always / residual
+- [ ] Standing gates remain true on every new mutation tool (off by default; force RO wins; preview/confirm/cooldown/rate/audit/no-retry; docs + contracts + agent-usage)
 - [ ] **No** MUT-ADMIN surfaces without security go
 
 ---
 
 ## 11. First sprint recommendation
 
-1. **MUT-001F** — close foundation checkboxes so expansion is honest.  
-2. **MUT-010** — term/kill (highest ops value after stop).  
-3. **MUT-015** — start_job residual hardening (no new tool surface).  
-4. **MUT-011** — rebuild last params.  
+Foundation + MUT-010…017 are **Done\***. Next product residual:
 
-Defer replay script-edit, bulk queue, and job disable until allowlists (MUT-017) exist if multi-tenant gateway is in play.
+1. **MUT-ADMIN** — only if security explicitly goes (out of scope by default).  
+2. Live smoke cells for mutations (opt-in `make live-jenkins-*`) when site evidence is required.

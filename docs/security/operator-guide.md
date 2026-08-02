@@ -25,7 +25,7 @@
 
 ### Never put secrets in
 
-- CLI argv (`-auth user:token` is deprecated bootstrap KD-003)
+- CLI argv (`-auth` / `JENKINS_MCP_AUTH` are removed — fail closed)
 - Cursor MCP `args` / `env` / committed config
 - Git, tickets, chat logs, screenshots of terminals with tokens
 - Support bundles (explicitly excluded — see below)
@@ -158,7 +158,7 @@ Always run `--preview` first when learning the surface. Zip members are listed b
 | Layer | MVP posture |
 |-------|-------------|
 | TLS to Jenkins | Verify on by default; custom CA / mTLS via profile paths |
-| At-rest L1/L2 cache | Local filesystem permissions + per-user XDG; **full AEAD at-rest encryption is residual** (future SEC/ARC work) |
+| At-rest L1/L2 cache | Local filesystem permissions + per-user XDG; optional L1 AEAD via `cache key init` (ARC-009) — see [cache-encryption.md](cache-encryption.md) and [caching.md](../caching.md) |
 | Update manifests | HTTPS fetch for metadata only; **in-process signed update install residual** (use org package signing) |
 | Policy overlays | Deny-only local file today; signed policy bundles residual |
 
@@ -180,7 +180,7 @@ Document residual honestly: local cache may contain sensitive build text; treat 
 1. `logout --profile` for affected users; rotate Jenkins API tokens.  
 2. Collect `support-bundle --preview` then bundle if needed (confirm no secret categories).  
 3. Preserve doctor/pilot-check JSON as evidence (secret-free).  
-4. Revoke Cursor MCP config that used legacy `-auth` if found.  
+4. Revoke Cursor MCP config that used retired `-auth` / `JENKINS_MCP_AUTH` if found.  
 5. Escalate per org vulnerability response; see `SECURITY.md`.  
 
 ---

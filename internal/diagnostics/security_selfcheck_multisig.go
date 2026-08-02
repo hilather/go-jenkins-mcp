@@ -5,8 +5,8 @@ import (
 	"crypto/rand"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
-	"github.com/simonfxr/go-jenkins-mcp/internal/policy"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
 // checkPolicyMultisigLiteResidual is Wave 42 / MGR-001 residual honesty:

@@ -7,13 +7,13 @@ Incomplete items list **next steps**.
 
 | Task | Status | Notes |
 |------|--------|--------|
-| **FND-001** | Done (local) | Seed import `83f66a9…`, UPSTREAM/NOTICE/SECURITY/CONTRIBUTING. Tag `upstream-simonfxr-baseline` still to create on first freeze commit. |
+| **FND-001** | Done | Historical import recorded in `docs/HISTORY.md` + `docs/archive/`; NOTICE/SECURITY/CONTRIBUTING present. Module path `github.com/hilather/go-jenkins-mcp`. |
 | **FND-002** | Done | Makefile, package-linux.sh, version ldflags, Linux tarball/deb. |
 | **FND-003** | Done | Fixture + contract tests; KNOWN_DEFECTS; seed tool inventory. |
 | **FND-004** | Done | `cmd/jenkins-mcp`, full `internal/*` skeleton, `depgraph` boundaries. Wave 17: split oversized `internal/jenkins/client.go` into `client.go` / `client_types.go` / `client_jobs.go` / `client_builds.go` / `client_logs.go` / `client_mutations.go` (mechanical, no behavior change). |
 | **FND-005** | Done | `internal/contracts` refs + `internal/apperr` taxonomy + redaction; tools map errors. |
 | **FND-006** | Done* | SDK pin `go-sdk v1.7.0` + ADR 0006 + in-memory MCP smoke. *Wave 17: CallTool/RunHTTP cancel smoke. Wave 20: offline protocol matrix (Initialize/ListTools/CallTool success·invalid·unknown·cancel + loopback HTTP). Wave 25: offline stdio **binary** smoke (`make stdio-smoke`). Wave 26: optional CI job `stdio-smoke` (non-merge-gate). Wave 33: offline binary **host-lifecycle** expansion (invalid/unknown/cancel + post-call ListTools + canary scrub) — offline host-lifecycle matrix Done*. Cursor product binary / host stdio CI still residual (not closed). |
-| **FND-007** | Done* | GitHub Actions CI: merge gate = `lint-test-build` + `govulncheck`; optional `macos-optional`, `package-smoke` (Ubuntu), `fuzz-smoke` (FUZZTIME=1s), `stdio-smoke` (Wave 26, continue-on-error), perf step; live Jenkins = workflow_dispatch only. *Residuals: Cursor host CI, SBOM attach, secret/code scanning productization, required-check owner config. |
+| **FND-007** | Done* | GitHub Actions CI: merge gate = `lint-test-build` + `govulncheck`; optional `package-smoke` (Ubuntu), `fuzz-smoke` (FUZZTIME=1s), `stdio-smoke` (Wave 26, continue-on-error), perf step; live Jenkins = workflow_dispatch only. *Residuals: Cursor host CI, SBOM attach, secret/code scanning productization, required-check owner config. |
 | **FND-008** | Done | ADRs 0001–0011 under `docs/adr/`. |
 | **PERF-001** | Done | Progressive log benches + `docs/perf-baseline.md` + `make bench-progressive`. KD-001 locked as baseline. |
 
@@ -69,10 +69,10 @@ SEC-001, AUTH-000, CFG-001, AUTH-001/002, POL-001, MCP-001, LOG-001, NET-001 lan
 
 ## Next steps
 
-- [ ] Git commit + tag `upstream-simonfxr-baseline` (owners)
+Open work only (completed lines removed per agent session-todo rule):
+
 - [ ] Branch protection: required PR review + CI (owners)
-- [ ] Optional: module path → `github.com/hilather/go-jenkins-mcp`
-- [x] Split large `internal/jenkins/client.go` (wave 17 FND-004 residual)
-- [ ] **AUTH-003/004**, **CFG-002**, **POL-002**, **NET-002/003**, **LOG-002**, **STO-001**
 - [ ] Cursor product binary / host stdio lifecycle CI (FND-006 residual; offline protocol matrix Wave 20; offline binary host-lifecycle smoke Wave 25+33 Done* — neither closes Cursor product host CI)
 - [ ] Formal ADR security sign-off process
+
+Phase 1 foundations (AUTH/CFG/POL/NET/LOG/STO) landed — see `docs/phase1-progress.md`.

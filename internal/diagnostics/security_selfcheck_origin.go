@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
 )
 
 // checkJenkinsOriginPinResidual is Wave 50 Track C / NET-001 residual honesty:

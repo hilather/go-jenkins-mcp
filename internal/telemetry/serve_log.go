@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/redact"
 )
 
 // SafeServeLog formats like log.Printf, redacts the result with layered secret

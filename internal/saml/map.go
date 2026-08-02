@@ -3,7 +3,7 @@ package saml
 import (
 	"strings"
 
-	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 )
 
 // AttributeValues is a multi-map of assertion attribute names → values.
