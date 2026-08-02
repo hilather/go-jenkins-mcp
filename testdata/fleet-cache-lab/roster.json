@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "fleet_id": "fleet-cache-lab",
+  "bundle_seq": 1,
+  "members": [
+    {
+      "id": "lab-a",
+      "display_name": "Lab member A",
+      "peer_url": "http://member-a:9443",
+      "profile_id": "lab-a",
+      "region": "lab",
+      "cache": {
+        "enabled": true,
+        "controller_id": "jenkins-lab",
+        "pool": "jenkins-lab-logs",
+        "capacity_weight": 100,
+        "failure_domain": "zone-a",
+        "protocols": ["fleet-cache/1"]
+      }
+    },
+    {
+      "id": "lab-b",
+      "display_name": "Lab member B",
+      "peer_url": "http://member-b:9443",
+      "profile_id": "lab-b",
+      "region": "lab",
+      "cache": {
+        "enabled": true,
+        "controller_id": "jenkins-lab",
+        "pool": "jenkins-lab-logs",
+        "capacity_weight": 100,
+        "failure_domain": "zone-b",
+        "protocols": ["fleet-cache/1"]
+      }
+    },
+    {
+      "id": "lab-c",
+      "display_name": "Lab member C",
+      "peer_url": "http://member-c:9443",
+      "profile_id": "lab-c",
+      "region": "lab",
+      "cache": {
+        "enabled": true,
+        "controller_id": "jenkins-lab",
+        "pool": "jenkins-lab-logs",
+        "capacity_weight": 50,
+        "failure_domain": "zone-c",
+        "protocols": ["fleet-cache/1"]
+      }
+    }
+  ]
+}

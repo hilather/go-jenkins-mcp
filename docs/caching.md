@@ -323,4 +323,6 @@ jenkins-mcp admin serve --admin-role operator …
 | [observability.md](observability.md) | `cache_*` metrics |
 | [fleet/shared-cache-current-state.md](fleet/shared-cache-current-state.md) | FLC-000 audit (peer cache Planned) |
 | [adr/0016-fleet-p2p-shared-cache.md](adr/0016-fleet-p2p-shared-cache.md) | Peer shared-cache decision + MVP cut |
+| [fleet/shared-cache-slos.md](fleet/shared-cache-slos.md) | FLC budgets / default off / origin fallback |
+| [testdata/fleet-cache-lab/README.md](../testdata/fleet-cache-lab/README.md) | Opt-in 3-member lab (`make fleet-cache-lab-smoke`) |
 | [security/product-residuals.md](security/product-residuals.md) | Residual honesty |

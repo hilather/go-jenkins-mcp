@@ -5503,7 +5503,7 @@
         "Representative workload description",
         "Release-gate mapping"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) — fleetcache.ResolveConfig defaults + docs/fleet/shared-cache-slos.md; peer I/O runtime still Planned",
       "source_line": 0,
       "dependency_depth": 2,
       "dependents": [
@@ -5540,7 +5540,7 @@
         "Lab README",
         "Smoke transcript"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* offline (2026-08-02) — testdata/fleet-cache-lab + make fleet-cache-lab-smoke; Docker up residual; peer protocol not Done",
       "source_line": 0,
       "dependency_depth": 2,
       "dependents": [
@@ -5575,7 +5575,7 @@
         "Protocol identity specification",
         "Golden vectors"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) — internal/fleetcache locator+manifest identity + golden tests; peer-read not Done",
       "source_line": 0,
       "dependency_depth": 2,
       "dependents": [
@@ -5652,7 +5652,7 @@
         "Roster schema documentation",
         "Migration example"
       ],
-      "status_note": "Planned — MVP A (peer read foundation / first useful peer-cache release path); no runtime Done claim",
+      "status_note": "Done* (2026-08-02) — roster MemberCache eligibility + CacheEligibleMembers; legacy v1 without cache still loads",
       "source_line": 0,
       "dependency_depth": 2,
       "dependents": [

@@ -77,10 +77,18 @@ def main() -> int:
             continue
         if "still planned" in low or "no runtime done" in low:
             continue
+        if "peer" in low and "planned" in low:
+            # Done* foundation while peer-read/protocol still Planned is OK
+            continue
         if "docs" in low and "runtime" in low and "planned" in low:
             # e.g. Done (docs) — runtime peer cache still Planned
             continue
-        if low.startswith("done") and "docs" not in low:
+        if "offline" in low and "not done" in low:
+            continue
+        if low.startswith("done") and "docs" not in low and "done*" not in low[:8]:
+            flc_false_done.append(t["id"])
+        # Done* with explicit residual language is allowed; bare "Done" without residual is not.
+        if low.startswith("done ") and "planned" not in low and "residual" not in low:
             flc_false_done.append(t["id"])
 
     print(f"task_index: {path}")

@@ -98,13 +98,18 @@ Cursor **stdio** single-member pilots stay `off`. Do not enable by surprise.
 
 ---
 
-## 8. Residuals
+## 8. Foundation landed vs residuals
 
-| Residual | Notes |
-|----------|--------|
-| Runtime `internal/fleetcache` | Not in tree until FLC implementation tasks |
+| Piece | Status |
+|-------|--------|
+| SLOs / budgets / mode default off | **Done\*** — `internal/fleetcache` + [shared-cache-slos.md](shared-cache-slos.md) |
+| Canonical locator + sealed manifest identity | **Done\*** — pure API + golden tests (FLC-010) |
+| Roster cache eligibility fields | **Done\*** — optional `cache` on roster v1 (FLC-012) |
+| 3-member lab scaffold | **Done\*** offline — `testdata/fleet-cache-lab/` + `make fleet-cache-lab-*` (FLC-003) |
+| Peer streaming protocol / logmirror hook | **Planned** (FLC-030…032) |
+| Fill lease / RF2 | **Planned** (later gates) |
 | Production per-node identity | mTLS or signing beyond mesh token |
-| Admin BFF/SPA/MCP full parity | FLC-063; early residual allowed |
+| Admin BFF/SPA/MCP full parity | FLC-063 residual |
 | Shared NFS/S3 log store | Non-goal |
 | Multi-pod HA | HOST-008 cancelled |
 

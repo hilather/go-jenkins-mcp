@@ -78,6 +78,8 @@ Do **not** treat this tree as a claim of full production OAuth / gateway readine
 | [fleet/shared-cache-current-state.md](fleet/shared-cache-current-state.md) | FLC-000 audit: peer sealed-log cache **Planned** (not Done) |
 | [fleet/shared-cache-architecture.md](fleet/shared-cache-architecture.md) | FLC target architecture + **MVP A** peer-read cut line |
 | [adr/0016-fleet-p2p-shared-cache.md](adr/0016-fleet-p2p-shared-cache.md) | ADR: pure-Go peer cache coordination; HOST-008 still cancelled |
+| [fleet/shared-cache-slos.md](fleet/shared-cache-slos.md) | FLC-002 budgets; default mode off; origin fallback |
+| [testdata/fleet-cache-lab/README.md](../testdata/fleet-cache-lab/README.md) | FLC-003 opt-in 3-member lab |
 | [arc/eviction.md](arc/eviction.md) · [arc/cache-pins.md](arc/cache-pins.md) | Eviction CLI + pin CLI detail |
 | [arc/pack-format-v1.md](arc/pack-format-v1.md) | L2 pack format |
 | [arc/ratarmount-rs-pin.json](arc/ratarmount-rs-pin.json) | Candidate pin: `ratarmount-rs` **v0.1.14** |

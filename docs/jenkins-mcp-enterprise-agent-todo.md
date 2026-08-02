@@ -3997,7 +3997,11 @@ Operators manage **who** may do **what** in MCP policy via the admin console: bi
 |----|---------------|--------|
 | **FLC-000** | Commit audit + reserve FLC IDs | **Done** (docs Phase 0) |
 | **FLC-001** | ADR + scope + MVP cut | **Done** (docs Phase 0) |
-| **FLC-002**…**FLC-082** | SLOs, lab, protocol, storage, peer read, fill, RF2, ops, expansion | **Planned** — see task-index; **no runtime Done** |
+| **FLC-002** | SLOs / budgets / origin fallback defaults | **Done\*** (`internal/fleetcache` config + [shared-cache-slos.md](fleet/shared-cache-slos.md)) |
+| **FLC-003** | Three-member lab scaffold | **Done\*** offline (`testdata/fleet-cache-lab/`, `make fleet-cache-lab-smoke`; Docker residual) |
+| **FLC-010** | Canonical locator + sealed manifest identity | **Done\*** pure API + golden tests |
+| **FLC-012** | Roster cache eligibility fields | **Done\*** optional `cache` on roster v1 + filter tests |
+| **FLC-011**, **FLC-013+** | Protocol, hot-reload, peer read, fill, RF2, … | **Planned** — peer-read/fill/RF2 **not Done** |
 
 Full acceptance criteria and dependency edges for every `FLC-*` ID live in the machine-readable task index (and the offline planning pack used as source). Agents implement **one task ID per PR** where practical; do not mark peer-cache capability Done without code + tests + residual honesty.
 

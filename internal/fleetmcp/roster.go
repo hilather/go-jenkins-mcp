@@ -10,10 +10,18 @@ import (
 )
 
 // RosterSchemaVersion is the supported roster.json schema_version.
+// Cache eligibility fields are optional on v1 members (FLC-012); absent cache
+// blocks keep operator fleet_* fan-out working with peer cache disabled.
 const RosterSchemaVersion = 1
 
 // MaxRosterMembers is the absolute fail-closed cap on fleet size.
 const MaxRosterMembers = 64
+
+// DefaultCacheCapacityWeight when cache.enabled and capacity_weight omitted/0.
+const DefaultCacheCapacityWeight = 100
+
+// MaxCacheCapacityWeight is the fail-closed upper bound for capacity_weight.
+const MaxCacheCapacityWeight = 10000
 
 // Roster is the gitops membership SoT (secret-free).
 type Roster struct {
@@ -31,6 +39,20 @@ type RosterMember struct {
 	ProfileID   string            `json:"profile_id,omitempty"`
 	Region      string            `json:"region,omitempty"`
 	Labels      map[string]string `json:"labels,omitempty"`
+	// Cache is optional FLC eligibility (ADR 0016). Nil/disabled → not a cache owner.
+	Cache *MemberCache `json:"cache,omitempty"`
+}
+
+// MemberCache describes whether a member may store/serve fleet shared-cache objects.
+// Secret-free; no credentials or data-dir paths.
+type MemberCache struct {
+	Enabled        bool     `json:"enabled"`
+	ControllerID   string   `json:"controller_id,omitempty"`
+	Pool           string   `json:"pool,omitempty"`
+	CapacityWeight int      `json:"capacity_weight,omitempty"`
+	FailureDomain  string   `json:"failure_domain,omitempty"`
+	Draining       bool     `json:"draining,omitempty"`
+	Protocols      []string `json:"protocols,omitempty"`
 }
 
 // LoadRosterFile reads and validates roster JSON from path.
@@ -106,8 +128,119 @@ func ValidateRoster(r *Roster) error {
 			}
 			m.Labels = clean
 		}
+		if err := validateMemberCache(m.Cache); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func validateMemberCache(c *MemberCache) error {
+	if c == nil || !c.Enabled {
+		// Disabled or absent: strip accidental empty enabled blocks to a clean nil-like state.
+		if c != nil && !c.Enabled {
+			// Allow disabled block without controller/pool (explicit opt-out).
+			c.ControllerID = strings.TrimSpace(c.ControllerID)
+			c.Pool = strings.TrimSpace(c.Pool)
+			c.FailureDomain = strings.TrimSpace(c.FailureDomain)
+		}
+		return nil
+	}
+	c.ControllerID = strings.TrimSpace(c.ControllerID)
+	c.Pool = strings.TrimSpace(c.Pool)
+	c.FailureDomain = strings.TrimSpace(c.FailureDomain)
+	if c.ControllerID == "" {
+		return apperr.New(apperr.CodeInvalidArgument, "cache-enabled member requires controller_id")
+	}
+	if c.Pool == "" {
+		return apperr.New(apperr.CodeInvalidArgument, "cache-enabled member requires pool")
+	}
+	if c.CapacityWeight < 0 {
+		return apperr.New(apperr.CodeInvalidArgument, "cache capacity_weight must not be negative")
+	}
+	if c.CapacityWeight == 0 {
+		c.CapacityWeight = DefaultCacheCapacityWeight
+	}
+	if c.CapacityWeight > MaxCacheCapacityWeight {
+		return apperr.New(apperr.CodeInvalidArgument, "cache capacity_weight exceeds maximum")
+	}
+	if len(c.Protocols) == 0 {
+		return apperr.New(apperr.CodeInvalidArgument, "cache-enabled member requires protocols (e.g. fleet-cache/1)")
+	}
+	cleanProto := make([]string, 0, len(c.Protocols))
+	seen := make(map[string]struct{}, len(c.Protocols))
+	for _, p := range c.Protocols {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		cleanProto = append(cleanProto, p)
+	}
+	if len(cleanProto) == 0 {
+		return apperr.New(apperr.CodeInvalidArgument, "cache-enabled member requires non-empty protocols")
+	}
+	c.Protocols = cleanProto
+	return nil
+}
+
+// CacheEligibleOptions controls CacheEligibleMembers filtering.
+type CacheEligibleOptions struct {
+	// Protocol required advertisement (e.g. fleet-cache/1). Empty → any protocol list non-empty.
+	Protocol string
+	// IncludeDraining keeps draining members (readable grace); default false excludes them from new ownership.
+	IncludeDraining bool
+}
+
+// CacheEligibleMembers returns members that may own/serve objects for controller/pool.
+// Members without cache.enabled are omitted (ops-only roster rows remain valid for fleet_*).
+// Cross-controller or cross-pool members are never returned together for a single query.
+func (r *Roster) CacheEligibleMembers(controllerID, pool string, opts CacheEligibleOptions) []RosterMember {
+	if r == nil {
+		return nil
+	}
+	controllerID = strings.TrimSpace(controllerID)
+	pool = strings.TrimSpace(pool)
+	if controllerID == "" || pool == "" {
+		return nil
+	}
+	proto := strings.TrimSpace(opts.Protocol)
+	out := make([]RosterMember, 0, len(r.Members))
+	for _, m := range r.Members {
+		c := m.Cache
+		if c == nil || !c.Enabled {
+			continue
+		}
+		if c.ControllerID != controllerID || c.Pool != pool {
+			continue
+		}
+		if c.Draining && !opts.IncludeDraining {
+			continue
+		}
+		if proto != "" && !memberHasProtocol(c, proto) {
+			continue
+		}
+		if proto == "" && len(c.Protocols) == 0 {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+func memberHasProtocol(c *MemberCache, want string) bool {
+	if c == nil {
+		return false
+	}
+	for _, p := range c.Protocols {
+		if p == want {
+			return true
+		}
+	}
+	return false
 }
 
 func validatePeerURL(raw string) error {

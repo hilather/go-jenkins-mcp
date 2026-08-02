@@ -50,6 +50,9 @@ help:
 	@echo "  make live-jenkins-test  Compose up + live smoke + down (needs Docker)"
 	@echo "  make live-jenkins-down  Stop disposable Jenkins and remove volume"
 	@echo "  make live-jenkins-fixtures-rebuild  Re-queue mock-inv-* builds (lab running)"
+	@echo "  make fleet-cache-lab-smoke  FLC-003 offline 3-member lab checks (not default test)"
+	@echo "  make fleet-cache-lab-up     FLC-003 Docker 3 members + LB (opt-in; needs Docker)"
+	@echo "  make fleet-cache-lab-down   Tear down fleet-cache lab volumes"
 	@echo "  make ci         lint + test + build (merge gate subset)"
 	@echo "  make admin-ui   UI-001 production build of web/admin → web/admin/dist"
 	@echo "  make admin-ui-embed  Build SPA and copy into internal/admin/uiembed/dist (UI-008)"
@@ -252,6 +255,27 @@ live-jenkins-fixtures-rebuild:
 	@chmod +x $(CURDIR)/scripts/jenkins-fixture-rebuild.sh
 	JENKINS_HOST_PORT=$(JENKINS_HOST_PORT) \
 		$(CURDIR)/scripts/jenkins-fixture-rebuild.sh
+
+# FLC-003: three-member fleet-cache lab (opt-in; NOT part of make test / make ci).
+# Offline smoke validates roster/identity/compose structure. Docker up is optional.
+COMPOSE_FLEET_CACHE ?= testdata/fleet-cache-lab/docker-compose.yml
+
+.PHONY: fleet-cache-lab-smoke
+fleet-cache-lab-smoke:
+	@chmod +x $(CURDIR)/scripts/fleet-cache-lab-smoke.sh
+	$(CURDIR)/scripts/fleet-cache-lab-smoke.sh
+
+.PHONY: fleet-cache-lab-up
+fleet-cache-lab-up:
+	@command -v docker >/dev/null || { echo "docker required"; exit 1; }
+	docker compose -f $(COMPOSE_FLEET_CACHE) up -d --build
+	@echo "fleet-cache lab: LB http://127.0.0.1:19080 peers :19443-19445 (mode off; residual peer protocol)"
+
+.PHONY: fleet-cache-lab-down
+fleet-cache-lab-down:
+	@command -v docker >/dev/null || { echo "docker required"; exit 1; }
+	docker compose -f $(COMPOSE_FLEET_CACHE) down -v --remove-orphans
+	@echo "fleet-cache lab stopped; volumes removed (independent plane A caches destroyed)"
 
 # UI-001: reactive admin SPA (ADR 0014). Requires Node ≥ 18 / npm.
 # Production assets land in web/admin/dist for packaging and --assets-dir (UI-008).

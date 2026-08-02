@@ -1,0 +1,93 @@
+# FLC-003 opt-in three-member fleet-cache lab.
+# Independent XDG data volumes per member (no shared plane A).
+# Not part of make test / make ci. Tear down: make fleet-cache-lab-down
+#
+# Members use deploy/local image when built; residual: peer sealed-log protocol
+# not required for scaffold bring-up (health/ops only until FLC-030+).
+
+name: jenkins-mcp-fleet-cache-lab
+
+services:
+  member-a:
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile
+      args:
+        SKIP_SPA: "1"
+    environment:
+      XDG_DATA_HOME: /var/lib/jenkins-mcp-data
+      XDG_CONFIG_HOME: /var/lib/jenkins-mcp-config
+      XDG_CACHE_HOME: /var/lib/jenkins-mcp-cache
+      JENKINS_MCP_FLEET_MODE: "1"
+      JENKINS_MCP_FLEET_MEMBER_ID: lab-a
+      JENKINS_MCP_FLEET_ROSTER: /etc/jenkins-mcp/roster.json
+      JENKINS_MCP_FLEET_MESH_TOKEN: lab-fleet-cache-mesh-token-not-for-production
+      JENKINS_MCP_FLEET_PEER_LISTEN: 0.0.0.0:9443
+      JENKINS_MCP_FLEET_CACHE_MODE: "off"
+    volumes:
+      - fc-data-a:/var/lib/jenkins-mcp-data
+      - fc-cfg-a:/var/lib/jenkins-mcp-config
+      - fc-cache-a:/var/lib/jenkins-mcp-cache
+      - ./roster.json:/etc/jenkins-mcp/roster.json:ro
+    ports:
+      - "19443:9443"
+    # Residual: full serve profile not wired; container proves volume isolation + image build.
+    command: ["sleep", "infinity"]
+
+  member-b:
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile
+      args:
+        SKIP_SPA: "1"
+    environment:
+      XDG_DATA_HOME: /var/lib/jenkins-mcp-data
+      JENKINS_MCP_FLEET_MEMBER_ID: lab-b
+      JENKINS_MCP_FLEET_ROSTER: /etc/jenkins-mcp/roster.json
+      JENKINS_MCP_FLEET_MESH_TOKEN: lab-fleet-cache-mesh-token-not-for-production
+      JENKINS_MCP_FLEET_PEER_LISTEN: 0.0.0.0:9443
+      JENKINS_MCP_FLEET_CACHE_MODE: "off"
+    volumes:
+      - fc-data-b:/var/lib/jenkins-mcp-data
+      - ./roster.json:/etc/jenkins-mcp/roster.json:ro
+    ports:
+      - "19444:9443"
+    command: ["sleep", "infinity"]
+
+  member-c:
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile
+      args:
+        SKIP_SPA: "1"
+    environment:
+      XDG_DATA_HOME: /var/lib/jenkins-mcp-data
+      JENKINS_MCP_FLEET_MEMBER_ID: lab-c
+      JENKINS_MCP_FLEET_ROSTER: /etc/jenkins-mcp/roster.json
+      JENKINS_MCP_FLEET_MESH_TOKEN: lab-fleet-cache-mesh-token-not-for-production
+      JENKINS_MCP_FLEET_PEER_LISTEN: 0.0.0.0:9443
+      JENKINS_MCP_FLEET_CACHE_MODE: "off"
+    volumes:
+      - fc-data-c:/var/lib/jenkins-mcp-data
+      - ./roster.json:/etc/jenkins-mcp/roster.json:ro
+    ports:
+      - "19445:9443"
+    command: ["sleep", "infinity"]
+
+  lb:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./nginx/lb.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "19080:80"
+    depends_on:
+      - member-a
+      - member-b
+      - member-c
+
+volumes:
+  fc-data-a:
+  fc-data-b:
+  fc-data-c:
+  fc-cfg-a:
+  fc-cache-a:
