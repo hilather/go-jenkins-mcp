@@ -173,6 +173,62 @@ else
   echo "PASS: secret-looking path refused"
 fi
 
+# --- Regression: bare git SHA as VERSION must not break dpkg-deb Version field ---
+# CI make package uses Makefile VERSION=$(git describe --tags --always), which is a
+# short SHA when tags are not fetched. Debian requires Version to start with a digit.
+SHA_VER="e2050dd"
+SHA_DIST="$WORK/dist-sha"
+mkdir -p "$SHA_DIST"
+if command -v dpkg-deb >/dev/null 2>&1; then
+  echo "== package-linux.sh VERSION=${SHA_VER} (dpkg-deb present; Regression: bare SHA) =="
+  # Unset SKIP_DEB from the portable smoke export so this path exercises dpkg-deb.
+  if ! env -u SKIP_DEB SKIP_RPM=1 "$SCRIPT" "$BIN" "$SHA_DIST" "$SHA_VER" "e2050dd"; then
+    echo "FAIL: packaging bare git SHA version must succeed when dpkg-deb is available" >&2
+    fail=1
+  else
+    deb_found=0
+    for f in "$SHA_DIST"/jenkins-mcp_"${SHA_VER}"_*.deb; do
+      if [[ -f "$f" ]]; then
+        deb_found=1
+        deb_ver="$(dpkg-deb -f "$f" Version 2>/dev/null || true)"
+        if [[ "$deb_ver" =~ ^[0-9] ]]; then
+          echo "PASS: deb produced for bare SHA VERSION=${SHA_VER} (Version=$deb_ver)"
+        else
+          echo "FAIL: deb Version must start with digit, got: ${deb_ver:-empty}" >&2
+          fail=1
+        fi
+        break
+      fi
+    done
+    if [[ "$deb_found" -eq 0 ]]; then
+      echo "FAIL: expected deb for VERSION=${SHA_VER} under $SHA_DIST" >&2
+      ls -la "$SHA_DIST" >&2 || true
+      fail=1
+    fi
+    # BUILD_INFO package_version must start with a digit
+    if [[ -f "$SHA_DIST/BUILD_INFO" ]]; then
+      pv="$(grep -E '^package_version=' "$SHA_DIST/BUILD_INFO" | head -1 | cut -d= -f2-)"
+      if [[ "$pv" =~ ^[0-9] ]]; then
+        echo "PASS: package_version starts with digit ($pv)"
+      else
+        echo "FAIL: package_version must start with digit, got: $pv" >&2
+        fail=1
+      fi
+    fi
+  fi
+else
+  # Still assert sanitization path via SKIP_DEB=1 and BUILD_INFO package_version
+  echo "== package-linux.sh VERSION=${SHA_VER} (no dpkg-deb; BUILD_INFO package_version) =="
+  SKIP_DEB=1 SKIP_RPM=1 "$SCRIPT" "$BIN" "$SHA_DIST" "$SHA_VER" "e2050dd"
+  pv="$(grep -E '^package_version=' "$SHA_DIST/BUILD_INFO" | head -1 | cut -d= -f2-)"
+  if [[ "$pv" =~ ^[0-9] ]]; then
+    echo "PASS: package_version starts with digit without dpkg ($pv)"
+  else
+    echo "FAIL: package_version must start with digit, got: $pv" >&2
+    fail=1
+  fi
+fi
+
 if [[ "$fail" -ne 0 ]]; then
   echo "package-linux_test: FAILED" >&2
   exit 1

@@ -84,14 +84,31 @@ fi
 
 # Normalize version for package managers (strip leading v; empty → 0.0.0-dev).
 PKG_VERSION="${VERSION#v}"
-if [[ -z "$PKG_VERSION" || "$PKG_VERSION" == "unknown" ]]; then
+if [[ -z "$PKG_VERSION" || "$PKG_VERSION" == "unknown" || "$PKG_VERSION" == "dev" ]]; then
   PKG_VERSION="0.0.0-dev"
 fi
+# Debian Policy: Version must start with a digit. `git describe --tags --always`
+# (Makefile VERSION default) yields a bare commit SHA when tags are absent
+# (shallow CI checkout without tags) — dpkg-deb then fails with:
+#   'Version' field value 'e2050dd': version number does not start with digit
+# Prefix a digit-safe form; tarball filename still uses raw VERSION.
 # Debian/RPM disallow some git describe characters; sanitize lightly.
 DEB_VERSION="${PKG_VERSION//+/-}"
 DEB_VERSION="${DEB_VERSION//\//-}"
-# RPM Version: replace remaining problematic characters with dots.
+if [[ ! "$DEB_VERSION" =~ ^[0-9] ]]; then
+  DEB_VERSION="0.0.0+git.${DEB_VERSION}"
+fi
+# RPM Version: replace remaining problematic characters with dots; must start digit.
 RPM_VERSION="${DEB_VERSION//-/.}"
+RPM_VERSION="${RPM_VERSION//+/-}"
+if [[ ! "$RPM_VERSION" =~ ^[0-9] ]]; then
+  RPM_VERSION="0.0.0.git.${RPM_VERSION}"
+fi
+# package_version in BUILD_INFO matches manager-safe identity when VERSION was
+# a non-semver label (e.g. bare SHA from shallow CI).
+if [[ ! "$PKG_VERSION" =~ ^[0-9] ]]; then
+  PKG_VERSION="$DEB_VERSION"
+fi
 
 BUILDTIME="${BUILDTIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 if command -v go >/dev/null 2>&1; then

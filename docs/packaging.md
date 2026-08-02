@@ -76,6 +76,8 @@ BUILDTIME = UTC ISO-8601
 
 Embedded in the binary via ldflags (`main.version`, `main.commit`, `main.buildTime`) and written into package `BUILD_INFO` (plus secret-free `admin_ui*` fields when packaging runs).
 
+**DEB/RPM Version sanitization:** Debian Policy requires the package `Version` field to **start with a digit**. When `VERSION` is a bare git SHA (common on shallow CI checkouts that lack tags), `scripts/package-linux.sh` maps it to a manager-safe form such as `0.0.0+git.<sha>` for `.deb` / `.rpm` and `package_version=` in `BUILD_INFO`. Tarball **filenames** still use the raw `VERSION` string for CI artifact identity.
+
 ### Version CLI (UPD-001)
 
 ```bash
