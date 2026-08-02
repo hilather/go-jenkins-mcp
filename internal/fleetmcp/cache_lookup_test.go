@@ -65,7 +65,7 @@ func TestOwnerDirectedManifestLookup_HitMissTimeout(t *testing.T) {
 	if len(owners) != 2 {
 		t.Fatal("must not broadcast full roster")
 	}
-	client := &fleetmcp.ManifestLookupClient{MeshToken: "mesh-tok", Timeout: time.Second}
+	client := &fleetmcp.ManifestLookupClient{MeshToken: "mesh-tok", Timeout: time.Second, Mode: fleetcache.ModeRead}
 	res, err := client.LookupOwners(context.Background(), "fleet", wm.LocatorHash, owners, true)
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +80,7 @@ func TestOwnerDirectedManifestLookup_HitMissTimeout(t *testing.T) {
 		t.Fatalf("tried %v", res.OwnersTried)
 	}
 
-	// Both miss.
+	// Both miss (still ModeRead).
 	emptyOwners := []fleetcache.OwnerContact{
 		{MemberID: "lab-b", PeerURL: "http://" + srvB.Addr()},
 	}
@@ -107,7 +107,7 @@ func TestOwnerDirectedManifestLookup_HitMissTimeout(t *testing.T) {
 	}
 
 	// Unauthorized: wrong mesh token.
-	bad := &fleetmcp.ManifestLookupClient{MeshToken: "wrong", Timeout: time.Second}
+	bad := &fleetmcp.ManifestLookupClient{MeshToken: "wrong", Timeout: time.Second, Mode: fleetcache.ModeRead}
 	res4, err := bad.LookupOwners(context.Background(), "fleet", wm.LocatorHash, []fleetcache.OwnerContact{
 		{MemberID: "lab-a", PeerURL: "http://" + srvA.Addr()},
 	}, true)
@@ -117,6 +117,59 @@ func TestOwnerDirectedManifestLookup_HitMissTimeout(t *testing.T) {
 	}
 	if res4.Status == fleetcache.LookupHit {
 		t.Fatal("wrong mesh must not hit")
+	}
+
+	// Mode off: must not contact peers (would hit if it did).
+	off := &fleetmcp.ManifestLookupClient{MeshToken: "mesh-tok", Timeout: time.Second, Mode: fleetcache.ModeOff}
+	resOff, err := off.LookupOwners(context.Background(), "fleet", wm.LocatorHash, owners, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resOff.Status != fleetcache.LookupModeOff {
+		t.Fatalf("mode off: %+v", resOff)
+	}
+	if len(resOff.PeerResults) != 0 || resOff.Manifest != nil {
+		t.Fatalf("mode off must not peer: %+v", resOff)
+	}
+	// Empty mode defaults to off (fail closed).
+	emptyMode := &fleetmcp.ManifestLookupClient{MeshToken: "mesh-tok", Timeout: time.Second}
+	resEmpty, err := emptyMode.LookupOwners(context.Background(), "fleet", wm.LocatorHash, owners, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resEmpty.Status != fleetcache.LookupModeOff {
+		t.Fatalf("empty mode: %+v", resEmpty)
+	}
+	// Shadow also skips peer I/O.
+	shadow := &fleetmcp.ManifestLookupClient{MeshToken: "mesh-tok", Timeout: time.Second, Mode: fleetcache.ModeShadow}
+	resShadow, err := shadow.LookupOwners(context.Background(), "fleet", wm.LocatorHash, owners, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resShadow.Status != fleetcache.LookupModeOff {
+		t.Fatalf("shadow: %+v", resShadow)
+	}
+}
+
+// TestLookupOwners_ModeOffNoHTTP ensures mode=off never dials (regression: missing Mode would hit).
+func TestLookupOwners_ModeOffNoHTTP(t *testing.T) {
+	t.Parallel()
+	// If mode gate were missing, this would try 127.0.0.1:1 and get partial/timeout.
+	client := &fleetmcp.ManifestLookupClient{
+		MeshToken: "t",
+		Timeout:   50 * time.Millisecond,
+		Mode:      fleetcache.ModeOff,
+	}
+	owners := []fleetcache.OwnerContact{{MemberID: "x", PeerURL: "http://127.0.0.1:1"}}
+	res, err := client.LookupOwners(context.Background(), "f", strings.Repeat("a", 64), owners, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != fleetcache.LookupModeOff {
+		t.Fatalf("%+v", res)
+	}
+	if len(res.PeerResults) != 0 {
+		t.Fatalf("must not contact peers: %+v", res.PeerResults)
 	}
 }
 

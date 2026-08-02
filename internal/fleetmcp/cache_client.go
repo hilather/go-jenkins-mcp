@@ -18,16 +18,39 @@ type ManifestLookupClient struct {
 	Client    *http.Client
 	MeshToken string
 	Timeout   time.Duration
+	// Mode is fleet-cache mode (off|shadow|read|full). Empty treated as off for safety
+	// when unset by callers that forgot to wire config (fail closed: no peer I/O).
+	// Lookup runs only for ModeRead and ModeFull. ModeOff/ModeShadow skip peers.
+	Mode fleetcache.Mode
 }
 
 // LookupOwners queries each OwnerContact in order until a verified hit or exhaustion.
+// When Mode is off (or empty) or shadow, returns LookupModeOff without contacting peers.
 func (c *ManifestLookupClient) LookupOwners(ctx context.Context, fleetID, locatorHash string, owners []fleetcache.OwnerContact, originFallback bool) (fleetcache.LookupResult, error) {
+	if c == nil {
+		return fleetcache.LookupResult{
+			Status:                    fleetcache.LookupModeOff,
+			Residual:                  "lookup client nil; origin fallback recommended",
+			OriginFallbackRecommended: true,
+		}, nil
+	}
+	mode := c.Mode
+	if mode == "" {
+		mode = fleetcache.ModeOff
+	}
+	if mode == fleetcache.ModeOff || mode == fleetcache.ModeShadow {
+		return fleetcache.LookupResult{
+			Status:                    fleetcache.LookupModeOff,
+			Residual:                  "fleet-cache mode off or shadow; peer lookup skipped",
+			OriginFallbackRecommended: originFallback || mode == fleetcache.ModeOff,
+		}, nil
+	}
 	locatorHash = strings.ToLower(strings.TrimSpace(locatorHash))
 	if len(locatorHash) != 64 {
 		return fleetcache.LookupResult{Status: fleetcache.LookupInvalidLocator},
 			apperr.New(apperr.CodeInvalidArgument, "locator_hash invalid")
 	}
-	if c == nil || strings.TrimSpace(c.MeshToken) == "" {
+	if strings.TrimSpace(c.MeshToken) == "" {
 		return fleetcache.LookupResult{Status: fleetcache.LookupPartial, Residual: "lookup client not configured", OriginFallbackRecommended: true},
 			apperr.New(apperr.CodePolicyDenial, "manifest lookup requires mesh token")
 	}

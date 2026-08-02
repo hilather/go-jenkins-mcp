@@ -52,6 +52,54 @@ func TestFreshnessGate_AllowDenyTTL(t *testing.T) {
 	}
 }
 
+// TestFreshnessGate_TTLExpireReprobes advances the gate clock past TTL so a
+// never-expiring Allow cache would fail this test (FLC-018 verification).
+func TestFreshnessGate_TTLExpireReprobes(t *testing.T) {
+	t.Parallel()
+	var probes int
+	now := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
+	g := fleetcache.NewFreshnessGate(10*time.Second, func(ctx context.Context, key fleetcache.AuthzKey) (bool, string, error) {
+		probes++
+		return true, "", nil
+	})
+	g.Now = func() time.Time { return now }
+
+	key := fleetcache.AuthzKey{
+		SubjectKeyHash: "ttl-sub",
+		ControllerID:   "ctrl",
+		JobFullName:    "job",
+		ToolName:       "jenkins_get_build_logs",
+	}
+	d1, err := g.Allow(context.Background(), key)
+	if err != nil || !d1.Allowed || d1.FromCache {
+		t.Fatalf("first: %+v %v", d1, err)
+	}
+	if probes != 1 {
+		t.Fatalf("probes after first=%d", probes)
+	}
+	// Within TTL: served from cache.
+	now = now.Add(5 * time.Second)
+	d2, err := g.Allow(context.Background(), key)
+	if err != nil || !d2.Allowed || !d2.FromCache {
+		t.Fatalf("within TTL: %+v %v", d2, err)
+	}
+	if probes != 1 {
+		t.Fatalf("must not re-probe within TTL; probes=%d", probes)
+	}
+	// Past TTL: must re-probe (would fail if cache never expired).
+	now = now.Add(10 * time.Second) // total +15s from first allow; TTL was 10s
+	d3, err := g.Allow(context.Background(), key)
+	if err != nil || !d3.Allowed {
+		t.Fatalf("after TTL: %+v %v", d3, err)
+	}
+	if d3.FromCache {
+		t.Fatal("stale allow must not be served FromCache after TTL")
+	}
+	if probes != 2 {
+		t.Fatalf("expected re-probe after TTL expire; probes=%d", probes)
+	}
+}
+
 func TestFreshnessGate_ProbeFailClosed(t *testing.T) {
 	t.Parallel()
 	g := fleetcache.NewFreshnessGate(time.Second, func(ctx context.Context, key fleetcache.AuthzKey) (bool, string, error) {
