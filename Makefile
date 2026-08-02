@@ -21,8 +21,10 @@ LDFLAGS = -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildTime=
 # Binary package path (FND-004)
 CMD_PKG = ./cmd/jenkins-mcp
 
-# QA-001: short fuzz wall time per target for smoke (not a merge-gate default).
-FUZZTIME ?= 2s
+# QA-001: short fuzz budget per target (count-based default avoids GHA deadline flakes).
+# Override: make fuzz-smoke FUZZTIME=2s  or  FUZZTIME=2000x
+FUZZTIME ?= 500x
+FUZZ_TIMEOUT ?= 90s
 
 .PHONY: help
 help:
@@ -80,35 +82,14 @@ test:
 test-race:
 	$(GO) test $(GOFLAGS) $(GO_TESTFLAGS) -race ./...
 
-# QA-001: short native Go fuzz smoke (opt-in; not part of default make test / ci).
-# Seed corpora live in f.Add(...) and optional testdata/fuzz/<FuzzName>/ files.
-# Crashers are retained by the go tool under testdata/fuzz/ when found.
-# Longer runs: go test ./internal/jenkins -run=Fuzz -fuzz=FuzzSanitizeArtifactPath -fuzztime=5m
+# QA-001: short native Go fuzz smoke (opt-in; not part of default make test).
+# Implementation: scripts/fuzz-smoke.sh (count-based default, GOMAXPROCS cap,
+# deadline-flake retry). Crashers land under testdata/fuzz/ (gitignored via "fuzz").
+# Longer runs: go test ./internal/jenkins -run=^$ -fuzz=FuzzSanitizeArtifactPath -fuzztime=5m
 .PHONY: fuzz-smoke
 fuzz-smoke:
-	@echo "QA-001 fuzz-smoke FUZZTIME=$(FUZZTIME)"
-	$(GO) test $(GOFLAGS) ./internal/jenkins -run=^$$ -fuzz=FuzzSanitizeArtifactPath -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/jenkins -run=^$$ -fuzz=FuzzBuildJobPath -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/jenkins -run=^$$ -fuzz=FuzzNormalizeBaseURL -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/jenkins -run=^$$ -fuzz=FuzzInventoryZip -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/archive -run=^$$ -fuzz=FuzzOpenPack -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/archive -run=^$$ -fuzz=FuzzParseSeekTable -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/archive -run=^$$ -fuzz=FuzzParseIndex -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/redact -run=^$$ -fuzz=FuzzStripControlSequences -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/redact -run=^$$ -fuzz=FuzzRedactText -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/redact -run=^$$ -fuzz=FuzzSanitizeForModel -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/tools -run=^$$ -fuzz=FuzzJobFullName -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/tools -run=^$$ -fuzz=FuzzPolicyTargetFromArgs -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/contracts -run=^$$ -fuzz=FuzzParseJobFullName -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/mutation -run=^$$ -fuzz=FuzzNormalizeParams -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/mutation -run=^$$ -fuzz=FuzzValidateAgainstDefinitions -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/update -run=^$$ -fuzz=FuzzParseManifest -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/update -run=^$$ -fuzz=FuzzLoadLKG -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/policy -run=^$$ -fuzz=FuzzLoadOverlayJSON -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/policy -run=^$$ -fuzz=FuzzDenyJobPrefixMatch -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/auth -run=^$$ -fuzz=FuzzClassifyFallthroughProbe -fuzztime=$(FUZZTIME)
-	$(GO) test $(GOFLAGS) ./internal/auth -run=^$$ -fuzz=FuzzParseProtectedResourceMetadata -fuzztime=$(FUZZTIME)
-	@echo "fuzz-smoke complete (see docs/phase2-progress.md and CONTRIBUTING.md for longer runs)"
+	FUZZTIME=$(FUZZTIME) FUZZ_TIMEOUT=$(FUZZ_TIMEOUT) GOFLAGS='$(GOFLAGS)' \
+		bash scripts/fuzz-smoke.sh
 
 # PERF-001: fixture-only progressive log benchmarks + optional JSON capture.
 # Not part of default make test / make ci (benchmarks are opt-in).

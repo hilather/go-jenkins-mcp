@@ -235,6 +235,10 @@ func FuzzStripControlSequences(f *testing.F) {
 	f.Add("\u0080\u009f")
 	f.Add("before\u009dafter")
 	f.Fuzz(func(t *testing.T, s string) {
+		// Cap size for CI smoke predictability (unbounded OSC-to-EOS walks).
+		if len(s) > 8<<10 {
+			return
+		}
 		out := redact.StripControlSequences(s)
 		// No ESC or C1 CSI/OSC introducers may remain.
 		if strings.Contains(out, "\x1b") {

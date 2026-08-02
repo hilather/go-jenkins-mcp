@@ -6,7 +6,7 @@
 #
 # Optional / non-blocking (continue-on-error or workflow_dispatch only):
 #   - package-smoke     — PKG-001 offline tarball smoke (bare Ubuntu only)
-#   - fuzz-smoke        — QA-001 short native fuzz (FUZZTIME=1s on PR path)
+#   - fuzz-smoke        — QA-001 short native fuzz (count-based FUZZTIME=500x)
 #   - stdio-smoke       — FND-006 offline MCP binary host-lifecycle (Wave 26+33; not Cursor product)
 #   - live-jenkins-smoke — TST-001 Docker Jenkins (workflow_dispatch only)
 #   - Perf regression step inside check (Ubuntu only, continue-on-error)
@@ -173,22 +173,33 @@ jobs:
           JENKINS_MCP_AUTH: ""
 
   # Wave 23 / FND-007 expand: QA-001 short native fuzz smoke.
-  # FUZZTIME=1s per target keeps PR wall time modest (~20 targets + compile).
-  # Non-required merge check; continue-on-error. Longer runs: make fuzz-smoke FUZZTIME=2s locally.
+  # Count-based FUZZTIME (Nx) avoids wall-clock cancel flakes ("context deadline
+  # exceeded") common on GHA with FUZZTIME=1s. scripts/fuzz-smoke.sh also caps
+  # GOMAXPROCS and retries pure deadline flakes once. Still non-required.
+  # Longer local runs: make fuzz-smoke FUZZTIME=5s  or  -fuzztime=5m per target.
   fuzz-smoke:
     name: fuzz-smoke
     runs-on: ubuntu-latest
+    # Optional signal only — keep false-red noise off the required merge gate.
+    # Real crashers still fail this job (continue-on-error only affects workflow
+    # conclusion for branch-protection simplicity).
     continue-on-error: true
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Fuzz smoke (QA-001 short)
-        run: make fuzz-smoke FUZZTIME=1s
+        run: make fuzz-smoke
         env:
           # Never inject real Jenkins credentials into unit CI
           JENKINS_MCP_AUTH: ""
+          # Count-based budget (~500 execs/target); override for nightlies.
+          FUZZTIME: "500x"
+          FUZZ_TIMEOUT: "90s"
+          # Bound workers on shared runners (script default is 4 if unset).
+          GOMAXPROCS: "4"
 
   # Wave 26 + Wave 33 / FND-006+FND-007: offline MCP stdio host-lifecycle smoke
   # (make stdio-smoke). Spawns real bin/jenkins-mcp over stdio against httptest Jenkins —

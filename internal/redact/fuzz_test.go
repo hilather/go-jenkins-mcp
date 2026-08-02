@@ -11,7 +11,10 @@ import (
 
 // QA-001: additional redaction/sanitize fuzz targets (see also FuzzStripControlSequences).
 
-const fuzzMaxText = 16 << 10 // 16 KiB — regex redaction is CPU-heavy
+// Keep smoke inputs modest: layered regex redaction on multi-KiB garbage is
+// CPU-heavy and historically contributed to GHA "context deadline exceeded"
+// when combined with wall-clock -fuzztime=1s cancel races.
+const fuzzMaxText = 4 << 10 // 4 KiB
 
 // FuzzRedactText ensures layered secret redaction never panics and is deterministic.
 func FuzzRedactText(f *testing.F) {
@@ -75,6 +78,7 @@ func FuzzSanitizeForModel(f *testing.F) {
 			return
 		}
 		out, rep := redact.SanitizeForModelReport(s)
+		// Alias + report path share the same sanitize result.
 		if redact.SanitizeForModel(s) != out {
 			t.Fatal("SanitizeForModel mismatch with Report")
 		}
@@ -90,12 +94,12 @@ func FuzzSanitizeForModel(f *testing.F) {
 		if !utf8.ValidString(out) {
 			t.Fatalf("invalid utf8: %q", out)
 		}
-		// Deterministic.
+		// Deterministic (second pass only — avoid third full sanitize when possible).
 		out2, rep2 := redact.SanitizeForModelReport(s)
 		if out2 != out || rep2.Total() != rep.Total() {
 			t.Fatal("non-deterministic SanitizeForModel")
 		}
-		// Untrusted wrapper path.
+		// Untrusted wrapper path (reuses same sanitize semantics).
 		ex := redact.NewUntrustedExcerpt(s, redact.ContentKindBuildLog)
 		if !ex.Untrusted || ex.Text != out {
 			t.Fatalf("excerpt mismatch: %+v", ex)

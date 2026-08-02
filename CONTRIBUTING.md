@@ -75,9 +75,14 @@ found by the fuzzer are retained under `testdata/fuzz/<FuzzName>/` (git-friendly
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"
-make fuzz-smoke              # default FUZZTIME=2s per target
-make fuzz-smoke FUZZTIME=5s  # slightly longer
+make fuzz-smoke                # default FUZZTIME=500x per target (count-based)
+make fuzz-smoke FUZZTIME=2000x # more mutations
+make fuzz-smoke FUZZTIME=5s    # wall-clock still supported
 ```
+
+CI uses `scripts/fuzz-smoke.sh` with **count-based** `-fuzztime=500x`, `GOMAXPROCS=4`,
+and a single automatic retry for pure `context deadline exceeded` coordinator
+cancel flakes (not for written crashers). Prefer `Nx` over `1s` on shared runners.
 
 **Longer local / CI nightlies:**
 
@@ -112,7 +117,7 @@ OAuth secrets.
 | `lint-test-build` | `check` | push / PR | **Yes** | Ubuntu host + Rocky 9 container; gofmt, vet, test, race (Ubuntu only), build, `make package`; optional perf step (continue-on-error) |
 | `govulncheck` | `govulncheck` | push / PR | **Yes** | `golang.org/x/vuln` scan of `./...` |
 | `package-smoke` | `package-smoke` | push / PR | No | Bare Ubuntu only; `make package-smoke` (PKG-001 offline); `continue-on-error` |
-| `fuzz-smoke` | `fuzz-smoke` | push / PR | No | `make fuzz-smoke FUZZTIME=1s`; `continue-on-error` |
+| `fuzz-smoke` | `fuzz-smoke` | push / PR | No | `make fuzz-smoke` (`FUZZTIME=500x`); `continue-on-error` |
 | `stdio-smoke (host-lifecycle offline)` | `stdio-smoke` | push / PR | No | Wave 26+33 FND-006 offline MCP binary host-lifecycle (`make stdio-smoke`); `continue-on-error`; **not** Cursor product binary CI |
 | `live-jenkins-smoke (manual)` | `live-jenkins-smoke` | `workflow_dispatch` only | No | Disposable Jenkins LTS via Docker Compose; not on push/PR |
 
@@ -127,7 +132,7 @@ Local equivalents:
 export PATH="$HOME/.local/go/bin:$PATH"
 make ci                  # lint + test + build (fast local gate)
 make package-smoke       # optional PKG-001 offline package checks
-make fuzz-smoke FUZZTIME=1s   # optional QA-001 short fuzz (CI uses 1s)
+make fuzz-smoke               # optional QA-001 short fuzz (CI uses 500x)
 make stdio-smoke         # optional FND-006 offline binary host-lifecycle MCP smoke (CI optional job)
 ```
 
