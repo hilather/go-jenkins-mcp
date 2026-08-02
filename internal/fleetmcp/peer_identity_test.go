@@ -1,6 +1,10 @@
 package fleetmcp_test
 
 import (
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -42,30 +46,64 @@ func TestValidatePeerURLTransport(t *testing.T) {
 	}
 }
 
-func TestValidateRosterTransport(t *testing.T) {
+func TestParseRoster_RejectsNonLoopbackHTTP(t *testing.T) {
 	t.Parallel()
-	r, err := fleetmcp.ParseRoster([]byte(`{
+	// Production-shaped cleartext peer must fail closed on default ParseRoster.
+	_, err := fleetmcp.ParseRoster([]byte(`{
+	  "schema_version":1,"fleet_id":"corp",
+	  "members":[{"id":"a","peer_url":"http://edge.example.com:9443"}]
+	}`))
+	if err == nil {
+		t.Fatal("expected non-loopback http reject")
+	}
+	if apperr.CodeOf(err) != apperr.CodeInvalidArgument {
+		t.Fatalf("%v", err)
+	}
+	// Lab residual opt-in.
+	r, err := fleetmcp.ParseRosterOpts([]byte(`{
+	  "schema_version":1,"fleet_id":"corp",
+	  "members":[{"id":"a","peer_url":"http://edge.example.com:9443"}]
+	}`), fleetmcp.RosterParseOptions{PeerURL: fleetmcp.PeerURLOptions{AllowInsecureHTTP: true}})
+	if err != nil || r.MemberByID("a") == nil {
+		t.Fatalf("%v %+v", err, r)
+	}
+}
+
+func TestResolveConfig_RejectsNonLoopbackHTTPWithoutLabFlag(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "roster.json")
+	raw := `{
 	  "schema_version":1,"fleet_id":"corp",
 	  "members":[
-	    {"id":"a","peer_url":"http://127.0.0.1:9443"},
-	    {"id":"b","peer_url":"https://b.example:9443"}
+	    {"id":"edge-a","peer_url":"http://edge.example.com:9443"}
 	  ]
-	}`))
-	if err != nil {
+	}`
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := fleetmcp.ValidateRosterTransport(r, fleetmcp.PeerURLOptions{}); err != nil {
-		t.Fatal(err)
+	_, err := fleetmcp.ResolveConfig(fleetmcp.ResolveOptions{
+		ModeFlag:        "1",
+		MemberIDFlag:    "edge-a",
+		RosterPathFlag:  path,
+		MeshTokenInline: "mesh",
+	})
+	if err == nil {
+		t.Fatal("expected production-shaped http peer fail closed")
 	}
-	r2, err := fleetmcp.ParseRoster([]byte(`{
-	  "schema_version":1,"fleet_id":"corp",
-	  "members":[{"id":"a","peer_url":"http://peer.example:9443"}]
-	}`))
-	if err != nil {
-		t.Fatal(err)
+	// Lab residual.
+	cfg, err := fleetmcp.ResolveConfig(fleetmcp.ResolveOptions{
+		ModeFlag:              "1",
+		MemberIDFlag:          "edge-a",
+		RosterPathFlag:        path,
+		MeshTokenInline:       "mesh",
+		AllowInsecureHTTPFlag: "1",
+	})
+	if err != nil || !cfg.Enabled || !cfg.AllowInsecureHTTP {
+		t.Fatalf("%+v %v", cfg, err)
 	}
-	if err := fleetmcp.ValidateRosterTransport(r2, fleetmcp.PeerURLOptions{}); err == nil {
-		t.Fatal("expected non-loopback http fail")
+	if cfg.TrustResidual.UniqueNodeIdentity {
+		t.Fatal("must not claim unique node identity Done")
 	}
 }
 
@@ -80,27 +118,37 @@ func TestDefaultTrustResidual(t *testing.T) {
 	}
 }
 
-func TestMeshTokenOK_ConstantTimeSecretFree(t *testing.T) {
+func TestPeerMux_UnauthorizedBodySecretFree(t *testing.T) {
 	t.Parallel()
-	// Existing mux still rejects bad tokens without leaking mesh token in body.
+	const mesh = "super-secret-mesh-token-value"
 	cfg := fleetmcp.Config{
-		Enabled: true, MemberID: "a", MeshToken: "super-secret-mesh",
+		Enabled: true, MemberID: "a", MeshToken: mesh,
 		Roster: &fleetmcp.Roster{
 			SchemaVersion: 1, FleetID: "f",
 			Members: []fleetmcp.RosterMember{{ID: "a", PeerURL: "http://127.0.0.1:1"}},
 		},
 	}
 	mux := fleetmcp.NewPeerMux(cfg, &fleetmcp.LocalProvider{})
-	// Use managed server for identity path.
 	ps, _, err := fleetmcp.StartPeerServer("127.0.0.1:0", mux, fleetmcp.DefaultPeerServerOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = ps.Shutdown(nil) }()
-	// Unauthorized body must not contain the mesh secret.
-	// (full HTTP covered in server_test; residual honesty for TrustResidual only here)
-	_ = ps.Addr()
-	if strings.Contains(fleetmcp.DefaultTrustResidual().Residual, "super-secret") {
-		t.Fatal("residual must not embed secrets")
+
+	// Unauthorized request — must 401 and never echo mesh secret.
+	res, err := http.Get("http://" + ps.Addr() + fleetmcp.PeerPathPrefix + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status %d body %s", res.StatusCode, body)
+	}
+	if strings.Contains(string(body), mesh) || strings.Contains(string(body), "super-secret") {
+		t.Fatalf("mesh secret leaked in response: %s", body)
 	}
 }

@@ -26,6 +26,9 @@ type RosterSnapshot struct {
 	// allowBundleSeqRollback is fail-closed false by default (FLC-013).
 	allowBundleSeqRollback bool
 
+	// rosterParse peer URL transport (strict HTTPS by default).
+	rosterParse RosterParseOptions
+
 	loadedAt time.Time
 }
 
@@ -35,6 +38,8 @@ type SnapshotOptions struct {
 	Path string
 	// AllowBundleSeqRollback when true permits applying a lower bundle_seq (break-glass).
 	AllowBundleSeqRollback bool
+	// AllowInsecureHTTP when true allows non-loopback http peer URLs (lab residual).
+	AllowInsecureHTTP bool
 	// ReadFile optional (default os.ReadFile).
 	ReadFile func(string) ([]byte, error)
 }
@@ -49,7 +54,19 @@ func NewRosterSnapshot(opts SnapshotOptions) *RosterSnapshot {
 		path:                   strings.TrimSpace(opts.Path),
 		readFile:               rf,
 		allowBundleSeqRollback: opts.AllowBundleSeqRollback,
+		rosterParse: RosterParseOptions{
+			PeerURL: PeerURLOptions{AllowInsecureHTTP: opts.AllowInsecureHTTP},
+		},
 	}
+}
+
+func (s *RosterSnapshot) parseOpts() RosterParseOptions {
+	if s == nil {
+		return RosterParseOptions{}
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.rosterParse
 }
 
 // LoadFile parses path, validates, and installs as current (initial or replace with rules).
@@ -65,7 +82,7 @@ func (s *RosterSnapshot) LoadFile(path string) error {
 	if err != nil {
 		return apperr.Wrap(apperr.CodeNotFound, "read fleet roster", err)
 	}
-	r, err := ParseRoster(raw)
+	r, err := ParseRosterOpts(raw, s.parseOpts())
 	if err != nil {
 		return err
 	}
@@ -94,7 +111,7 @@ func (s *RosterSnapshot) Reload() error {
 		// LKG retained.
 		return apperr.Wrap(apperr.CodeNotFound, "reload fleet roster", err)
 	}
-	r, err := ParseRoster(raw)
+	r, err := ParseRosterOpts(raw, s.parseOpts())
 	if err != nil {
 		// Invalid parse → keep LKG.
 		return err
@@ -108,7 +125,7 @@ func (s *RosterSnapshot) Apply(candidate *Roster) error {
 	if s == nil {
 		return apperr.New(apperr.CodeInternal, "roster snapshot is nil")
 	}
-	if err := ValidateRoster(candidate); err != nil {
+	if err := ValidateRosterOpts(candidate, s.parseOpts()); err != nil {
 		return err
 	}
 	// Clone membership into a private snapshot so callers cannot half-mutate under RLock.

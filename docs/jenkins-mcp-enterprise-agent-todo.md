@@ -4005,7 +4005,7 @@ Operators manage **who** may do **what** in MCP policy via the admin console: bi
 | **FLC-014** | Weighted rendezvous placement | **Done\*** `OwnerOrder` / golden vectors / domain-aware RF pick |
 | **FLC-015** | Managed peer HTTP server lifecycle | **Done\*** `StartPeerServer` + timeouts + graceful shutdown |
 | **FLC-013** | Atomic roster hot-reload + LKG / bundle_seq | **Done\*** `RosterSnapshot` |
-| **FLC-016** | Peer transport identity residual | **Done\*** HTTPS non-loopback; mesh pilot residual; mTLS **not Done** |
+| **FLC-016** | Peer transport identity residual | **Done\*** default reject non-loopback `http://`; lab `JENKINS_MCP_FLEET_ALLOW_INSECURE_HTTP`; mesh pilot / mTLS **not Done** |
 | **FLC-020** | Pure zstd wire hash schema | **Done\*** schema v8 `zstd_size`/`zstd_sha256` + `EnsureChunkWireHash` |
 | **FLC-017+**, **FLC-021+**, **FLC-030+** | Assertions, export path, peer-read, fill, RF2, … | **Planned** — owner-directed peer-read / fill / RF2 **not Done** |
 

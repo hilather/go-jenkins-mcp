@@ -30,7 +30,9 @@ func DefaultTrustResidual() TrustResidual {
 	return TrustResidual{
 		MeshTokenPilot:     true,
 		UniqueNodeIdentity: false,
-		Residual:           "pilot mesh-token peer auth; production unique node identity (mTLS/signing) residual (FLC-016)",
+		Residual: "pilot mesh-token peer auth; non-loopback peer_url requires https by default " +
+			"(lab residual JENKINS_MCP_FLEET_ALLOW_INSECURE_HTTP); production unique node identity " +
+			"(mTLS/signing) residual (FLC-016)",
 	}
 }
 

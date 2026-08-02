@@ -15,6 +15,9 @@ const (
 	EnvFleetRoster     = "JENKINS_MCP_FLEET_ROSTER"
 	EnvFleetMeshToken  = "JENKINS_MCP_FLEET_MESH_TOKEN"
 	EnvFleetPeerListen = "JENKINS_MCP_FLEET_PEER_LISTEN"
+	// EnvFleetAllowInsecureHTTP is lab residual: allow non-loopback http peer_url.
+	// Production default is off (HTTPS required for non-loopback — FLC-016).
+	EnvFleetAllowInsecureHTTP = "JENKINS_MCP_FLEET_ALLOW_INSECURE_HTTP"
 )
 
 // MeshTokenHeader is the HTTP header peers and coordinators use for mesh-token auth.
@@ -39,6 +42,10 @@ type Config struct {
 	MaxParallel int
 	// TrustConfigured is true when mesh token (or future mTLS) is present.
 	TrustConfigured bool
+	// AllowInsecureHTTP is true only when lab residual explicitly enabled.
+	AllowInsecureHTTP bool
+	// TrustResidual is secret-free pilot vs production identity honesty (FLC-016).
+	TrustResidual TrustResidual
 }
 
 // ResolveOptions are operator inputs for ResolveConfig.
@@ -55,6 +62,9 @@ type ResolveOptions struct {
 	MeshTokenInline string
 	// PeerListen optional.
 	PeerListenFlag string
+	// AllowInsecureHTTPFlag when "1"/"true" allows non-loopback http peer URLs (lab).
+	// Empty → env JENKINS_MCP_FLEET_ALLOW_INSECURE_HTTP; default false (HTTPS required).
+	AllowInsecureHTTPFlag string
 	// Getenv optional (default os.Getenv).
 	Getenv func(string) string
 	// ReadFile optional (default os.ReadFile).
@@ -91,7 +101,10 @@ func ResolveConfig(opts ResolveOptions) (Config, error) {
 	if err != nil {
 		return Config{}, apperr.Wrap(apperr.CodeNotFound, "read fleet roster", err)
 	}
-	roster, err := ParseRoster(raw)
+	allowInsecure := truthy(firstNonEmpty(opts.AllowInsecureHTTPFlag, getenv(EnvFleetAllowInsecureHTTP)))
+	roster, err := ParseRosterOpts(raw, RosterParseOptions{
+		PeerURL: PeerURLOptions{AllowInsecureHTTP: allowInsecure},
+	})
 	if err != nil {
 		return Config{}, err
 	}
@@ -117,15 +130,17 @@ func ResolveConfig(opts ResolveOptions) (Config, error) {
 	listen := strings.TrimSpace(firstNonEmpty(opts.PeerListenFlag, getenv(EnvFleetPeerListen)))
 
 	return Config{
-		Enabled:         true,
-		MemberID:        memberID,
-		Roster:          roster,
-		MeshToken:       token,
-		PeerListen:      listen,
-		PeerTimeout:     DefaultPeerTimeout,
-		Overall:         DefaultOverallTimeout,
-		MaxParallel:     DefaultMaxPeerParallel,
-		TrustConfigured: true,
+		Enabled:           true,
+		MemberID:          memberID,
+		Roster:            roster,
+		MeshToken:         token,
+		PeerListen:        listen,
+		PeerTimeout:       DefaultPeerTimeout,
+		Overall:           DefaultOverallTimeout,
+		MaxParallel:       DefaultMaxPeerParallel,
+		TrustConfigured:   true,
+		AllowInsecureHTTP: allowInsecure,
+		TrustResidual:     DefaultTrustResidual(),
 	}, nil
 }
 

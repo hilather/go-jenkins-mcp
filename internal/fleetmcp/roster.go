@@ -54,8 +54,19 @@ type MemberCache struct {
 	Protocols      []string `json:"protocols,omitempty"`
 }
 
-// LoadRosterFile reads and validates roster JSON from path.
+// RosterParseOptions controls fail-closed validation during parse/load.
+type RosterParseOptions struct {
+	// PeerURL transport rules (default: non-loopback requires https — FLC-016).
+	PeerURL PeerURLOptions
+}
+
+// LoadRosterFile reads and validates roster JSON from path (strict peer transport).
 func LoadRosterFile(path string) (*Roster, error) {
+	return LoadRosterFileOpts(path, RosterParseOptions{})
+}
+
+// LoadRosterFileOpts is LoadRosterFile with explicit parse options (lab may allow insecure HTTP).
+func LoadRosterFileOpts(path string, opts RosterParseOptions) (*Roster, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return nil, apperr.New(apperr.CodeInvalidArgument, "fleet roster path is empty")
@@ -64,11 +75,18 @@ func LoadRosterFile(path string) (*Roster, error) {
 	if err != nil {
 		return nil, apperr.Wrap(apperr.CodeNotFound, "read fleet roster", err)
 	}
-	return ParseRoster(raw)
+	return ParseRosterOpts(raw, opts)
 }
 
-// ParseRoster validates roster JSON bytes (no secrets expected).
+// ParseRoster validates roster JSON bytes with production peer URL rules
+// (non-loopback http rejected). For lab cleartext peers use ParseRosterOpts
+// with PeerURL.AllowInsecureHTTP=true.
 func ParseRoster(raw []byte) (*Roster, error) {
+	return ParseRosterOpts(raw, RosterParseOptions{})
+}
+
+// ParseRosterOpts validates roster JSON with the given options.
+func ParseRosterOpts(raw []byte, opts RosterParseOptions) (*Roster, error) {
 	if len(raw) == 0 {
 		return nil, apperr.New(apperr.CodeInvalidArgument, "fleet roster is empty")
 	}
@@ -76,14 +94,19 @@ func ParseRoster(raw []byte) (*Roster, error) {
 	if err := json.Unmarshal(raw, &r); err != nil {
 		return nil, apperr.New(apperr.CodeInvalidArgument, "invalid fleet roster JSON")
 	}
-	if err := ValidateRoster(&r); err != nil {
+	if err := ValidateRosterOpts(&r, opts); err != nil {
 		return nil, err
 	}
 	return &r, nil
 }
 
-// ValidateRoster enforces fail-closed membership rules.
+// ValidateRoster enforces fail-closed membership rules (strict peer transport).
 func ValidateRoster(r *Roster) error {
+	return ValidateRosterOpts(r, RosterParseOptions{})
+}
+
+// ValidateRosterOpts is ValidateRoster with explicit peer URL transport options.
+func ValidateRosterOpts(r *Roster, opts RosterParseOptions) error {
 	if r == nil {
 		return apperr.New(apperr.CodeInvalidArgument, "fleet roster is nil")
 	}
@@ -111,7 +134,7 @@ func ValidateRoster(r *Roster) error {
 			return apperr.New(apperr.CodeInvalidArgument, "duplicate roster member id")
 		}
 		seen[id] = struct{}{}
-		if err := validatePeerURL(m.PeerURL); err != nil {
+		if err := ValidatePeerURLTransport(m.PeerURL, opts.PeerURL); err != nil {
 			return err
 		}
 		m.PeerURL = strings.TrimSpace(m.PeerURL)
@@ -240,12 +263,6 @@ func memberHasProtocol(c *MemberCache, want string) bool {
 		}
 	}
 	return false
-}
-
-func validatePeerURL(raw string) error {
-	// Base roster validation allows http/https + rejects credentials.
-	// Stricter non-loopback HTTPS is ValidatePeerURLTransport (FLC-016).
-	return ValidatePeerURLTransport(raw, PeerURLOptions{AllowInsecureHTTP: true})
 }
 
 // MemberByID returns the member with id or nil.

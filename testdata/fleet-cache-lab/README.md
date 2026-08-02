@@ -53,6 +53,7 @@ make fleet-cache-lab-down    # down -v (destroys volumes + ephemeral mesh materi
 | Production mTLS / unique node identity | Mesh token lab only |
 | Real Jenkins origin in this compose | Optional later; offline unit path is the CI gate |
 | Stickiness | Intentionally **off** on LB so cold multi-member behavior is visible |
+| Cleartext peer URLs | Lab roster uses `http://member-*` docker DNS — set `JENKINS_MCP_FLEET_ALLOW_INSECURE_HTTP=1` (compose does). Production `ParseRoster` / `ResolveConfig` **reject** non-loopback http without that residual flag (FLC-016). |
 
 ## Tear-down
 

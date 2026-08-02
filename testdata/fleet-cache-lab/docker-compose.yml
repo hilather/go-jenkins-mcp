@@ -24,6 +24,8 @@ services:
       JENKINS_MCP_FLEET_MESH_TOKEN: lab-fleet-cache-mesh-token-not-for-production
       JENKINS_MCP_FLEET_PEER_LISTEN: 0.0.0.0:9443
       JENKINS_MCP_FLEET_CACHE_MODE: "off"
+      # Lab residual: roster uses http://member-* docker DNS (not production HTTPS).
+      JENKINS_MCP_FLEET_ALLOW_INSECURE_HTTP: "1"
     volumes:
       - fc-data-a:/var/lib/jenkins-mcp-data
       - fc-cfg-a:/var/lib/jenkins-mcp-config
@@ -47,6 +49,7 @@ services:
       JENKINS_MCP_FLEET_MESH_TOKEN: lab-fleet-cache-mesh-token-not-for-production
       JENKINS_MCP_FLEET_PEER_LISTEN: 0.0.0.0:9443
       JENKINS_MCP_FLEET_CACHE_MODE: "off"
+      JENKINS_MCP_FLEET_ALLOW_INSECURE_HTTP: "1"
     volumes:
       - fc-data-b:/var/lib/jenkins-mcp-data
       - ./roster.json:/etc/jenkins-mcp/roster.json:ro
@@ -67,6 +70,7 @@ services:
       JENKINS_MCP_FLEET_MESH_TOKEN: lab-fleet-cache-mesh-token-not-for-production
       JENKINS_MCP_FLEET_PEER_LISTEN: 0.0.0.0:9443
       JENKINS_MCP_FLEET_CACHE_MODE: "off"
+      JENKINS_MCP_FLEET_ALLOW_INSECURE_HTTP: "1"
     volumes:
       - fc-data-c:/var/lib/jenkins-mcp-data
       - ./roster.json:/etc/jenkins-mcp/roster.json:ro

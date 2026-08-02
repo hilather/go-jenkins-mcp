@@ -5808,7 +5808,7 @@
         "Trust rollout runbook",
         "Security review record"
       ],
-      "status_note": "Done* (2026-08-02) — ValidatePeerURLTransport HTTPS non-loopback; DefaultTrustResidual mesh pilot; unique node mTLS not Done; peer-read still Planned",
+      "status_note": "Done* (2026-08-02) — ParseRoster/ResolveConfig fail closed on non-loopback http; lab residual JENKINS_MCP_FLEET_ALLOW_INSECURE_HTTP; mesh pilot residual; mTLS unique node identity not Done; peer-read still Planned",
       "source_line": 0,
       "dependency_depth": 3,
       "dependents": [

@@ -50,6 +50,7 @@ func TestParseRoster_Reject(t *testing.T) {
 		{"dup id", `{"schema_version":1,"fleet_id":"x","members":[{"id":"a","peer_url":"https://a"},{"id":"a","peer_url":"https://b"}]}`},
 		{"cred url", `{"schema_version":1,"fleet_id":"x","members":[{"id":"a","peer_url":"https://u:p@h/"}]}`},
 		{"bad scheme", `{"schema_version":1,"fleet_id":"x","members":[{"id":"a","peer_url":"ftp://h"}]}`},
+		{"non-loopback http", `{"schema_version":1,"fleet_id":"x","members":[{"id":"a","peer_url":"http://edge.example.com:9443"}]}`},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -211,12 +212,19 @@ func TestLoadRosterFile(t *testing.T) {
 }
 
 // TestLabRosterFile loads the shipped FLC-003 lab roster (real fixture path).
+// Lab uses docker DNS hostnames over http — requires AllowInsecureHTTP residual.
 func TestLabRosterFile(t *testing.T) {
 	t.Parallel()
 	// CWD is package dir under go test; walk up to module root.
 	root := findModuleRoot(t)
 	path := filepath.Join(root, "testdata", "fleet-cache-lab", "roster.json")
-	r, err := fleetmcp.LoadRosterFile(path)
+	// Strict load must fail (non-loopback http://member-*).
+	if _, err := fleetmcp.LoadRosterFile(path); err == nil {
+		t.Fatal("expected strict load to reject lab cleartext hostnames")
+	}
+	r, err := fleetmcp.LoadRosterFileOpts(path, fleetmcp.RosterParseOptions{
+		PeerURL: fleetmcp.PeerURLOptions{AllowInsecureHTTP: true},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
