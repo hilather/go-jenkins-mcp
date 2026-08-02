@@ -113,13 +113,14 @@ Register (`AllowMutationsOptIn` false).
 
 ## Per-user and per-group bindings (POL-006)
 
-**Status:** **Done\*** (policy language + evaluator). Admin SPA/BFF CRUD and SAML
-group source remain residual (**UI-011**, **POL-007**).
+**Status:** **Done\*** (policy language + evaluator). Admin SPA/BFF binding CRUD
+residual (**UI-011**). **SAML group source** is **POL-007 Done\*** offline
+(`internal/saml` maps assertion groups → `Subject.Groups`); live IdP pin residual.
 
 Operator-defined **named permission sets per user and per group** attach to the
 same overlay document as global denials. Matching is against verified
 `policy.Subject` only (Jenkins user, optional external subject, IdP groups from
-gateway/JWT bind) — **never** MCP tool arguments.
+gateway/JWT/**SAML** bind) — **never** MCP tool arguments.
 
 ### Schema (`subjects` on overlay)
 

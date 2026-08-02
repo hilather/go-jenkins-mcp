@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -127,6 +129,102 @@ func TestAdminSAML_ACS_RoleMap_AndCanary(t *testing.T) {
 			t.Fatalf("audit leaked assertion material: %s", blob)
 		}
 	}
+}
+
+// Regression: production admin-serve path must emit login_success to profile
+// audit File when SAMLOptions.Audit is nil (LoadSAMLOptionsFromEnviron).
+func TestAdminSAML_ACS_EmitsDurableAuditWhenSinkNil(t *testing.T) {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Isolate XDG so ProfileAuditPath writes under temp.
+	tmp := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", tmp)
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+
+	// Seed a minimal profile so loadProfile + data dir resolve.
+	// Use default profile store under XDG.
+	profDir := filepath.Join(tmp, "jenkins-mcp", "profiles")
+	if err := os.MkdirAll(profDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// profiles are typically in config; ProfileDataDir uses data home.
+	// emit opens via ProfileAuditPath → data/profiles/<id>/audit
+	dataRoot := filepath.Join(tmp, "jenkins-mcp", "profiles", "corp")
+	if err := os.MkdirAll(dataRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := admin.Config{
+		Addr:      admin.DefaultAddr,
+		Role:      admin.RoleViewer,
+		ProfileID: "corp",
+		// No injected Audit — must open file sink (production path).
+		SAML: admin.SAMLOptions{
+			Config: saml.Config{
+				SchemaVersion: 1,
+				Enabled:       true,
+				SPEntityID:    "https://mcp.example/sp",
+				ACSURL:        "https://mcp.example/admin/v1/saml/acs",
+				IdPEntityID:   "https://idp.example/metadata",
+				AttributeMap:  saml.AttributeMap{GroupsAttribute: "groups"},
+				GroupRoles:    map[string]string{"mcp-operators": "operator"},
+			},
+			Trust: saml.TrustMaterial{PublicKey: &priv.PublicKey},
+			Now:   func() time.Time { return time.Now().UTC() },
+		},
+	}
+	h, err := admin.NewHandler(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := buildAdminSAMLAssertion(t, priv, "mcp-operators")
+	form := url.Values{}
+	form.Set("SAMLResponse", base64.StdEncoding.EncodeToString(raw))
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/admin/v1/saml/acs", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("acs: %d %s", rr.Code, rr.Body.String())
+	}
+
+	// Read durable audit.jsonl under profile data
+	auditPath := filepath.Join(dataRoot, "audit", "audit.jsonl")
+	// ProfileAuditPath may use XDG layout — discover audit.jsonl under tmp
+	var found []string
+	_ = filepath.Walk(tmp, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() {
+			return nil
+		}
+		if filepath.Base(path) == "audit.jsonl" {
+			found = append(found, path)
+		}
+		return nil
+	})
+	if len(found) == 0 {
+		t.Fatalf("expected audit.jsonl under XDG after ACS (tmp=%s)", tmp)
+	}
+	b, err := os.ReadFile(found[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(b)
+	if !strings.Contains(body, `"type":"login_success"`) && !strings.Contains(body, `"type": "login_success"`) {
+		// JSON may compact without space
+		if !strings.Contains(body, "login_success") {
+			t.Fatalf("audit missing login_success: %s path=%s", body, found[0])
+		}
+	}
+	if !strings.Contains(body, "saml_acs") {
+		t.Fatalf("audit missing reason saml_acs: %s", body)
+	}
+	// Canary: no assertion XML
+	if strings.Contains(body, "<Assertion") {
+		t.Fatal("audit file leaked assertion XML")
+	}
+	_ = auditPath
 }
 
 func TestAdminSAML_RequireBlocksWithoutSession(t *testing.T) {

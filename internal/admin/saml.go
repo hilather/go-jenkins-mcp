@@ -8,10 +8,12 @@ import (
 	"encoding/base64"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/simonfxr/go-jenkins-mcp/internal/apperr"
 	"github.com/simonfxr/go-jenkins-mcp/internal/audit"
 	"github.com/simonfxr/go-jenkins-mcp/internal/saml"
 )
@@ -220,14 +222,31 @@ func (rt *samlRuntime) lookupSession(sid string) (samlSession, bool) {
 }
 
 func (s *server) emitSAMLAudit(typ, reason, subjectRedacted string) {
-	if s == nil || s.saml == nil || s.saml.opts.Audit == nil {
+	if s == nil {
 		return
 	}
+	// Prefer injected sink (tests). Production serve path opens the profile
+	// audit File under <data>/audit/ — same as emitPolicyAudit / emitOpsAudit.
+	// LoadSAMLOptionsFromEnviron does not set Audit; silent nil was a bug.
+	sink := audit.Sink(nil)
+	if s.saml != nil {
+		sink = s.saml.opts.Audit
+	}
+	closeSink := func() {}
+	if sink == nil {
+		var err error
+		sink, closeSink, err = s.openProfileAuditSink()
+		if err != nil || sink == nil {
+			return
+		}
+	}
+	defer closeSink()
+
 	ev := audit.Event{
 		Type:          typ,
 		Decision:      audit.DecisionFail,
 		ReasonCode:    reason,
-		ProfileID:     s.cfg.ProfileID,
+		ProfileID:     strings.TrimSpace(s.cfg.ProfileID),
 		Action:        "saml_admin",
 		SchemaVersion: 1,
 	}
@@ -238,7 +257,41 @@ func (s *server) emitSAMLAudit(typ, reason, subjectRedacted string) {
 		ev.ExternalSubject = subjectRedacted
 		ev.SubjectKeyHash = audit.HashOpaque(subjectRedacted)
 	}
-	_ = audit.Emit(context.Background(), s.saml.opts.Audit, ev)
+	_ = audit.Emit(context.Background(), sink, ev)
+}
+
+// openProfileAuditSink opens a File sink under the configured profile data dir
+// (AUD-001). Best-effort; returns nil when no profile/data root is available.
+func (s *server) openProfileAuditSink() (audit.Sink, func(), error) {
+	if s == nil {
+		return nil, func() {}, apperr.New(apperr.CodeInvalidArgument, "nil server")
+	}
+	profileID := strings.TrimSpace(s.cfg.ProfileID)
+	if profileID == "" {
+		return nil, func() {}, nil
+	}
+	if err := ValidateProfileID(profileID); err != nil {
+		return nil, func() {}, err
+	}
+	paths, err := s.resolvePaths()
+	if err != nil {
+		return nil, func() {}, err
+	}
+	var dataOverride string
+	if p, err := s.loadProfile(profileID); err == nil && p != nil {
+		dataOverride = strings.TrimSpace(p.DataDir)
+	}
+	auditPath, err := ProfileAuditPath(paths, profileID, dataOverride)
+	if err != nil {
+		return nil, func() {}, err
+	}
+	dir := filepath.Dir(auditPath)
+	// Ensure audit dir can be created when profile data root exists or is creatable.
+	sink, err := audit.NewFile(audit.FileConfig{Dir: dir})
+	if err != nil {
+		return nil, func() {}, err
+	}
+	return sink, func() { _ = sink.Close() }, nil
 }
 
 // EnvSAMLSessionKey is optional HMAC key material for session cookies.

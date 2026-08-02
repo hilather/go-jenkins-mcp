@@ -788,7 +788,7 @@ Build a matrix across identities, groups, profiles, nested jobs, cached data, to
 
 **Priority:** P0  
 **Dependencies:** POL-002, POL-003, POL-004  
-**Status:** **Done\*** (policy language + evaluator; 2026-08-01) — Admin SPA/BFF CRUD + `admin_rbac_*` MCP residual (**UI-011**); SAML group source residual (**POL-007**)
+**Status:** **Done\*** (policy language + evaluator; 2026-08-01) — Admin SPA/BFF CRUD + `admin_rbac_*` MCP residual (**UI-011**). SAML group source for bindings is **POL-007 Done\*** offline (`internal/saml` → `Subject.Groups`); live IdP pin residual.
 
 **Objective**
 
