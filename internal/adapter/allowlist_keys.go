@@ -1,7 +1,6 @@
 package adapter
 
 import (
-	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
@@ -227,11 +226,18 @@ func parseAllowlistTrustStoreJSON(raw []byte) (AllowlistTrustedKeySet, error) {
 // parseAllowlistPublicKeyBytes parses raw 32-byte or std/raw base64 Ed25519 public key.
 // Never returns private keys. Errors must not include key bytes.
 func parseAllowlistPublicKeyBytes(raw []byte) (ed25519.PublicKey, error) {
+	// Raw 32-byte key shapes first — do NOT TrimRight the key body.
+	// Random Ed25519 public keys may end with 0x0a/0x0d; treating those as
+	// optional trailing newlines would truncate the key (Regression: CI flake
+	// TestParseAllowlistPublicKey_RawWithTrailingNewline).
+	if pk, ok := rawEd25519PublicKey(raw); ok {
+		return pk, nil
+	}
 	s := strings.TrimSpace(string(raw))
 	if s == "" {
 		return nil, apperr.New(apperr.CodeInvalidArgument, "public key material is empty")
 	}
-	// Reject PEM / private markers without echoing material.
+	// Reject PEM / private markers without echoing material (text forms only).
 	upper := strings.ToUpper(s)
 	if strings.Contains(upper, "PRIVATE") {
 		return nil, apperr.New(apperr.CodeInvalidArgument,
@@ -240,13 +246,6 @@ func parseAllowlistPublicKeyBytes(raw []byte) (ed25519.PublicKey, error) {
 	if strings.Contains(s, "-----BEGIN") {
 		return nil, apperr.New(apperr.CodeInvalidArgument,
 			"PEM public keys are not accepted for adapter allowlist keys (use base64 raw 32-byte)")
-	}
-	// Raw 32-byte key (optionally with trailing \n / \r only — common for .pub files).
-	rawTrim := bytes.TrimRight(raw, "\r\n")
-	if len(rawTrim) == ed25519.PublicKeySize {
-		pk := make(ed25519.PublicKey, ed25519.PublicKeySize)
-		copy(pk, rawTrim)
-		return pk, nil
 	}
 	// Base64 (std or raw), strip internal whitespace.
 	s = strings.Map(func(r rune) rune {
@@ -270,6 +269,26 @@ func parseAllowlistPublicKeyBytes(raw []byte) (ed25519.PublicKey, error) {
 	return ed25519.PublicKey(dec), nil
 }
 
+// rawEd25519PublicKey returns a copy of a raw 32-byte public key when raw is
+// exactly 32 bytes, or 32 bytes plus a single trailing \n / \r / \r\n.
+// Key body bytes are never stripped — only the optional single trailing line ending.
+func rawEd25519PublicKey(raw []byte) (ed25519.PublicKey, bool) {
+	n := len(raw)
+	switch {
+	case n == ed25519.PublicKeySize:
+		// exact
+	case n == ed25519.PublicKeySize+1 && (raw[n-1] == '\n' || raw[n-1] == '\r'):
+		raw = raw[:ed25519.PublicKeySize]
+	case n == ed25519.PublicKeySize+2 && raw[n-2] == '\r' && raw[n-1] == '\n':
+		raw = raw[:ed25519.PublicKeySize]
+	default:
+		return nil, false
+	}
+	pk := make(ed25519.PublicKey, ed25519.PublicKeySize)
+	copy(pk, raw)
+	return pk, true
+}
+
 func allowlistKeyIDFromFilename(name string) string {
 	base := filepath.Base(name)
 	for _, ext := range []string{".pub", ".pem", ".json", ".key"} {
@@ -282,6 +301,12 @@ func allowlistKeyIDFromFilename(name string) string {
 }
 
 func looksLikeJSONObject(raw []byte) bool {
+	// Prefer raw 32-byte Ed25519 public keys when the on-disk shape matches.
+	// Random keys can begin with '{' (0x7b); treating those as JSON fails closed
+	// spuriously (Regression: TestParseAllowlistPublicKey_RawWithTrailingNewline).
+	if _, ok := rawEd25519PublicKey(raw); ok {
+		return false
+	}
 	s := strings.TrimSpace(string(raw))
 	return strings.HasPrefix(s, "{")
 }
