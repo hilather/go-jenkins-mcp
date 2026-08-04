@@ -126,15 +126,45 @@ required checks. Optional jobs surface signal without blocking the merge path.
 Cursor product binary / host stdio lifecycle CI remains residual even when
 `stdio-smoke` is green (offline host-lifecycle matrix is Done*).
 
-Local equivalents:
+### Reproduce required CI locally (canonical)
+
+Use Go **1.25.x** (see `go.mod`). Put the official toolchain on `PATH` if needed
+(`export PATH="$HOME/.local/go/bin:$PATH"`). Required merge-gate jobs map to:
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"
-make ci                  # lint + test + build (fast local gate)
-make package-smoke       # optional PKG-001 offline package checks
-make fuzz-smoke               # optional QA-001 short fuzz (CI uses 500x)
-make stdio-smoke         # optional FND-006 offline binary host-lifecycle MCP smoke (CI optional job)
+export JENKINS_MCP_AUTH=""   # never inject real Jenkins credentials into unit CI
+
+make fmt                 # rewrite sources; CI "Format check" fails without gofmt
+make lint                # gofmt -l check + go vet ./...
+go test -count=1 -timeout=20m ./...
+# Ubuntu matrix cell also runs:
+# go test -count=1 -race -timeout=30m ./...
+make build
+make package
+make vuln                # govulncheck ./...  (required job "govulncheck")
+
+# Fast combined gate (lint + test + build; not package/vuln):
+make ci
 ```
+
+Optional (non-required, `continue-on-error` on GitHub):
+
+```bash
+make package-smoke       # PKG-001 offline package checks
+make fuzz-smoke          # QA-001 short fuzz (CI uses FUZZTIME=500x)
+make stdio-smoke         # FND-006 offline MCP binary host-lifecycle
+```
+
+**Free disposable labs** (opt-in; not required for product qualification):
+`make live-jenkins-test`, `make live-oauth-test`, `make live-jwt-rs-test`,
+`make live-saml-test`, `make fleet-cache-lab-smoke`. Customer production Entra,
+AgentCore, or corporate Jenkins is **optional operator validation**, not a merge
+or release gate.
+
+Rocky Linux 9 is exercised only in the GitHub Actions container matrix cell
+(`rockylinux:9` in `.github/workflows/ci.yml`); local Ubuntu/host runs cover the
+same offline unit/contract path.
 
 ## Branch protection
 

@@ -44,6 +44,8 @@ var requiredPackages = []string{
 	"internal/admin",
 	"internal/adminops",
 	"internal/fleetmcp",
+	// FLC: fleet peer-cache (opt-in sealed-log peer reuse).
+	"internal/fleetcache",
 }
 
 func moduleRoot(t *testing.T) string {
@@ -242,11 +244,13 @@ func TestDependencyDirection(t *testing.T) {
 		// POL-001/002: RO gate + overlay + subjects.
 		"internal/policy": {"internal/apperr", "internal/config", "internal/contracts", "internal/jenkins"},
 		// LOG-002: progressive state machine may use jenkins + store metadata.
-		"internal/logmirror": {"internal/store", "internal/jenkins", "internal/apperr", "internal/archive"},
+		// FLC: optional peer fill/publish hooks (fleetcache is leaf w.r.t. logmirror).
+		"internal/logmirror": {"internal/store", "internal/jenkins", "internal/apperr", "internal/archive", "internal/fleetcache"},
 		// STO-001/002: secure dirs + SQLite metadata; no tools/mcp.
 		// ARC-009: optional AEAD lives in store/crypto (stdlib only + apperr).
 		// ARC-009: AEAD pure crypto; key load/wiring is cmd (not store→keyring).
-		"internal/store":        {"internal/apperr", "internal/store/crypto"},
+		// FLC: sealed manifest / peer metadata helpers (fleetcache must not import store).
+		"internal/store":        {"internal/apperr", "internal/store/crypto", "internal/fleetcache"},
 		"internal/store/crypto": {"internal/apperr"},
 		"internal/archive":      {"internal/apperr"},
 		"internal/search":       {"internal/store", "internal/apperr"},
@@ -291,7 +295,8 @@ func TestDependencyDirection(t *testing.T) {
 			"internal/apperr", "internal/audit", "internal/auth", "internal/config",
 			"internal/diagnostics", "internal/keyring", "internal/policy",
 			"internal/gateway", "internal/profile", "internal/store", "internal/telemetry",
-			"internal/saml", // POL-007 admin SSO SP
+			"internal/saml",       // POL-007 admin SSO SP
+			"internal/fleetcache", // FLC admin status / residual surface
 		},
 		// POL-007: SAML SP pure validation + attribute/role maps (stdlib crypto/xml).
 		"internal/saml": {
@@ -302,10 +307,18 @@ func TestDependencyDirection(t *testing.T) {
 			"internal/admin", "internal/apperr", "internal/audit", "internal/config",
 			"internal/diagnostics", "internal/gateway", "internal/policy",
 			"internal/profile", "internal/store", "internal/telemetry",
+			"internal/fleetcache", // FLC operator ops surface
 		},
 		// Fleet MCP: roster + peer fan-out for fleet_* tools (not multi-pod HA).
+		// FLC: peer-cache lookup/read tools call fleetcache + logmirror fill path.
 		"internal/fleetmcp": {
 			"internal/apperr", "internal/diagnostics", "internal/store", "internal/telemetry",
+			"internal/fleetcache", "internal/logmirror",
+		},
+		// FLC: fleet peer-cache protocol/placement (leaf: apperr + contracts + redact only).
+		// Must not import store/logmirror/admin (callers depend on fleetcache, not the reverse).
+		"internal/fleetcache": {
+			"internal/apperr", "internal/contracts", "internal/redact",
 		},
 		// UI-008: embed-only SPA assets; stdlib only (no other internal imports).
 		"internal/admin/uiembed": {},
