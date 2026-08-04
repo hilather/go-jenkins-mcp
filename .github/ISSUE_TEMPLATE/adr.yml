@@ -1,0 +1,33 @@
+name: Architecture decision (ADR)
+description: Propose or record an irreversible or cross-cutting design choice.
+title: "adr: "
+labels: ["architecture"]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: consequences
+    attributes:
+      label: Consequences
+    validations:
+      required: true
+  - type: input
+    id: adr_path
+    attributes:
+      label: Target ADR path
+      description: e.g. docs/adr/00xx-short-name.md
+      placeholder: docs/adr/00xx-short-name.md

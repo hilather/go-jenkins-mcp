@@ -35,7 +35,7 @@ Default `make test` / `make ci` stay **offline** (no Docker requirement).
 
 ## 3. What product Tier A free-lab GO requires
 
-- [x] Offline HOST-001…011 / GWY / OAUTH foundations as already Done\* in the critical path  
+- [x] Offline HOST-001…011 / GWY / OAUTH foundations as already implemented in the critical path  
 - [x] Free Mode A lab path available  
 - [x] Free Mode B/C mock oauth-lab path available  
 - [x] residual-smoke never claims production live qualified  
@@ -43,7 +43,7 @@ Default `make test` / `make ci` stay **offline** (no Docker requirement).
 
 Optional free extensions (nice-to-have, not product blockers):
 
-- Keycloak **OIDC** + disposable Jenkins + real `jwt-auth-filter` — **Done\*** free lab (`make live-jwt-rs-*`, `testdata/jwt-rs-lab/`)  
+- Keycloak **OIDC** + disposable Jenkins + real `jwt-auth-filter` — **implemented free lab (`make live-jwt-rs-*`, `testdata/jwt-rs-lab/`)  
 - Free-tier Entra **only** when an operator chooses Microsoft-shaped evidence  
 
 ---
@@ -67,8 +67,8 @@ Until they attach evidence, doctor/residual-status correctly report `mode_*_live
 
 | Prefer | Avoid |
 |--------|--------|
-| “Tier A free-lab / offline Done\*” | “Blocked until live Entra” (for product backlog) |
-| “Production pin residual (operator-owned)” | “OAUTH-009 incomplete” when free-lab + offline already Done\* |
+| “Tier A free-lab / offline implemented” | “Blocked until live Entra” (for product backlog) |
+| “Production pin residual (operator-owned)” | “OAUTH-009 incomplete” when free-lab + offline already implemented |
 | Keep free Docker labs current | Invent parallel paid-lab-only gates as product DoD |
 | residual-smoke honesty | Flipping live-qualified flags offline |
 

@@ -65,7 +65,7 @@ The product speaks Model Context Protocol to Cursor and optional gateways. Using
 - Builds are reproducible via `go.mod` / `go.sum`.  
 - Protocol support matrix is explicit for support docs and Cursor compatibility notes.  
 - HTTP mode still needs product hardening (KD-008 / MCP-001); SDK pin does not equal production HTTP safety.  
-- Residual: official SDK conformance suite is not re-executed inside this repo’s CI; offline protocol matrix covers Initialize/ListTools/CallTool/cancel/HTTP loopback; Wave 25 + Wave 33 add opt-in **binary** stdio host-lifecycle smoke (**Done***). **Cursor product binary / host stdio CI remains open** (see `docs/packaging.md`, `docs/phase2-progress.md`).
+- Residual: official SDK conformance suite is not re-executed inside this repo’s CI; offline protocol matrix covers Initialize/ListTools/CallTool/cancel/HTTP loopback; Wave 25 + Wave 33 add opt-in **binary** stdio host-lifecycle smoke (**implemented). **Cursor product binary / host stdio CI remains open** (see `docs/packaging.md`, `docs/archive/phase2-progress.md`).
 
 ## Module reference
 

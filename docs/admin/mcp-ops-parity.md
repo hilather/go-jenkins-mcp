@@ -2,7 +2,7 @@
 
 **Audience:** implementers, agents, security  
 **Related:** [api-v1.md](api-v1.md), [ADR 0014](../adr/0014-admin-console-reactive-spa.md), [AGENTS.md](../../AGENTS.md)  
-**Status:** **Done\* foundation (MCP-OPS-001…008)** — `admin_*` tools via
+**Status:** **implemented foundation (MCP-OPS-001…008)** — `admin_*` tools via
 `--enable-admin-mcp` (default **off**); shared library `internal/adminops`;
 process role `viewer|operator|policy_admin`. Local admin BFF/SPA remains
 first-class for browser operators. POL-006/007 RBAC user/group + SAML tools
@@ -55,7 +55,7 @@ Console RBAC: `viewer` / `operator` / `policy_admin` (never widens enterprise `f
 | Mutations (start/stop/…) | allow-mutations | Jenkins writes, not admin BFF |
 | External logs / adapters | enable-adapter | Not admin SPA |
 
-**Done\* lite:** With `--enable-admin-mcp`, agents get `admin_*` tools covering
+**implemented lite:** With `--enable-admin-mcp`, agents get `admin_*` tools covering
 health/version/me, residual-status, profiles, policy effective/overlay/validate/apply
 (apply durable residual when signed bundles), metrics, audit list/settings, doctor,
 security self-check, cache status/plan/evict, support-bundle, vault status,
@@ -82,8 +82,8 @@ Authz: process **admin role** (same as console) or stricter serve-time gate; des
 | Effective policy | `admin_policy_effective` | P0 | Mirror show-effective |
 | Policy overlay get | `admin_policy_overlay_get` | P1 | |
 | Policy validate/apply | `admin_policy_validate`, `admin_policy_apply` | P1 | policy_admin + confirm on apply |
-| User/group RBAC bindings (POL-006) | `admin_rbac_list_bindings`, `admin_rbac_put_binding`, `admin_rbac_delete_binding` | P1 | **Done\*** pilot (UI-011); multi-fleet SoT remains signed config |
-| SAML SP / attribute map (POL-007) | `admin_saml_status` residual; BFF `GET /admin/v1/saml/status` **Done\*** | P2 | SP validate/map Done\* offline; **admin_saml_*** MCP tools residual; live IdP residual |
+| User/group RBAC bindings (POL-006) | `admin_rbac_list_bindings`, `admin_rbac_put_binding`, `admin_rbac_delete_binding` | P1 | **implemented pilot (UI-011); multi-fleet SoT remains signed config |
+| SAML SP / attribute map (POL-007) | `admin_saml_status` residual; BFF `GET /admin/v1/saml/status` **implemented | P2 | SP validate/map implemented offline; **admin_saml_*** MCP tools residual; live IdP residual |
 | Metrics snapshot | `admin_metrics` | P0 | Counters/gauges only; residual note |
 | Audit list | `admin_audit_list` | P0 | limit/before/type/external_subject caps |
 | Audit type settings | `admin_audit_settings_get`, `admin_audit_settings_put` | P1 | Mirror GET/PUT `…/audit/settings`; gateway_ops on put; catalog from KnownEventTypes |
@@ -91,8 +91,8 @@ Authz: process **admin role** (same as console) or stricter serve-time gate; des
 | Security self-check | `admin_security_selfcheck` | P1 | Offline default |
 | Cache status | `admin_cache_status` | P0 | |
 | Cache evict-plan / evict | `admin_cache_evict_plan`, `admin_cache_evict` | P1 | confirm `EVICT` |
-| Fleet-cache status / doctor | `admin_fleet_cache_status`, `admin_fleet_cache_doctor` | P1 | **Done\*** FLC-063; process-local; mode default off; SPA residual |
-| Fleet-cache purge | `admin_fleet_cache_purge` | P1 | **Done\*** FLC-063; confirm `PURGE`; operator; no HTTP peer fan-out |
+| Fleet-cache status / doctor | `admin_fleet_cache_status`, `admin_fleet_cache_doctor` | P1 | **implemented FLC-063; process-local; mode default off; SPA residual |
+| Fleet-cache purge | `admin_fleet_cache_purge` | P1 | **implemented FLC-063; confirm `PURGE`; operator; no HTTP peer fan-out |
 | Support bundle | `admin_support_bundle` | P1 | preview/create; secret-free |
 | Vault inventory (Mode A) | `admin_gateway_vault_status` | P1 | No tokens; same as BFF vault GET |
 | Subject invalidate | `admin_subject_invalidate` | P1 | gateway_ops + confirm |
@@ -107,14 +107,14 @@ Authz: process **admin role** (same as console) or stricter serve-time gate; des
 
 | ID | Task | Size | Acceptance | Status |
 |----|------|------|------------|--------|
-| **MCP-OPS-001** | Design: `admin_*` tool schemas, RegisterOptions flag, role gate | M | This doc + `internal/adminops` | **Done\*** |
-| **MCP-OPS-002** | Read tools: health, version, me, residual-status, profiles, policy effective, metrics, audit list, doctor, cache status | L | Unit + MCP list/call; secret canaries | **Done\*** |
-| **MCP-OPS-003** | Write tools: policy validate/apply, cache plan/evict, support-bundle, subject-invalidate, consent-purge, audit settings | L | Confirm tokens; RBAC fail-closed; AUD-001 | **Done\*** (policy apply durable residual) |
-| **MCP-OPS-004** | Wire serve: `--enable-admin-mcp` / `--admin-role`; default off | S | usage + log line | **Done\*** |
-| **MCP-OPS-005** | Admin SPA residual note | S | docs + Overview residual | **Done\*** docs |
-| **MCP-OPS-006** | Parity catalog + residual map | M | `adminops.ToolCatalog` + tests | **Done\*** |
-| **MCP-OPS-007** | Agent usage guide | S | docs/agent-usage | **Done\*** (this section + agent-usage note) |
-| **MCP-OPS-008** | Audit on admin_* writes | S | emitWriteAudit | **Done\*** |
+| **MCP-OPS-001** | Design: `admin_*` tool schemas, RegisterOptions flag, role gate | M | This doc + `internal/adminops` | **implemented |
+| **MCP-OPS-002** | Read tools: health, version, me, residual-status, profiles, policy effective, metrics, audit list, doctor, cache status | L | Unit + MCP list/call; secret canaries | **implemented |
+| **MCP-OPS-003** | Write tools: policy validate/apply, cache plan/evict, support-bundle, subject-invalidate, consent-purge, audit settings | L | Confirm tokens; RBAC fail-closed; AUD-001 | **implemented (policy apply durable residual) |
+| **MCP-OPS-004** | Wire serve: `--enable-admin-mcp` / `--admin-role`; default off | S | usage + log line | **implemented |
+| **MCP-OPS-005** | Admin SPA residual note | S | docs + Overview residual | **implemented docs |
+| **MCP-OPS-006** | Parity catalog + residual map | M | `adminops.ToolCatalog` + tests | **implemented |
+| **MCP-OPS-007** | Agent usage guide | S | docs/agent-usage | **implemented (this section + agent-usage note) |
+| **MCP-OPS-008** | Audit on admin_* writes | S | emitWriteAudit | **implemented |
 
 ---
 

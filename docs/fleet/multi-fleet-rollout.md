@@ -2,7 +2,7 @@
 
 **Status:** Product free-lab multi-fleet pack (2026-08-01)  
 **Audience:** platform operators, agents  
-**Related:** [policy-rbac.md](../policy-rbac.md) · [policy-bundles.md](../security/policy-bundles.md) · [free-lab-qualification.md](../gateway/free-lab-qualification.md) · fixtures `testdata/fleet-pack/` · **[fleet-mcp-ops.md](fleet-mcp-ops.md)** (opt-in `fleet_*` MCP + any-node fan-out — **Done\* vertical slice**; not multi-pod HA) · **[shared-cache-operator.md](shared-cache-operator.md)** (optional peer sealed-log canary — library Done\*, mode default **off**, FLC-073 offline gate Done\* / live multi-host residual; ADR [0016](../adr/0016-fleet-p2p-shared-cache.md))
+**Related:** [policy-rbac.md](../policy-rbac.md) · [policy-bundles.md](../security/policy-bundles.md) · [free-lab-qualification.md](../gateway/free-lab-qualification.md) · fixtures `testdata/fleet-pack/` · **[fleet-mcp-ops.md](fleet-mcp-ops.md)** (opt-in `fleet_*` MCP + any-node fan-out — **implemented vertical slice**; not multi-pod HA) · **[shared-cache-operator.md](shared-cache-operator.md)** (optional peer sealed-log canary — library implemented, mode default **off**, FLC-073 offline gate implemented / live multi-host residual; ADR [0016](../adr/0016-fleet-p2p-shared-cache.md))
 
 ---
 
@@ -68,8 +68,8 @@ Pilot break-glass: admin console **Access** page / `admin_rbac_*` tools edit **p
 | Live Entra / production SAML browser pin | Site IdP (free-lab policy separate) |
 | Multi-pod gateway HA | **Out of scope** (HOST-008 **cancelled**) — multi-fleet *is* the scale model; do not plan multi-replica shared vault/rate |
 | SPA as fleet SoT | **Never** — config/signed policy remains SoT |
-| Cross-member MCP aggregation (`fleet_*`) | **Done\* vertical slice** — [fleet-mcp-ops.md](fleet-mcp-ops.md); opt-in `--fleet-mode` + roster + mesh token; not default pilot; not multi-pod HA |
-| Cross-member **log cache** (FLC peer plane) | Library **Done\***; mode default **off** (plane A local until enabled). Optional owner-directed peer read of sealed completed console logs (MVP A). When `read`/`full`, matching fleet/pool/controller objects **may be shared** — **not** “always isolated.” Operator canary: [shared-cache-operator.md](shared-cache-operator.md). Offline gate **FLC-073 Done\***; **live multi-host production GO residual.** HOST-008 still cancelled. Absolute: [ADR 0016](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/adr/0016-fleet-p2p-shared-cache.md) |
+| Cross-member MCP aggregation (`fleet_*`) | **implemented vertical slice** — [fleet-mcp-ops.md](fleet-mcp-ops.md); opt-in `--fleet-mode` + roster + mesh token; not default pilot; not multi-pod HA |
+| Cross-member **log cache** (FLC peer plane) | Library **implemented; mode default **off** (plane A local until enabled). Optional owner-directed peer read of sealed completed console logs (MVP A). When `read`/`full`, matching fleet/pool/controller objects **may be shared** — **not** “always isolated.” Operator canary: [shared-cache-operator.md](shared-cache-operator.md). Offline gate **FLC-073 implemented; **live multi-host production GO residual.** HOST-008 still cancelled. Absolute: [ADR 0016](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/adr/0016-fleet-p2p-shared-cache.md) |
 
 Verify offline: `go test ./internal/policy/ -run 'Fleet|POL006|RequireSigned|LoadFromEnviron'`.  
 Example fixtures: `testdata/fleet-pack/`.

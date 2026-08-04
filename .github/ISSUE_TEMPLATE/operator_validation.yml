@@ -1,0 +1,35 @@
+name: Operator / production validation request
+description: Optional environment-specific validation (Entra, corporate certs, site Jenkins). Not a product release gate.
+title: "ops-validation: "
+labels: ["operator-validation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Product qualification uses free disposable labs. This issue tracks
+        **optional** validation in a customer or site environment.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Site, IdP, Jenkins version, network constraints (no secrets).
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Validation goal
+    validations:
+      required: true
+  - type: textarea
+    id: free_lab
+    attributes:
+      label: Related free-lab coverage already in repo
+      description: What product labs already cover the same behavior?
+  - type: checkboxes
+    id: not_blocker
+    attributes:
+      label: Acknowledgement
+      options:
+        - label: This is optional operator validation, not a product merge/release blocker
+          required: true

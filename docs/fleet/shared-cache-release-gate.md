@@ -1,6 +1,6 @@
 # Fleet peer-cache — offline production release gate (FLC-073)
 
-**Status:** **Done\*** offline gate pack (2026-08-02)  
+**Status:** **implemented offline gate pack (2026-08-02)  
 **Audience:** release owners, security, operators  
 **Not:** a claim of live multi-host production GO without site canary evidence  
 
@@ -34,7 +34,7 @@ go test -race -count=1 ./internal/fleetcache/ ./internal/store/ ./internal/admin
 # make lint && make test-race   # or make ci when offline-safe
 ```
 
-Opt-in lab (not required for offline Done\*): `make fleet-cache-lab-smoke` (see `testdata/fleet-cache-lab/`).
+Opt-in lab (not required for offline implemented): `make fleet-cache-lab-smoke` (see `testdata/fleet-cache-lab/`).
 
 ---
 
@@ -56,11 +56,11 @@ Operator walkthrough: [shared-cache-operator.md](shared-cache-operator.md) §10.
 |----------|-------|--------|
 | Live multi-host LB canary soak | Operations | Residual (offline dual-dir + lab smoke only) |
 | Production mTLS / peer identity | Security / Ops | Residual beyond FLC-016 lab HTTP allowlist |
-| Admin SPA fleet-cache page | Product | Residual (BFF+MCP Done\* FLC-063) |
+| Admin SPA fleet-cache page | Product | Residual (BFF+MCP implemented FLC-063) |
 | Signed multi-platform release artifacts | Release | Operator / REL-002 packaging residual when not produced in CI |
 | SIEM ship of fleet-cache audit | Security | Residual (AUD-001 local) |
 | HOST-008 multi-pod shared vault | Architecture | **Cancelled** |
-| Extra object classes beyond console_log | Product | Framework Done\* (FLC-082); new class = separate PR |
+| Extra object classes beyond console_log | Product | Framework implemented (FLC-082); new class = separate PR |
 
 ---
 

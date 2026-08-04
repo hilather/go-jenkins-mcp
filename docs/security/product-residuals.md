@@ -11,10 +11,10 @@ defect IDs (KD-*) are closed or rehomed here after the UPSTREAM-EXIT cut.
 | Log redaction | **Strong** | Sub-threshold hex FN / git-SHA FP / force-flush boundary; prefer `telemetry.Logger` |
 | Mutations always-on | **Fixed** | RO default; `--allow-mutations` opt-in only |
 | Package monolith | **Fixed** | `cmd/` + `internal/*` |
-| Jenkins HTTP resilience | **Done\*** offline | Live reverse-proxy path-prefix matrix residual |
+| Jenkins HTTP resilience | **implemented offline | Live reverse-proxy path-prefix matrix residual |
 | Streamable HTTP loopback | **Partial** | Shared secret optional on loopback by default (pilot); not multi-user auth; prefer stdio (ADR 0002) |
-| Live Entra / jwt-auth-filter / AgentCore | **Product free-lab Done\*** | Site production pin is **operator-owned residual** — not open product DoD. Free labs kept: `live-jenkins-*`, `live-oauth-*`, `live-saml-*`. Policy: [free-lab-qualification.md](../gateway/free-lab-qualification.md). Runbook: [live-pin-blockers.md](../gateway/live-pin-blockers.md). Doctor keeps `mode_*_live_*_qualified=false` until **that site** attaches evidence. |
-| Multi-pod gateway HA | **Cancelled / out of scope** | Same-host flock lite historical Done\*; multi-pod HA is **not** a product task — use **multi-fleet** (independent single-replica members + shared signed policy). See HOST-008 cancelled + [multi-fleet-rollout.md](../fleet/multi-fleet-rollout.md). |
+| Live Entra / jwt-auth-filter / AgentCore | **Product free-lab implemented | Site production pin is **operator-owned residual** — not open product DoD. Free labs kept: `live-jenkins-*`, `live-oauth-*`, `live-saml-*`. Policy: [free-lab-qualification.md](../gateway/free-lab-qualification.md). Runbook: [live-pin-blockers.md](../gateway/live-pin-blockers.md). Doctor keeps `mode_*_live_*_qualified=false` until **that site** attaches evidence. |
+| Multi-pod gateway HA | **Cancelled / out of scope** | Same-host flock lite historical implemented; multi-pod HA is **not** a product task — use **multi-fleet** (independent single-replica members + shared signed policy). See HOST-008 cancelled + [multi-fleet-rollout.md](../fleet/multi-fleet-rollout.md). |
 
 Archive of the former seed defect table (historical):
 [`docs/archive/KNOWN_DEFECTS.md`](../archive/KNOWN_DEFECTS.md).

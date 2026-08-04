@@ -77,7 +77,7 @@ Code constant: `auth.FallbackAuthMethodWhenOnlyOICAuth == MethodAPIToken`.
 
 **Live production residual checklist (Entra app reg + AgentCore pin):**
 [../gateway/live-pin-blockers.md](../gateway/live-pin-blockers.md) §3.
-**Do not claim live Entra Done** from the offline matrix below.
+**Do not claim live Entra implemented from the offline matrix below.
 
 | Item | Decision |
 |------|----------|
@@ -86,7 +86,7 @@ Code constant: `auth.FallbackAuthMethodWhenOnlyOICAuth == MethodAPIToken`.
 | Flows | User-delegated auth code, then OBO/exchange as needed |
 | Full Jenkins AS | Only after ADR 0011 go decision |
 
-### Offline Mode C prototype matrix (OAUTH-010 Done*)
+### Offline Mode C prototype matrix (OAUTH-010 implemented)
 
 **Do not claim live Entra Done.** Offline + mock lab only.
 
@@ -112,12 +112,12 @@ Code constant: `auth.FallbackAuthMethodWhenOnlyOICAuth == MethodAPIToken`.
 
 | Path | Status | Evidence |
 |------|--------|----------|
-| Gateway Obtain contract (`Live=false` fail-closed) | **Done*** foundation | `internal/gateway` unit tests; no shared SA |
-| Offline prototype matrix (auth_code + OBO + Live gates) | **Done*** offline | `oauth010_mode_c_offline_matrix` + `TestOAUTH010_*` |
-| Offline mock `TokenFetcher` / `HTTPTokenFetcher` + consent URL metadata | **Done*** offline | Mock AS / https-only tests (never live Entra) |
+| Gateway Obtain contract (`Live=false` fail-closed) | **implemented foundation | `internal/gateway` unit tests; no shared SA |
+| Offline prototype matrix (auth_code + OBO + Live gates) | **implemented offline | `oauth010_mode_c_offline_matrix` + `TestOAUTH010_*` |
+| Offline mock `TokenFetcher` / `HTTPTokenFetcher` + consent URL metadata | **implemented offline | Mock AS / https-only tests (never live Entra) |
 | Docker mock token peer (HOST-015) | **Scaffold** opt-in | `testdata/oauth-lab/` `mock-token`; `make live-oauth-*` |
 | Opt-in Mode C Obtain vs mock-token | **Residual lab** (not Entra) | `go test -tags=live_oauth ./internal/gateway/qualify/` — healthz skip; Live Obtain + `HTTPTokenFetcher` via TLS test shim; https pin rejects raw HTTP lab URL |
-| Live Entra 3LO + OBO + durable vault | **Residual** | OAUTH-010 / GWY-001 / GWY-003 production pin — **not Done** |
+| Live Entra 3LO + OBO + durable vault | **Residual** | OAUTH-010 / GWY-001 / GWY-003 production pin — **not implemented |
 | AgentCore production binary pin | **Residual** | GWY-003 / GWY-004 |
 
 ```bash
@@ -145,13 +145,13 @@ Cross-links: [gateway/README.md](../gateway/README.md), [gateway/qualification.m
 |-------|----------------|----------|
 | Role | RS only — validates externally issued JWTs | — |
 | Does **not** | Issue codes, host consent, or act as 3LO AS | — |
-| `invalid_bearer_fallthrough` | `Done*` offline classifier (`OfflineFallthroughFixtures` + simulated RS + OAuth-required Basic/anon deny fixtures); Wave 33 empty/HTML/Bearer WWW-Authenticate + OAUTH-009 Basic/anon expand | Must re-prove on real plugin — **not live Entra Done** |
+| `invalid_bearer_fallthrough` | `implemented` offline classifier (`OfflineFallthroughFixtures` + simulated RS + OAuth-required Basic/anon deny fixtures); Wave 33 empty/HTML/Bearer WWW-Authenticate + OAUTH-009 Basic/anon expand | Must re-prove on real plugin — **not live Entra implemented |
 | `incomplete_route_coverage` | **contract_tested** (`RequiredMCPRoutes`, inventory completeness, progressive OutsideAPIGlob) | Path includes in JCasC |
 | `multi_issuer` / `alg_none` | **contract_tested** (`ValidateAccessToken`) | RS must match |
 | `jwks_outage` | **contract_tested** (MCP fail-closed); **live residual** for Jenkins RS cache TTL | Fail-closed + cache TTL on controller |
 | RFC 9728 PRM | **parser + edge validation** (fixture only; no live fetch) | Publication path residual |
 | Doctor / self-check / probe | Matrix + classifier fixture count + `live_lab_still_required` (secret-free); optional online sample | Plugin version auto-detect residual |
-| Production go/no-go | **Not claimed offline** (classifier Done* only) | Security sign-off residual |
+| Production go/no-go | **Not claimed offline** (classifier implemented only) | Security sign-off residual |
 
 ### Tested versions / endpoints (living table)
 

@@ -154,6 +154,15 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 
+
+  docs-check:
+    name: docs-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Documentation checks
+        run: bash scripts/docs-check.sh
+
   # Wave 23 / FND-007 expand: PKG-001 offline package smoke (bare Ubuntu only).
   # Does not run in Rocky container (no dpkg tooling assumptions; keeps Rocky job lean).
   # Non-required merge check; continue-on-error so optional branch-protection config stays simple.

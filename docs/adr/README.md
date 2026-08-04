@@ -1,7 +1,7 @@
 # Architecture Decision Records (ADRs)
 
 **Task:** FND-006 (MCP SDK pin), FND-008 (decision capture)  
-**Source of truth for product decisions:** [`../jenkins-mcp-enterprise-architecture.md`](../jenkins-mcp-enterprise-architecture.md)  
+**Source of truth for product decisions:** [`../jenkins-mcp-enterprise-architecture.md`](../architecture/README.md)  
 **Owner of this index:** engineering  
 
 These ADRs freeze irreversible or hard-to-change choices before implementation hardens around them. They must stay consistent with the architecture Key Decisions and platform matrix. When code or config encodes a choice, link the applicable ADR in a comment or docs cross-reference.

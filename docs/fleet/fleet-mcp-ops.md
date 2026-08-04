@@ -1,6 +1,6 @@
 # Fleet MCP ops — design plan (aggregation without multi-pod HA)
 
-**Status:** **Done\* vertical slice** (2026-08-02) — `internal/fleetmcp` + `fleet_*` MCP tools; mesh-token peer auth; mTLS residual  
+**Status:** **implemented vertical slice** (2026-08-02) — `internal/fleetmcp` + `fleet_*` MCP tools; mesh-token peer auth; mTLS residual  
 **Audience:** product, security, implementers, operators  
 **Package:** `internal/fleetmcp` · tools: `internal/tools/fleet_ops.go` · serve flags `--fleet-mode` / roster / member-id / mesh token  
 **Related:** [multi-fleet-rollout.md](multi-fleet-rollout.md) · [admin/mcp-ops-parity.md](../admin/mcp-ops-parity.md) · [caching.md](../caching.md) · HOST-008 **cancelled** · ADR 0002 (stdio default) · ADR 0014 (admin ≠ MCP discovery)
@@ -45,7 +45,7 @@ This plan defines a **separate** tool family, gated on explicit **fleet mode**, 
 | Agent SAML login for fleet tools | Admin MCP remains process role; fleet peer auth is **mesh**, not browser SSO |
 | Unbounded full audit merge | AUD-T SIEM residual; optional later with hard caps |
 | Auto-discovery of peers via mDNS / Jenkins | Spoofable; roster only |
-| Shared / sharded **log body** cache across members | **Different epic (FLC / ADR 0016)** — library Done\*, mode default **off**, FLC-073 offline gate Done\* / live multi-host residual; this doc’s `fleet_*` fan-out must **not** carry progressive log payloads; see [shared-cache-operator.md](shared-cache-operator.md) · [shared-cache-architecture.md](shared-cache-architecture.md) |
+| Shared / sharded **log body** cache across members | **Different epic (FLC / ADR 0016)** — library implemented, mode default **off**, FLC-073 offline gate implemented / live multi-host residual; this doc’s `fleet_*` fan-out must **not** carry progressive log payloads; see [shared-cache-operator.md](shared-cache-operator.md) · [shared-cache-architecture.md](shared-cache-architecture.md) |
 
 ---
 
@@ -215,13 +215,13 @@ Register **only** in fleet mode. Suggest process role gate parallel to admin: `v
 
 | Tool | Behavior | Status |
 |------|----------|--------|
-| `fleet_list_members` | Roster + peer `/member` reachability | **Done\*** |
-| `fleet_health` | Fan-out health; per-member + summary counts | **Done\*** |
-| `fleet_metrics` | Fan-out metrics; per-member snapshots + allowlisted counter sums | **Done\*** |
-| `fleet_residual_status` | Fan-out residual maps; never claim live GO from union | **Done\*** |
-| `fleet_doctor` | Fan-out offline doctor summaries | **Done\*** |
-| `fleet_cache_status` | Fan-out quota usage lite | **Done\*** |
-| `fleet_version` | Fan-out version/commit matrix | **Done\*** |
+| `fleet_list_members` | Roster + peer `/member` reachability | **implemented |
+| `fleet_health` | Fan-out health; per-member + summary counts | **implemented |
+| `fleet_metrics` | Fan-out metrics; per-member snapshots + allowlisted counter sums | **implemented |
+| `fleet_residual_status` | Fan-out residual maps; never claim live GO from union | **implemented |
+| `fleet_doctor` | Fan-out offline doctor summaries | **implemented |
+| `fleet_cache_status` | Fan-out quota usage lite | **implemented |
+| `fleet_version` | Fan-out version/commit matrix | **implemented |
 
 ### 6.1 Common result envelope (sketch)
 

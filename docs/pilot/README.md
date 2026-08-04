@@ -21,7 +21,7 @@ provides:
 **Operator path:** [../admin/README.md](../admin/README.md)  
 **Optional Docker admin/support (no host package):** [`../../deploy/local/README.md`](../../deploy/local/README.md) · `make local-docker-up`  
 **Agent triage:** [../agent-usage.md](../agent-usage.md) · [../tool-contracts.md](../tool-contracts.md)  
-**Wave board:** [../phase2-progress.md](../phase2-progress.md) (Wave 20 DOC-001/002)
+**Wave board:** [../phase2-progress.md](../archive/phase2-progress.md) (Wave 20 DOC-001/002)
 
 ## Non-negotiable pilot constraints
 
@@ -282,6 +282,6 @@ item is optional under [checklist.md](checklist.md).
 - Packaging: [`../packaging.md`](../packaging.md)
 - Observability / doctor: [`../observability.md`](../observability.md)
 - Live Jenkins lab: [`../tst/README.md`](../tst/README.md)
-- Phase 2 board: [`../phase2-progress.md`](../phase2-progress.md)
+- Phase 2 board: [`../phase2-progress.md`](../archive/phase2-progress.md)
 - Docs index: [`../README.md`](../README.md)
-- Backlog REL-001 / DOC-001 / DOC-002: [`../jenkins-mcp-enterprise-agent-todo.md`](../jenkins-mcp-enterprise-agent-todo.md)
+- Backlog REL-001 / DOC-001 / DOC-002: [`../archive/jenkins-mcp-enterprise-agent-todo.md`](../archive/jenkins-mcp-enterprise-agent-todo.md)

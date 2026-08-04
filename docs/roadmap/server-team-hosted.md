@@ -3,7 +3,7 @@
 **Status:** Planning SoT for optional **team/server-hosted** Jenkins MCP  
 **Audience:** engineering leads, security, platform operators, implementation agents  
 **Not a claim of production readiness:** local Cursor stdio pilot remains the default product path (ADR 0002).  
-**Related SoT:** [architecture](../jenkins-mcp-enterprise-architecture.md) (§§1–2, §6.6, §19.7, Phase 4), [agent todo](../jenkins-mcp-enterprise-agent-todo.md) (GWY/MGR/OAUTH/REL/UI/**HOST**), [task index](../jenkins-mcp-enterprise-task-index.json), [gateway](../gateway/README.md), **[live pin blockers](../gateway/live-pin-blockers.md)** (OAUTH-009/010; HOST-008 multi-pod **cancelled**), [multi-fleet](../fleet/multi-fleet-rollout.md), [auth-architecture](../auth-architecture.md), ADRs 0002 / 0003 / 0004 / 0013 / 0014  
+**Related SoT:** [architecture](../architecture/README.md) (§§1–2, §6.6, §19.7, Phase 4), [agent todo](../archive/jenkins-mcp-enterprise-agent-todo.md) (GWY/MGR/OAUTH/REL/UI/**HOST**), [task index](../archive/jenkins-mcp-enterprise-task-index.json), [gateway](../gateway/README.md), **[live pin blockers](../gateway/live-pin-blockers.md)** (OAUTH-009/010; HOST-008 multi-pod **cancelled**), [multi-fleet](../fleet/multi-fleet-rollout.md), [auth-architecture](../auth-architecture.md), ADRs 0002 / 0003 / 0004 / 0013 / 0014  
 
 **Auth decision for Tier A (binding):** implement **all three** Jenkins credential paths as first-class, tested gateway modes — sites pick the default; engineering does **not** pick only one:
 
@@ -23,11 +23,11 @@ JWT on Jenkins (**mode B/C**) and “OAuth” (**Entra AS + obtain path**) are *
 
 | Area | State | Evidence |
 |------|-------|----------|
-| **Default transport** | **Done** — Cursor stdio per-user process | ADR 0002; `jenkins-mcp serve --stdio` |
-| **Personal API token + Secret Service** | **Done** (Tier-1) | ADR 0009; `internal/keyring`; auth path 2.1 |
-| **Global RO + deny-only MCP RBAC** | **Done** (local) | ADR 0004; `internal/policy`; tool AuthGate |
+| **Default transport** | **implemented — Cursor stdio per-user process | ADR 0002; `jenkins-mcp serve --stdio` |
+| **Personal API token + Secret Service** | **implemented (Tier-1) | ADR 0009; `internal/keyring`; auth path 2.1 |
+| **Global RO + deny-only MCP RBAC** | **implemented (local) | ADR 0004; `internal/policy`; tool AuthGate |
 | **Local OIDC PKCE → Jenkins-audience token** | **Partial** — offline claim validation, refresh, epoch, whoAmI re-verify landed; **live Entra / jwt-auth-filter lab residual** | OAUTH-001…008 foundations; OAUTH-003/004/006/007 lite; OAUTH-009 residual |
-| **Tool contracts, budgets, progressive logs, L2 multi-frame** | **Done*** (MVP) | Phase 0–2 waves; native Go L2 required path |
+| **Tool contracts, budgets, progressive logs, L2 multi-frame** | **implemented (MVP) | Phase 0–2 waves; native Go L2 required path |
 | **Signed policy bundles (Ed25519)** | **Partial / lite** — envelope verify + multi-sig lite + ForceOff overlay pin lite | MGR-001 lite; `docs/security/policy-bundles.md`; fleet `fleet_telemetry_force_off` |
 | **Fleet telemetry** | **Partial** — opt-in queue/export schema; overlay force-off pin lite; privacy pack | MGR-002 lite; `docs/security/fleet-telemetry.md` |
 | **Admin console** | **Partial (Phase 6 mid-flight)** — SPA + loopback BFF + RBAC roles + CSP/packaging | UI-000…UI-008; ADR 0014; multi-user residual |
@@ -51,9 +51,9 @@ JWT on Jenkins (**mode B/C**) and “OAuth” (**Entra AS + obtain path**) are *
 | Multi-user cache/audit isolation on one process | Docs recommend **one logical user per process** for MVP | True multi-tenant process isolation |
 | Admin for gateway operators | Loopback SPA + HOST-007 residual docs; secret-free `enabledModes` | Non-loopback mTLS/OIDC multi-operator sessions |
 
-**Bottom line:** **Product free-lab Tier A** (offline contracts + disposable Jenkins + oauth-lab mocks + deploy scaffold) is **Done\*** — see [free-lab-qualification.md](../gateway/free-lab-qualification.md). Local stdio + personal credentials remains the default pilot (ADR 0002). **Site production** multi-user gateway (real Entra, real jwt-auth-filter/proxy, multi-pod) is **operator-owned residual**, not an open product gate that blocks free-lab GO.
+**Bottom line:** **Product free-lab Tier A** (offline contracts + disposable Jenkins + oauth-lab mocks + deploy scaffold) is **implemented — see [free-lab-qualification.md](../gateway/free-lab-qualification.md). Local stdio + personal credentials remains the default pilot (ADR 0002). **Site production** multi-user gateway (real Entra, real jwt-auth-filter/proxy, multi-pod) is **operator-owned residual**, not an open product gate that blocks free-lab GO.
 
-**Operator production pin runbook:** [live-pin-blockers.md](../gateway/live-pin-blockers.md) (what a **site** still needs before **their** production Mode B/C / multi-pod claim). Residual-smoke keeps `mode_*_live_*_qualified=false` until that site attaches evidence. **Do not claim site Entra / multi-replica production Done** from free labs alone.
+**Operator production pin runbook:** [live-pin-blockers.md](../gateway/live-pin-blockers.md) (what a **site** still needs before **their** production Mode B/C / multi-pod claim). Residual-smoke keeps `mode_*_live_*_qualified=false` until that site attaches evidence. **Do not claim site Entra / multi-replica production implemented from free labs alone.
 
 **Tier A JWT/OAuth critical-path (product free-lab DoD met):** [server-tier-a-jwt-oauth-critical-path.md](server-tier-a-jwt-oauth-critical-path.md).
 
@@ -142,30 +142,30 @@ Tier B is **not** required to call the product “team hosted.” Prefer shippin
 
 ## 4. Capability gap matrix
 
-Legend: **Done** / **Partial** / **Not started** relative to Tier A needs.
+Legend: **implemented / **Partial** / **Not started** relative to Tier A needs.
 
 | Capability | Local today | Needed for Tier A | Task IDs (existing or NEW) | Priority | Notes |
 |------------|-------------|-------------------|----------------------------|----------|-------|
-| Transport (stdio default) | **Done** | Keep default; server mode optional | ADR 0002, MCP-001 | P0 | Do not flip product default |
+| Transport (stdio default) | **implemented | Keep default; server mode optional | ADR 0002, MCP-001 | P0 | Do not flip product default |
 | Streamable HTTP hardened multi-user | **Partial*** (RequireSubject + session fingerprint offline; HOST-002 matrix docs) | Live Entra/JWKS rotation, path-prefix pin, mTLS residual | GWY-004, MCP-001 residual, **HOST-001**, **HOST-002** | P0 | Mid-session subject swap fail-closed offline |
 
 | Authn (Entra/OIDC, gateway subject) | **Partial** (local OIDC; gateway env labels) | Live inbound claims → `policy.Subject` | OAUTH-001…003, GWY-002, OAUTH-010 | P0 | Env binding is foundation only |
-| Authz (deny-only + Jenkins AND) | **Done** local | Same contracts on gateway path | POL-*, GWY-002 | P0 | Tool args never set identity |
-| Token acquisition **mode A** API token vault | Local keyring **Done** | Per-user vault on gateway host; Obtain path | **HOST-009**, HOST-003 | P0 | Never shared SA |
+| Authz (deny-only + Jenkins AND) | **implemented local | Same contracts on gateway path | POL-*, GWY-002 | P0 | Tool args never set identity |
+| Token acquisition **mode A** API token vault | Local keyring **implemented | Per-user vault on gateway host; Obtain path | **HOST-009**, HOST-003 | P0 | Never shared SA |
 | Token acquisition **mode B** JWT RS bearer | OIDC offline **Partial**; RS live residual | Live jwt-auth-filter + claim matrix + bearer wire | **OAUTH-009**, OAUTH-003/005, **HOST-010** | P0 | JWT = Jenkins half |
 | Token acquisition **mode C** 3LO/OBO Obtain | Gateway Obtain **stub** | Live Entra 3LO + OBO + vault | **OAUTH-010**, **GWY-001**, HOST-003 | P0 | AS = Entra, not Jenkins |
 | Mode matrix / fail-closed switch | N/A | Config selects modes; no silent cross-mode fallthrough | **HOST-011**, GWY-003 | P0 | Qualify all three |
-| Session/subject binding | Local re-verify **Done***; HTTP `Mcp-Session-Id` fingerprint **Done*** offline (+ rebind expand: PathPrefix, groups, lab JWT Alice/Bob) | Continuous JWKS rotation; durable multi-replica session store; **live Entra** | AUTH-004, GWY-002, **HOST-001**, **HOST-003** | P0 | Mid-session subject/group swap → 401 offline; live Entra residual (not Done) |
+| Session/subject binding | Local re-verify **implemented; HTTP `Mcp-Session-Id` fingerprint **implemented offline (+ rebind expand: PathPrefix, groups, lab JWT Alice/Bob) | Continuous JWKS rotation; durable multi-replica session store; **live Entra** | AUTH-004, GWY-002, **HOST-001**, **HOST-003** | P0 | Mid-session subject/group swap → 401 offline; live Entra residual (not Done) |
 | Cache isolation by user/tenant/profile | Local XDG per OS user **Partial** | Namespace + ACL on multi-user host | GWY-004, STO-*, **HOST-004** | P0 | MVP: one process per subject OK |
-| Audit isolation + correlation | Local audit **Done*** | Per-subject + correlation ID across hops | AUD-001, GWY-004, OBS-* | P1 | No secrets in events |
+| Audit isolation + correlation | Local audit **implemented | Per-subject + correlation ID across hops | AUD-001, GWY-004, OBS-* | P1 | No secrets in events |
 | Network placement near Jenkins | N/A (local) | Deploy next to controller; measure bytes | GWY-004, PERF-* | P1 | Prove near-source benefit |
-| Packaging (container, non-root, health) | Scaffold envelope **Done*** | Signed image + live AgentCore | GWY-004, PKG-001, **HOST-005** | P1 | limits+probes; signing residual |
-| Rate limits / multi-tenant budgets | Process budgets **Done*** | Per-subject quotas + fan-out caps | MCP-001, GWY-004, **HOST-006** | P1 | Mutations multi-tenant residual |
-| Policy distribution (signed bundles) | **Partial** lite | Enforce on gateway host | MGR-001 | P1 | HSM / true multi-sig residual; ForceOff overlay pin Done* lite |
+| Packaging (container, non-root, health) | Scaffold envelope **implemented | Signed image + live AgentCore | GWY-004, PKG-001, **HOST-005** | P1 | limits+probes; signing residual |
+| Rate limits / multi-tenant budgets | Process budgets **implemented | Per-subject quotas + fan-out caps | MCP-001, GWY-004, **HOST-006** | P1 | Mutations multi-tenant residual |
+| Policy distribution (signed bundles) | **Partial** lite | Enforce on gateway host | MGR-001 | P1 | HSM / true multi-sig residual; ForceOff overlay pin implemented lite |
 | Observability / correlation | Metrics/doctor **Partial** | Jenkins↔gateway vs gateway↔client byte metrics | OBS-*, GWY-004, MGR-002 | P2 | Fleet export privacy board |
 | Admin console multi-operator | Loopback SPA **Partial** + HOST-007 docs | Cookie/OIDC multi-operator | UI-003…010, **HOST-007** | P2 | enabledModes secret-free; not SaaS |
-| jwt-auth-filter / RS pin | Offline **Done***; mock lab scaffold | Live plugin pin + Entra | OAUTH-009 | P0 for OAuth path | `make live-oauth-*` ≠ production |
-| Docker OAuth/JWT labs | Mode A compose **Done*** (jenkins-compose) | Mock IdP + JWT RS + token peer scaffolds | **HOST-012…015** | P0 | Opt-in; not default make test |
+| jwt-auth-filter / RS pin | Offline **implemented; mock lab scaffold | Live plugin pin + Entra | OAUTH-009 | P0 for OAuth path | `make live-oauth-*` ≠ production |
+| Docker OAuth/JWT labs | Mode A compose **implemented (jenkins-compose) | Mock IdP + JWT RS + token peer scaffolds | **HOST-012…015** | P0 | Opt-in; not default make test |
 | HA / multi-replica | **Cancelled** | — | **HOST-008** | — | Multi-fleet replaces multi-pod HA; `replicas: 1` only |
 | Multi-controller chaos | **Not started** | Live matrix residual | NET-*, TST-* | P3 | Tier B / REL |
 | Full Jenkins AS plugin | **No-go default** | Only if OAUTH-011 **go** | OAUTH-011, JAS-* | — | Do not schedule unless go |
@@ -187,7 +187,7 @@ Relative size: **S** ≈ days, **M** ≈ 1–2 weeks, **L** ≈ multi-week. Para
 | Gateway package contracts + Jenkins-as-AS reject | M (done) | Done foundation |
 | Offline qualify suite | S (done) | Done lite |
 | Deploy scaffold compose/kustomize | S (done) | Scaffold only |
-| Admin loopback BFF + SPA | L (mid-flight) | UI-000…008 Done*; residual UI-009+ |
+| Admin loopback BFF + SPA | L (mid-flight) | UI-000…008 implemented; residual UI-009+ |
 
 ### P1 — Gateway identity + HTTP + **all three auth modes** (Tier A critical path)
 
@@ -334,7 +334,7 @@ Also keep **OAUTH-011** as a scheduled decision gate after OAUTH-010/009 evidenc
 **Priority:** P0  
 **Dependencies:** GWY-002 (subject binding), MCP-001 HTTP guards  
 **Maps to:** GWY-004 transport AC; KD-008 residual  
-**Status:** **Partial Done*** offline (not live Entra production)
+**Status:** **Partial implemented offline (not live Entra production)
 
 **Objective**
 
@@ -348,7 +348,7 @@ Replace “optional shared secret on loopback” as the multi-user story with **
 - [x] Tokens never appear in logs, errors, metrics labels, or support bundles (canary tests).
 - [x] Regression: loopback pilot without gateway may keep KD-008 residual **explicitly documented**; gateway mode cannot enable anonymous multi-user.
 
-**Residual (do not claim Done):** live Entra / jwt-auth-filter production pin. Process-local JWKS refresh Done\*; multi-pod shared JWKS / multi-replica session store **out of scope** (HOST-008 cancelled — multi-fleet).
+**Residual (do not claim Done):** live Entra / jwt-auth-filter production pin. Process-local JWKS refresh implemented; multi-pod shared JWKS / multi-replica session store **out of scope** (HOST-008 cancelled — multi-fleet).
 
 ---
 
@@ -357,7 +357,7 @@ Replace “optional shared secret on loopback” as the multi-user story with **
 **Priority:** P1  
 **Dependencies:** HOST-001, NET-001 origin pin  
 **Maps to:** GWY-004 deployment  
-**Progress:** **Partial / Done*** — docs matrix + fail-closed tests + `PathPrefix` strip/`--http-path-prefix` + offline Host/Origin fixture expansion residual lite; live edge origin pin residual  
+**Progress:** **Partial / implemented — docs matrix + fail-closed tests + `PathPrefix` strip/`--http-path-prefix` + offline Host/Origin fixture expansion residual lite; live edge origin pin residual  
 
 **Objective**
 
@@ -368,7 +368,7 @@ Prove safe placement behind site reverse-proxy (TLS terminate, path prefix, Host
 - [x] Documented allowed deployment shapes (TLS at proxy vs app; no CORS wildcard).
 - [x] Empty AllowedHosts / AllowedOrigins fail closed for non-local.
 - [x] Offline fixture matrix for path-prefix + Host/Origin pin (app-side). — `TestHOST002_PathPrefixOriginPinFixtureMatrix` + `TestHOST002_StreamableHTTPOriginHostMatrix` residual lite expand
-- [ ] Live edge path-prefix origin pin matrix (extends NET-001 residual). — offline Done*; live edge residual
+- [ ] Live edge path-prefix origin pin matrix (extends NET-001 residual). — offline implemented; live edge residual
 - [x] Health endpoints do not leak secrets or broad tool inventory without auth.
 
 ---
@@ -412,7 +412,7 @@ Ensure derived cache, L1/L2 handles, and list continuations cannot cross users/p
 
 **Foundation (done):** `CacheKey.Tenant`, `Caller.CacheKey`/`SubjectKey`,
 `jenkins.*WithSubject` page tokens, offline Alice/Bob tests,
-`docs/gateway/README.md` §3c. **Serve wire Done*:** `tools.RegisterOptions.SubjectKey`
+`docs/gateway/README.md` §3c. **Serve wire implemented:** `tools.RegisterOptions.SubjectKey`
 + list tools subject-bound pagination when `--gateway`. **Residual:**
 per-HTTP-request SubjectKey rebind; durable L1/L2 namespace; multi-pod HA out of scope (HOST-008 cancelled).
 
@@ -423,7 +423,7 @@ per-HTTP-request SubjectKey rebind; durable L1/L2 namespace; multi-pod HA out of
 **Priority:** P1  
 **Dependencies:** GWY-004 scaffold  
 **Maps to:** GWY-004 packaging ACs  
-**Progress:** **Done*** scaffold (probes + limits); live AgentCore residual  
+**Progress:** **implemented scaffold (probes + limits); live AgentCore residual  
 
 **Objective**
 
@@ -457,14 +457,14 @@ Prevent one user from exhausting process-wide budgets for others.
 
 **Foundation (done):** `gateway.SubjectLimiter` + fair-share tests; mutation
 `Binding` = profile + principal + ExternalSubject + tenant with multi-user
-`BindingFromContext` (Alice/Bob tests). **Token-bucket rate Done* foundation:**
+`BindingFromContext` (Alice/Bob tests). **Token-bucket rate implemented foundation:**
 `gateway.SubjectRateLimiter` (30/min + burst 10 default; process ceiling).
-**Serve wire Done*:** `SubjectSlotLimiter` + `SubjectRateLimiter`; Allow then Hold;
+**Serve wire implemented:** `SubjectSlotLimiter` + `SubjectRateLimiter`; Allow then Hold;
 `MutationBindingFromContext` prefers Valid PolicySubject PrincipalID (HTTP claim)
-else Caller + PrincipalCache (Obtain) else process principal. **Done\*** Obtain→
+else Caller + PrincipalCache (Obtain) else process principal. **implemented Obtain→
 Binding + policy RBAC JenkinsUserID via PrincipalCache + rate `LowerRate` +
 admin read-only rate knobs.
-**Done\* lite:** optional same-host `FileSubjectRateLimiter` (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`). Multi-pod shared rate **out of scope** (HOST-008 cancelled). **Done\* SPA:** Policy page overlay edit of `max_tools_per_minute` / `max_tools_burst` (policy_admin; lower only).
+**implemented lite:** optional same-host `FileSubjectRateLimiter` (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`). Multi-pod shared rate **out of scope** (HOST-008 cancelled). **implemented SPA:** Policy page overlay edit of `max_tools_per_minute` / `max_tools_burst` (policy_admin; lower only).
 
 ---
 
@@ -473,7 +473,7 @@ admin read-only rate knobs.
 **Priority:** P2  
 **Dependencies:** UI-003…UI-008, ADR 0014  
 **Maps to:** Phase 6 residual; architecture admin  
-**Progress:** **Done*** residual docs + secret-free `enabledModes`; cookie multi-op residual  
+**Progress:** **implemented residual docs + secret-free `enabledModes`; cookie multi-op residual  
 
 **Objective**
 
@@ -496,7 +496,7 @@ Operators of a **team gateway** can use admin BFF safely; still **not** a multi-
 **Status:** **Cancelled / out of scope** (2026-08-01)  
 **Scale model:** **[multi-fleet](../fleet/multi-fleet-rollout.md)** — independent single-replica members + shared signed policy. Not multi-pod shared vault/rate.
 
-Same-host multi-process file flock lite (vault, Obtain, rate, principal, JWKS) that shipped under this ID remains historical **Done\*** packaging. Do **not** implement multi-replica runtime or claim `haMultiReplica=true`. Operator honesty: [live-pin-blockers.md §4](../gateway/live-pin-blockers.md) (section reframed as non-goal) + [deployment.md §9](../gateway/deployment.md).
+Same-host multi-process file flock lite (vault, Obtain, rate, principal, JWKS) that shipped under this ID remains historical **implemented packaging. Do **not** implement multi-replica runtime or claim `haMultiReplica=true`. Operator honesty: [live-pin-blockers.md §4](../gateway/live-pin-blockers.md) (section reframed as non-goal) + [deployment.md §9](../gateway/deployment.md).
 
 ---
 
@@ -695,20 +695,20 @@ When implementing, agents may **close ACs on GWY-*/OAUTH-*** and mark HOST-* as 
 
 Assumptions: local pilot largely green; Phase 6 admin mid-flight (UI-008/009 adversarial foundations landed; HOST-007 residual for non-loopback multi-operator). Leadership wants a **path** to team-hosted without pausing local value.
 
-**Honesty (2026-08):** Offline **foundations landed** for modes A/B/C Obtain, multi-user opt-in, JWKS process-local refresh, packaging scaffold, doctor/admin residual fields, REL lite residual ids (`multi_user_offline`, `oauth009_offline`, `host008_single_replica`). **Live pins remain residual** — do not treat offline Done\* as live Entra / AgentCore / multi-replica GO.
+**Honesty (2026-08):** Offline **foundations landed** for modes A/B/C Obtain, multi-user opt-in, JWKS process-local refresh, packaging scaffold, doctor/admin residual fields, REL lite residual ids (`multi_user_offline`, `oauth009_offline`, `host008_single_replica`). **Live pins remain residual** — do not treat offline implemented as live Entra / AgentCore / multi-replica GO.
 
-### Days 0–30 (foundations — largely Done\*)
+### Days 0–30 (foundations — largely implemented)
 
 | Item | State | Residual |
 |------|-------|----------|
 | Socialize Tier A ships modes A+B+C (site chooses) | **Ongoing** | Site enablement evidence |
-| **HOST-012…015** Docker lab umbrella + mock IdP/RS/token peers | **Done\*** opt-in (`make live-oauth-*`, jenkins-compose) | Not production Entra |
-| **HOST-001** Streamable HTTP subject + JWKS refresh | **Done\*** process-local | Multi-instance JWKS HA; live Entra under load |
-| **HOST-009** Mode A vault Obtain | **Done\*** offline + CLI vault | Live multi-user personal-token lab cohort |
-| **HOST-010** Mode B JWT vault + **OAUTH-009** offline matrix | **Done\*** | **Live** jwt-auth-filter / Entra pin |
-| **GWY-001** Mode C Live opt-in foundation | **Done\*** Live=false + mock Fetcher | Live AgentCore / Entra Obtain |
-| **HOST-011** mode matrix + no fallthrough | **Done\*** | Ops mode-switch evidence |
-| Anti-patterns freeze (no shared SA, no Jenkins-as-AS) | **Done** ADR 0003/0013 | OAUTH-011 formal sign-off residual |
+| **HOST-012…015** Docker lab umbrella + mock IdP/RS/token peers | **implemented opt-in (`make live-oauth-*`, jenkins-compose) | Not production Entra |
+| **HOST-001** Streamable HTTP subject + JWKS refresh | **implemented process-local | Multi-instance JWKS HA; live Entra under load |
+| **HOST-009** Mode A vault Obtain | **implemented offline + CLI vault | Live multi-user personal-token lab cohort |
+| **HOST-010** Mode B JWT vault + **OAUTH-009** offline matrix | **implemented | **Live** jwt-auth-filter / Entra pin |
+| **GWY-001** Mode C Live opt-in foundation | **implemented Live=false + mock Fetcher | Live AgentCore / Entra Obtain |
+| **HOST-011** mode matrix + no fallthrough | **implemented | Ops mode-switch evidence |
+| Anti-patterns freeze (no shared SA, no Jenkins-as-AS) | **implemented ADR 0003/0013 | OAUTH-011 formal sign-off residual |
 
 ### Days 31–60 (live pins + pilot path)
 
@@ -784,7 +784,7 @@ Do not mark GWY-001…004 DoD complete without live evidence called out in backl
 |--------|--------|
 | This roadmap | `docs/roadmap/server-team-hosted.md` |
 | Gateway residuals | `docs/gateway/README.md`, `deployment.md`, `qualification.md` |
-| Phase board pointer | `docs/phase2-progress.md` residual line |
+| Phase board pointer | `docs/archive/phase2-progress.md` residual line |
 | Docs index | `docs/README.md` |
 | Task graph | Prefer existing IDs; add HOST-* to todo/index when implementation starts |
 

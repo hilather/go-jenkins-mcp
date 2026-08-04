@@ -139,7 +139,7 @@ Mode C):
   "progressiveConsentMultiReplicaShared": false,
   "progressiveConsentMetadataDoneStar": true,
   "progressiveConsentBrowser3loAutomated": false,
-  "progressiveConsentResidual": "Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; process-local consent metadata store Done* (optional file; never tokens; same-host reload-before-persist flock lite; not multi-replica shared store); multi-pod consent correlation residual (HOST-008)"
+  "progressiveConsentResidual": "Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) implemented; process-local consent metadata store implemented (optional file; never tokens; same-host reload-before-persist flock lite; not multi-replica shared store); multi-pod consent correlation residual (HOST-008)"
 }
 ```
 
@@ -158,15 +158,15 @@ Mode C):
 | `rateEnabled` | **HOST-006 / HOST-008 residual:** `true` when subject rate env would enable limiting (empty `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE` → default on; explicit `0` → false). Default process-local; optional same-host file when path set. **Not** multi-pod shared rate. Never tokens. |
 | `ratePerMinute` | **HOST-006 residual knob:** resolved bootstrap tools/min via `gateway.SubjectRateConfigFromEnviron` (package default **30**; **0** when disabled). Never tokens. |
 | `rateBurst` | **HOST-006 residual knob:** resolved bootstrap burst (package default **10**; **0** when rate off). Never tokens. |
-| `sharedSubjectRateFile` | **HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is non-empty (same-host `FileSubjectRateLimiter`). **Not** multi-pod HA. Path value never returned. Never tokens. |
-| `sharedPrincipalCacheFile` | **HOST-007 / HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` is non-empty (same-host `FilePrincipalCache`). **Not** multi-pod HA. Path value never returned. Never tokens. |
-| `sharedJwksFile` | **HOST-001 / HOST-007 / HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` is non-empty (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path value never returned. Public keys only — never tokens. |
-| `sharedTokenCacheFile` | **HOST-007 / HOST-008 Done\* lite residual:** `true` when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` is non-empty (same-host `FileTokenCache`). **Not** multi-pod Redis/HA. Path value never returned. Residual never opens the cache file — never tokens. CamelCase parity with residual-status `shared_token_cache_file`. |
-| `progressiveConsentFileBacked` | **HOST-007 / OAUTH-010 Done\* lite residual:** `true` when `JENKINS_MCP_CONSENT_STORE_PATH` is non-empty (same-host consent metadata file). **Not** multi-pod HA. Path value never returned. Residual never opens the consent file (no session inventory). CamelCase parity with residual-status `progressive_consent.file_backed` via `gateway.ConsentStorePathConfiguredFromEnviron`. **SPA Overview** Mode C progressive consent card. |
-| `progressiveConsentSameHostReload` | **HOST-007 / OAUTH-010 Done\* lite residual:** `true` only when file-backed (same condition as residual-status `progressive_consent.same_host_reload_before_persist`). Reload-before-persist flock lite — **not** multi-pod HA. Path never returned. |
+| `sharedSubjectRateFile` | **HOST-008 implemented lite residual:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is non-empty (same-host `FileSubjectRateLimiter`). **Not** multi-pod HA. Path value never returned. Never tokens. |
+| `sharedPrincipalCacheFile` | **HOST-007 / HOST-008 implemented lite residual:** `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` is non-empty (same-host `FilePrincipalCache`). **Not** multi-pod HA. Path value never returned. Never tokens. |
+| `sharedJwksFile` | **HOST-001 / HOST-007 / HOST-008 implemented lite residual:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` is non-empty (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path value never returned. Public keys only — never tokens. |
+| `sharedTokenCacheFile` | **HOST-007 / HOST-008 implemented lite residual:** `true` when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` is non-empty (same-host `FileTokenCache`). **Not** multi-pod Redis/HA. Path value never returned. Residual never opens the cache file — never tokens. CamelCase parity with residual-status `shared_token_cache_file`. |
+| `progressiveConsentFileBacked` | **HOST-007 / OAUTH-010 implemented lite residual:** `true` when `JENKINS_MCP_CONSENT_STORE_PATH` is non-empty (same-host consent metadata file). **Not** multi-pod HA. Path value never returned. Residual never opens the consent file (no session inventory). CamelCase parity with residual-status `progressive_consent.file_backed` via `gateway.ConsentStorePathConfiguredFromEnviron`. **SPA Overview** Mode C progressive consent card. |
+| `progressiveConsentSameHostReload` | **HOST-007 / OAUTH-010 implemented lite residual:** `true` only when file-backed (same condition as residual-status `progressive_consent.same_host_reload_before_persist`). Reload-before-persist flock lite — **not** multi-pod HA. Path never returned. |
 | `progressiveConsentStoresTokens` | Always **`false`** (consent metadata store never holds tokens). CamelCase honesty parity with residual-status `progressive_consent.stores_tokens`. |
 | `progressiveConsentMultiReplicaShared` | Always **`false`** (not multi-pod shared consent store). CamelCase honesty parity with residual-status `progressive_consent.multi_replica_shared`. |
-| `progressiveConsentMetadataDoneStar` | **OAUTH-010 / GWY-001 residual:** always **`true`**. ConsentRequired metadata path Done*. Static residual only — never embeds authorize URLs or secrets. |
+| `progressiveConsentMetadataDoneStar` | **OAUTH-010 / GWY-001 residual:** always **`true`**. ConsentRequired metadata path implemented. Static residual only — never embeds authorize URLs or secrets. |
 | `progressiveConsentBrowser3loAutomated` | **OAUTH-010 residual:** always **`false`** until browser 3LO is automated (GWY-003). |
 | `progressiveConsentResidual` | **OAUTH-010 residual note** when Mode C enabled. Omitted otherwise. Never tokens or authorize URL secrets. |
 | `residual` | Secret-free honesty note (never tokens). Process-local rate + HOST-008 multi-pod residual; multi-user/k8s notes as applicable; consent file-backed note when path set (path never embedded). |
@@ -212,10 +212,10 @@ Authorization headers, or raw subject keys.
 | `rateEnabled` | HOST-006 env residual (rate would be enabled; default process-local; not multi-pod shared rate) |
 | `ratePerMinute` | Resolved bootstrap tools/min (default or `JENKINS_MCP_SUBJECT_RATE_PER_MINUTE`); **0** when disabled. Never tokens. |
 | `rateBurst` | Resolved bootstrap burst (default or `JENKINS_MCP_SUBJECT_RATE_BURST`); **0** when rate disabled. Never tokens. |
-| `sharedSubjectRateFile` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` set (same-host file rate). **Not** multi-pod HA. Path never returned. Never tokens. |
-| `sharedPrincipalCacheFile` | **HOST-007 / HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` set (same-host FilePrincipalCache). **Not** multi-pod HA. Path never returned. Never tokens. |
-| `sharedJwksFile` | **HOST-001 / HOST-007 / HOST-008 Done\* lite:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path never returned. Public keys only — never tokens. |
-| `sharedTokenCacheFile` | **HOST-007 / HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` set (same-host FileTokenCache). **Not** multi-pod Redis/HA. Path never returned. Residual never opens the cache file — never tokens. CamelCase parity with residual-status `shared_token_cache_file`. |
+| `sharedSubjectRateFile` | **HOST-008 implemented lite:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` set (same-host file rate). **Not** multi-pod HA. Path never returned. Never tokens. |
+| `sharedPrincipalCacheFile` | **HOST-007 / HOST-008 implemented lite:** `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` set (same-host FilePrincipalCache). **Not** multi-pod HA. Path never returned. Never tokens. |
+| `sharedJwksFile` | **HOST-001 / HOST-007 / HOST-008 implemented lite:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path never returned. Public keys only — never tokens. |
+| `sharedTokenCacheFile` | **HOST-007 / HOST-008 implemented lite:** `true` when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` set (same-host FileTokenCache). **Not** multi-pod Redis/HA. Path never returned. Residual never opens the cache file — never tokens. CamelCase parity with residual-status `shared_token_cache_file`. |
 | `vaultConfigured` | Whether the Mode A vault file exists |
 | `entryCount` | Number of subject entries |
 | `subjects` | **SubjectKeyHash** values only (never raw keys or tokens) |
@@ -331,7 +331,7 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 | `multi_pod_residual_checklist` | Optional secret-free multi-pod honesty checklist string |
 | `progressive_consent` | OAUTH-010 / GWY-001 StatusMap + consent-store honesty: `stores_tokens=false`, `multi_replica_shared=false`; `file_backed` / `same_host_reload_before_persist` default **false**, **true** when `JENKINS_MCP_CONSENT_STORE_PATH` set (path never returned; residual never opens consent file; HOST-007 SPA Overview/Doctor residual cards surface these; not multi-pod HA) |
 | `rateEnabled` / `ratePerMinute` / `rateBurst` | HOST-006 process-local rate knobs (admin health field names) |
-| `shared_subject_rate_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is non-empty (same-host `FileSubjectRateLimiter`). **Not** multi-pod HA. Path value **never** returned. Never tokens. |
+| `shared_subject_rate_file` | **HOST-008 implemented lite:** `true` when `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH` is non-empty (same-host `FileSubjectRateLimiter`). **Not** multi-pod HA. Path value **never** returned. Never tokens. |
 | `subject_rate_max_subjects` | Optional rate-map MaxSubjects when env > 0 (omit = unlimited). Process/file-local only — not multi-pod. |
 | `subject_limiter_max_subjects` | Optional SubjectLimiter MaxSubjects when `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` > 0 (omit = unlimited). Process-local only — not multi-pod. |
 | `subject_slots_process_local` | **Always `true`:** SubjectLimiter concurrency slots are process-local (HOST-008 residual; **not** multi-pod shared concurrency). Secret-free honesty. |
@@ -340,10 +340,10 @@ When Mode C is enabled, also includes `progressive_consent_residual` and
 | `principal_cache_max_entries` | Optional hygiene max when env > 0 (omit = unlimited). Never subjects. |
 | `principal_cache_ttl_seconds` | Optional hygiene TTL seconds when env > 0 (omit = no TTL). Never subjects. |
 | `shared_principal_cache_file` | `true` when `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` set (HOST-008 same-host `FilePrincipalCache` lite; path never returned; never tokens) |
-| `shared_jwks_file` | **HOST-001 / HOST-008 Done\* lite:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path value **never** returned. Public keys only — never tokens. |
-| `shared_token_cache_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` set (same-host `FileTokenCache`). **Not** multi-pod Redis/HA. Path value **never** returned. Residual never opens the cache file — never tokens. |
-| `shared_api_token_vault_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_VAULT_PATH` is **explicitly set** (Mode A same-host `FileAPITokenVault` path residual). Default XDG vault path does **not** count. Path value **never** returned. Residual never opens the vault — never tokens. **Not** multi-pod shared vault HA. |
-| `shared_jwt_vault_file` | **HOST-008 Done\* lite:** `true` when `JENKINS_MCP_GATEWAY_JWT_VAULT_PATH` is **explicitly set** (Mode B same-host `FileJWTVault` path residual). Default XDG JWT vault path does **not** count. Path value **never** returned. Residual never opens the vault — never tokens. **Not** multi-pod shared vault HA. |
+| `shared_jwks_file` | **HOST-001 / HOST-008 implemented lite:** `true` when `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` set (same-host public JWKS snapshot). **Not** multi-pod external JWKS HA. Path value **never** returned. Public keys only — never tokens. |
+| `shared_token_cache_file` | **HOST-008 implemented lite:** `true` when `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` set (same-host `FileTokenCache`). **Not** multi-pod Redis/HA. Path value **never** returned. Residual never opens the cache file — never tokens. |
+| `shared_api_token_vault_file` | **HOST-008 implemented lite:** `true` when `JENKINS_MCP_GATEWAY_VAULT_PATH` is **explicitly set** (Mode A same-host `FileAPITokenVault` path residual). Default XDG vault path does **not** count. Path value **never** returned. Residual never opens the vault — never tokens. **Not** multi-pod shared vault HA. |
+| `shared_jwt_vault_file` | **HOST-008 implemented lite:** `true` when `JENKINS_MCP_GATEWAY_JWT_VAULT_PATH` is **explicitly set** (Mode B same-host `FileJWTVault` path residual). Default XDG JWT vault path does **not** count. Path value **never** returned. Residual never opens the vault — never tokens. **Not** multi-pod shared vault HA. |
 | `progressive_consent_residual` / `progressive_consent_surfaces` | Mode C only; secret-free residual note + surface ids |
 | `residual_note` / `doc` | Honesty sentence + pointer to [live-pin-blockers.md](../gateway/live-pin-blockers.md) |
 
@@ -483,7 +483,7 @@ mutation. `purge_expired` and `delete_session` do **not** require `confirm`.
 
 **Never** accepts or returns tokens, vault bytes, Authorization material, full
 store path values, or `session_id` echo. **Not** multi-pod HA (HOST-008 residual).
-**Not** browser 3LO automation. Same-host file reload-before-persist Done\* lite
+**Not** browser 3LO automation. Same-host file reload-before-persist implemented lite
 (admin/CLI purge not resurrected by serve Put of stale memory). Memory-only serve
 process is **not** cleared unless it shares the same file path.
 
@@ -549,7 +549,7 @@ credentials and never echoed.
   "file_backed": true,
   "file_basename": "consent_sessions.json",
   "consent_store_path_configured": true,
-  "residual_note": "consent metadata purge only (OAUTH-010 residual); never tokens; same-host file reload-before-persist Done* lite …",
+  "residual_note": "consent metadata purge only (OAUTH-010 residual); never tokens; same-host file reload-before-persist implemented lite …",
   "doc": "docs/gateway/README.md § progressive consent residual",
   "admin_note": "mirrors CLI gateway consent-purge; set JENKINS_MCP_CONSENT_STORE_PATH … multi-pod residual"
 }
@@ -601,7 +601,7 @@ Secret-free process-local status (same core fields as MCP
 | `active` | Non-off mode selected |
 | `local_healthy` / `replica_healthy` | Local plane vs fleet RF honesty |
 | `aggregation` | Process-local metrics residual |
-| `spa_residual` | **SPA page residual** — BFF+MCP Done\* |
+| `spa_residual` | **SPA page residual** — BFF+MCP implemented |
 | `drain_residual` / `repair_residual` | Drain/repair **trigger** not exposed on this API |
 | `mode_default_off` | Present when mode is off |
 
@@ -617,7 +617,7 @@ Secret-free doctor envelope:
   "checks": [
     { "name": "mode_default_off", "ok": true, "residual": "…" },
     { "name": "protocol_compat", "ok": true, "residual": "…" },
-    { "name": "admin_spa", "ok": true, "residual": "SPA page residual; BFF+MCP Done* (FLC-063)" }
+    { "name": "admin_spa", "ok": true, "residual": "SPA page residual; BFF+MCP implemented (FLC-063)" }
   ],
   "residual": "process-local aggregation; multi-member fan-out residual; mode default off"
 }
@@ -834,14 +834,14 @@ fields when present: `externalSubject` (IdP label, redacted/clipped), `subjectKe
 SPA list columns surface those fields (truncated/muted); type filter includes
 `tool_deny` / `tool_error` / `tool_success` / `mutation_*`.
 
-**Same-host rotated merge (Done\* lite):** the BFF merges the active profile audit
+**Same-host rotated merge (implemented lite):** the BFF merges the active profile audit
 JSONL with numbered rotates produced by the File sink (`audit.jsonl.1` …
 `audit.jsonl.N`, default keep 3) and optional timestamp-like siblings next to the
 active path. Newest matching events first; `limit` / `type` / `before` /
 `external_subject` apply across the merge set; corrupt lines are skipped. Memory
 stays bounded to `limit`.
 
-**`external_subject` (Done\* lite):** exact match on the normalized
+**`external_subject` (implemented lite):** exact match on the normalized
 `externalSubject` field so multi-user correlation works across page loads without
 loading the full JSONL into the browser. Prefer exact identity match (fail-closed)
 over substring. SPA sends the filter as `external_subject` and keeps a client-side

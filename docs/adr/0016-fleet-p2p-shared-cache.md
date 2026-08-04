@@ -82,7 +82,7 @@ The tree already has local L1 independent Zstd frames (`internal/store`), progre
 
 **Costs:** Peer protocol, placement, authz assertions, schema extensions, multi-node lab, and security review load. Disk may hold owner copies longer when RF2 ships. SQLite writer contention under import/repair must be measured.
 
-**Residuals:** Mode default **off**; offline release gate pack (**FLC-073 Done\*** — live multi-host/signed packaging residual); production mTLS/signing; admin SPA page residual (FLC-063 BFF+MCP **Done\***); SIEM; live multi-host canary/finalize residual (library **Done\*** FLC-072/081); object classes default-deny with **console_log** only (**FLC-082 Done\*** — new class = separate PR). Operator canary docs: [shared-cache-operator.md](../fleet/shared-cache-operator.md) (FLC-064 **Done\***). Gate pack: [shared-cache-release-gate.md](../fleet/shared-cache-release-gate.md).
+**Residuals:** Mode default **off**; offline release gate pack (**FLC-073 implemented — live multi-host/signed packaging residual); production mTLS/signing; admin SPA page residual (FLC-063 BFF+MCP **implemented); SIEM; live multi-host canary/finalize residual (library **implemented FLC-072/081); object classes default-deny with **console_log** only (**FLC-082 implemented — new class = separate PR). Operator canary docs: [shared-cache-operator.md](../fleet/shared-cache-operator.md) (FLC-064 **implemented). Gate pack: [shared-cache-release-gate.md](../fleet/shared-cache-release-gate.md).
 
 ## Owner
 

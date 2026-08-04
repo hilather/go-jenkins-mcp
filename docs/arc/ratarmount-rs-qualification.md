@@ -39,7 +39,7 @@
 | Latest release pin recorded? | **Yes** — **v0.1.14** @ `eeff8502539375acb0e0bfae9d0b327fee0fbe4d` |
 | Production go for product adapter? | **Not yet** — run ARC-000 qualification checklist |
 | Optional FUSE / Rust adapter (`ARC-004`) | **Unblocked for implementation work** after ARC-000 security/golden-byte gates; default product path remains native Go |
-| Native Go seekable multi-frame reader | **Mandatory supported path** (`ARC-003`, Done*) |
+| Native Go seekable multi-frame reader | **Mandatory supported path** (`ARC-003`, implemented) |
 
 ## Qualification checklist (open)
 
@@ -74,7 +74,7 @@
 
 ## Follow-up tasks (todo)
 
-See `docs/jenkins-mcp-enterprise-agent-todo.md`:
+See `docs/archive/jenkins-mcp-enterprise-agent-todo.md` (archived; open work → Issues):
 
 | ID | Summary |
 |----|---------|
