@@ -66,8 +66,8 @@ Versioned, secret-free JSON loaded at `serve` time.
 | `deny_tools` | Exact MCP tool names to deny |
 | `deny_job_prefixes` | Job full names / folder patterns denied at **call time** when args include `job_name` or seed `name`. See [Job pattern language](#job-pattern-language-deny_job_prefixes-pol-002-wave-26). Empty / overly broad entries fail load. **Wave 37/39:** also omits matching rows from `jenkins_list_jobs` (collect+filter+repaginate when patterns live; `policy_filtered` / `policy_omitted_count`). |
 | `deny_node_names` | Node/agent name patterns denied at **call time** when args include `node_name` / `NodeName` (Wave 35). Same pattern language as `deny_job_prefixes`. **Wave 36:** also omits matching rows from list-all `jenkins_get_nodes`. |
-| `deny_view_names` | View name patterns denied at **call time** when args include `view_name` / `ViewName` or seed `view` / `View` (Wave 35; e.g. `jenkins_list_jobs`). Same pattern language as jobs. **Wave 38 Done*:** also omits matching rows from list-all `jenkins_list_views`. |
-| `deny_artifact_paths` | Relative artifact path patterns denied at **call time** when args include `path` / `Path` or `artifact_path` / `ArtifactPath` (Wave 36; e.g. `jenkins_get_artifact_text`). Same pattern language as jobs. **Wave 37:** page-level omit from `jenkins_list_artifacts` under `max_artifacts`. **Wave 40 Done*:** hard-cap fetch when patterns live, filter, re-slice to caller `max_artifacts` (denied paths do not steal page slots). **Wave 39:** also omit denied paths from `jenkins_compare_builds` artifact diffs. **Wave 41 Done*:** compare/diagnose artifact cache (`getCachedArtifactList`) fetches via `listArtifactsWithPolicyFilter`, fingerprints cache keys with sorted `ArtifactPolicyFingerprintMaterial`, and always post-filters live patterns on return (denied paths never surface on hit or miss). |
+| `deny_view_names` | View name patterns denied at **call time** when args include `view_name` / `ViewName` or seed `view` / `View` (Wave 35; e.g. `jenkins_list_jobs`). Same pattern language as jobs. **Wave 38 implemented:** also omits matching rows from list-all `jenkins_list_views`. |
+| `deny_artifact_paths` | Relative artifact path patterns denied at **call time** when args include `path` / `Path` or `artifact_path` / `ArtifactPath` (Wave 36; e.g. `jenkins_get_artifact_text`). Same pattern language as jobs. **Wave 37:** page-level omit from `jenkins_list_artifacts` under `max_artifacts`. **Wave 40 implemented:** hard-cap fetch when patterns live, filter, re-slice to caller `max_artifacts` (denied paths do not steal page slots). **Wave 39:** also omit denied paths from `jenkins_compare_builds` artifact diffs. **Wave 41 implemented:** compare/diagnose artifact cache (`getCachedArtifactList`) fetches via `listArtifactsWithPolicyFilter`, fingerprints cache keys with sorted `ArtifactPolicyFingerprintMaterial`, and always post-filters live patterns on return (denied paths never surface on hit or miss). |
 | `deny_branch_names` | Branch name patterns denied at **call time** when args include `branch_name` / `BranchName` or seed `branch` / `Branch` (Wave 37). **Wave 38–39:** when `BranchName` is empty and `job_name` / `JobName` is a **multi-segment** path (≥2 `/`-separated segments after normalize), matches `BranchDenyCandidates`: **leaf**, intermediate segments from index 1 (not the first folder alone), multi-segment path **suffixes**, and full JobName — so `team/mb/release/1.2` is denied by `release/*`, exact `release`, or leaf `1.2`. **Single-segment** JobName alone (e.g. root freestyle `main`) does **not** apply branch deny via candidates. Slashy `BranchName` (e.g. `release/1.2`) also matches its leaf and path candidates. Same pattern language as jobs. **Wave 37/39 list privacy:** also omits matching `kind=branch`/`matrix_child` rows from `jenkins_list_jobs` via collect+filter+repaginate (`ApplyJobPolicyFilters` on Name/FullName; not page-level only). Kind gate: folders named like a branch are not hidden by branch deny. |
 | `max_result_bytes` | Optional result hard-max bound; mid-serve raise/lower ≤ serve-bootstrap ceiling (Wave 31); never elevates Jenkins rights |
 | `max_tools_per_minute` | Optional per-subject tools/min cap (HOST-006); serve applies via `SubjectRateLimiter.LowerRate` **lower only** under `--gateway` (never raises bootstrap env rate; omitted = no change) |
@@ -113,8 +113,8 @@ Register (`AllowMutationsOptIn` false).
 
 ## Per-user and per-group bindings (POL-006)
 
-**Status:** **Done\*** (policy language + evaluator). Admin SPA/BFF binding CRUD
-managed via Access SPA / `admin_rbac_*` (**UI-011 Done\*** pilot). **SAML group source** is **POL-007 Done\*** offline
+**Status:** **implemented (policy language + evaluator). Admin SPA/BFF binding CRUD
+managed via Access SPA / `admin_rbac_*` (**UI-011 implemented pilot). **SAML group source** is **POL-007 implemented offline
 (`internal/saml` maps assertion groups → `Subject.Groups`); live IdP pin residual.
 
 Operator-defined **named permission sets per user and per group** attach to the
@@ -191,9 +191,9 @@ enterprise force_read_only
 
 | Task | Scope | Status |
 |------|--------|--------|
-| **POL-006** | Policy language + evaluator (this section) | **Done\*** |
-| **POL-007** | SAML 2.0 SP path: assertion → subject + groups into policy (not Jenkins-as-IdP); multi-fleet **config-managed** | **Done\*** offline (ADR 0015, `internal/saml`, admin ACS); live IdP pin residual |
-| **UI-011** | Admin Access page + BFF CRUD + `admin_rbac_*` MCP for bindings (pilot/single-host; fleet SoT = config) | **Done\*** pilot break-glass (2026-08-01); fleet SoT remains signed config |
+| **POL-006** | Policy language + evaluator (this section) | **implemented |
+| **POL-007** | SAML 2.0 SP path: assertion → subject + groups into policy (not Jenkins-as-IdP); multi-fleet **config-managed** | **implemented offline (ADR 0015, `internal/saml`, admin ACS); live IdP pin residual |
+| **UI-011** | Admin Access page + BFF CRUD + `admin_rbac_*` MCP for bindings (pilot/single-host; fleet SoT = config) | **implemented pilot break-glass (2026-08-01); fleet SoT remains signed config |
 
 **Agent non-negotiable** (root `AGENTS.md`): new RBAC controls must be designed so
 they can be defined **per verified user** and **per group** — never only as an
@@ -202,12 +202,12 @@ undifferentiated global toggle without a residual task id.
 Group *claims* from JWT/gateway already attribute identity (OAUTH-006 / GWY-002)
 and now drive **POL-006 group bindings** when present on `Subject.Groups`.
 Operators manage binding documents via overlay JSON today; admin SPA editor is
-**UI-011** Done\* pilot Access SPA + BFF + `admin_rbac_*` (fleet SoT still config/signed policy).
+**UI-011** implemented pilot Access SPA + BFF + `admin_rbac_*` (fleet SoT still config/signed policy).
 
-### SAML and multi-fleet configuration (POL-007 Done* offline + Keycloak lab)
+### SAML and multi-fleet configuration (POL-007 implemented offline + Keycloak lab)
 
-**Status:** Offline SP validation + attribute map + admin ACS/session + POL-006 group bind **Done\***; opt-in Keycloak SAML IdP lab **Done** (`make live-saml-*`).  
-**Residual:** live Entra/Okta/ADFS browser pin; full browser ACS + Keycloak XML-DSig interop may need SP hardening; encrypted assertions; multi-pod session HA. **UI-011** Access SPA/BFF/`admin_rbac_*` is **Done\*** pilot (fleet SoT remains config).  
+**Status:** Offline SP validation + attribute map + admin ACS/session + POL-006 group bind **implemented; opt-in Keycloak SAML IdP lab **implemented (`make live-saml-*`).  
+**Residual:** live Entra/Okta/ADFS browser pin; full browser ACS + Keycloak XML-DSig interop may need SP hardening; encrypted assertions; multi-pod session HA. **UI-011** Access SPA/BFF/`admin_rbac_*` is **implemented pilot (fleet SoT remains config).  
 **Package:** `internal/saml` · ADR 0015 · env `JENKINS_MCP_SAML_CONFIG`.  
 **Labs:** offline `make saml-lab-test`; opt-in Keycloak IdP `make live-saml-up` / `live-saml-smoke` / `live-saml-test` / `live-saml-down` (`testdata/saml-lab/`).
 **Multi-fleet pack:** [fleet/multi-fleet-rollout.md](fleet/multi-fleet-rollout.md) · fixtures `testdata/fleet-pack/`.
@@ -222,7 +222,7 @@ Operators manage binding documents via overlay JSON today; admin SPA editor is
 | **IdP group → console role** (admin SSO) | **Same config plane** | e.g. map `mcp-admin-ops` → `operator`, `mcp-policy-admins` → `policy_admin`; default deny if no map match |
 | **IdP group / user → MCP denials** | **Policy overlay** (`subjects.groups` / `subjects.users`, preferably **signed** MGR-001) | Same deny-only language as POL-006; roll out to fleet via config management + hot-reload / last-good |
 | **Secrets** | Secret store / env / file mode 0600 | SP signing/decryption keys, client secrets — **never** in git plain text; never in audit/admin JSON |
-| **Single-host SPA / MCP bindings** | **UI-011 Done\*** pilot break-glass | Useful for lab; **must not** be required for multi-fleet consistency (SoT = signed config) |
+| **Single-host SPA / MCP bindings** | **UI-011 implemented pilot break-glass | Useful for lab; **must not** be required for multi-fleet consistency (SoT = signed config) |
 
 **Architectural rules (POL-007 / fleet):**
 
@@ -230,7 +230,7 @@ Operators manage binding documents via overlay JSON today; admin SPA editor is
 2. Config **maps and restricts**; it does not invent membership. Group overage/oversize fail closed.
 3. Multi-fleet prefers **immutable config + signed policy** over mutable per-pod DBs.
 4. Shared-secret pilot remains when SAML `require=false`; when `require=true`, SAML session is mandatory for gated `/admin/v1/*` (except ACS/login/status). See [admin README](admin/README.md).
-5. SPA Access UI / `admin_rbac_*` (UI-011 Done\* pilot) stays secret-free and cannot widen enterprise `force_read_only`; refused when require-signed / trusted keys / signed bundle active.
+5. SPA Access UI / `admin_rbac_*` (UI-011 implemented pilot) stays secret-free and cannot widen enterprise `force_read_only`; refused when require-signed / trusted keys / signed bundle active.
 
 ---
 
@@ -266,13 +266,13 @@ expanded patterns; brace nest ≤ **4**), and never executes code or network cal
 | `?`, `\` | unsupported metacharacters |
 | pattern deeper than 64 segments / expansion explosion | complexity bound |
 
-**Done* (Wave 32):** bounded nested braces (matching-depth close, nest ≤4, same product budgets).
-**Done* (Wave 31):** character classes (`[abc]` / ranges / optional `[^…]`) with match-time checks.
-**Done* lite (Wave 35):** non-job resource deny patterns for **nodes** and **views** (`deny_node_names` / `deny_view_names`); same `ValidateDenyJobPattern` / `MatchDenyJobPattern` language; `Target.NodeName` / `ViewName`; reason `resource_pattern_deny`.
-**Done* lite (Wave 36):** artifact path deny patterns (`deny_artifact_paths`); `Target.ArtifactPath`; call-time bind from `path` / `artifact_path`; reason `resource_pattern_deny` (`deny_artifact_path:<pat>`). List-row filter for **nodes** (`jenkins_get_nodes`).
-**Done* lite (Wave 37–39):** branch resource patterns (`deny_branch_names`); Wave 37 `Target.BranchName`; Wave 38 multi-segment JobName leaf/full when BranchName empty; Wave 39 intermediate segments + slashy path suffixes (`BranchDenyCandidates`). **List privacy Done*:** `jenkins_list_views` + `deny_view_names` (Wave 38); `jenkins_list_jobs` collect+filter+repaginate for `deny_job_prefixes` / `deny_branch_names` (Wave 37/39); `jenkins_list_artifacts` page-level omit vs `deny_artifact_paths` (Wave 37); compare artifact diffs omit (Wave 39).
-**Residual:** allow-lists; **Wave 40 Done*** — `list_artifacts` hard-cap fetch when deny patterns live; `list_jobs` page tokens bound to live deny patterns (deny patterns in fingerprint); incomplete collect sets non-secret `Message`. **Wave 41 Done*:** `list_jobs` collect max pages operator-tunable (`--list-jobs-collect-max-pages` / `JENKINS_MCP_LIST_JOBS_COLLECT_MAX_PAGES`; default **50**, absolute **200** fail-closed via `ResolveListJobsCollectMaxPages`); large fleets may still hit the **absolute** cap → `truncated=true`; artifact cache path filter + fingerprint key; HTTP deny-anonymous loopback opt-in (`JENKINS_MCP_HTTP_DENY_ANONYMOUS` alias of require-token, **default off**). **Wave 42 Done*:** artifacts hard-cap env/flag resolve (`ResolveArtifactsHardCap` / `ArtifactsHardCap`; default **500**, absolute **2000**); nodes/views collect max pages operator-tunable (`ResolveNodesCollectMaxPages` / `ResolveViewsCollectMaxPages`; default **50**, absolute **200**); multi-sig lite offline self-check canary (`policy_multisig_lite_residual`). **Wave 43 Done* (landed):** artifact list body-bytes resolve (default **2 MiB**, absolute **8 MiB**); doctor `operator_caps_snapshot` (incl. Wave 44 body-bytes detail keys); `adapter_framework_residual` self-check item.
-Mid-path `**/` and braces remain **Done*** (Wave 29–32).
+**implemented (Wave 32):** bounded nested braces (matching-depth close, nest ≤4, same product budgets).
+**implemented (Wave 31):** character classes (`[abc]` / ranges / optional `[^…]`) with match-time checks.
+**implemented lite (Wave 35):** non-job resource deny patterns for **nodes** and **views** (`deny_node_names` / `deny_view_names`); same `ValidateDenyJobPattern` / `MatchDenyJobPattern` language; `Target.NodeName` / `ViewName`; reason `resource_pattern_deny`.
+**implemented lite (Wave 36):** artifact path deny patterns (`deny_artifact_paths`); `Target.ArtifactPath`; call-time bind from `path` / `artifact_path`; reason `resource_pattern_deny` (`deny_artifact_path:<pat>`). List-row filter for **nodes** (`jenkins_get_nodes`).
+**implemented lite (Wave 37–39):** branch resource patterns (`deny_branch_names`); Wave 37 `Target.BranchName`; Wave 38 multi-segment JobName leaf/full when BranchName empty; Wave 39 intermediate segments + slashy path suffixes (`BranchDenyCandidates`). **List privacy implemented:** `jenkins_list_views` + `deny_view_names` (Wave 38); `jenkins_list_jobs` collect+filter+repaginate for `deny_job_prefixes` / `deny_branch_names` (Wave 37/39); `jenkins_list_artifacts` page-level omit vs `deny_artifact_paths` (Wave 37); compare artifact diffs omit (Wave 39).
+**Residual:** allow-lists; **Wave 40 implemented — `list_artifacts` hard-cap fetch when deny patterns live; `list_jobs` page tokens bound to live deny patterns (deny patterns in fingerprint); incomplete collect sets non-secret `Message`. **Wave 41 implemented:** `list_jobs` collect max pages operator-tunable (`--list-jobs-collect-max-pages` / `JENKINS_MCP_LIST_JOBS_COLLECT_MAX_PAGES`; default **50**, absolute **200** fail-closed via `ResolveListJobsCollectMaxPages`); large fleets may still hit the **absolute** cap → `truncated=true`; artifact cache path filter + fingerprint key; HTTP deny-anonymous loopback opt-in (`JENKINS_MCP_HTTP_DENY_ANONYMOUS` alias of require-token, **default off**). **Wave 42 implemented:** artifacts hard-cap env/flag resolve (`ResolveArtifactsHardCap` / `ArtifactsHardCap`; default **500**, absolute **2000**); nodes/views collect max pages operator-tunable (`ResolveNodesCollectMaxPages` / `ResolveViewsCollectMaxPages`; default **50**, absolute **200**); multi-sig lite offline self-check canary (`policy_multisig_lite_residual`). **Wave 43 implemented (landed):** artifact list body-bytes resolve (default **2 MiB**, absolute **8 MiB**); doctor `operator_caps_snapshot` (incl. Wave 44 body-bytes detail keys); `adapter_framework_residual` self-check item.
+Mid-path `**/` and braces remain **implemented (Wave 29–32).
 
 Implementation: `internal/policy/jobpattern.go` (`ExpandDenyJobBraces`, `NormalizeJobFullName`, character-class parse/match).
 
@@ -334,10 +334,10 @@ name only (no per-build deny list yet).
 | **`jenkins_get_artifact_text` / `jenkins_inspect_artifact`** | Call-time deny when `path` matches `deny_artifact_paths` (handler never runs). Target binding collapses `.` / empty segments via the same clean rules as `SanitizeArtifactPath` so exact denies cannot be bypassed with `exact/./file` forms |
 | **`jenkins_get_node` (Wave 36)** | Required `node_name` binds `Target.NodeName`; `deny_node_names` fails closed at dispatch before Jenkins is called |
 | **`jenkins_list_jobs` + `view`** | Call-time deny when `view` matches `deny_view_names` (handler never runs) |
-| **`jenkins_list_jobs` row filter (Wave 37/39/40 Done*)** | When live `deny_job_prefixes` and/or `deny_branch_names` non-empty: **collect** full ListJobs (paged internally up to safety cap), **drop** matching rows (`ApplyJobPolicyFilters`), recompute `total`, re-apply caller offset/limit/`page_token`. **Wave 40:** page tokens fingerprint live deny patterns (`PolicyFingerprintMaterial`); mid-session tighten fails closed on old tokens; incomplete collect forces `truncated=true` + non-secret `Message`. `policy_filtered` / `policy_omitted_count` stable across pages; denied names never listed. Empty patterns → single-page ListJobs (no multi-fetch cost). **Not** page-level-only omit. |
-| **`jenkins_list_views` (Wave 38 Done*)** | List-all views; rows matching live `deny_view_names` omitted after full collect (`policy_filtered` / `policy_omitted_count`). |
-| **`jenkins_list_artifacts` (Wave 37 Done*; Wave 40 Done*; Wave 41 Done*; Wave 42 Done*)** | **Wave 40:** when live `deny_artifact_paths` non-empty, fetch up to live hard cap (`ArtifactsHardCap()`, default 500), filter denied paths, re-slice to caller `max_artifacts` so denied rows do not steal page slots; sets `policy_filtered` / `policy_omitted_count`. Empty patterns → single fetch at user max (no hard-cap expansion). **Wave 41:** compare/diagnose cache path (`getCachedArtifactList`) uses the same filter path + live post-filter + policy fingerprint cache key. **Wave 42:** operator-tunable hard cap via `--artifacts-hard-cap` / `JENKINS_MCP_ARTIFACTS_HARD_CAP` (`ResolveArtifactsHardCap`; absolute **2000** fail-closed). **Wave 43 residual:** list JSON body still fixed **2 MiB** (not operator-tunable yet). |
-| **`jenkins_get_nodes`** | Args are pagination only (no `node_name`) → **empty** node target at dispatch (list is not denied wholesale). **Wave 36 Done*:** after successful Jenkins fetch, rows whose `name` matches live `deny_node_names` are **omitted** (deny-only privacy); summary recomputed over kept nodes then re-paginated; `policy_filtered` / `policy_omitted_count` (integer only; denied names never listed). Empty evaluator / empty patterns → unchanged. Unauthorized (403) path unchanged. |
+| **`jenkins_list_jobs` row filter (Wave 37/39/40 implemented)** | When live `deny_job_prefixes` and/or `deny_branch_names` non-empty: **collect** full ListJobs (paged internally up to safety cap), **drop** matching rows (`ApplyJobPolicyFilters`), recompute `total`, re-apply caller offset/limit/`page_token`. **Wave 40:** page tokens fingerprint live deny patterns (`PolicyFingerprintMaterial`); mid-session tighten fails closed on old tokens; incomplete collect forces `truncated=true` + non-secret `Message`. `policy_filtered` / `policy_omitted_count` stable across pages; denied names never listed. Empty patterns → single-page ListJobs (no multi-fetch cost). **Not** page-level-only omit. |
+| **`jenkins_list_views` (Wave 38 implemented)** | List-all views; rows matching live `deny_view_names` omitted after full collect (`policy_filtered` / `policy_omitted_count`). |
+| **`jenkins_list_artifacts` (Wave 37 implemented; Wave 40 implemented; Wave 41 implemented; Wave 42 implemented)** | **Wave 40:** when live `deny_artifact_paths` non-empty, fetch up to live hard cap (`ArtifactsHardCap()`, default 500), filter denied paths, re-slice to caller `max_artifacts` so denied rows do not steal page slots; sets `policy_filtered` / `policy_omitted_count`. Empty patterns → single fetch at user max (no hard-cap expansion). **Wave 41:** compare/diagnose cache path (`getCachedArtifactList`) uses the same filter path + live post-filter + policy fingerprint cache key. **Wave 42:** operator-tunable hard cap via `--artifacts-hard-cap` / `JENKINS_MCP_ARTIFACTS_HARD_CAP` (`ResolveArtifactsHardCap`; absolute **2000** fail-closed). **Wave 43 residual:** list JSON body still fixed **2 MiB** (not operator-tunable yet). |
+| **`jenkins_get_nodes`** | Args are pagination only (no `node_name`) → **empty** node target at dispatch (list is not denied wholesale). **Wave 36 implemented:** after successful Jenkins fetch, rows whose `name` matches live `deny_node_names` are **omitted** (deny-only privacy); summary recomputed over kept nodes then re-paginated; `policy_filtered` / `policy_omitted_count` (integer only; denied names never listed). Empty evaluator / empty patterns → unchanged. Unauthorized (403) path unchanged. |
 | **health / explain_queue** | Surface node **labels** and sample names in results; no per-node tool arg → not gated by `deny_node_names` at dispatch |
 | **Hot-reload** | Node/view/artifact pattern lists reload with the Document (counts on `ReloadInfo` / status map) |
 
@@ -404,7 +404,7 @@ is wrapped in `policy.ReloadableDenyOnly`:
 | ~~ListTools AuthGate fail-closed~~ | **Wave 29 done*** — `InstallListToolsPolicyFilter` consults `AuthGate` once per `tools/list`; Check fail → empty Tools (no name leak). Nil gate unchanged; OK + deny_tools still filters as Wave 28. *Sticky revoke stays empty; non-sticky recover re-lists. |
 | ~~Mutation tools omitted at RO register (allow-mutations + force clear)~~ | **Wave 30 done*** — with `--allow-mutations` / `AllowMutations`, mutations **register** even under Effective RO; ListTools + `DenyMutation` hide/deny while force (or other RO) is on; force clear re-lists without restart. *Residual: without allow-mutations (pilot default RO) mutations stay unregistered for the process lifetime (no surprise write tools). |
 | ~~Raise `max_result_bytes` after a prior lower~~ | **Wave 31 done*** — `SetWithinCeiling` can raise back up to serve-bootstrap ceiling; above ceiling still restart. |
-| Raise subject rate above serve-bootstrap env | **HOST-006 Done\* lower-only** — `LowerRate` never raises; restart with higher `JENKINS_MCP_SUBJECT_RATE_*` to raise bootstrap. Process rate ceilings not overlay-tunable. Admin SPA Policy editor can lower overlay `max_tools_*` (policy_admin). |
+| Raise subject rate above serve-bootstrap env | **HOST-006 implemented lower-only** — `LowerRate` never raises; restart with higher `JENKINS_MCP_SUBJECT_RATE_*` to raise bootstrap. Process rate ceilings not overlay-tunable. Admin SPA Policy editor can lower overlay `max_tools_*` (policy_admin). |
 | ~~**L1 search historical hits**~~ | **Wave 33 done*** — single-generation `jenkins_search_logs` re-checks `deny_job_prefixes` **and** `CheckStoreRead` on the resolved job before any frame scan; mid-session tighten denies on next call. *Not multi-job fan-in (search is one generation). |
 
 ## Example overlay (read-only fleet, deny log tools + secret jobs)
@@ -446,8 +446,8 @@ Cursor config remains secret-free; point the process at the overlay with env:
 | ListTools AuthGate session death | **Wave 29 done*** — discovery empty when `AuthGate.Check` fails; CallTool already fail-closed |
 | Multi-layer PEPs (handler target, network classifier, store) | **POL-004 lite done** — call-time job `Target` + `deny_job_prefixes`; network/store PEPs earlier. Residual: richer ACL language; adapter-specific PEPs beyond shared middleware |
 | Job/folder pattern language completeness | **Wave 26–32 done*** — mid-path `**/` + `{a,b}` braces (incl. nested ≤4) + character classes `[…]` |
-| Non-job resource patterns (node/view/branch) | **Wave 35–42 Done*** — call-time + list filters for **nodes** (`get_nodes` + operator collect max pages), **jobs** (`list_jobs` collect+filter + policy-bound page tokens + incomplete `Message` + operator collect max pages), **views** (`list_views` + operator collect max pages), **artifacts** (hard-cap list filter + compare diffs + cache filter + operator hard-cap resolve); JobName `BranchDenyCandidates` + slashy BranchName for `deny_branch_names`. **Residual honesty:** large fleets may hit collect **absolute** caps (jobs/nodes/views **200** pages) → `truncated=true`; HTTP deny-anonymous loopback **opt-in** (default off). |
-| Artifact path resource patterns | **Wave 36–43 Done*** — list_artifacts hard-cap fetch+filter when deny patterns live + call-time + **compare_builds path diffs** omit denied paths + **cache path** (`getCachedArtifactList` + `ArtifactPolicyFingerprintMaterial`) + operator hard-cap resolve (`ResolveArtifactsHardCap` / `ArtifactsHardCap`; default 500, absolute 2000) + **Wave 43** list JSON body-bytes resolve (`ResolveArtifactsListBodyBytes`; default **2 MiB**, absolute **8 MiB**) — `deny_artifact_paths` + `Target.ArtifactPath` + Evaluate `resource_pattern_deny` (`deny_artifact_path:<pat>`) + `path`/`artifact_path` binding on artifact tools. Absolute body/hard-cap ceilings still apply. |
+| Non-job resource patterns (node/view/branch) | **Wave 35–42 implemented — call-time + list filters for **nodes** (`get_nodes` + operator collect max pages), **jobs** (`list_jobs` collect+filter + policy-bound page tokens + incomplete `Message` + operator collect max pages), **views** (`list_views` + operator collect max pages), **artifacts** (hard-cap list filter + compare diffs + cache filter + operator hard-cap resolve); JobName `BranchDenyCandidates` + slashy BranchName for `deny_branch_names`. **Residual honesty:** large fleets may hit collect **absolute** caps (jobs/nodes/views **200** pages) → `truncated=true`; HTTP deny-anonymous loopback **opt-in** (default off). |
+| Artifact path resource patterns | **Wave 36–43 implemented — list_artifacts hard-cap fetch+filter when deny patterns live + call-time + **compare_builds path diffs** omit denied paths + **cache path** (`getCachedArtifactList` + `ArtifactPolicyFingerprintMaterial`) + operator hard-cap resolve (`ResolveArtifactsHardCap` / `ArtifactsHardCap`; default 500, absolute 2000) + **Wave 43** list JSON body-bytes resolve (`ResolveArtifactsListBodyBytes`; default **2 MiB**, absolute **8 MiB**) — `deny_artifact_paths` + `Target.ArtifactPath` + Evaluate `resource_pattern_deny` (`deny_artifact_path:<pat>`) + `path`/`artifact_path` binding on artifact tools. Absolute body/hard-cap ceilings still apply. |
 | Branch name patterns (tools without `branch_name`) | **Wave 38–39 done* lite** — multi-segment `JobName` leaf + intermediate + path suffixes + full when `BranchName` empty; slashy `BranchName` leaf/suffixes; single-segment JobName does not apply branch deny. List-row omit of `kind=branch`/`matrix_child` on `jenkins_list_jobs` is Wave 37/39 collect+filter (not page-level only) |
 | Hot-reload of deny tools / job prefixes | **Wave 24 done** — `ReloadableDenyOnly`; see [Hot-reload](#hot-reload-wave-24--wave-25-hot-apply) |
 | force_read_only + max_result_bytes on reload | **Wave 25/31 done*** — `DynamicForce` + `SetWithinCeiling` via `OnSuccess` |
@@ -456,7 +456,7 @@ Cursor config remains secret-free; point the process at the overlay with env:
 | MUT-001 confirm cooldown + token TTL offline canary | **Wave 48** — `mutation_confirm_cooldown_residual` in `RunSecuritySelfCheck` proves DefaultTokenTTL/DefaultConfirmCooldown and fail-closed re-confirm deny offline; residual: multi-tenant gateway mutations not covered |
 | Raise budget above serve ceiling | **Wave 37–38** — serve `--hard-max-bytes` / env bootstrap; **AbsoluteMaxHardMaxBytes 64 MiB** fail-closed; overlay only lowers; re-serve to raise bootstrap (≤64 MiB) |
 | L1 log search after mid-session policy change | **Wave 33 done*** — `enforceSearchLogsJobPolicy` resolves the generation job (meta only), then tool `Evaluate` **and** `CheckStoreRead` before `Search`/frame open; either deny wins (fail closed). Covers `job_name`, `generation_id`, and smuggle cases. *Residual: none for single-generation L1 search; multi-job fan-in is N/A (engine is one generation). Other multi-job tools (e.g. mirror related) already re-check per job. |
-| Conformance / adversarial suite | **POL-005 MVP + Wave 40–44 Done*** — `internal/policy/conformance_test.go` + `wave40`/`wave42`–`wave44_conformance_test.go` (deny-only Document canaries); tools `pol_conformance_test.go` + `wave40`–`wave44_conformance_test.go` hard-assert hard-cap list_artifacts, body-bytes resolve, PolicyFingerprintMaterial, incomplete list_jobs Message, collect max pages, HTTP RequireToken; diagnostics hard-assert `policy_multisig_lite_residual`, `operator_caps_snapshot` (incl. body-bytes keys), `adapter_framework_residual`, `adapter_allowlist_provenance_lite`; mcpserver hard-assert `ResolveHTTPMaxBodyBytes` / `AbsoluteMaxBodyBytes` (16 MiB). Residual: live disposable Jenkins matrix (TST-001 live). |
+| Conformance / adversarial suite | **POL-005 MVP + Wave 40–44 implemented — `internal/policy/conformance_test.go` + `wave40`/`wave42`–`wave44_conformance_test.go` (deny-only Document canaries); tools `pol_conformance_test.go` + `wave40`–`wave44_conformance_test.go` hard-assert hard-cap list_artifacts, body-bytes resolve, PolicyFingerprintMaterial, incomplete list_jobs Message, collect max pages, HTTP RequireToken; diagnostics hard-assert `policy_multisig_lite_residual`, `operator_caps_snapshot` (incl. body-bytes keys), `adapter_framework_residual`, `adapter_allowlist_provenance_lite`; mcpserver hard-assert `ResolveHTTPMaxBodyBytes` / `AbsoluteMaxBodyBytes` (16 MiB). Residual: live disposable Jenkins matrix (TST-001 live). |
 
 ### L1 search job re-eval (Wave 19 + Wave 33 store PEP)
 
@@ -492,42 +492,42 @@ Pure `internal/policy` checks (no tools import cycle); secret-free bool details 
 
 Wave 40 list privacy (hard-cap `list_artifacts`, policy-bound `list_jobs` page tokens, incomplete `Message`) is proven in **tools-layer** unit/MCP/conformance tests (`listArtifactsWithPolicyFilter`, `PolicyFingerprintMaterial`, collect incompleteness) — not re-asserted in pure `internal/policy` self-check (no tools import cycle).
 
-### Wave 40 list privacy (Done*)
+### Wave 40 list privacy (implemented)
 
 - `list_artifacts`: hard-cap fetch when `deny_artifact_paths` live, filter, then re-slice to caller `max_artifacts` (`listArtifactsWithPolicyFilter`).
 - `list_jobs` collect path: page_token fingerprint includes sorted live `deny_job_prefixes` / `deny_branch_names` (`PolicyFingerprintMaterial`); incomplete collect sets non-secret `Message`.
 
-### Wave 41 Done* (landed)
+### Wave 41 (historical)
 
 - Artifact cache path: `getCachedArtifactList` applies `deny_artifact_paths` via `listArtifactsWithPolicyFilter` + live post-filter; cache keys use `ArtifactPolicyFingerprintMaterial` (compare/diagnose).
 - `list_jobs` collect max pages: operator-tunable via `--list-jobs-collect-max-pages` / `JENKINS_MCP_LIST_JOBS_COLLECT_MAX_PAGES` (`ResolveListJobsCollectMaxPages`; default 50, absolute 200 fail-closed).
 - HTTP deny-anonymous loopback: `JENKINS_MCP_HTTP_DENY_ANONYMOUS` opt-in alias of `--http-require-token` / `JENKINS_MCP_HTTP_REQUIRE_TOKEN` (same `RequireToken` path; **default off**).
 
-### Wave 42 Done* (landed)
+### Wave 42 (historical)
 
 - Artifacts hard-cap resolve: env/flag raise of list hard cap (`--artifacts-hard-cap` / `JENKINS_MCP_ARTIFACTS_HARD_CAP` via `ResolveArtifactsHardCap`; default **500**, absolute **2000** fail-closed; live `ArtifactsHardCap()`).
 - Nodes/views collect max pages: operator-tunable like list_jobs (`ResolveNodesCollectMaxPages` / `ResolveViewsCollectMaxPages`; default **50**, absolute **200**).
 - Multi-sig self-check: offline `policy_multisig_lite_residual` canary (see below).
 
-### Wave 43 Done* (landed)
+### Wave 43 (historical)
 
 - Artifact list body bytes resolve: `ResolveArtifactsListBodyBytes` / `jenkins.SetArtifactListBodyBytes` (default **2 MiB**, absolute **8 MiB** fail-closed).
 - Doctor / offline `operator_caps_snapshot` item: secret-free snapshot of live process caps (collect pages, hard max, artifacts hard cap).
 - Adapter framework residual self-check item (`adapter_framework_residual`): offline canary present (default-off + production-backend residual honesty).
 
-### Wave 44 Done* (landed)
+### Wave 44 (historical)
 
 - Operator caps body-bytes fields: `artifacts_list_body_bytes` / `default_artifacts_list_body_bytes` / `absolute_max_artifacts_list_body_bytes` in `operator_caps_snapshot`.
 - Adapter allowlist Ed25519 provenance lite: `LoadAllowlistFileWithKeys` + env `JENKINS_MCP_ADAPTER_ALLOWLIST_TRUSTED_KEYS`; self-check `adapter_allowlist_provenance_lite` (cosign/SBOM/HSM residual).
 - HTTP MaxBodyBytes resolve: `ResolveHTTPMaxBodyBytes` / `--http-max-body-bytes` / `JENKINS_MCP_HTTP_MAX_BODY_BYTES` (default **4 MiB**, absolute **16 MiB** fail-closed).
 
 
-### Wave 45 Done* (landed)
+### Wave 45 (historical)
 
 - Adapter allowlist MinSignatures dual-control lite: `ResolveAllowlistMinSignatures` / `--adapter-allowlist-min-signatures` / `JENKINS_MCP_ADAPTER_ALLOWLIST_MIN_SIGNATURES` (default **1**, absolute **16**); multi-sig requires ≥N distinct trusted key_ids.
 - Operator caps: HTTP body constants (4/16 MiB) + identity re-verify TTL bounds (10s–30m) in `operator_caps_snapshot`.
 - Offline NET-003 self-check: `jenkins_resilience_residual` (GET/HEAD retry + circuit; POST never auto-retry; live chaos residual).
 
-### Offline multi-sig self-check (Wave 42 Done*)
+### Offline multi-sig self-check (Wave 42 implemented)
 
 - `policy_multisig_lite_residual` — proves multi-sig lite MinSignatures 2-of-2 verify + 1-of-2 fail-closed; details mark `residual_true_threshold=false` and `residual_hsm=false` (true t-of-n / HSM not implemented).

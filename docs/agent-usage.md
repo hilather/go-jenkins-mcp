@@ -302,12 +302,12 @@ jenkins-mcp serve --profile <id> --enable-admin-mcp --admin-role operator
 |------------|----------|--------|
 | Read | `admin_health`, `admin_me`, `admin_gateway_residual_status`, `admin_list_profiles`, `admin_policy_effective`, `admin_metrics`, `admin_audit_list`, `admin_doctor`, `admin_cache_status`, `admin_fleet_cache_status`, `admin_fleet_cache_doctor` | Secret-free; never tokens |
 | Write | `admin_cache_evict` (`confirm=EVICT`), `admin_fleet_cache_purge` (`confirm=PURGE`), `admin_consent_purge` (`CLEAR_ALL`), `admin_subject_invalidate`, `admin_audit_settings_put`, `admin_support_bundle` | Process role gates; AUD-001 on writes |
-| Done* pilot | `admin_rbac_list_bindings`, `admin_rbac_put_binding`, `admin_rbac_delete_binding` | UI-011 / POL-006; fleet SoT = signed config |
+| implemented pilot | `admin_rbac_list_bindings`, `admin_rbac_put_binding`, `admin_rbac_delete_binding` | UI-011 / POL-006; fleet SoT = signed config |
 | Residual | `admin_saml_*` | POL-007 MCP residual |
 
 **Rules:** Do not scrape `http://127.0.0.1:8787/admin/v1`. Prefer `admin_*` when
 registered. Confirm tokens are exact strings. `admin_policy_apply` durable write
-to signed enterprise bundles remains residual (validate path Done\*).
+to signed enterprise bundles remains residual (validate path implemented).
 
 ---
 

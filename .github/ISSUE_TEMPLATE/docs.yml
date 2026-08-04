@@ -1,0 +1,35 @@
+name: Documentation defect or drift
+description: Incorrect, missing, or outdated docs (not a product bug).
+title: "docs: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: Active docs describe current behavior only. No phase boards or task backlogs.
+  - type: textarea
+    id: location
+    attributes:
+      label: Doc path or URL
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong or missing?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected documentation
+    validations:
+      required: true
+  - type: dropdown
+    id: support
+    attributes:
+      label: Support-status concern (if any)
+      options:
+        - n/a
+        - Overstated (mock/stub claimed as full)
+        - Understated (missing Supported path)
+        - Missing page for exposed feature

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Validate docs/jenkins-mcp-enterprise-task-index.json (FND/FLC DAG hygiene).
+"""Validate archived enterprise task-index JSON (DAG hygiene).
 
+Historical artifact under docs/archive/ — not an active product SoT.
 Exit 0 when: unique IDs, known deps, no self/dup deps, acyclic graph.
 Prints a short report suitable for CI/scratch capture.
 """
@@ -14,7 +15,7 @@ from pathlib import Path
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    path = root / "docs" / "jenkins-mcp-enterprise-task-index.json"
+    path = root / "docs" / "archive" / "jenkins-mcp-enterprise-task-index.json"
     if len(sys.argv) > 1:
         path = Path(sys.argv[1])
 

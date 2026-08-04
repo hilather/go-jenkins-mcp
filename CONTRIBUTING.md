@@ -1,150 +1,142 @@
 # Contributing
 
-## Agent and human policy
+## Policy
 
 All contributors and coding agents must follow root **`AGENTS.md`**:
 
-- Tests for every feature
-- Regression tests for every fix
-- Code review on every change set
-- Documentation kept current
-- Incomplete work tracked with next steps
-
-## Implementation backlog
-
-Work is planned against:
-
-- `docs/jenkins-mcp-enterprise-architecture.md`
-- `docs/jenkins-mcp-enterprise-agent-todo.md` (task source of truth)
-- `docs/jenkins-mcp-enterprise-task-index.json` (dependencies)
-
-Prefer **one task ID per pull request** unless a task allows pairing.
+- Tests for every feature; regression tests for every fix
+- Code review on every non-trivial change set
+- Documentation kept current with behavior
+- Free disposable labs are sufficient for product qualification
+- Open work lives in **GitHub Issues**, not Markdown backlogs
+- Root `README.md` stays high-level; drill-down docs live under `docs/`
 
 ## Development workflow
 
 ```bash
-make test    # unit/contract tests (no live Jenkins credentials)
-make build   # local binary with version metadata
-make lint    # formatting + static checks when configured
+export PATH="$HOME/.local/go/bin:$PATH"   # if Go is installed under ~/.local/go
+export JENKINS_MCP_AUTH=""                # never inject real Jenkins credentials into unit tests
+
+make fmt
+make lint                # gofmt check + go vet
+make test                # unit/contract tests (no live Jenkins)
+make build
+make package             # optional; required CI also packages
+make vuln                # govulncheck (required CI job)
+make ci                  # lint + test + build (fast local gate)
+make docs-check          # Markdown links, policy, integration coverage
 ```
 
-## Chaos / fault-injection (QA-002)
-
-Deterministic suites (no live Jenkins; included in `make test` when fast):
-
-```bash
-export PATH="$HOME/.local/go/bin:$PATH"
-# L1 frames, L2 packs, logmirror
-go test ./internal/store/ ./internal/logmirror/ ./internal/archive/ -count=1 -run Chaos
-# Jenkins client HTTP faults (truncated progressive, cancel, empty JSON, POST no-retry)
-go test ./internal/jenkins/ -count=1 -run ChaosHTTP
-# MCP tool-context cancel + HTTP serve cancel (FND-006 residual)
-go test ./internal/mcpserver/ ./internal/tools/ -count=1 -run 'Cancel|cancel'
-# Offline MCP protocol matrix (FND-006 Wave 20; Cursor host CI still residual)
-go test ./internal/tools/ ./internal/mcpserver/ -count=1 -run 'ProtocolMatrix|MCPProtocolMatrix'
-# Offline MCP stdio binary smoke (FND-006 Wave 25; opt-in; not in make test)
-make stdio-smoke
-```
-
-Do not add multi-second sleeps in chaos tests unless unavoidable; prefer
-`httptest` + context cancel. Mutation POSTs must never auto-retry (duplicate
-trigger safety). See `docs/pilot/README.md` for residual live-chaos gaps.
-
-## Fuzz testing (QA-001)
-
-Native Go fuzz targets (`testing.F`, go1.18+) cover high-risk parsers:
-
-| Package | Targets (representative) |
-|---------|---------------------------|
-| `internal/jenkins` | `FuzzBuildJobPath`, `FuzzNormalizeBaseURL`, `FuzzSanitizeArtifactPath`, `FuzzInventoryZip`, progressive limits |
-| `internal/archive` | `FuzzOpenPack`, `FuzzParseSeekTable`, `FuzzParseIndex`, `FuzzScanFrames` |
-| `internal/redact` | `FuzzStripControlSequences`, `FuzzRedactText`, `FuzzSanitizeForModel`, `FuzzRedactJSON` |
-| `internal/tools` | `FuzzJobFullName`, `FuzzPrepareBuildLogsForModel`, `FuzzPolicyTargetFromArgs` |
-| `internal/contracts` | `FuzzParseJobFullName`, `FuzzIsAbsoluteHTTPURL` |
-| `internal/mutation` | `FuzzNormalizeParams`, `FuzzValidateAgainstDefinitions` (MUT-002) |
-| `internal/update` | `FuzzParseManifest`, `FuzzLoadLKG` (UPD-001 fail-closed) |
-| `internal/policy` | `FuzzLoadOverlayJSON`, `FuzzDenyJobPrefixMatch` (POL overlay / job prefixes) |
-| `internal/auth` | `FuzzClassifyFallthroughProbe`, `FuzzParseProtectedResourceMetadata` (OAUTH-009 pure) |
-
-Seed corpora are registered with `f.Add(...)` in each `Fuzz*` function. Crashers
-found by the fuzzer are retained under `testdata/fuzz/<FuzzName>/` (git-friendly).
-
-**Unit test path (no generation):** `go test` runs each `Fuzz*` once over its seeds.
-
-**Short smoke (opt-in):**
-
-```bash
-export PATH="$HOME/.local/go/bin:$PATH"
-make fuzz-smoke                # default FUZZTIME=500x per target (count-based)
-make fuzz-smoke FUZZTIME=2000x # more mutations
-make fuzz-smoke FUZZTIME=5s    # wall-clock still supported
-```
-
-CI uses `scripts/fuzz-smoke.sh` with **count-based** `-fuzztime=500x`, `GOMAXPROCS=4`,
-and a single automatic retry for pure `context deadline exceeded` coordinator
-cancel flakes (not for written crashers). Prefer `Nx` over `1s` on shared runners.
-
-**Longer local / CI nightlies:**
-
-```bash
-go test ./internal/jenkins  -run=^$ -fuzz=FuzzSanitizeArtifactPath -fuzztime=5m
-go test ./internal/archive  -run=^$ -fuzz=FuzzOpenPack -fuzztime=10m
-go test ./internal/redact   -run=^$ -fuzz=FuzzSanitizeForModel -fuzztime=5m
-go test ./internal/mutation -run=^$ -fuzz=FuzzValidateAgainstDefinitions -fuzztime=5m
-go test ./internal/update   -run=^$ -fuzz=FuzzParseManifest -fuzztime=5m
-go test ./internal/policy   -run=^$ -fuzz=FuzzLoadOverlayJSON -fuzztime=5m
-go test ./internal/auth     -run=^$ -fuzz=FuzzParseProtectedResourceMetadata -fuzztime=5m
-```
-
-Fuzz targets must not panic on garbage (returning an error is fine). Inputs are
-size-capped inside the targets so accidental huge corpora stay bounded.
+Go version: see `go.mod` (**1.25.x**). Tier-1 hosts: Rocky Linux and Ubuntu only.
 
 ## Pull requests
 
-1. Reference the task ID (e.g. `FND-003`) in the PR title or body.
-2. Include tests and doc updates in the same PR.
-3. Do not check backlog DoD boxes without demonstrated evidence.
-4. If work is incomplete, list **next steps** in the PR.
+1. Reference a **GitHub Issue** when one exists (task IDs / wave numbers are not required).
+2. Include tests and documentation in the same PR for behavior changes.
+3. In the PR body, list:
+   - What behavior changed
+   - Tests run (`make test` / scoped packages)
+   - Free labs run **or** why no lab applies
+   - Docs/diagrams updated
+   - Security / compatibility / migration / persistent-format impact (or “none”)
+   - How to verify and how to roll back
+   - Remaining work filed as Issues (not Markdown TODOs in product docs)
+4. Do not add phase boards, `Done*`, or backlog checkbox updates to the repo.
 
-## CI matrix (FND-007)
+Operational runbooks may keep unchecked procedure steps; those are operator
+checklists, not implementation-completion trackers.
+
+### Reproduce required CI locally (canonical)
+
+Use Go **1.25.x** (see `go.mod`). Put the official toolchain on `PATH` if needed
+(`export PATH="$HOME/.local/go/bin:$PATH"`). Required merge-gate jobs map to:
+
+```bash
+export PATH="$HOME/.local/go/bin:$PATH"
+export JENKINS_MCP_AUTH=""
+
+make fmt
+make lint
+go test -count=1 -timeout=20m ./...
+# Ubuntu matrix cell also runs:
+# go test -count=1 -race -timeout=30m ./...
+make build
+make package
+make vuln
+
+# Fast combined gate (lint + test + build; not package/vuln):
+make ci
+```
+
+Optional (non-required, `continue-on-error` on GitHub):
+
+```bash
+make package-smoke
+make fuzz-smoke          # CI uses FUZZTIME=500x
+make stdio-smoke
+make docs-check
+```
+
+**Free disposable labs** (opt-in; not required for product qualification):
+`make live-jenkins-test`, `make live-oauth-test`, `make live-jwt-rs-test`,
+`make live-saml-test`, `make fleet-cache-lab-smoke`. Customer production Entra,
+AgentCore, or corporate Jenkins is **optional operator validation**, not a merge
+or release gate.
+
+Rocky Linux 9 is exercised in the GitHub Actions container matrix cell
+(`rockylinux:9` in `.github/workflows/ci.yml`); local Ubuntu/host runs cover the
+same offline unit/contract path.
+
+## CI matrix
 
 Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Workflow-level
 `permissions: contents: read` only — untrusted PR jobs never receive Jenkins or
 OAuth secrets.
 
-| Job name (display) | Job id | When | Merge gate? | Notes |
-|--------------------|--------|------|-------------|-------|
-| `lint-test-build` | `check` | push / PR | **Yes** | Ubuntu host + Rocky 9 container; gofmt, vet, test, race (Ubuntu only), build, `make package`; optional perf step (continue-on-error) |
-| `govulncheck` | `govulncheck` | push / PR | **Yes** | `golang.org/x/vuln` scan of `./...` |
-| `package-smoke` | `package-smoke` | push / PR | No | Bare Ubuntu only; `make package-smoke` (PKG-001 offline); `continue-on-error` |
-| `fuzz-smoke` | `fuzz-smoke` | push / PR | No | `make fuzz-smoke` (`FUZZTIME=500x`); `continue-on-error` |
-| `stdio-smoke (host-lifecycle offline)` | `stdio-smoke` | push / PR | No | Wave 26+33 FND-006 offline MCP binary host-lifecycle (`make stdio-smoke`); `continue-on-error`; **not** Cursor product binary CI |
-| `live-jenkins-smoke (manual)` | `live-jenkins-smoke` | `workflow_dispatch` only | No | Disposable Jenkins LTS via Docker Compose; not on push/PR |
+| Job name (display) | Merge gate? | Notes |
+|--------------------|-------------|-------|
+| `lint-test-build` | **Yes** | Ubuntu + Rocky 9; gofmt, vet, test, race (Ubuntu), build, package |
+| `govulncheck` | **Yes** | `golang.org/x/vuln` scan of `./...` |
+| `docs-check` | **Yes** (when present) | Links, policy greps, integration coverage |
+| `package-smoke` | No | `continue-on-error` |
+| `fuzz-smoke` | No | `continue-on-error` |
+| `stdio-smoke` | No | Offline MCP binary host-lifecycle; not Cursor product CI |
+| `live-jenkins-smoke` | No | `workflow_dispatch` only |
 
-**Configure branch protection** so only `lint-test-build` and `govulncheck` are
-required checks. Optional jobs surface signal without blocking the merge path.
-Cursor product binary / host stdio lifecycle CI remains residual even when
-`stdio-smoke` is green (offline host-lifecycle matrix is Done*).
+**Branch protection** should require `lint-test-build`, `govulncheck`, and
+`docs-check` (when the job exists).
 
-Local equivalents:
+## Chaos / fault-injection
+
+Deterministic suites (no live Jenkins; included in `make test` when fast):
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"
-make ci                  # lint + test + build (fast local gate)
-make package-smoke       # optional PKG-001 offline package checks
-make fuzz-smoke               # optional QA-001 short fuzz (CI uses 500x)
-make stdio-smoke         # optional FND-006 offline binary host-lifecycle MCP smoke (CI optional job)
+go test ./internal/store/ ./internal/logmirror/ ./internal/archive/ -count=1 -run Chaos
+go test ./internal/jenkins/ -count=1 -run ChaosHTTP
+go test ./internal/mcpserver/ ./internal/tools/ -count=1 -run 'Cancel|cancel'
+go test ./internal/tools/ ./internal/mcpserver/ -count=1 -run 'ProtocolMatrix|MCPProtocolMatrix'
+make stdio-smoke   # opt-in offline binary smoke
 ```
 
-## Branch protection
+## Fuzz testing
 
-The default branch should require:
+Native Go fuzz targets cover high-risk parsers (`internal/jenkins`, `archive`,
+`redact`, `tools`, `contracts`, `mutation`, `update`, `policy`, `auth`).
 
-- Reviewed pull requests (no direct push for ordinary contributors)
-- Passing required CI checks: **`lint-test-build`** and **`govulncheck`** only
-  (see [CI matrix](#ci-matrix-fnd-007) above)
+```bash
+make fuzz-smoke                # default FUZZTIME=500x
+make fuzz-smoke FUZZTIME=5s
+```
 
-Repository owners configure GitHub branch protection for `master`/`main`.
+Fuzz targets must not panic on garbage. Inputs are size-capped.
+
+## Documentation
+
+- Markdown under `docs/` is canonical; see `docs/README.md` for navigation.
+- Support labels: Supported / Opt-in supported / Free-lab validated / Experimental / Stub/demo / Not implemented.
+- Architecture changes include Mermaid diagrams where helpful.
+- Run `make docs-check` before merging docs-heavy PRs.
 
 ## License
 

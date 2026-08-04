@@ -21,7 +21,7 @@ probe an operator-pinned log backend for jobs they cannot read.
 
 | Residual | Status |
 |----------|--------|
-| Real Splunk / ELK / OpenSearch / Datadog Logs client | **Not implemented** |
+| Real Splunk / ELK / OpenSearch / Datadog Logs client | **Not implemented |
 | Shipping **MCP security audit** (AUD-001 JSONL) to SIEM | **Not this adapter** — see [audit-trail-review.md](../security/audit-trail-review.md) **AUD-T-010…012** |
 | Full console dump proxy / progressive log passthrough | **Forbidden** |
 | Arbitrary backend query-language (SPL, Lucene DSL, …) passthrough | **Forbidden** |

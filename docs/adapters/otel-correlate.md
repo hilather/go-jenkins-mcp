@@ -14,8 +14,8 @@ with source and freshness labels.
 
 | Residual | Status |
 |----------|--------|
-| Real OTLP/OTLP-HTTP protobuf collector clients | **Not implemented** (framework stub: [otel-export.md](otel-export.md)) |
-| Querying Tempo / Jaeger / Honeycomb / Datadog APM APIs | **Not implemented** |
+| Real OTLP/OTLP-HTTP protobuf collector clients | **Not implemented (framework stub: [otel-export.md](otel-export.md)) |
+| Querying Tempo / Jaeger / Honeycomb / Datadog APM APIs | **Not implemented |
 | Sending log text to telemetry to search it | **Forbidden** (never) |
 | Separate adapter credentials for backends | Residual with INT-003-style secrets |
 

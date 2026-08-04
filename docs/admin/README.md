@@ -118,7 +118,7 @@ start; restart or redeploy to change role. Multiple humans share that
 token+role for a given host — that is the pilot model (HOST-007 honesty:
 single process role).
 
-**SAML admin SSO (POL-007 Done\* offline):**
+**SAML admin SSO (POL-007 implemented offline):**
 
 | Piece | Detail |
 |-------|--------|
@@ -143,7 +143,7 @@ in secret stores / env — **not** committed config. See ADR 0015.
 | Surface | SPA status (honest) |
 |---------|---------------------|
 | Overview / policy effective / doctor read | Scaffold (UI-001) + BFF (UI-002) + role badge / token control (UI-003) + serve/CSP packaging (UI-008). **MCP-OPS:** same reads available as `admin_*` tools when serve uses `--enable-admin-mcp` (default off) — [mcp-ops-parity.md](mcp-ops-parity.md) |
-| **Fleet-cache** (FLC-063) | **BFF+MCP Done\***: `GET /admin/v1/fleet-cache/status` / `doctor`, `POST …/purge` (`confirm: "PURGE"`, operator); MCP `admin_fleet_cache_status` / `_doctor` / `_purge`. Process-local; mode default **off**. **SPA page residual** (no dedicated SPA section yet). See [api-v1.md](api-v1.md) § Fleet-cache. |
+| **Fleet-cache** (FLC-063) | **BFF+MCP implemented: `GET /admin/v1/fleet-cache/status` / `doctor`, `POST …/purge` (`confirm: "PURGE"`, operator); MCP `admin_fleet_cache_status` / `_doctor` / `_purge`. Process-local; mode default **off**. **SPA page residual** (no dedicated SPA section yet). See [api-v1.md](api-v1.md) § Fleet-cache. |
 | **Metrics** (UI-005) | Auto-refresh (15s) with pause on hidden tab + manual pause; **Apache ECharts** snapshot bars + session history (≤60 pts); tables under charts; secret-free JSON export. **Residual:** process-local only; no fleet aggregation |
 | **Audit** (UI-006) | type dropdown (catalog from settings API + static fallback), limit/before, BFF **`external_subject`** exact match (case-sensitive) on multi-user `externalSubject`, **externalSubject** / **subjectKeyHash** table columns (muted/truncated), SPA client exact filter residual for older BFF, detail drawer, load-older, export includes multi-user fields. **Event type settings:** enable/disable all known AUD-001 types (`GET`/`PUT …/audit/settings`, `gateway_ops` on write; `type_filter.json`; File sink reloads on mtime). **Residual:** no live SSE tail; page-capped client export only; multi-pod aggregation residual |
 | Policy write editor | Not yet (UI-004) |

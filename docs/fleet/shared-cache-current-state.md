@@ -52,7 +52,7 @@ new work (Planned — FLC-* backlog; not shipped)
 
 **First production slice (when implemented):** sealed **completed** Jenkins console logs only. Running logs, arbitrary artifacts, and peer L2 packs are later (FLC-080+).
 
-**Default today:** plane A remains **local per profile/host**. Optional peer coordination library is **Done\*** with mode default **off** until explicitly enabled. Offline release gate **FLC-073 Done\***; **live multi-host production GO residual**. Operator canary: [shared-cache-operator.md](shared-cache-operator.md).
+**Default today:** plane A remains **local per profile/host**. Optional peer coordination library is **implemented with mode default **off** until explicitly enabled. Offline release gate **FLC-073 implemented; **live multi-host production GO residual**. Operator canary: [shared-cache-operator.md](shared-cache-operator.md).
 
 ---
 
@@ -98,7 +98,7 @@ new work (Planned — FLC-* backlog; not shipped)
 | Encryption portability | On-disk ciphertext must not be replicated as-is across nodes |
 | Wire metadata | Need pure-zstd size/hash columns for export (schema extension Planned) |
 | Quota / eviction | No owner-replica vs near-cache roles yet |
-| Recovery | Import journal + committed mapping (FLC-023); startup abort/quarantine **Done\*** (FLC-024) |
+| Recovery | Import journal + committed mapping (FLC-023); startup abort/quarantine **implemented (FLC-024) |
 
 ---
 
@@ -116,30 +116,30 @@ new work (Planned — FLC-* backlog; not shipped)
 
 | Capability | Status |
 |------------|--------|
-| Local plane A L1/L2 cache | **Done** (existing) |
-| Multi-fleet independent members + signed policy | **Done\*** (existing) |
-| `fleet_*` ops fan-out | **Done\*** vertical slice |
-| Peer owner-directed sealed-log read/import | **Done\*** library (FLC-022/023, 030…032); default mode **off** |
-| Fill lease / one-origin coordination | **Done\*** in-memory leases (FLC-040) + `CoordinateOriginFill` / logmirror FillBridge (FLC-041); partition matrix **Done\*** FLC-045 |
-| RF2 compressed-frame replication | **Done\*** library (FLC-043 planner + dual-dir import + missing-frame resume); not default-on |
-| Repair / drain / previous-owner grace | **Done\*** library (FLC-044 PlanRepair/RunRepair + drain budget); not default-on |
-| Partition / duplicate-fill / conflict | **Done\*** library (FLC-045); split-primary may still duplicate origin (safe residual) |
-| Isolation proofs | **Done\*** (FLC-052) — cross-user/controller/fleet/pool; bytes ≠ authz |
-| Crypto portability / key isolation | **Done\*** (FLC-053) — dual-key parity; cross-key fail closed |
-| Metrics / audit-style residuals | **Done\*** (FLC-061) process-local; multi-member aggregation residual **FLC-062+** |
-| Owner-aware quota / L1 roles | **Done\*** (FLC-050 library; QuotaManager wire residual) |
-| Purge + tombstone | **Done\*** (FLC-051 process-local; multi-member HTTP residual) |
-| Status / doctor | **Done\*** (FLC-062 library; admin SPA residual FLC-063) |
-| Near-cache promotion | **Done\*** (FLC-033 library; default off; never RF; serve wire residual) |
-| Offline SLO / bench gates | **Done\*** (FLC-070 unit gates; multi-member lab residual) |
-| Offline chaos / race qual | **Done\*** (FLC-071; live multi-host Docker residual) |
-| Admin BFF + MCP fleet-cache | **Done\*** (FLC-063; SPA residual; process-local purge) |
-| Canary criteria / rollback | **Done\*** (FLC-072 offline; live multi-host residual) |
-| Operator docs / canary runbook | **Done\*** (FLC-064 — [shared-cache-operator.md](shared-cache-operator.md)) |
-| Offline release gate pack | **Done\*** (FLC-073 — [shared-cache-release-gate.md](shared-cache-release-gate.md); live multi-host residual) |
-| Running-log durable frames | **Done\*** (FLC-080 library; multi-host stream residual) |
-| Finalize running without recompress | **Done\*** (FLC-081 library; multi-host residual) |
-| Object class default-deny | **Done\*** (FLC-082 — console_log only; unknown fail closed) |
+| Local plane A L1/L2 cache | **implemented (existing) |
+| Multi-fleet independent members + signed policy | **implemented (existing) |
+| `fleet_*` ops fan-out | **implemented vertical slice |
+| Peer owner-directed sealed-log read/import | **implemented library (FLC-022/023, 030…032); default mode **off** |
+| Fill lease / one-origin coordination | **implemented in-memory leases (FLC-040) + `CoordinateOriginFill` / logmirror FillBridge (FLC-041); partition matrix **implemented FLC-045 |
+| RF2 compressed-frame replication | **implemented library (FLC-043 planner + dual-dir import + missing-frame resume); not default-on |
+| Repair / drain / previous-owner grace | **implemented library (FLC-044 PlanRepair/RunRepair + drain budget); not default-on |
+| Partition / duplicate-fill / conflict | **implemented library (FLC-045); split-primary may still duplicate origin (safe residual) |
+| Isolation proofs | **implemented (FLC-052) — cross-user/controller/fleet/pool; bytes ≠ authz |
+| Crypto portability / key isolation | **implemented (FLC-053) — dual-key parity; cross-key fail closed |
+| Metrics / audit-style residuals | **implemented (FLC-061) process-local; multi-member aggregation residual **FLC-062+** |
+| Owner-aware quota / L1 roles | **implemented (FLC-050 library; QuotaManager wire residual) |
+| Purge + tombstone | **implemented (FLC-051 process-local; multi-member HTTP residual) |
+| Status / doctor | **implemented (FLC-062 library; admin SPA residual FLC-063) |
+| Near-cache promotion | **implemented (FLC-033 library; default off; never RF; serve wire residual) |
+| Offline SLO / bench gates | **implemented (FLC-070 unit gates; multi-member lab residual) |
+| Offline chaos / race qual | **implemented (FLC-071; live multi-host Docker residual) |
+| Admin BFF + MCP fleet-cache | **implemented (FLC-063; SPA residual; process-local purge) |
+| Canary criteria / rollback | **implemented (FLC-072 offline; live multi-host residual) |
+| Operator docs / canary runbook | **implemented (FLC-064 — [shared-cache-operator.md](shared-cache-operator.md)) |
+| Offline release gate pack | **implemented (FLC-073 — [shared-cache-release-gate.md](shared-cache-release-gate.md); live multi-host residual) |
+| Running-log durable frames | **implemented (FLC-080 library; multi-host stream residual) |
+| Finalize running without recompress | **implemented (FLC-081 library; multi-host residual) |
+| Object class default-deny | **implemented (FLC-082 — console_log only; unknown fail closed) |
 | HOST-008 multi-pod shared vault/session | **Cancelled** |
 
 **Isolation honesty:** mode **off** → local plane A only. Mode **`read`/`full`** → eligible members **may share** sealed completed console logs for matching fleet/pool/controller; not “always isolated after full rollout.” Authz + locator isolation (FLC-052) still apply.
@@ -152,11 +152,11 @@ new work (Planned — FLC-* backlog; not shipped)
 
 See [ADR 0016](../adr/0016-fleet-p2p-shared-cache.md) § MVP cut line:
 
-1. **MVP A** — owner-directed peer **read** of sealed completed console logs + origin fallback (**Done\*** library; mode default **off**)  
-2. **Fill** — fill lease / origin dedup (**Done\*** FLC-040/041) + partition matrix (**Done\*** FLC-045)  
-3. **RF2** — compressed-frame replication (**Done\*** FLC-043) + repair/drain library (**Done\*** FLC-044); near-cache library **Done\*** default off (FLC-033)
+1. **MVP A** — owner-directed peer **read** of sealed completed console logs + origin fallback (**implemented library; mode default **off**)  
+2. **Fill** — fill lease / origin dedup (**implemented FLC-040/041) + partition matrix (**implemented FLC-045)  
+3. **RF2** — compressed-frame replication (**implemented FLC-043) + repair/drain library (**implemented FLC-044); near-cache library **implemented default off (FLC-033)
 
-Library Done\* + offline release gate (**FLC-073**) ≠ automatic site production GO: mode remains **off** until operator canary; live multi-host soak residual.
+Library implemented + offline release gate (**FLC-073**) ≠ automatic site production GO: mode remains **off** until operator canary; live multi-host soak residual.
 
 ---
 
@@ -168,6 +168,6 @@ Library Done\* + offline release gate (**FLC-073**) ≠ automatic site productio
 | [shared-cache-architecture.md](shared-cache-architecture.md) | Target architecture summary |
 | [shared-cache-slos.md](shared-cache-slos.md) | Budgets / origin fallback |
 | [ADR 0016](../adr/0016-fleet-p2p-shared-cache.md) | Binding decision |
-| [jenkins-mcp-enterprise-agent-todo.md](../jenkins-mcp-enterprise-agent-todo.md) | FLC backlog SoT |
-| [jenkins-mcp-enterprise-task-index.json](../jenkins-mcp-enterprise-task-index.json) | Machine graph |
+| [jenkins-mcp-enterprise-agent-todo.md](../archive/jenkins-mcp-enterprise-agent-todo.md) | FLC backlog SoT |
+| [jenkins-mcp-enterprise-task-index.json](../archive/jenkins-mcp-enterprise-task-index.json) | Machine graph |
 | Absolute (GitHub): [shared-cache-current-state.md](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/fleet/shared-cache-current-state.md) | Landing/link surface |

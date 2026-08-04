@@ -42,7 +42,7 @@ Multi-fleet sites need **config-managed** SP settings and group→role maps (git
 
 7. **Offline + Keycloak lab:** Offline unit fixtures + opt-in Keycloak SAML IdP under `testdata/saml-lab/` (`make saml-lab-test`, `make live-saml-*`); default `make test` stays offline without the lab. **Live Entra/Okta/ADFS pin remains residual** (Keycloak lab ≠ production GO). Browser ACS + full IdP XML-DSig interop may need SP hardening beyond fixture verifier.
 
-8. **Package:** Pure logic lives in `internal/saml` (stdlib crypto + XML). Admin BFF wires ACS/status under `/admin/v1/saml/*`. UI-011 Access SPA + `admin_rbac_*` is pilot break-glass (**Done\***); multi-fleet SoT remains signed config.
+8. **Package:** Pure logic lives in `internal/saml` (stdlib crypto + XML). Admin BFF wires ACS/status under `/admin/v1/saml/*`. UI-011 Access SPA + `admin_rbac_*` is pilot break-glass (**implemented); multi-fleet SoT remains signed config.
 
 ## Alternatives considered
 
@@ -59,7 +59,7 @@ Multi-fleet sites need **config-managed** SP settings and group→role maps (git
 
 **Costs:** ACS/browser interop residual depth; cookie CSRF when cookie sessions ship; operators must maintain SP metadata + role maps in config.
 
-**Residuals:** Live IdP pin; encrypted assertions; multi-pod shared session store; `admin_saml_*` MCP tools (MCP-OPS residual). UI-011 Access/bindings path is **Done\*** pilot.
+**Residuals:** Live IdP pin; encrypted assertions; multi-pod shared session store; `admin_saml_*` MCP tools (MCP-OPS residual). UI-011 Access/bindings path is **implemented pilot.
 
 ## Owner
 

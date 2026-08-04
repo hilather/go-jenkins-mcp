@@ -1,0 +1,54 @@
+name: Feature or integration
+description: New product capability, tool, adapter, or auth/deploy mode.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe product work. Free disposable labs are enough for qualification.
+        Customer production validation is optional and separate.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What should exist when this is done?
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - Feature (core MCP / CLI)
+        - Integration / adapter
+        - Auth mode
+        - Deployment / packaging
+        - Admin console / admin MCP
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: support_target
+    attributes:
+      label: Target support label when done
+      options:
+        - Supported
+        - Opt-in supported
+        - Free-lab validated
+        - Experimental
+        - Stub/demo
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Tests, docs (setup/verify/security/limits/troubleshoot/rollback), free lab if integration-facing.
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: Especially production-site or customer-only validation.

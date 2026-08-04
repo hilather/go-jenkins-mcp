@@ -106,12 +106,12 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
 
 | Path | Status |
 |------|--------|
-| `ConsentRequired` → auth URL + session id only (Obtain / AuthProvider / `mapToolErr`) | **Done\*** |
-| Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway residual-status`, admin `GET /admin/v1/gateway/residual-status`, `gateway consent-residual`, `gateway consent-purge`, `gateway subject-invalidate`) | **Done\*** (env/static honesty; subject-invalidate is force re-auth residual lite) |
-| Process-local consent metadata store (TTL; optional file under XDG data) | **Done\*** — auth URL + session id + timestamps only; never tokens |
-| Same-host multi-process file honesty (reload-under-flock before mutate/write) | **Done\* lite** — CLI `consent-purge` not resurrected by live serve `Put` of stale memory; reads resync for freshness |
-| Consent metadata purge/expire CLI (`gateway consent-purge` / `consent-expire`) | **Done\*** — TTL purge / `--session-id` / `--all`; secret-free summary; never tokens; same-host file lite; **persist fail closed** (CLI non-zero / admin 500 when file write fails — never silent success) |
-| Consent metadata purge/expire CLI (`gateway consent-purge` / `consent-expire`) | **Done\*** — TTL purge / `--session-id` / `--all --confirm=CLEAR_ALL`; secret-free summary; never tokens; same-host file lite |
+| `ConsentRequired` → auth URL + session id only (Obtain / AuthProvider / `mapToolErr`) | **implemented |
+| Operator residual surfaces (`doctor` `gateway_status`, `gateway qualify` residual row, `gateway residual-status`, admin `GET /admin/v1/gateway/residual-status`, `gateway consent-residual`, `gateway consent-purge`, `gateway subject-invalidate`) | **implemented (env/static honesty; subject-invalidate is force re-auth residual lite) |
+| Process-local consent metadata store (TTL; optional file under XDG data) | **implemented — auth URL + session id + timestamps only; never tokens |
+| Same-host multi-process file honesty (reload-under-flock before mutate/write) | **implemented lite** — CLI `consent-purge` not resurrected by live serve `Put` of stale memory; reads resync for freshness |
+| Consent metadata purge/expire CLI (`gateway consent-purge` / `consent-expire`) | **implemented — TTL purge / `--session-id` / `--all`; secret-free summary; never tokens; same-host file lite; **persist fail closed** (CLI non-zero / admin 500 when file write fails — never silent success) |
+| Consent metadata purge/expire CLI (`gateway consent-purge` / `consent-expire`) | **implemented — TTL purge / `--session-id` / `--all --confirm=CLEAR_ALL`; secret-free summary; never tokens; same-host file lite |
 | Browser 3LO interactive UX automation | **Residual** — not automated; operator/agent opens `authorization_url` out-of-band |
 | AgentCore durable consent / token vault | **Residual** (not this process-local metadata store) |
 | Multi-replica / multi-pod consent correlation | **Out of scope** (HOST-008 cancelled) — same-host file flock only; multi-fleet per member |
@@ -124,7 +124,7 @@ the **tool error path** (`mapToolErr`): MCP model-visible message includes
   `$XDG_DATA_HOME/jenkins-mcp/gateway/consent_sessions.json` (override
   `JENKINS_MCP_CONSENT_STORE_PATH`). Mode 0600; schema is metadata only
   (no `access_token` / `refresh_token` / `client_secret` fields — load rejects them).
-- **Same-host multi-process Done\* lite:** every mutation (`Put` / `Delete` /
+- **Same-host multi-process implemented lite:** every mutation (`Put` / `Delete` /
   `PurgeExpired` / `Clear`) with `FilePath` set takes flock → **reload disk** →
   apply mutation → write. Reads (`Get` / `List` / …) resync under flock so CLI
   purge is visible without waiting for a Put. Prevents the prior last-writer-wins
@@ -167,11 +167,11 @@ multi-pod fan-out.
 
 | Path | Status |
 |------|--------|
-| `gateway.InvalidateSubjectLocal(caller, principalCache, tokenCache?)` | **Done\*** — secret-free; drops `PrincipalStore` + optional `TokenCache` (subject-namespace purge when `DeleteBySubjectKey` available). **Honesty:** `principal_cleared` only when `PrincipalStore.Delete` succeeds; `FilePrincipalCache` IO/corrupt/save failure → `principal_cleared=false` + residual note (parity with `FileTokenCache.DeleteBySubjectKey` `-1`) |
-| `CredentialProvider.Invalidate` companion principal drop (AgentCore / Mode A / Mode B) | **Done\*** — token cache (Mode C) + `PrincipalCache`; durable vault entries **not** deleted (use `gateway vault delete`) |
-| CLI `jenkins-mcp gateway subject-invalidate` (alias `invalidate-subject`) | **Done\*** — process-local principal clear **or** same-host `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` + optional `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH`; never claims `principal_cleared` when file Delete fails |
-| Admin BFF `POST /admin/v1/gateway/subject-invalidate` + Overview SPA form | **Done\*** residual lite (HOST-007) — same cache semantics as CLI; requires `gateway_ops` (operator/policy_admin); secret-free StatusMap; multi-pod residual |
-| Admin BFF `POST /admin/v1/gateway/consent-purge` + Overview Mode C SPA form | **Done\*** residual lite (HOST-007) — same purge semantics as CLI; clear_all requires `confirm: "CLEAR_ALL"` (SPA type-to-confirm); `gateway_ops`; secret-free counts; never tokens / session_id echo; multi-pod residual |
+| `gateway.InvalidateSubjectLocal(caller, principalCache, tokenCache?)` | **implemented — secret-free; drops `PrincipalStore` + optional `TokenCache` (subject-namespace purge when `DeleteBySubjectKey` available). **Honesty:** `principal_cleared` only when `PrincipalStore.Delete` succeeds; `FilePrincipalCache` IO/corrupt/save failure → `principal_cleared=false` + residual note (parity with `FileTokenCache.DeleteBySubjectKey` `-1`) |
+| `CredentialProvider.Invalidate` companion principal drop (AgentCore / Mode A / Mode B) | **implemented — token cache (Mode C) + `PrincipalCache`; durable vault entries **not** deleted (use `gateway vault delete`) |
+| CLI `jenkins-mcp gateway subject-invalidate` (alias `invalidate-subject`) | **implemented — process-local principal clear **or** same-host `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` + optional `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH`; never claims `principal_cleared` when file Delete fails |
+| Admin BFF `POST /admin/v1/gateway/subject-invalidate` + Overview SPA form | **implemented residual lite (HOST-007) — same cache semantics as CLI; requires `gateway_ops` (operator/policy_admin); secret-free StatusMap; multi-pod residual |
+| Admin BFF `POST /admin/v1/gateway/consent-purge` + Overview Mode C SPA form | **implemented residual lite (HOST-007) — same purge semantics as CLI; clear_all requires `confirm: "CLEAR_ALL"` (SPA type-to-confirm); `gateway_ops`; secret-free counts; never tokens / session_id echo; multi-pod residual |
 | Live IdP / AgentCore token revocation | **Residual** (OAUTH-010 / GWY-003) |
 | Multi-pod / multi-replica invalidate fan-out | **Out of scope** (HOST-008 cancelled) — same-host file paths or per-member invalidate |
 | Clear of a remote serve process memory-only caches without shared file paths | **Residual** — share `FilePrincipalCache` / `FileTokenCache` paths for same-host CLI/admin↔serve purge |
@@ -295,29 +295,29 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
 
 **Residuals (honest):**
 
-- **Policy RBAC Subject rebind:** **Done\*** foundation — per-request
+- **Policy RBAC Subject rebind:** **implemented foundation — per-request
   `policy.Subject` from trusted HTTP identity on context
   (`ContextWithPolicySubject` / `SubjectFromContext` / `effectiveSubject`).
   Process `RegisterOptions.Subject` remains the multi-user-off / missing-ctx
   default. Tool args never supply identity (`RejectIdentityToolArgs`).
-  **Done\*** Obtain→RBAC JenkinsUserID via process-local `PrincipalCache`:
+  **implemented Obtain→RBAC JenkinsUserID via process-local `PrincipalCache`:
   `policySubjectFromGatewayCtx` prefers cache (Mode A vault username) after
   successful Obtain, else HTTP/lab claim, else empty fail-closed; Verified when
   cache principal non-empty/non-anonymous; Alice/Bob deny_tools tests; groups
   never elevate. AuthProviderCtx still does not mutate request-context Values
   (cache is the rewrite path).
-- **Mutation Binding PrincipalID:** **Done\*** when HTTP/lab carries
-  JenkinsPrincipal (Valid PolicySubject). **Done\*** Obtain→Binding principal
+- **Mutation Binding PrincipalID:** **implemented when HTTP/lab carries
+  JenkinsPrincipal (Valid PolicySubject). **implemented Obtain→Binding principal
   via process-local `PrincipalCache` (Mode A vault username / Credential.JenkinsPrincipal
   recorded on successful multi-user Obtain) even without lab claim — Alice/Bob
   isolation tests; cache.String secret-free.
-- **IdP groups foundation (OAUTH-006 / GWY-002 residual lite): Done\*** —
+- **IdP groups foundation (OAUTH-006 / GWY-002 residual lite): implemented —
   JWT access-token `groups`/`roles` → `PolicySubjectFromHTTPInbound` /
   `BindSubject` with `MaxInboundGroups=64`, name length 256, default
   `FailOnGroupOverage=true`. Lab header `X-Jenkins-MCP-Lab-Groups`
   (comma-separated) only when lab identity is on. Groups never elevate
   `deny_tools` / `force_read_only`.
-- **Entra group overage fail-closed foundation (OAUTH-006): Done\*** —
+- **Entra group overage fail-closed foundation (OAUTH-006): implemented —
   JWT payloads with `_claim_names` / `_claim_sources` group overage markers
   **or** a groups-as-reference object **without** a concrete `groups` string
   array fail closed at `ValidateAccessToken` /
@@ -330,14 +330,14 @@ get 401 — so multi-subject HTTP cannot share one process-bound Obtain caller.
   GWY-003): no Graph call; incomplete overage membership is never invented.
 - **Live Entra / JWKS rotation / Mode C 3LO browser UX** remain GWY-003 /
   OAUTH-010 residuals.
-- **MCP SDK context flow / tools/call multi-user (Done\* offline, session-scoped):**
+- **MCP SDK context flow / tools/call multi-user (implemented offline, session-scoped):**
   AuthProviderCtx / SubjectFromContext only see Caller/Subject when tool handlers
   receive a context that carries them. **Protect-layer contract**
   (`multi_user_http_test.go` + `NewHTTPProtectHandler`): `RequireSubject` + lab
   identity + `AfterIdentity` injects `gateway.Caller` + `policy.Subject` into
   `r.Context()`; mock next hop sees Alice then Bob on independent sessions;
   mid-session subject swap 401s with secret-free bodies.
-  **tools/call JSON-RPC e2e (Done\* offline):**
+  **tools/call JSON-RPC e2e (implemented offline):**
   `TestMultiUserHTTP_ToolsCall_JSONRPC_AliceBobAuthProviderCtx` drives a real MCP
   Streamable HTTP client against `NewHTTPHandler` with lab identity headers,
   two sessions (Alice/Bob), and `CallTool` that exercises Mode A vault
@@ -371,7 +371,7 @@ Stable namespace: `gateway.SubjectKey(Caller)` / `Caller.SubjectKey()` /
 Empty `subjectKey` leaves page tokens unbound (stdio single-user pilot). Gateway
 mode should always pass a non-empty subject key.
 
-**Serve wire (Done*):** when `--gateway` is on, `cmd/jenkins-mcp` sets
+**Serve wire (implemented):** when `--gateway` is on, `cmd/jenkins-mcp` sets
 `tools.RegisterOptions.SubjectKey` from `gateway.SubjectKey(CallerFromBoundSubject)`.
 List tools (`jenkins_list_jobs`, `jenkins_get_jobs`, `jenkins_list_builds`) resolve
 and mint page tokens with `*WithSubject` helpers. Empty `SubjectKey` (stdio)
@@ -381,9 +381,9 @@ skips binding. **Multi-user (`JENKINS_MCP_GATEWAY_MULTI_USER`):**
 `PolicySubjectFromContext` when **Valid** (PrincipalID = `JenkinsUserID` from
 HTTP `JenkinsPrincipal` / lab `X-Jenkins-MCP-Lab-Jenkins-Principal`) else
 Caller + `PrincipalCache.Get(SubjectKey)` (Obtain/Mode A vault username) when
-non-empty, else process principal. **Done\*** per-request Jenkins principal on
+non-empty, else process principal. **implemented per-request Jenkins principal on
 mutation Binding via HTTP claim/lab **or** PrincipalCache after Obtain (Mode A
-without lab claim covered). **Done\*** policy RBAC JenkinsUserID via
+without lab claim covered). **implemented policy RBAC JenkinsUserID via
 `policySubjectFromGatewayCtx` + PrincipalCache after Obtain (prefer cache, else
 HTTP claim). **Residual:** durable L1/L2 archive namespace (STO / HOST-008).
 
@@ -401,20 +401,20 @@ HTTP claim). **Residual:** durable L1/L2 archive namespace (STO / HOST-008).
 **Concurrency defaults:** **8** concurrent per subject, **64** process-wide
 (abs ceilings **64** / **256**). Excess → `CodeQuota`.
 
-**Rate defaults (foundation Done*):** **30** tools/min per subject sustained,
+**Rate defaults (foundation implemented):** **30** tools/min per subject sustained,
 burst **10**; process default **300**/min sustained, burst **60** (abs
 **600** / **120** subject; **6000** / **600** process). Excess → `CodeQuota`.
 Alice at subject cap does not starve Bob (per-subject buckets; process token
 refunded on subject deny).
 
-**Serve wire (Done*):** `tools.RegisterOptions.SubjectLimiter` /
+**Serve wire (implemented):** `tools.RegisterOptions.SubjectLimiter` /
 `SubjectRateLimiter` are tools interfaces (implemented by
 `*gateway.SubjectLimiter` / `*gateway.SubjectRateLimiter`; tools does not
 import gateway). `addTool` calls `Allow` then `Hold` when limiter(s) and
 non-empty `SubjectKey` are set. Mutation Manager uses
 `MutationBindingFromContext` (multi-user) so confirm tokens and cooldowns cannot
 cross subjects; audit ProfileID/PrincipalID prefer the effective binding.
-**Done\*** PrincipalID from per-request `policy.Subject` (HTTP JenkinsPrincipal
+**implemented PrincipalID from per-request `policy.Subject` (HTTP JenkinsPrincipal
 claim / lab header) when Valid — Alice/Bob PrincipalID mismatch tests; else
 **PrincipalCache** (Obtain principal) when present, else process principal +
 Caller ExternalSubject isolation. Optional env:
@@ -441,7 +441,7 @@ Optional `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` applies
 `SubjectLimiter.SetMaxSubjects`; when set, `StatusMap` / residual-status include
 `subject_limiter_max_subjects` (omit when unlimited).
 
-**Policy-driven rate reduction (HOST-006 Done\* foundation):** serve constructs
+**Policy-driven rate reduction (HOST-006 implemented foundation):** serve constructs
 `SubjectRateLimiter` from env bootstrap, then optional overlay fields may only
 **lower** via `SubjectRateLimiter.LowerRate` (absolute floors 1; never raise):
 
@@ -450,13 +450,13 @@ Optional `JENKINS_MCP_GATEWAY_SUBJECT_LIMITER_MAX_SUBJECTS` applies
 | `max_tools_per_minute` | Upper bound on per-subject sustained tools/min (lower only) |
 | `max_tools_burst` | Upper bound on per-subject burst (lower only) |
 
-**Done\*** Binding PrincipalID + policy SubjectFromContext JenkinsUserID from
+**implemented Binding PrincipalID + policy SubjectFromContext JenkinsUserID from
 PrincipalCache after Obtain (prefer cache over HTTP claim). **Admin residual
-knobs Done\* (read-only):** `rateEnabled` / `ratePerMinute` / `rateBurst` on
-health + vault. **Done\* SPA Policy editor:** plain pilot overlay
+knobs implemented (read-only):** `rateEnabled` / `ratePerMinute` / `rateBurst` on
+health + vault. **implemented SPA Policy editor:** plain pilot overlay
 `max_tools_per_minute` / `max_tools_burst` (policy_admin / `policy_write`; lower
 only; empty omit). Multi-pod shared rate/slots **out of scope** (HOST-008 cancelled); same-host file rate is
-**Done\* lite** via `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`. Raise env bootstrap
+**implemented lite** via `JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`. Raise env bootstrap
 still needs serve restart.
 
 ---
@@ -520,7 +520,7 @@ wrapper (injectable `getenv` for offline tests).
 stricter than local OIDC truncate-by-default). Truncate residual string:
 `group_overage_truncated: stored_groups capped at N; excess ignored (cannot broaden access)`.
 
-**Entra distributed-claim overage (OAUTH-006 foundation Done\*):** when the
+**Entra distributed-claim overage (OAUTH-006 foundation implemented):** when the
 access token has `_claim_names.groups` / groups-as-ref **and no full `groups`
 array**, validation fails closed (`authentication` —
 `entra group overage without full groups claim; membership not invented`).
@@ -590,7 +590,7 @@ Streamable HTTP JWT subject validation uses a **refreshable JWKS source**
 | Initial fetch | Fail-closed at serve start unless optional same-host file snapshot is fresh enough |
 | Refresh TTL | Default **5m**; env `JENKINS_MCP_HTTP_JWKS_REFRESH_TTL` (Go duration; min **30s**, max **1h**; fail closed out of bounds) |
 | Max stale age | Default **0 = unlimited** stale-if-error; env `JENKINS_MCP_HTTP_JWKS_MAX_STALE` (Go duration; min **1m**, max **24h** when set; empty/`0`/`0s` = unlimited; invalid → fail closed at serve start). After a failed refresh, if snapshot age (memory **or** file) exceeds max, `Get` fails closed. |
-| Optional file cache | Env `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` — same-host multi-process **public JWKS** snapshot (flock + 0600 atomic rename; keys only). Empty → memory-only. residual-status `shared_jwks_file: true` (path **never** returned). HOST-001 / HOST-008 **Done\* lite** only. |
+| Optional file cache | Env `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` — same-host multi-process **public JWKS** snapshot (flock + 0600 atomic rename; keys only). Empty → memory-only. residual-status `shared_jwks_file: true` (path **never** returned). HOST-001 / HOST-008 **implemented lite** only. |
 | On demand + background | `Get(ctx)` refreshes when TTL elapsed (singleflight); optional ticker also started for serve |
 | Refresh failure | Prefer fresh enough **file** snapshot when configured; else **stale-if-error** (keep last good memory) unless max stale exceeded; non-secret log line only (no path, no key material) |
 | Validation | IdentityResolver calls `jwksSource.Get` **each** request so rotated `kid`s work after refresh |
@@ -616,10 +616,10 @@ Done. Live Entra JWKS under load / multi-replica session store (HOST-008).
 | Custom Jenkins authorization-server plugin | ADR 0011 / OAUTH-011 **default no-go** |
 | Shared Jenkins service account for interactive users | **Never** |
 | Real client secret storage | keyring / vault (not profile JSON) |
-| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial Done*** offline (HOST-001): `RequireSubject`, lab/JWT, session fingerprint, JWKS TTL refresh + MaxStaleAge, multi-user Obtain + **policy.Subject rebind foundation** + **protect→inner Alice/Bob** (`multi_user_http_test.go`) + **tools/call JSON-RPC Alice/Bob AuthProviderCtx e2e** (`multi_user_tools_call_test.go`, session-scoped Connect ctx) + **mid-session rebind residual expand** (`http_host001_rebind_expand_test.go`: PathPrefix strip + group claim change fail-closed + order-stable groups OK + health exempt; multi-user PathPrefix Alice/Bob swap; lab JWT Alice/Bob + group change in `TestHTTPHandler_LabJWT_MidSessionAliceBobSwapAndGroups`); residual: multi-instance JWKS HA, **live Entra / jwt-auth-filter (not offline expand Done)**, live Entra groups claim completeness, durable multi-replica session store, per-POST (intra-session) handler-ctx rebind if SDK adds it |
-| Reverse-proxy non-local matrix | HOST-002 **Partial Done***: docs + `PathPrefix` strip + dual health + offline origin pin + expanded Host/Origin matrix residual lite (`TestHOST002_StreamableHTTPOriginHostMatrix`: missing Origin, wrong/exact Origin, Host allow-list, X-Forwarded-Host/Origin ignore, TrustedProxy true no-op, PathPrefix does not weaken Origin) + `TrustedProxy` default false; **live edge residual** (no live edge claim); no CORS wildcards |
+| Streamable HTTP multi-user subject + mid-session fingerprint | **Partial implemented offline (HOST-001): `RequireSubject`, lab/JWT, session fingerprint, JWKS TTL refresh + MaxStaleAge, multi-user Obtain + **policy.Subject rebind foundation** + **protect→inner Alice/Bob** (`multi_user_http_test.go`) + **tools/call JSON-RPC Alice/Bob AuthProviderCtx e2e** (`multi_user_tools_call_test.go`, session-scoped Connect ctx) + **mid-session rebind residual expand** (`http_host001_rebind_expand_test.go`: PathPrefix strip + group claim change fail-closed + order-stable groups OK + health exempt; multi-user PathPrefix Alice/Bob swap; lab JWT Alice/Bob + group change in `TestHTTPHandler_LabJWT_MidSessionAliceBobSwapAndGroups`); residual: multi-instance JWKS HA, **live Entra / jwt-auth-filter (not offline expand Done)**, live Entra groups claim completeness, durable multi-replica session store, per-POST (intra-session) handler-ctx rebind if SDK adds it |
+| Reverse-proxy non-local matrix | HOST-002 **Partial implemented: docs + `PathPrefix` strip + dual health + offline origin pin + expanded Host/Origin matrix residual lite (`TestHOST002_StreamableHTTPOriginHostMatrix`: missing Origin, wrong/exact Origin, Host allow-list, X-Forwarded-Host/Origin ignore, TrustedProxy true no-op, PathPrefix does not weaken Origin) + `TrustedProxy` default false; **live edge residual** (no live edge claim); no CORS wildcards |
 | Health/readiness envelope | HOST-005 **partial** — `/healthz` + `/readyz` + compose/k8s limits; Obtain Ready on `/readyz` when `--gateway` |
-| Multi-replica HA | **HOST-008 cancelled** (out of scope) — single-replica only; scale via [multi-fleet](../fleet/multi-fleet-rollout.md); same-host flock lite historical Done\* |
+| Multi-replica HA | **HOST-008 cancelled** (out of scope) — single-replica only; scale via [multi-fleet](../fleet/multi-fleet-rollout.md); same-host flock lite historical implemented |
 | **Free-lab qualification (product)** | [free-lab-qualification.md](free-lab-qualification.md) — offline + free Docker labs DoD |
 | **Operator production pin residual** | [live-pin-blockers.md](live-pin-blockers.md) — site Entra / RS / multi-pod; residual-smoke honesty |
 | **Program path to team-hosted** | [roadmap/server-team-hosted.md](../roadmap/server-team-hosted.md) |
@@ -652,7 +652,7 @@ HOST-001 `RequireSubject` + shared-secret not identity; mid-session
 secret-free 401 bodies — `TestHOST001_*` / `TestHTTPHandler_LabJWT_MidSession*`);
 multi-user tools/call JSON-RPC Alice/Bob
 AuthProviderCtx isolation (`TestMultiUserHTTP_ToolsCall_JSONRPC_*`, session-scoped);
-**not live Entra Done**;
+**not live Entra implemented;
 HOST-004 two-user token-cache + page_token subject isolation; HOST-006
 SubjectLimiter + SubjectRateLimiter fair-share. Opt-in Mode C mock peer:
 `make live-oauth-*` + `go test -tags=live_oauth ./internal/gateway/qualify/`
@@ -687,7 +687,7 @@ Obtain (APITokenVaultProvider):
 |------|------|
 | `APITokenVault` | `Get` / `Put` / `Delete` by `subjectKey` (never logs values) |
 | `MemoryAPITokenVault` | Process memory for tests |
-| `FileAPITokenVault` | Lab file under configurable path, mode **0600**; multi-process flock on `path.lock` (HOST-008 **Done* lite**; not multi-pod HA) |
+| `FileAPITokenVault` | Lab file under configurable path, mode **0600**; multi-process flock on `path.lock` (HOST-008 **implemented lite**; not multi-pod HA) |
 | `APITokenVaultProvider` | Mode A `CredentialProvider` |
 | `SubjectKey(caller)` | Stable `tenant\|subject\|profile` — **never** tool args |
 | `HTTPAuthFromCredential` | HOST-003 helper: Basic (A) vs Bearer (B/C) |
@@ -744,7 +744,7 @@ jenkins-mcp gateway vault revoke --subject 'tenant|entra-sub|corp'
 **Admin console residual:** Mode A vault **write** is **CLI-only** (HOST-007 / SPA
 residual). Admin exposes secret-free vault **status** (entry count + subject-key
 hashes only). Never put vault tokens in admin JSON or the browser. Same-host
-shared file path is multi-process safe via flock (**HOST-008 Done* lite**);
+shared file path is multi-process safe via flock (**HOST-008 implemented lite**);
 multi-pod / sticky-session HA remains residual.
 
 ## Mode B — Jenkins-audience JWT bearer (HOST-010 offline)
@@ -762,7 +762,7 @@ Obtain (JWTRSBearerProvider):
 |------|------|
 | `JWTVault` | `Get` / `Put` / `Delete` by `subjectKey` (never logs values) |
 | `MemoryJWTVault` | Process memory for tests |
-| `FileJWTVault` | Lab file under configurable path, mode **0600**; multi-process flock on `path.lock` (HOST-008 **Done* lite**) |
+| `FileJWTVault` | Lab file under configurable path, mode **0600**; multi-process flock on `path.lock` (HOST-008 **implemented lite**) |
 | `JWTRSBearerProvider` | Mode B `CredentialProvider` |
 | `SubjectKey(caller)` | Same `tenant\|subject\|profile` key as Mode A — **never** tool args |
 | `HTTPAuthFromCredential` | Bearer for Mode B (and Mode C) |
@@ -839,10 +839,10 @@ opt in via `JENKINS_MCP_GATEWAY_LIVE` + token endpoint (`EnableLiveHTTPFetcher`)
 Consent metadata (`ConsentInfo`) may carry **authorization URL + session id** only —
 never access tokens, refresh tokens, client secrets, or auth codes.
 Tool path: `mapToolErr` surfaces progressive `authorization_url` + `session_id`
-(**Done\*** metadata path; browser 3LO not automated — GWY-003 / OAUTH-010 residual).
+(**implemented metadata path; browser 3LO not automated — GWY-003 / OAUTH-010 residual).
 Process-local consent metadata store (optional XDG file) remembers metadata only
 when Obtain returns `ConsentRequired` — same-host reload-before-persist flock lite
-(**Done\***); not multi-replica / multi-pod shared store (HOST-008 residual).
+(**implemented); not multi-replica / multi-pod shared store (HOST-008 residual).
 See §3 progressive consent residual table; CLI: `jenkins-mcp gateway consent-residual`,
 `jenkins-mcp gateway consent-purge` (TTL expire / `--session-id` / `--all --confirm=CLEAR_ALL`).
 

@@ -84,7 +84,7 @@ or `signatures` fields (fixed Go struct field order). Nested `overlay.signature`
 is always cleared before signing/verifying. Multi-sig signers all sign the
 **same** body.
 
-### Multi-sig verification (Done\* lite)
+### Multi-sig verification (implemented lite)
 
 `Ed25519SignatureVerifier` behavior:
 
@@ -169,7 +169,7 @@ rely on pilot `unverified_pilot` overlays. Pin **real** Ed25519 verification:
 | 5 | Optional dual-control: `JENKINS_MCP_POLICY_MIN_SIGNATURES=2` + multi-sig envelope |
 | 6 | Verify offline: `jenkins-mcp policy verify --file … --keys … --check-downgrade` |
 | 7 | Confirm serve refuses start on invalid/missing/unsigned bundle (load-time fail closed) |
-| 8 | Self-check residual honesty: multi-sig lite Done*; HSM / true *t*-of-*n* residual |
+| 8 | Self-check residual honesty: multi-sig lite implemented; HSM / true *t*-of-*n* residual |
 
 **Do not** treat `JENKINS_MCP_POLICY_REQUIRED=1` alone as crypto proof — without
 trusted keys it only uses the staging field-presence verifier.
@@ -305,17 +305,17 @@ cannot start.
 
 | Item | Notes |
 |------|-------|
-| Multi-sig lite (N distinct Ed25519 keys + `MinSignatures`) | **Done\*** (Wave 34 / MGR-001 residual) |
-| CLI multi-sign (`policy sign` multi-key / `--keys-dir`) | **Done\*** (Wave 35) — dev-only; not a fleet CA |
-| Offline self-check canary (`policy_multisig_lite_residual`) | **Done\*** (Wave 42) — proves 2-of-2 ok / 1-of-2 fail-closed; residual flags `residual_true_threshold=false`, `residual_hsm=false` |
-| `JENKINS_MCP_REQUIRE_SIGNED_POLICY` fail-closed pin | **Done\*** lite — refuse start without trusted keys / unsigned when set (gateway enterprise checklist above) |
+| Multi-sig lite (N distinct Ed25519 keys + `MinSignatures`) | **implemented (Wave 34 / MGR-001 residual) |
+| CLI multi-sign (`policy sign` multi-key / `--keys-dir`) | **implemented (Wave 35) — dev-only; not a fleet CA |
+| Offline self-check canary (`policy_multisig_lite_residual`) | **implemented (Wave 42) — proves 2-of-2 ok / 1-of-2 fail-closed; residual flags `residual_true_threshold=false`, `residual_hsm=false` |
+| `JENKINS_MCP_REQUIRE_SIGNED_POLICY` fail-closed pin | **implemented lite — refuse start without trusted keys / unsigned when set (gateway enterprise checklist above) |
 | Full threshold crypto (secret sharing, BLS aggregates, true *t*-of-*n* without N distinct sigs) | Residual — not implemented (self-check documents honesty; does not implement) |
 | Production HSM/KMS-backed signing pipeline | Residual — operator/org-owned; CLI `policy sign` is dev-only |
 | Online key discovery | Out of band only |
 | Detached `.sig` files | Envelope preferred; not implemented |
 | Gateway push of bundles | GWY / fleet epic |
 | Automatic emergency kill-switch channel | Manual higher-seq publish |
-| MGR-002 overlay `fleet_telemetry_force_off` pin (serve + hot-reload) | **Done\* lite** (`policy_overlay_pin=true`) — HSM/true multi-sig + privacy board residual; not full MGR-002 production claim |
+| MGR-002 overlay `fleet_telemetry_force_off` pin (serve + hot-reload) | **implemented lite** (`policy_overlay_pin=true`) — HSM/true multi-sig + privacy board residual; not full MGR-002 production claim |
 
 ## Security notes
 

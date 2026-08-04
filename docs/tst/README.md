@@ -1,6 +1,6 @@
 # TST-001 — Jenkins integration tests and route matrix
 
-**Task:** [TST-001](../jenkins-mcp-enterprise-agent-todo.md#tst-001---create-the-disposable-jenkins-integration-test-and-route-matrix)  
+**Lab:** disposable Jenkins (see below). Historical task id TST-001 was archived.  
 **Status (MVP offline):** machine-readable route matrix + httptest fixture inventory  
 **Status (live harness MVP):** disposable Jenkins Compose + tagged live smoke (opt-in; not default CI)  
 **Residual:** full LTS major/plugin/proxy/OIDC matrix cells (see below)

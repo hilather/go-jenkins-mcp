@@ -3,7 +3,7 @@
 **Status:** Binding terminology and path order (Phase 0)  
 **ADRs:** [0003](adr/0003-jenkins-not-oauth-authorization-server.md) (no native Jenkins AS), [0009](adr/0009-personal-api-token-secret-service.md) (API token first), [0011](adr/0011-custom-jenkins-authz-plugin-gated.md) (full AS plugin gated)  
 **Threat model:** [security/threat-model.md](security/threat-model.md)  
-**Architecture:** `docs/jenkins-mcp-enterprise-architecture.md` §§1–2, §6  
+**Architecture:** `docs/architecture/README.md` (historical: `docs/archive/jenkins-mcp-enterprise-architecture.md`) §§1–2, §6  
 
 This note is the security-facing summary so code and docs **never** claim that
 stock Jenkins is a native three-legged OAuth (3LO) authorization server.
@@ -111,7 +111,7 @@ identity must not substitute a generic service account.
 | Local PKCE browser login | OAUTH-002 residual (writes via `OIDCProvider.StoreTokens`) |
 | Token refresh store + single-flight refresh | OAUTH-004 (`TokenBundle` / keyring `method=oidc_tokens`) |
 | OAuth logout / status `has_refresh` / recovery | OAUTH-007 |
-| jwt-auth-filter lab qualification | OAUTH-009 ([jwt-auth-filter-qualification.md](auth/jwt-auth-filter-qualification.md); offline classifier Done* Wave 33; live pin residual) |
+| jwt-auth-filter lab qualification | OAUTH-009 ([jwt-auth-filter-qualification.md](auth/jwt-auth-filter-qualification.md); offline classifier implemented Wave 33; live pin residual) |
 | Capability matrix (paths/plugins) | [auth/oauth-capability-matrix.md](auth/oauth-capability-matrix.md) (OAUTH-008) |
 | AgentCore providers | GWY-* / OAUTH-010+ |
 | Full Jenkins AS plugin | Decision gate + separate epic (ADR 0011) |
@@ -138,8 +138,8 @@ JWT-shaped access tokens; **opaque** tokens skip JWT parse and bind via whoAmI.
 |-----|--------|
 | Claim matrix + residuals | [auth/oauth-003-claim-validation.md](auth/oauth-003-claim-validation.md) |
 | Groups caps (OAUTH-006 light) | `MaxStoredGroups=64`, `MaxGroupNameBytes=256` |
-| Entra group overage (OAUTH-006 foundation Done\*) | `_claim_names`/`_claim_sources` or groups-as-ref without full `groups` array → fail closed (`CheckIncompleteGroupOverage`); hybrid concrete groups OK; no Graph expansion (OAUTH-010 residual) |
-| Still residual | Live jwt-auth-filter lab / bearer RS pin — **OAUTH-005 / OAUTH-009** (offline classifier `Done*` Wave 33; production pin still residual); Graph group expansion — **OAUTH-010** |
+| Entra group overage (OAUTH-006 foundation implemented) | `_claim_names`/`_claim_sources` or groups-as-ref without full `groups` array → fail closed (`CheckIncompleteGroupOverage`); hybrid concrete groups OK; no Graph expansion (OAUTH-010 residual) |
+| Still residual | Live jwt-auth-filter lab / bearer RS pin — **OAUTH-005 / OAUTH-009** (offline classifier `implemented` Wave 33; production pin still residual); Graph group expansion — **OAUTH-010** |
 
 ### Wave 15 cross-process session invalidation (landed)
 

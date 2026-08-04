@@ -54,6 +54,7 @@ help:
 	@echo "  make fleet-cache-lab-up     FLC-003 Docker 3 members + LB (opt-in; needs Docker)"
 	@echo "  make fleet-cache-lab-down   Tear down fleet-cache lab volumes"
 	@echo "  make ci         lint + test + build (merge gate subset)"
+	@echo "  make docs-check Markdown links, policy, coverage (docs CI)"
 	@echo "  make admin-ui   UI-001 production build of web/admin → web/admin/dist"
 	@echo "  make admin-ui-embed  Build SPA and copy into internal/admin/uiembed/dist (UI-008)"
 	@echo "  make admin-ui-dev  UI-001 Vite dev server (proxies /admin → :8787)"
@@ -505,3 +506,8 @@ clean:
 .PHONY: version
 version:
 	@echo "version=$(VERSION) commit=$(COMMIT) dirty=$(DIRTY) go=$(GOVER)"
+
+.PHONY: docs-check
+docs-check:
+	bash scripts/docs-check.sh
+

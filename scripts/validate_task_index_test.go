@@ -11,17 +11,17 @@ import (
 )
 
 // TestValidateTaskIndex_RepoGraph runs scripts/validate-task-index.py against
-// the live enterprise task index (includes FLC-* reservation). Regression:
-// validator must pass when FLC runtime work is Planned (not false Done).
+// the archived enterprise task index (historical FLC-* reservation). Regression:
+// validator must still pass for the archived graph; open work lives in Issues.
 func TestValidateTaskIndex_RepoGraph(t *testing.T) {
 	root := repoRoot(t)
 	script := filepath.Join(root, "scripts", "validate-task-index.py")
-	index := filepath.Join(root, "docs", "jenkins-mcp-enterprise-task-index.json")
+	index := filepath.Join(root, "docs", "archive", "jenkins-mcp-enterprise-task-index.json")
 	if _, err := os.Stat(script); err != nil {
 		t.Fatalf("missing validator: %v", err)
 	}
 	if _, err := os.Stat(index); err != nil {
-		t.Fatalf("missing task index: %v", err)
+		t.Fatalf("missing archived task index: %v", err)
 	}
 	cmd := exec.Command("python3", script, index)
 	cmd.Dir = root

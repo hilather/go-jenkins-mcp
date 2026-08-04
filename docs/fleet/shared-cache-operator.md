@@ -1,7 +1,7 @@
 # Fleet shared cache — operator canary runbook (FLC-064)
 
 **Audience:** platform operators standing up a multi-member peer cache canary  
-**Status:** Operator documentation **Done\*** (FLC-064); FLC epic **Done\*** offline (FLC-073 gate pack + FLC-082 class deny); mode default **off**; **live multi-host production GO still requires site canary** — see [shared-cache-release-gate.md](shared-cache-release-gate.md)  
+**Status:** Operator documentation **implemented (FLC-064); FLC epic **implemented offline (FLC-073 gate pack + FLC-082 class deny); mode default **off**; **live multi-host production GO still requires site canary** — see [shared-cache-release-gate.md](shared-cache-release-gate.md)  
 **SoT decision:** [ADR 0016](../adr/0016-fleet-p2p-shared-cache.md)  
 **Architecture:** [shared-cache-architecture.md](shared-cache-architecture.md)  
 **Budgets / SLOs:** [shared-cache-slos.md](shared-cache-slos.md)  
@@ -10,7 +10,7 @@
 **Admin HTTP contract:** [admin/api-v1.md](../admin/api-v1.md) § Fleet-cache  
 **Lab:** [testdata/fleet-cache-lab/README.md](../../testdata/fleet-cache-lab/README.md)
 
-This runbook is the **navigable operator home** for configuring a three-member fleet-cache canary from repository docs alone. Offline release-gate pack is **FLC-073 Done\*** ([shared-cache-release-gate.md](shared-cache-release-gate.md)); **live multi-host site production GO** still requires a real canary + packaging residual.
+This runbook is the **navigable operator home** for configuring a three-member fleet-cache canary from repository docs alone. Offline release-gate pack is **FLC-073 implemented ([shared-cache-release-gate.md](shared-cache-release-gate.md)); **live multi-host site production GO** still requires a real canary + packaging residual.
 
 ---
 
@@ -19,14 +19,14 @@ This runbook is the **navigable operator home** for configuring a three-member f
 | Claim | Reality |
 |-------|---------|
 | Default mode | **`off`** — local plane A only until you set mode |
-| Library path | Peer lookup/read/fill/RF2/repair libraries **Done\*** under `internal/fleetcache` |
-| Production GO | **Not** automatic — offline **FLC-073 Done\***; live multi-host canary + site packaging residual before calling site production GO |
+| Library path | Peer lookup/read/fill/RF2/repair libraries **implemented under `internal/fleetcache` |
+| Production GO | **Not** automatic — offline **FLC-073 implemented; live multi-host canary + site packaging residual before calling site production GO |
 | HOST-008 multi-pod HA | **Cancelled** — peer cache does **not** share vault/session/rate |
 | Isolation after enable | Matching **fleet + cache pool + controller** sealed logs **may be shared** across eligible members; caches are **not** “always isolated” once mode is `read`/`full`. Isolation is by locator identity + authz (user/controller/fleet/pool), not by “every member always independent forever.” |
 | Cursor stdio pilots | Leave fleet-cache mode **off** |
-| SPA fleet-cache page | **Residual** (BFF + MCP Done\* — FLC-063) |
+| SPA fleet-cache page | **Residual** (BFF + MCP implemented — FLC-063) |
 | Production mTLS / unique node identity | **Residual** — mesh token OK for controlled lab/pilot; not production pin |
-| Live multi-host canary orchestration | FLC-072 criteria library Done\*; live multi-host residual |
+| Live multi-host canary orchestration | FLC-072 criteria library implemented; live multi-host residual |
 
 ---
 
@@ -253,7 +253,7 @@ Library: `internal/fleetcache` — `CriteriaFor`, `ValidateTransition`, `CheckCa
 2. Promote to `--fleet-cache-mode=full` only with approval.  
 3. Confirm fill single-flight (waiters skip origin body) and RF2/repair health.  
 4. Measured origin-byte savings justify continued rollout.  
-5. **Still not automatic site production GO** — offline FLC-073 pack Done\*; complete a live multi-member canary before calling production GO.
+5. **Still not automatic site production GO** — offline FLC-073 pack implemented; complete a live multi-member canary before calling production GO.
 
 ### 6.3 Recommended ladder
 
@@ -289,10 +289,10 @@ local mapping miss
 | Topic | Default / residual |
 |-------|--------------------|
 | Plane A total quota | **10 GiB** per profile (see [caching.md](../caching.md)); flags `--cache-total-quota-bytes` / env |
-| Owner-aware eviction roles | Library Done\* (FLC-050) — prefer reclaim near/non-required copies first; hard safety wins; mode-off ignores fleet roles |
+| Owner-aware eviction roles | Library implemented (FLC-050) — prefer reclaim near/non-required copies first; hard safety wins; mode-off ignores fleet roles |
 | QuotaManager auto-wire | Residual note on FLC-050 |
-| Near-cache promotion | Library Done\* (FLC-033); **default off** (`Enabled=false`); near never counts toward RF |
-| Purge / tombstone | Process-local Done\* (FLC-051); multi-member HTTP purge residual |
+| Near-cache promotion | Library implemented (FLC-033); **default off** (`Enabled=false`); near never counts toward RF |
+| Purge / tombstone | Process-local implemented (FLC-051); multi-member HTTP purge residual |
 
 Near-cache is **not** required for MVP A peer read.
 
@@ -300,7 +300,7 @@ Near-cache is **not** required for MVP A peer read.
 
 ## 9. Status, doctor, purge (admin BFF + MCP)
 
-**FLC-063 Done\*:** process-local BFF routes + `admin_fleet_cache_*` MCP tools.  
+**FLC-063 implemented:** process-local BFF routes + `admin_fleet_cache_*` MCP tools.  
 **SPA dedicated fleet-cache page:** residual.  
 **Multi-member HTTP purge fan-out:** residual.
 
@@ -359,8 +359,8 @@ Rollback is allowed from **any** known stage (`shadow`/`read`/`full` → `off`).
 | Cross-user / cross-controller bleed | Fail closed by isolation proofs (FLC-052); report as bug if observed |
 | Purge only local | Expected — multi-member HTTP purge residual; tombstones process-local |
 | No SPA page | Residual — use BFF HTTP or `admin_fleet_cache_*` MCP |
-| Live multi-host chaos | Offline FLC-071 Done\*; Docker multi-host residual |
-| Production GO questions | Offline **FLC-073 Done\***; use this runbook for canary; site production GO needs live multi-host residual closed |
+| Live multi-host chaos | Offline FLC-071 implemented; Docker multi-host residual |
+| Production GO questions | Offline **FLC-073 implemented; use this runbook for canary; site production GO needs live multi-host residual closed |
 | HOST-008 / shared vault requests | Cancelled — multi-fleet independent members only |
 
 ---
@@ -381,10 +381,10 @@ Rollback is allowed from **any** known stage (`shadow`/`read`/`full` → `off`).
 
 | Residual / out of runbook | Note |
 |---------------------------|------|
-| Offline release gate pack | **FLC-073 Done\*** — [shared-cache-release-gate.md](shared-cache-release-gate.md); live multi-host residual |
-| Finalize running without recompress | **FLC-081 Done\*** library |
-| Object class default-deny | **FLC-082 Done\*** — `console_log` only; new class = separate PR |
-| Admin SPA fleet-cache page | Residual on FLC-063 (BFF+MCP Done\*) |
+| Offline release gate pack | **FLC-073 implemented — [shared-cache-release-gate.md](shared-cache-release-gate.md); live multi-host residual |
+| Finalize running without recompress | **FLC-081 implemented library |
+| Object class default-deny | **FLC-082 implemented — `console_log` only; new class = separate PR |
+| Admin SPA fleet-cache page | Residual on FLC-063 (BFF+MCP implemented) |
 | SIEM ship of fleet-cache audit | AUD-T residual |
 | Shared NFS/S3 log store | Non-goal |
 | Multi-pod HA | HOST-008 cancelled |

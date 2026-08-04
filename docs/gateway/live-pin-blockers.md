@@ -1,7 +1,7 @@
 # Live pin blockers — operator production pin runbook
 
 **Status:** **Operator-owned production pin** residual runbook. Product **free-lab /
-offline Tier A** is **Done\*** and is **not** blocked on corporate Entra, AgentCore,
+offline Tier A** is **implemented and is **not** blocked on corporate Entra, AgentCore,
 or customer Jenkins labs (see [free-lab-qualification.md](free-lab-qualification.md)).  
 **Audience:** site security / platform operators (when they need production GO);
 agents must not treat this file as open product engineering DoD.  
@@ -26,7 +26,7 @@ agents must not treat this file as open product engineering DoD.
 | Kustomize `sessionAffinity` + `replicas: 1` | Packaging honesty — **not** multi-replica runtime |
 | Doctor `mode_*_live_*_qualified=false` | **Correct** until **that site** attaches production evidence — do not “fix” from free labs |
 
-**Product:** free-lab + offline paths may be **Done\*** without Entra.  
+**Product:** free-lab + offline paths may be **implemented without Entra.  
 **Operator:** do **not** mark site production GO or flip `mode_*_live_*_qualified`
 from mocks / free labs alone.
 
@@ -48,7 +48,7 @@ See [ADR 0003](../adr/0003-jenkins-not-oauth-authorization-server.md),
 ## 1. What blocks **site production** GO (operator summary)
 
 These rows block a **site** from claiming production multi-user gateway GO on
-**their** controllers/IdP. They do **not** block product free-lab Tier A Done\*
+**their** controllers/IdP. They do **not** block product free-lab Tier A implemented
 ([free-lab-qualification.md](free-lab-qualification.md)).
 
 Local Cursor **stdio** + personal API token remains the default pilot surface
@@ -110,7 +110,7 @@ Illustrative JCasC sketch only: [jwt-auth-filter-qualification.md §2](../auth/j
 
 ### 2.3 Routes that must be re-proved live
 
-Constants: `auth.RequiredMCPRoutes`. Offline inventory completeness is Done\*;
+Constants: `auth.RequiredMCPRoutes`. Offline inventory completeness is implemented;
 **live** must re-prove fallthrough + claim fail-closed on the controller.
 
 | ID | Pattern | Outside `/**/api/**`? |
@@ -192,7 +192,7 @@ Fill during live lab; keep secrets out of git, tickets, and support bundles.
 
 ### 3.2 AgentCore / gateway provider residual
 
-| Gate | Offline Done\* | Live residual |
+| Gate | Offline implemented | Live residual |
 |------|----------------|---------------|
 | AS base = Entra (Jenkins-as-AS reject) | Config validation + qualify | Production env audit |
 | `authorization_code` consent metadata only | ConsentRequired URL+session; process-local metadata store | Browser 3LO UX; multi-replica consent correlation |
@@ -201,7 +201,7 @@ Fill during live lab; keep secrets out of git, tickets, and support bundles.
 | Per-user vault binding | Process memory cache / mock | **Durable AgentCore Identity vault** |
 | Wrong audience fail-closed | Unit + qualify | Live canary tokens (redacted evidence) |
 | Progressive consent tool path | `authorization_url` + `session_id` only | Operator runbook for reauth storms |
-| Force re-auth / revocation foundation | **Done\* lite:** `InvalidateSubjectLocal` + `gateway subject-invalidate` (process-local principal **or** same-host `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` + optional same-host `FileTokenCache`); provider `Invalidate` drops principal companion; `principal_cleared` / `token_cache_cleared` honest on durable Delete fail | **Live IdP/AgentCore revocation window** still residual (OAUTH-010); multi-pod fan-out residual (HOST-008); CLI does not clear remote serve memory-only caches without shared file paths |
+| Force re-auth / revocation foundation | **implemented lite:** `InvalidateSubjectLocal` + `gateway subject-invalidate` (process-local principal **or** same-host `FilePrincipalCache` via `JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH` + optional same-host `FileTokenCache`); provider `Invalidate` drops principal companion; `principal_cleared` / `token_cache_cleared` honest on durable Delete fail | **Live IdP/AgentCore revocation window** still residual (OAUTH-010); multi-pod fan-out residual (HOST-008); CLI does not clear remote serve memory-only caches without shared file paths |
 | Graph group expansion | Fail-closed incomplete overage | Optional funded residual — not invented membership |
 | AgentCore sidecar / binary pin | None in-repo | Org AgentCore release + GWY-003/004 |
 
@@ -217,7 +217,7 @@ Fill during live lab; keep secrets out of git, tickets, and support bundles.
 - [ ] No shared Jenkins SA on interactive path  
 - [ ] Doctor residual `mode_c_live_agentcore_qualified` only flipped after evidence (today always offline false)
 
-**OAUTH-010 revocation honesty:** offline **Done\* lite** only for process-local
+**OAUTH-010 revocation honesty:** offline **implemented lite** only for process-local
 force re-auth (`InvalidateSubjectLocal` / `gateway subject-invalidate` clears
 principal + optional file token cache). Live Entra/AgentCore revocation, refresh
 reuse detection, and multi-pod invalidate fan-out remain **open** — do not mark
@@ -252,11 +252,11 @@ make live-oauth-test   # mock-token peer; opt-in; not production Entra
 
 | Item | Status | Honesty |
 |------|--------|---------|
-| Docs + kustomize/compose `replicas: 1` | Done\* | Default single replica |
-| File vault process mutex + `flock` on `path.lock` | Done\* lite | **Same host / shared FS** only |
-| Service `sessionAffinity: ClientIP` | Done\* scaffold | Packaging only; does **not** enable multi-pod |
-| Doctor / admin `haMultiReplica=false` | Done\* | Always false; multi-pod runtime **cancelled** |
-| Optional file Obtain / rate / principal / JWKS paths | Done\* lite | Same-host multi-process only |
+| Docs + kustomize/compose `replicas: 1` | implemented | Default single replica |
+| File vault process mutex + `flock` on `path.lock` | implemented lite | **Same host / shared FS** only |
+| Service `sessionAffinity: ClientIP` | implemented scaffold | Packaging only; does **not** enable multi-pod |
+| Doctor / admin `haMultiReplica=false` | implemented | Always false; multi-pod runtime **cancelled** |
+| Optional file Obtain / rate / principal / JWKS paths | implemented lite | Same-host multi-process only |
 
 ### 4.2 What operators should do instead of `replicas > 1`
 
@@ -334,7 +334,7 @@ jenkins-mcp doctor --profile <id> --offline --json  # optional: gateway_residual
 | Residual id | Meaning |
 |-------------|---------|
 | `multi_user_offline` | Multi-user foundation offline only — not production multi-user GO |
-| `oauth009_offline` | Bearer / RS offline matrix Done\*; live jwt-auth-filter pin open |
+| `oauth009_offline` | Bearer / RS offline matrix implemented; live jwt-auth-filter pin open |
 | `host008_single_replica` | Single-replica honesty; multi-pod HA **cancelled** (multi-fleet) |
 | `gateway_modes_live` | Modes A/B/C live pin / mode-selection record still open |
 
@@ -383,7 +383,7 @@ live pin complete without lab evidence.
 | `gateway residual-status` | Unified residual snapshot (modes A/B/C, multi-user/HA/multi-pod, consent, rate, principal_cache count + process note, JWKS/token/vault path file bools, optional limiter max subjects) | Env/static honesty; Mode B id `oauth009_offline`; `shared_subject_rate_file` / `shared_principal_cache_file` / `shared_jwks_file` / `shared_token_cache_file` / `shared_api_token_vault_file` / `shared_jwt_vault_file` path residual (path never dumped; token/vault residual never opens files; vault bools via `VaultPathConfiguredFromEnviron` / `JWTVaultPathConfiguredFromEnviron` — **explicit** `JENKINS_MCP_GATEWAY_VAULT_PATH` / `JWT_VAULT_PATH` only, not default XDG); `progressive_consent.file_backed` / `same_host_reload_before_persist` when `CONSENT_STORE_PATH` set (`stores_tokens=false`, `multi_replica_shared=false`); `subject_limiter_max_subjects` when env set (omit unlimited; process-local); `principal_cache_entries` **this process / file Len only** (CLI/admin ≠ serve); never tokens/subjects; **exercised by residual-smoke** |
 | Admin `GET /admin/v1/gateway/residual-status` | Same secret-free map as CLI (HOST-007 SPA Overview + Doctor residual cards surface `mode_*_live_*_qualified` / `gateway_ready` / `ha_multi_replica` as no/false; `progressive_consent.file_backed` / `same_host_reload_before_persist` when `CONSENT_STORE_PATH` set; `multi_replica_shared=false`; `stores_tokens=false`) | Viewer read; 404 hides card on older BFF; offline residual — not production GO; never tokens/paths |
 | `gateway consent-residual` | Progressive consent residual snapshot | Browser 3LO not automated; residual-smoke optional |
-| `gateway consent-purge` / `consent-expire` | Purge TTL-expired consent metadata (or `--session-id` / `--all --confirm=CLEAR_ALL`) | Metadata only; secret-free counts; clear_all requires exact confirm token; same-host file reload-before-persist **Done\* lite** (no serve Put resurrection); persist fail closed (non-zero on disk write fail); not multi-replica HA |
+| `gateway consent-purge` / `consent-expire` | Purge TTL-expired consent metadata (or `--session-id` / `--all --confirm=CLEAR_ALL`) | Metadata only; secret-free counts; clear_all requires exact confirm token; same-host file reload-before-persist **implemented lite** (no serve Put resurrection); persist fail closed (non-zero on disk write fail); not multi-replica HA |
 | `gateway subject-invalidate` | Force re-auth residual lite: process-local principal **or** FilePrincipalCache + optional FileTokenCache | Not live Entra revocation; multi-pod residual; share file paths for same-host CLI↔serve |
 | Admin `POST /admin/v1/gateway/subject-invalidate` | Same residual lite as CLI (HOST-007 SPA Overview form; `gateway_ops`) | Not live Entra; multi-pod residual; share file paths for same-host admin↔serve |
 | Admin `POST /admin/v1/gateway/consent-purge` | Same residual lite as CLI consent-purge (HOST-007 SPA Mode C form; `gateway_ops`; clear_all + `confirm: "CLEAR_ALL"`) | Metadata only; never tokens; session_id not echoed; multi-pod residual; share `JENKINS_MCP_CONSENT_STORE_PATH` for same-host admin↔serve |
@@ -450,7 +450,7 @@ implementation task — never a docs-only toggle.
 | [server-team-hosted.md](../roadmap/server-team-hosted.md) | Program path; HOST/OAUTH task order |
 | [pilot/checklist.md](../pilot/checklist.md) §0 | Modes piloted + residual ids |
 | [release/gates.md](../release/gates.md) | REL residual honesty smoke |
-| [KNOWN_DEFECTS](../docs/security/product-residuals.md) KD-009 | Live RS lab residual tracking |
+| [KNOWN_DEFECTS](../security/product-residuals.md) KD-009 | Live RS lab residual tracking |
 | `deploy/gateway/` | Compose/kustomize scaffold (no live AgentCore image) |
 | `testdata/oauth-lab/` | Mock OIDC/RS/token peers (opt-in) |
 

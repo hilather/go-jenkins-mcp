@@ -1,12 +1,14 @@
-# Archive (historical)
+# Archived documentation
 
-Frozen origin material from the early import of the community MIT project
-`simonfxr/go-jenkins-mcp`. **Not** product architecture SoT.
+Historical planning packs, phase/wave boards, monolithic architecture exports,
+and task graphs. **Not** product sources of truth.
 
-| File | Role |
-|------|------|
-| `UPSTREAM.md` | Import freeze record (URL, SHA, date) |
-| `README.upstream.md` | Upstream README snapshot at import |
-| `KNOWN_DEFECTS.md` | Former seed defect table (KD-*) — see `docs/security/product-residuals.md` for living residuals |
+| Prefer instead | Location |
+|----------------|----------|
+| Architecture | [../architecture/](../architecture/) |
+| Open work | [GitHub Issues](https://github.com/hilather/go-jenkins-mcp/issues) |
+| Completed history | Git + [../release/](../release/) |
+| Getting started | [../getting-started/](../getting-started/) |
 
-Current product history: [`docs/HISTORY.md`](../HISTORY.md).
+Files here may contain outdated `Done*`, task IDs, and status tables retained
+only for archaeology.

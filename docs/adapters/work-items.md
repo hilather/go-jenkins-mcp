@@ -19,7 +19,7 @@ Present them as bounded `work_items[]` with source and evidence labels. Optional
 
 | Residual | Status |
 |----------|--------|
-| Jira / GitHub / GitLab / Bitbucket ticket API lookup | **Not implemented** |
+| Jira / GitHub / GitLab / Bitbucket ticket API lookup | **Not implemented |
 | Broad project scrape or private discussion content | **Forbidden** |
 | Automatic inclusion of unrelated issues | **Forbidden** (pattern allowlist only) |
 | Using Jenkins credentials for ticket hosts | **Forbidden** |

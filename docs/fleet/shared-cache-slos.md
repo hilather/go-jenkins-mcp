@@ -1,6 +1,6 @@
 # Fleet shared-cache SLOs, budgets, and fallback (FLC-002)
 
-**Status:** Defaults **shipped** in `internal/fleetcache`; FLC epic **Done\*** offline; default mode **off**; live multi-host production GO residual (see [shared-cache-release-gate.md](shared-cache-release-gate.md))  
+**Status:** Defaults **shipped** in `internal/fleetcache`; FLC epic **implemented offline; default mode **off**; live multi-host production GO residual (see [shared-cache-release-gate.md](shared-cache-release-gate.md))  
 **Related:** [shared-cache-operator.md](shared-cache-operator.md) · [shared-cache-architecture.md](shared-cache-architecture.md) · [shared-cache-current-state.md](shared-cache-current-state.md) · ADR [0016](../adr/0016-fleet-p2p-shared-cache.md)
 
 These limits keep multi-fleet peer cache from delaying authorized Jenkins origin work or unbounded peer fan-out. Empty/zero operator overrides restore product defaults; out-of-range values **fail closed** (no silent unsafe clamp).
@@ -55,9 +55,9 @@ A degraded or misconfigured peer plane **must not** indefinitely delay origin. R
 |--------|----------------|
 | Lookup timeout / fallback | Unit: `fleetcache.ResolveConfig`; integration: lab injects slow peer, assert origin path within timeout + ε |
 | Stream/lookup caps | Unit tests on resolve bounds; later peer handler tests reject over-admission |
-| Origin bytes avoided | **Done\*** library — process-local `OriginBytesAvoided()` / local_hit + peer_hit decoded counters (FLC-061); multi-member aggregation residual FLC-062+ |
-| Pure-zstd wire ≤ compressed frames | **Done\*** offline gates (FLC-070) — `TestWireBytes_*` / `TestSLO_*`; multi-member HTTP lab residual |
-| Bounded ReadRange memory | **Done\*** offline gate (FLC-070) — mid-window read not O(whole log) |
+| Origin bytes avoided | **implemented library — process-local `OriginBytesAvoided()` / local_hit + peer_hit decoded counters (FLC-061); multi-member aggregation residual FLC-062+ |
+| Pure-zstd wire ≤ compressed frames | **implemented offline gates (FLC-070) — `TestWireBytes_*` / `TestSLO_*`; multi-member HTTP lab residual |
+| Bounded ReadRange memory | **implemented offline gate (FLC-070) — mid-window read not O(whole log) |
 | Shadow mode | Placement computed, zero peer payload bytes |
 
 Default `make test` stays offline; multi-node lab is opt-in (`make fleet-cache-lab-*`).
@@ -66,10 +66,10 @@ Default `make test` stays offline; multi-node lab is opt-in (`make fleet-cache-l
 
 ## 5. What is not in this document
 
-- Operator canary walkthrough — see [shared-cache-operator.md](shared-cache-operator.md) (FLC-064 **Done\***)  
-- Admin SPA fleet-cache page (FLC-063 SPA residual; BFF+MCP Done\*)  
-- Live multi-host canary orchestration (FLC-072 offline criteria Done\*; live residual)  
-- **Live multi-host production peer-cache GO** — offline gate pack **FLC-073 Done\*** ([shared-cache-release-gate.md](shared-cache-release-gate.md)); site canary residual  
+- Operator canary walkthrough — see [shared-cache-operator.md](shared-cache-operator.md) (FLC-064 **implemented)  
+- Admin SPA fleet-cache page (FLC-063 SPA residual; BFF+MCP implemented)  
+- Live multi-host canary orchestration (FLC-072 offline criteria implemented; live residual)  
+- **Live multi-host production peer-cache GO** — offline gate pack **FLC-073 implemented ([shared-cache-release-gate.md](shared-cache-release-gate.md)); site canary residual  
 
 
 Go API: `fleetcache.ResolveConfig` · constants `DefaultPeerLookupTimeout`, `DefaultMaxPeerStreams`, `DefaultMaxPeerLookups`.

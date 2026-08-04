@@ -143,7 +143,7 @@ go test ./internal/gateway -count=1 -run 'JenkinsAsAS|ValidateProviderConfig_Rej
 | Item | Status |
 |------|--------|
 | This threat model + enforcement helpers/tests | **This pack (JAS-001 MVP)** |
-| OAUTH-011 formal default no-go decision log (§4.1) | **Done\*** residual formalization (not a live pen-test sign-off) |
+| OAUTH-011 formal default no-go decision log (§4.1) | **implemented residual formalization (not a live pen-test sign-off) |
 | Org security “approval” signature for a future plugin **go** | Residual until funded OAUTH-011 **go** packet |
 | JAS-002…005 implementation | **Not started** (correct under default no-go) |
 | Live jwt-auth-filter lab / AgentCore pin | Separate OAUTH-009 / GWY residuals |

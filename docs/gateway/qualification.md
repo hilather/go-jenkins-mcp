@@ -1,6 +1,6 @@
 # Gateway 3LO/OBO qualification (GWY-003)
 
-**Status:** Offline (mock) harness shipped — **modes A/B/C matrix Done***; **live AgentCore / Entra / jwt-auth-filter pin residual**.  
+**Status:** Offline (mock) harness shipped — **modes A/B/C matrix implemented; **live AgentCore / Entra / jwt-auth-filter pin residual**.  
 **Related:** [README.md](README.md), **[live-pin-blockers.md](live-pin-blockers.md)** (live production GO residual runbook), [auth-architecture.md](../auth-architecture.md) §2.3, ADR 0003, OAUTH-006 claims/revocation, [HOST-011](../roadmap/server-team-hosted.md), [oauth-lab](../../testdata/oauth-lab/README.md).
 
 This document is the **checklist for a live production pin** of AgentCore /
@@ -43,7 +43,7 @@ jenkins-mcp gateway qualify --offline   # JSON summary, no secrets
 | `host011_no_silent_fallthrough` | security | **HOST-011:** empty Mode B does not use Mode A token; residual Mode B fail closed; A stays Basic / B stays Bearer; invalid mode & primary-not-enabled fail start |
 | `oauth009_offline_bearer_matrix` | security | **OAUTH-009:** wrong aud/exp/iss fail closed; ID token reject; OfflineFallthroughFixtures; Mode B empty ≠ Mode A; ModeMatrix residual honesty |
 | `oauth010_mode_c_offline_matrix` | security | **OAUTH-010:** auth_code ConsentRequired (URL+session only); token_exchange Bearer; wrong audience; Live=false; Live=true nil Fetcher; ModeMatrix residual; Jenkins-as-AS reject (**not** live Entra Done) |
-| `progressive_consent_residual` | security | **OAUTH-010 / GWY-001:** progressive consent residual honesty — browser 3LO not automated; metadata path Done*; ConsentRequired helpers + Error() canary-free |
+| `progressive_consent_residual` | security | **OAUTH-010 / GWY-001:** progressive consent residual honesty — browser 3LO not automated; metadata path implemented; ConsentRequired helpers + Error() canary-free |
 | `gateway_residual_status_offline_honesty` | security | **GWY-003 residual lite:** `BuildGatewayResidualStatus` (CLI `gateway residual-status` / doctor embed) — `residual_ids` present, `ha_multi_replica=false`, live `mode_*_*_qualified=false`, `oauth009_offline`, `shared_*_file` default false, secret-free (**not** live Entra Done) |
 | `concurrent_obtain_stub_under_budget` | performance | N=32 concurrent stub Obtain under 500ms wall budget |
 | `fail_closed_obtain_latency` | performance | Fail-closed Obtain under 50ms |
@@ -51,12 +51,12 @@ jenkins-mcp gateway qualify --offline   # JSON summary, no secrets
 **Residuals (always printed in JSON summary):**
 
 - Live Entra / AgentCore network acquisition not exercised  
-- Live Entra JWKS rotation under load and live IdP outage chaos (offline vault hit/miss + mock IdP outage + JWKS kid-lite + mode A/B/C matrix Done*)
-- Mode B live jwt-auth-filter / IdP pin residual (OAUTH-009); offline JWT vault Bearer + claim fail-closed matrix Done* (`oauth009_offline_bearer_matrix`)
-- Mode C live Entra 3LO/OBO + AgentCore Identity vault residual (OAUTH-010 / GWY-003); offline prototype matrix Done* (`oauth010_mode_c_offline_matrix` + `mode_c_agentcore_live_matrix`) — **do not claim live Entra Done**
-- Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) Done*; process-local consent metadata store Done* (optional file; never tokens; same-host reload-before-persist flock lite; not multi-replica shared store); multi-pod consent correlation residual (HOST-008)
-- Gateway residual-status offline honesty Done* (`gateway_residual_status_offline_honesty`): `residual_ids` + `ha_multi_replica=false` + live mode pins false + `oauth009_offline` + `shared_*_file` default false; no secrets — live Entra/AgentCore pin residual
-- Security self-check residual lite Done* (`gateway_residual_status_honesty` in `RunSecuritySelfCheck`): same honesty map as qualify residual-status case / CLI residual-status; **ok** when honesty holds; **warn** if multi_user env set (not live multi-user GO); pure offline — not residual-smoke, not live pin
+- Live Entra JWKS rotation under load and live IdP outage chaos (offline vault hit/miss + mock IdP outage + JWKS kid-lite + mode A/B/C matrix implemented)
+- Mode B live jwt-auth-filter / IdP pin residual (OAUTH-009); offline JWT vault Bearer + claim fail-closed matrix implemented (`oauth009_offline_bearer_matrix`)
+- Mode C live Entra 3LO/OBO + AgentCore Identity vault residual (OAUTH-010 / GWY-003); offline prototype matrix implemented (`oauth010_mode_c_offline_matrix` + `mode_c_agentcore_live_matrix`) — **do not claim live Entra implemented
+- Mode C progressive consent UX residual (OAUTH-010 / GWY-001): browser 3LO not automated; ConsentRequired metadata path (authorization_url + session_id only) implemented; process-local consent metadata store implemented (optional file; never tokens; same-host reload-before-persist flock lite; not multi-replica shared store); multi-pod consent correlation residual (HOST-008)
+- Gateway residual-status offline honesty implemented (`gateway_residual_status_offline_honesty`): `residual_ids` + `ha_multi_replica=false` + live mode pins false + `oauth009_offline` + `shared_*_file` default false; no secrets — live Entra/AgentCore pin residual
+- Security self-check residual lite implemented (`gateway_residual_status_honesty` in `RunSecuritySelfCheck`): same honesty map as qualify residual-status case / CLI residual-status; **ok** when honesty holds; **warn** if multi_user env set (not live multi-user GO); pure offline — not residual-smoke, not live pin
 - OAUTH-010: `HTTPTokenFetcher` https mock AS in package tests (`TestOAUTH010_*` / `TestHTTPTokenFetcher_*`)
 - Opt-in residual lab: `testdata/oauth-lab` + `make live-oauth-*` + `go test -tags=live_oauth` Mode C Obtain vs mock-token (TLS test shim; not default `make test`; not production Entra)
 - Production P95/P99 token acquisition SLOs  
@@ -64,7 +64,7 @@ jenkins-mcp gateway qualify --offline   # JSON summary, no secrets
 
 Operator CLI residual snapshot (no Obtain): `jenkins-mcp gateway consent-residual`.
 
-### Offline vault / IdP / JWKS kid-lite (Done*)
+### Offline vault / IdP / JWKS kid-lite (implemented)
 
 | Property | Offline evidence | Residual |
 |----------|------------------|----------|
@@ -74,7 +74,7 @@ Operator CLI residual snapshot (no Obtain): `jenkins-mcp gateway consent-residua
 | IdP recovery | Healthy Fetcher after outage → Obtain + cache hit | Live recovery SLOs |
 | JWKS kid rotation | Multi-key `KeyByID` overlap; stale kid after removal fail closed; mock fetcher `key_id` version gate; process-local `RefreshingJWKS` TTL + stale-if-error + optional `JENKINS_MCP_HTTP_JWKS_MAX_STALE` + optional same-host `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` lite (HOST-001 foundation) | Live Entra under load; multi-pod external JWKS cache (GWY-003 full pin) |
 
-### HOST-011 modes A/B/C offline matrix (Done*)
+### HOST-011 modes A/B/C offline matrix (implemented)
 
 Cross-link: package tests in `internal/gateway` (`TestHOST011_*`) already prove auth-header shapes and no silent fallthrough. The qualify suite **invokes the same contracts** so GWY-003 evidence cannot drift.
 
@@ -115,7 +115,7 @@ Complete before enabling `CredentialProvider.Live` / production gateway mode.
 | Revocation / refresh failure | IdP revoke + refresh fail → subsequent tool path fails closed (OAUTH-006) | Security |
 | Invalid bearer no downgrade | No fallthrough to Basic/API-token/session/anonymous on OAuth-required routes | Security |
 | Token never in logs/errors/MCP | Canary redaction tests on live traffic samples | Security |
-| Groups overage | Cap 64; residual note; cannot broaden MCP deny-only. Entra incomplete overage (`_claim_names` without full `groups`) fail-closed foundation Done\*; Graph expansion residual | Security |
+| Groups overage | Cap 64; residual note; cannot broaden MCP deny-only. Entra incomplete overage (`_claim_names` without full `groups`) fail-closed foundation implemented; Graph expansion residual | Security |
 | Generic passthrough disabled | Production config audit; exact-audience exception recorded | Security |
 
 ---

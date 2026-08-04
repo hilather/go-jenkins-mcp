@@ -83,16 +83,16 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 
 | Surface | Status |
 |---------|--------|
-| Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
-| Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
-| tool_success audit (default filter off; admin toggle or `JENKINS_MCP_AUDIT_TOOL_OK` seed) | **Done\*** volume residual (opt-in persist) |
-| Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
-| Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; BFF `external_subject` exact match + client residual) | **Done\*** lite (same-host BFF filter; multi-pod aggregation still residual) |
-| Admin SPA **event type enable/disable** (`…/audit/settings` + `type_filter.json` + ReloadingFilterSink) | **Done\*** lite (per-host file; multi-pod residual) |
-| Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **Done\*** lite — multi-user correlation more complete on one host after rotation |
+| Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **implemented foundation |
+| Per-process tool_error attribution (same multi-user identity fields) | **implemented foundation |
+| tool_success audit (default filter off; admin toggle or `JENKINS_MCP_AUDIT_TOOL_OK` seed) | **implemented volume residual (opt-in persist) |
+| Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **implemented foundation |
+| Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; BFF `external_subject` exact match + client residual) | **implemented lite (same-host BFF filter; multi-pod aggregation still residual) |
+| Admin SPA **event type enable/disable** (`…/audit/settings` + `type_filter.json` + ReloadingFilterSink) | **implemented lite (per-host file; multi-pod residual) |
+| Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **implemented lite — multi-user correlation more complete on one host after rotation |
 | Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod / per-host JSONL only; no fleet merge |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
-| Subject quota metrics (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`) | **Done\* lite** process-local (HOST-006 CodeQuota); multi-pod metric aggregation residual |
+| Subject quota metrics (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`) | **implemented lite** process-local (HOST-006 CodeQuota); multi-pod metric aggregation residual |
 
 ### Rotation / retention
 
@@ -104,7 +104,7 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 
 | Capability | Status |
 |------------|--------|
-| Local JSONL file sink + `audit.Multi` fan-out interface | **Done\*** |
+| Local JSONL file sink + `audit.Multi` fan-out interface | **implemented |
 | In-process **syslog** / **Splunk HEC** / webhook audit ship | **Residual** — not implemented (backlog **AUD-T-010…012** in [security/audit-trail-review.md](security/audit-trail-review.md)) |
 | Host agent tail of `audit.jsonl` (Fluent Bit, Splunk UF, rsyslog `imfile`, Vector) | **Operator-owned** near-term path (runbook **AUD-T-013**) |
 | `ext-logs` adapter (query external logs for Jenkins jobs) | **Separate** INT-003 — not audit export; real Splunk/ELK *clients* residual |
@@ -557,16 +557,16 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 
 | Surface | Status |
 |---------|--------|
-| Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
-| Per-process tool_error attribution (same multi-user identity fields) | **Done\*** foundation |
-| tool_success audit (default filter off; admin toggle or `JENKINS_MCP_AUDIT_TOOL_OK` seed) | **Done\*** volume residual (opt-in persist) |
-| Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **Done\*** foundation |
-| Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; BFF `external_subject` exact match + client residual) | **Done\*** lite (same-host BFF filter; multi-pod aggregation still residual) |
-| Admin SPA **event type enable/disable** (`…/audit/settings` + `type_filter.json` + ReloadingFilterSink) | **Done\*** lite (per-host file; multi-pod residual) |
-| Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **Done\*** lite — multi-user correlation more complete on one host after rotation |
+| Per-process tool_deny attribution (`externalSubject`, `subjectKeyHash`) | **implemented foundation |
+| Per-process tool_error attribution (same multi-user identity fields) | **implemented foundation |
+| tool_success audit (default filter off; admin toggle or `JENKINS_MCP_AUDIT_TOOL_OK` seed) | **implemented volume residual (opt-in persist) |
+| Per-process mutation preview/confirm/deny attribution (`externalSubject`, `subjectKeyHash`) | **implemented foundation |
+| Admin SPA audit table columns + type filter (`externalSubject` / `subjectKeyHash`; BFF `external_subject` exact match + client residual) | **implemented lite (same-host BFF filter; multi-pod aggregation still residual) |
+| Admin SPA **event type enable/disable** (`…/audit/settings` + `type_filter.json` + ReloadingFilterSink) | **implemented lite (per-host file; multi-pod residual) |
+| Admin BFF **same-host rotated sibling merge** (`ReadAuditFile` merges `audit.jsonl` + `audit.jsonl.N` / optional timestamped names) | **implemented lite — multi-user correlation more complete on one host after rotation |
 | Multi-pod / multi-replica **audit aggregation** (central sink, fleet timeline) | **Residual** (HOST-008 checklist row 5) — per-pod / per-host JSONL only; no fleet merge |
 | Shared durable vault + sticky sessions under multi-replica | **Residual** (see `docs/gateway/deployment.md` §9) |
-| Subject quota metrics (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`) | **Done\* lite** process-local (HOST-006 CodeQuota); multi-pod metric aggregation residual |
+| Subject quota metrics (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`) | **implemented lite** process-local (HOST-006 CodeQuota); multi-pod metric aggregation residual |
 
 ### Rotation / retention
 
@@ -578,7 +578,7 @@ Audit emit is **best-effort**: failures never authorize mutations and never elev
 
 | Capability | Status |
 |------------|--------|
-| Local JSONL file sink + `audit.Multi` fan-out interface | **Done\*** |
+| Local JSONL file sink + `audit.Multi` fan-out interface | **implemented |
 | In-process **syslog** / **Splunk HEC** / webhook audit ship | **Residual** — not implemented (backlog **AUD-T-010…012** in [security/audit-trail-review.md](security/audit-trail-review.md)) |
 | Host agent tail of `audit.jsonl` (Fluent Bit, Splunk UF, rsyslog `imfile`, Vector) | **Operator-owned** near-term path (runbook **AUD-T-013**) |
 | `ext-logs` adapter (query external logs for Jenkins jobs) | **Separate** INT-003 — not audit export; real Splunk/ELK *clients* residual |
@@ -834,9 +834,9 @@ Env enable path (`JENKINS_MCP_TELEMETRY`) remains separate from force-off.
 
 | Surface | Status |
 |---------|--------|
-| Subject quota metrics (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`) | **Done\* lite** — process-local counters on HOST-006 CodeQuota (rate `Allow` / slot `Hold`); also counted in `mcp_tool_error`; **never** subject keys, tokens, or free-form labels. Fleet allowlist includes both names. Multi-pod aggregation / shared rate still **residual** (HOST-008). |
-| Multi-pod / multi-replica audit aggregation (central sink) | **Residual** — per-pod JSONL only. **Done\* lite:** same-host admin merge of rotated siblings (`audit.jsonl.N`) for a single profile path — not fleet timeline |
-| tool-success audit summaries | **Done\*** opt-in persist (admin type filter / env seed default; metrics always on; high volume residual) |
+| Subject quota metrics (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`) | **implemented lite** — process-local counters on HOST-006 CodeQuota (rate `Allow` / slot `Hold`); also counted in `mcp_tool_error`; **never** subject keys, tokens, or free-form labels. Fleet allowlist includes both names. Multi-pod aggregation / shared rate still **residual** (HOST-008). |
+| Multi-pod / multi-replica audit aggregation (central sink) | **Residual** — per-pod JSONL only. **implemented lite:** same-host admin merge of rotated siblings (`audit.jsonl.N`) for a single profile path — not fleet timeline |
+| tool-success audit summaries | **implemented opt-in persist (admin type filter / env seed default; metrics always on; high volume residual) |
 | Per-tool allowlisted counters | **Residual** (only if a closed seed name set is required; default is total ok/error/deny + subject quota) |
 | OTLP export / remote collector query | **Residual** (INT-002 approved backend adapter) |
 | Per-request latency histograms / compression-ratio gauges / decoder CPU | **Residual** (OBS follow-on) |
@@ -846,7 +846,7 @@ Env enable path (`JENKINS_MCP_TELEMETRY`) remains separate from force-off.
 | Support bundle: optional live capability attach; signed/encrypted export | **Residual** |
 | Post-pack L1 release metrics (`cache_l1_released`, `cache_l1_release_bytes_reclaimed`) | Named residual (constants exist; wiring honesty in support/doctor paths as shipped) |
 | Authenticated Streamable HTTP / gateway session binding | GWY-* residual |
-| MGR-002 formal privacy board + HSM/multi-sig | **Residual** (overlay force-off pin is **Done\* lite**) |
+| MGR-002 formal privacy board + HSM/multi-sig | **Residual** (overlay force-off pin is **implemented lite**) |
 | KD-004 logging migration / bare high-entropy FN-FP | Residual sub-threshold hex FN / git-SHA FP / force-flush boundary only; Wave 34 `writer_split_line_canary` guards line reassembly |
 | KD-008 loopback HTTP without require-token | Residual open to local processes (default pilot); opt-in `--http-require-token` / `JENKINS_MCP_HTTP_REQUIRE_TOKEN` / `JENKINS_MCP_HTTP_DENY_ANONYMOUS`; self-check `http_require_token_residual` / `http_allowed_hosts_residual` |
 

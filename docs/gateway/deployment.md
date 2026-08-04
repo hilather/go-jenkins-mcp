@@ -133,7 +133,7 @@ still listens on loopback or a private port.
 #### Path-prefix + origin pin fixture matrix (offline)
 
 Offline unit fixtures in `internal/mcpserver` pin the reverse-proxy + Host/Origin
-contract. **Done\*** expanded residual lite (no live edge claim):
+contract. **implemented expanded residual lite (no live edge claim):
 
 | Test | What it covers |
 |------|----------------|
@@ -193,7 +193,7 @@ AllowedOrigins on the app to match the public edge URL.
 **Residual (NET-001 / HOST-002 live matrix):** a full **live** path-prefix origin
 pin matrix (real edge container that strips/rewrites `Host`/`Origin`/
 `X-Forwarded-*`, multi-prefix Jenkins vs MCP edge) is **not** automated here.
-Offline fixtures above (**Done\*** expanded residual lite) cover app-side Host/
+Offline fixtures above (**implemented expanded residual lite) cover app-side Host/
 Origin/`TrustedProxy` no-op pin behavior only — **no live edge claim**. Document
 site proxy config in pilot evidence. Do not claim automatic multi-prefix
 production support or trusted-proxy mode beyond the strip + dual health +
@@ -389,8 +389,8 @@ Obtain Ready and Streamable HTTP mTLS hardening remain residuals.
 | Control | Tier A posture |
 |---------|----------------|
 | Kustomize / compose | **`replicas: 1`** (`deploy/gateway/kustomize/deployment.yaml`) |
-| Service sticky (scaffold) | **`sessionAffinity: ClientIP`** + `sessionAffinityConfig` on `deploy/gateway/kustomize/service.yaml` (**Done* scaffold** only — does not enable multi-replica runtime) |
-| Token / JWT vault | File vault: process-local mutex + **flock** on `path.lock` (HOST-008 **Done\* lite** multi-process **same host / shared FS**). Memory vault process-local only. Multi-pod shared vault **out of scope** |
+| Service sticky (scaffold) | **`sessionAffinity: ClientIP`** + `sessionAffinityConfig` on `deploy/gateway/kustomize/service.yaml` (**implemented scaffold** only — does not enable multi-replica runtime) |
+| Token / JWT vault | File vault: process-local mutex + **flock** on `path.lock` (HOST-008 **implemented lite** multi-process **same host / shared FS**). Memory vault process-local only. Multi-pod shared vault **out of scope** |
 | Token Obtain cache | Default in-process `MemoryTokenCache` (`shared_token_cache: false`). Optional **same-host** `FileTokenCache` via `JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH` (flock + 0600; `shared_token_cache_file: true`). Multi-pod Redis **out of scope** |
 | Subject limiter / rate | Concurrency slots process-local. Optional file rate + MaxSubjects hygiene (same-host lite). `ha_multi_replica: false` always — multi-pod shared rate **out of scope** |
 | Principal map | Default in-process `PrincipalCache`. Optional **same-host** `FilePrincipalCache`. Multi-pod principal map **out of scope** |
@@ -420,20 +420,20 @@ treat rows as open product work; use multi-fleet instead.
 
 | # | Requirement | Why | Status in this repo |
 |---|-------------|-----|---------------------|
-| 1a | **Shared vault path + flock (same host / shared FS)** | CLI + serve (or multi-process lab) on one vault file without corrupt load-modify-save | **Done* lite** — `FileAPITokenVault` / `FileJWTVault` use process mutex + `syscall.Flock` on `path.lock` (unix/Tier-1 Linux). **Honesty:** multi-process same host / shared FS only — **not** multi-pod alone |
+| 1a | **Shared vault path + flock (same host / shared FS)** | CLI + serve (or multi-process lab) on one vault file without corrupt load-modify-save | **implemented lite** — `FileAPITokenVault` / `FileJWTVault` use process mutex + `syscall.Flock` on `path.lock` (unix/Tier-1 Linux). **Honesty:** multi-process same host / shared FS only — **not** multi-pod alone |
 | 1b | **Durable shared token vault** (external / AgentCore Identity / multi-pod) | Memory vaults and emptyDir file vaults are not multi-pod safe | **Out of scope** (HOST-008 cancelled; multi-fleet per-member vault) |
-| 2 | **Session affinity** (sticky sessions) **or** shared session store | Subject bind / confirm tokens must not split-brain across pods | **Done* scaffold / residual runtime** — kustomize Service `sessionAffinity: ClientIP` + `sessionAffinityConfig.clientIP.timeoutSeconds` (default 10800). Affinity is optional packaging for operators who later scale; **does not** close multi-replica HA without 1b + 3–8. Shared durable session store still residual |
-| 3 | **No reliance on memory token cache alone** | In-process Obtain cache must be shared or disabled under multi-replica | **Done\* lite** same-host: optional `FileTokenCache` (`JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH`, flock + 0600; `StatusMap` `shared_token_cache_file: true`). Default remains `MemoryTokenCache` (`shared_token_cache: false`). **Multi-pod external** Obtain cache (Redis/etc.) still **residual** — not multi-replica Done |
+| 2 | **Session affinity** (sticky sessions) **or** shared session store | Subject bind / confirm tokens must not split-brain across pods | **implemented scaffold / residual runtime** — kustomize Service `sessionAffinity: ClientIP` + `sessionAffinityConfig.clientIP.timeoutSeconds` (default 10800). Affinity is optional packaging for operators who later scale; **does not** close multi-replica HA without 1b + 3–8. Shared durable session store still residual |
+| 3 | **No reliance on memory token cache alone** | In-process Obtain cache must be shared or disabled under multi-replica | **implemented lite** same-host: optional `FileTokenCache` (`JENKINS_MCP_GATEWAY_TOKEN_CACHE_PATH`, flock + 0600; `StatusMap` `shared_token_cache_file: true`). Default remains `MemoryTokenCache` (`shared_token_cache: false`). **Multi-pod external** Obtain cache (Redis/etc.) still **residual** — not multi-replica Done |
 | 4 | Shared or carefully partitioned **cache / archive** policy | Avoid cross-pod archive handle / pin confusion | **Residual** (STO / HOST-004) |
 | 5 | **Audit aggregation** (central sink) | Per-pod files are not a fleet audit plane | **Out of scope** for multi-pod HA — per-member JSONL + optional SIEM sinks (AUD-T); multi-fleet does not require multi-pod merge |
 | 6 | Sticky or shared Obtain / consent correlation | Refresh/consent must not double-mint unsafely | **Residual** (Mode C progressive consent) |
-| 7 | JWKS / identity multi-instance behavior measured | Process-local default; optional same-host public JWKS file | **Done\* lite** same-host: optional `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` (flock + 0600 public keys; `shared_jwks_file: true`). **Multi-pod external** JWKS + live Entra under load still **residual** — not multi-replica Done |
-| 8 | Shared subject rate / concurrency limiters | Process-local default; multi-process same-host optional file rate | **Done\* lite** same-host: optional `FileSubjectRateLimiter` (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`, flock + secret-free JSON; `shared_subject_rate_file: true`). Default memory `SubjectRateLimiter`. Admin `rateEnabled`/`ratePerMinute`/`rateBurst` + `sharedSubjectRateFile`. Concurrency slots still process-local. **Multi-pod external** shared rate still **residual** — not multi-replica Done |
+| 7 | JWKS / identity multi-instance behavior measured | Process-local default; optional same-host public JWKS file | **implemented lite** same-host: optional `JENKINS_MCP_HTTP_JWKS_CACHE_PATH` (flock + 0600 public keys; `shared_jwks_file: true`). **Multi-pod external** JWKS + live Entra under load still **residual** — not multi-replica Done |
+| 8 | Shared subject rate / concurrency limiters | Process-local default; multi-process same-host optional file rate | **implemented lite** same-host: optional `FileSubjectRateLimiter` (`JENKINS_MCP_GATEWAY_SUBJECT_RATE_PATH`, flock + secret-free JSON; `shared_subject_rate_file: true`). Default memory `SubjectRateLimiter`. Admin `rateEnabled`/`ratePerMinute`/`rateBurst` + `sharedSubjectRateFile`. Concurrency slots still process-local. **Multi-pod external** shared rate still **residual** — not multi-replica Done |
 
 **Honesty:**
 
-- **Done* lite** (1a) is multi-process file safety on a **shared path**, not multi-replica HA.
-- **Done* scaffold** (2) is Service YAML + docs only; kube sticky routing is **not** a multi-replica GO.
+- **implemented lite** (1a) is multi-process file safety on a **shared path**, not multi-replica HA.
+- **implemented scaffold** (2) is Service YAML + docs only; kube sticky routing is **not** a multi-replica GO.
 - Do **not** raise `replicas` > 1 until **1b–8** are satisfied (affinity alone is insufficient).
 
 ### Operator scale checklist (if replicas ever raised)
@@ -451,7 +451,7 @@ When (and only if) org design closes 1b–8 and operators set `replicas` > 1:
 | Surface | Fields | Honesty |
 |---------|--------|---------|
 | `SubjectLimiter.StatusMap` | `ha_multi_replica: false` | Always false until multi-replica runtime exists |
-| Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `mode_a/b/c_enabled`, `mode_*_live_*_qualified=false`, `oauth009_offline_only`, `gateway_ready=false`, `ha_multi_replica=false`, `session_affinity_recommended`, **`multi_pod_vault_residual=true` (always)**, `kubernetes_env_detected`, `vault_path_emptydir_heuristic`, `replicas_env_residual`, `multi_pod_residual_checklist` (when any multi-pod signal), `mode_matrix_residual`, `progressive_consent_*` (browser 3LO not automated; metadata Done*) | Env/heuristic only; Ready is serve `/readyz`; sticky + progressive consent residual honesty, **not** HA Done. When `KUBERNETES_SERVICE_HOST` is set (or emptyDir-ish vault path / residual replicas env >1), doctor **warns** with multi-pod checklist summary (sticky, shared vault, rate, Obtain cache) — secret-free, never vault path contents or tokens. |
+| Doctor offline check `gateway_status` | `multi_user_enabled`, `credential_mode`, `mode_a/b/c_enabled`, `mode_*_live_*_qualified=false`, `oauth009_offline_only`, `gateway_ready=false`, `ha_multi_replica=false`, `session_affinity_recommended`, **`multi_pod_vault_residual=true` (always)**, `kubernetes_env_detected`, `vault_path_emptydir_heuristic`, `replicas_env_residual`, `multi_pod_residual_checklist` (when any multi-pod signal), `mode_matrix_residual`, `progressive_consent_*` (browser 3LO not automated; metadata implemented) | Env/heuristic only; Ready is serve `/readyz`; sticky + progressive consent residual honesty, **not** HA Done. When `KUBERNETES_SERVICE_HOST` is set (or emptyDir-ish vault path / residual replicas env >1), doctor **warns** with multi-pod checklist summary (sticky, shared vault, rate, Obtain cache) — secret-free, never vault path contents or tokens. |
 | Admin `GET /admin/v1/health` | `multiUserEnabled`, `credentialMode`, `gatewayReady=false`, `haMultiReplica=false`, `sessionAffinityRecommended`, **`multiPodVaultResidual=true`**, `kubernetesEnvDetected`, `rateEnabled`/`ratePerMinute`/`rateBurst`, `residual` | Admin BFF ≠ MCP serve; rate knobs process-local HOST-006; k8s residual string when `KUBERNETES_SERVICE_HOST` set (parity with doctor checklist) |
 | Admin `GET /admin/v1/gateway/vault` | `multiUserEnabled`, `haMultiReplica=false`, `sessionAffinityRecommended`, **`multiPodVaultResidual=true`**, `kubernetesEnvDetected`, `rateEnabled`/`ratePerMinute`/`rateBurst` + mode matrix | Never tokens; multi-user / k8s residual notes when env set; file vault flock multi-process lite only |
 

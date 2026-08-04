@@ -64,7 +64,7 @@ This is a **pilot** release, not a claim of full enterprise production completen
 - Live multi-controller chaos / reverse-proxy origin pin matrix
 - LKG auto-install / binary rollback (operator-owned)
 
-Full list: `docs/phase2-progress.md`.
+Full list: `docs/archive/phase2-progress.md`.
 
 ## Commit
 

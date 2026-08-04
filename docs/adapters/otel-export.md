@@ -30,10 +30,10 @@ Payload envelopes contain **only** allowlisted fields:
 
 | Residual | Status |
 |----------|--------|
-| Real **OTLP** / **OTLP-HTTP protobuf** collector clients | **Not implemented** |
+| Real **OTLP** / **OTLP-HTTP protobuf** collector clients | **Not implemented |
 | Sending Jenkins **console log text** to telemetry | **Forbidden** |
 | Exporting **tokens** or **full parameter maps** | **Forbidden** |
-| Querying Tempo / Jaeger / Honeycomb / Datadog APM APIs | **Not implemented** (see correlation lite) |
+| Querying Tempo / Jaeger / Honeycomb / Datadog APM APIs | **Not implemented (see correlation lite) |
 | Adapter credentials in config or URL userinfo | **Forbidden** (keyring namespace residual) |
 
 MVP responses always include a residual note that real OTLP collector clients

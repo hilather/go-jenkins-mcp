@@ -4,7 +4,7 @@
 **Related:** [observability.md](../observability.md) (AUD-001), [privacy-data-retention.md](privacy-data-retention.md), [threat-model.md](threat-model.md), [adapters/ext-logs.md](../adapters/ext-logs.md)  
 **Code:** `internal/audit`  
 **Agent policy:** Root [AGENTS.md](../../AGENTS.md) — *Non-negotiable: audit trails when security-relevant*  
-**Status:** Review snapshot 2026-08-01 — local privacy-preserving audit is **Done\*** for pilot; enterprise SIEM ship and several AU-* strengths remain residual.
+**Status:** Review snapshot 2026-08-01 — local privacy-preserving audit is **implemented for pilot; enterprise SIEM ship and several AU-* strengths remain residual.
 
 ---
 
@@ -39,7 +39,7 @@ Mapped to common control families (NIST SP 800-53 AU-*, CIS Controls logging, IS
 | **AU-9 / non-repudiation lite** | Detect tampering | No chain of custody / signatures | Hash-chain or external WORM residual (**AUD-T-007**) |
 | **AU-11 / retention** | Org retention policy | Size rotation only | Policy-controlled days/legal hold residual (**AUD-T-004**) |
 | **AU-12 / generation** | Generate for defined events | Wired on serve, policy, mutations, identity re-verify | See coverage matrix **AUD-T-001** |
-| **Central collection** | Forward to SIEM (syslog/HEC/etc.) | **Not implemented** for audit plane | **AUD-T-010…013** (syslog / Splunk HEC / webhook) |
+| **Central collection** | Forward to SIEM (syslog/HEC/etc.) | **Not implemented for audit plane | **AUD-T-010…013** (syslog / Splunk HEC / webhook) |
 | **Separation** | Audit admin separate from operators | Admin BFF RBAC for read | Role-gated audit download residual (**AUD-T-008**) |
 
 ### What already aligns well
@@ -85,7 +85,7 @@ Mapped to common control families (NIST SP 800-53 AU-*, CIS Controls logging, IS
 
 | Capability | Status |
 |------------|--------|
-| **Ship MCP security audit events to syslog / Splunk / SIEM** | **Residual — not implemented** |
+| **Ship MCP security audit events to syslog / Splunk / SIEM** | **Residual — not implemented |
 | **Query external log platforms for Jenkins build logs** (`ext-logs` adapter) | MVP framework only; **real Splunk/ELK SaaS clients residual** (`docs/adapters/ext-logs.md`) |
 | **OTLP metrics/traces export** | Separate residual (`otel-export` adapter) |
 
@@ -116,7 +116,7 @@ Requirements for any remote sink (non-negotiable):
 
 ## 5. Task backlog (audit trail)
 
-Work IDs are **AUD-T-*** (audit trail) to avoid colliding with historical **AUD-001** Done\*.
+Work IDs are **AUD-T-*** (audit trail) to avoid colliding with historical **AUD-001** implemented.
 
 ### P0 — coverage & honesty
 
