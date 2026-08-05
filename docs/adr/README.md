@@ -38,6 +38,7 @@ ADR status values: **Accepted** (binding), **Proposed** (not yet binding), **Sup
 | [0014](0014-admin-console-reactive-spa.md) | Operator admin console: React SPA + local BFF | Accepted | UI-000–UI-010 |
 | [0015](0015-saml-sp-identity-and-groups.md) | SAML 2.0 SP for identity + groups (config SoT) | Accepted | POL-007, POL-006, UI-003 residual |
 | [0016](0016-fleet-p2p-shared-cache.md) | Pure-Go multi-fleet peer shared-cache coordination (default off; HOST-008 still cancelled) | Accepted | FLC-000…FLC-082 · MVP A peer-read first |
+| [0017](0017-resource-cache.md) | Typed non-log resource cache (`resources.sqlite` + objects; seven tools) | Accepted | Resource-cache expansion |
 
 ## Conventions
 

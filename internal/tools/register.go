@@ -143,6 +143,10 @@ type RegisterOptions struct {
 	// (hashes + short redacted text only — never log bodies). Nil ⇒ process TTL
 	// cache only. Serve wires store.Open(dataDir) when a profile data dir is open.
 	Meta *store.Meta
+	// ResourceCache is optional durable typed resource cache for approved tools
+	// (stage log, artifacts, tests, stages, changes). Nil ⇒ tools call Jenkins
+	// only. Serve may open internal/resourcecache under the profile cache dir.
+	ResourceCache ResourceCache
 	// EnableTraceRefs registers jenkins_get_trace_refs and optional diagnose
 	// enrichment (INT-002). Default false. Pure extraction from Jenkins build
 	// parameters; no OTLP export. Serve sets true when otel-correlate adapter is enabled.
@@ -229,6 +233,8 @@ type regState struct {
 
 	// Profile Meta for durable survey compact cache (schema v7); optional.
 	meta *store.Meta
+	// Durable resource cache (optional).
+	resourceCache ResourceCache
 
 	// HOST-004 / HOST-006: process-bound subject key + optional concurrent/rate limiters.
 	subjectKey            string
@@ -315,6 +321,7 @@ func resolveRegisterOptions(opts *RegisterOptions) regState {
 	}
 	st.diagBudget = opts.DiagOpBudgets
 	st.meta = opts.Meta
+	st.resourceCache = opts.ResourceCache
 	st.subjectKey = strings.TrimSpace(opts.SubjectKey)
 	st.subjectKeyFromContext = opts.SubjectKeyFromContext
 	st.subjectLimiter = opts.SubjectLimiter

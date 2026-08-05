@@ -34,6 +34,7 @@ import (
 	"github.com/hilather/go-jenkins-mcp/internal/policy"
 	"github.com/hilather/go-jenkins-mcp/internal/profile"
 	"github.com/hilather/go-jenkins-mcp/internal/redact"
+	"github.com/hilather/go-jenkins-mcp/internal/resourcecache"
 	"github.com/hilather/go-jenkins-mcp/internal/search"
 	"github.com/hilather/go-jenkins-mcp/internal/store"
 	"github.com/hilather/go-jenkins-mcp/internal/telemetry"
@@ -1553,6 +1554,7 @@ func runServe(args []string) error {
 	var logSearch tools.LogSearcher
 	var auditFile audit.Sink
 	var storeMeta *store.Meta
+	var resourceCache *resourcecache.Cache
 	var storeFrames *store.Frames
 	var profileDataDir string
 	var frameCrypto *store.FrameCrypto
@@ -1565,6 +1567,17 @@ func runServe(args []string) error {
 		storeMeta, err = store.Open(dataDir)
 		if err != nil {
 			return apperr.Wrap(apperr.CodeInternal, "failed to open profile log store", err)
+		}
+		// Resource cache (non-log): resources.sqlite + objects/ under profile data dir.
+		// Fail-open to nil on open error so serve still works; doctor can report residual.
+		if rc, rcErr := resourcecache.Open(resourcecache.Config{
+			CacheDir: filepath.Join(dataDir, "resource-cache"),
+			Verifier: resourcecache.AllowAllVerifier{}, // per-call tools policyVerifier overrides
+		}); rcErr != nil {
+			log.Printf("resource cache open: %v", rcErr)
+		} else {
+			resourceCache = rc
+			defer func() { _ = resourceCache.Close() }()
 		}
 		defer func() { _ = storeMeta.Close() }()
 		storeFrames, err = store.NewFrames(storeMeta, dataDir)
@@ -2269,6 +2282,7 @@ func runServe(args []string) error {
 		LogSearch:                  logSearch,
 		Logs:                       logAccess,
 		Meta:                       storeMeta, // durable survey compact cache when profile data dir open
+		ResourceCache:              resourceCache,
 		EnableTraceRefs:            enableTraceRefs,
 		TraceExporter:              traceExporter,
 		ExternalLogs:               externalLogs,
