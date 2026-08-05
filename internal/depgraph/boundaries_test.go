@@ -46,6 +46,8 @@ var requiredPackages = []string{
 	"internal/fleetmcp",
 	// FLC: fleet peer-cache (opt-in sealed-log peer reuse).
 	"internal/fleetcache",
+	// Resource cache (non-log typed objects).
+	"internal/resourcecache",
 }
 
 func moduleRoot(t *testing.T) string {
@@ -281,7 +283,15 @@ func TestDependencyDirection(t *testing.T) {
 		// Wave 45 Track B: operator_caps_snapshot reports auth + mcpserver constants
 		// (identity re-verify TTL bounds, Streamable HTTP MaxBodyBytes); both are
 		// cycle-free leaves (auth/mcpserver do not import tools).
-		"internal/tools": {"internal/jenkins", "internal/apperr", "internal/contracts", "internal/policy", "internal/audit", "internal/telemetry", "internal/redact", "internal/search", "internal/logmirror", "internal/diagnostics", "internal/mutation", "internal/otelx", "internal/correlate", "internal/store", "internal/auth", "internal/mcpserver", "internal/adminops", "internal/fleetmcp"},
+		"internal/tools": {"internal/jenkins", "internal/apperr", "internal/contracts", "internal/policy", "internal/audit", "internal/telemetry", "internal/redact", "internal/search", "internal/logmirror", "internal/diagnostics", "internal/mutation", "internal/otelx", "internal/correlate", "internal/store", "internal/auth", "internal/mcpserver", "internal/adminops", "internal/fleetmcp", "internal/resourcecache"},
+		// Resource cache: leaf-ish control plane (store dirs, jenkins sources, structured/blob/meta).
+		"internal/resourcecache": {
+			"internal/apperr", "internal/contracts", "internal/jenkins", "internal/store",
+			"internal/resourcecache/meta", "internal/resourcecache/blob", "internal/resourcecache/structured",
+		},
+		"internal/resourcecache/meta":       {"internal/apperr"},
+		"internal/resourcecache/blob":       {"internal/apperr", "internal/store"},
+		"internal/resourcecache/structured": {"internal/apperr"},
 		// depgraph is test-only package for this suite; production imports of it are empty.
 		"internal/otelx":     {},
 		"internal/correlate": {}, // INT-004 pure extractors (no network, no jenkins).

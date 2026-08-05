@@ -25,9 +25,13 @@ Secrets (API tokens, AEAD keys) never live in plane A trees — only in **keyrin
 
 ```text
 $XDG_DATA_HOME/jenkins-mcp/profiles/<profile-id>/
-  metadata.sqlite          # indexes, pins, generation/pack catalog (no log bodies)
+  metadata.sqlite          # log indexes, pins, generation/pack catalog (no log bodies)
   frames/<generation>/…zst # L1 independent Zstandard frames (STO-003/004)
   archives/                # L2 multi-frame seekable packs (ARC / pack-format-v1)
+  resource-cache/          # typed non-log resource cache (ADR 0017)
+    resources.sqlite       # resource entries (independent schema v1)
+    objects/blobs/…        # content-addressed immutable blobs + structured JSON+zstd
+    staging/               # incomplete writes (never sealed as complete)
   evict-journal.json       # interrupt-safe eviction journal
   release-journal.json     # L1-release-after-pack journal
 ```
@@ -38,6 +42,15 @@ $XDG_DATA_HOME/jenkins-mcp/profiles/<profile-id>/
 | **L2 packs** | Related sealed generations in multi-frame `.tar.zst` | Seekable members; native Go reader required path |
 | **SQLite meta** | Offsets, hashes, pins, collection catalog, survey summary cache | Recovery + eviction decisions |
 | **Survey cache** | Compact signature summaries for recent-failure survey | TTL + max entries; never full log tails |
+| **Resource cache** | Artifact catalogs/text/inspection, test reports, pipeline stages, SCM changes, stage logs, optional full artifact blobs | GetOrFetch with **policy re-check on every hit**; incomplete never complete |
+
+**Resource-cache rules (ADR 0017)**
+
+- Does **not** repack into log frames/packs; console log path stays compatible.
+- Cache presence never grants access — tools re-run MCP job/artifact policy on hits.
+- Partial results (e.g. bounded stage log / text) are variant-scoped; truncated data is never fleet-published as complete.
+- Fleet share for non-log object classes is **default-off** (residual until protocol v2).
+- **`ratarmount-rs`** archive member random access is optional residual; core tools work without FUSE.
 
 **Rules of thumb**
 

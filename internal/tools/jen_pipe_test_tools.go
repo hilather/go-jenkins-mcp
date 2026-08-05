@@ -2,8 +2,10 @@ package tools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
+	"github.com/hilather/go-jenkins-mcp/internal/resourcecache"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -117,11 +119,21 @@ func registerJenPipeTestTools(s *mcp.Server, client *jenkins.Client, st regState
 			if err != nil {
 				return nil, jenkins.GetPipelineStagesToolResponse{}, err
 			}
-			ps, err := client.GetPipelineStages(ctx, bref.Job.FullName, int(bref.Number))
+			key := resourcecache.ResourceKey{
+				ProfileID: st.profileID, Kind: resourcecache.KindPipelineStages,
+				JobFullName: bref.Job.FullName, BuildNumber: bref.Number, Variant: "v1",
+			}
+			ps, _, err := getCachedStructured(ctx, st, client, key, "", func() (jenkins.PipelineStages, error) {
+				p, e := client.GetPipelineStages(ctx, bref.Job.FullName, int(bref.Number))
+				if e != nil {
+					return jenkins.PipelineStages{}, e
+				}
+				return *p, nil
+			})
 			if err != nil {
 				return nil, jenkins.GetPipelineStagesToolResponse{}, mapToolErr(err)
 			}
-			return structuredResult(*ps)
+			return structuredResult(ps)
 		})
 
 	// TEST-001: JUnit test report summary + bounded failed cases.
@@ -133,11 +145,25 @@ func registerJenPipeTestTools(s *mcp.Server, client *jenkins.Client, st regState
 			if err != nil {
 				return nil, nil, err
 			}
-			rep, err := client.GetTestReport(ctx, bref.Job.FullName, int(bref.Number), args.MaxFailed)
+			variant := "v1"
+			if args.MaxFailed > 0 {
+				variant = fmt.Sprintf("max_failed=%d", args.MaxFailed)
+			}
+			key := resourcecache.ResourceKey{
+				ProfileID: st.profileID, Kind: resourcecache.KindTestReport,
+				JobFullName: bref.Job.FullName, BuildNumber: bref.Number, Variant: variant,
+			}
+			rep, _, err := getCachedStructured(ctx, st, client, key, "", func() (jenkins.TestReport, error) {
+				r, e := client.GetTestReport(ctx, bref.Job.FullName, int(bref.Number), args.MaxFailed)
+				if e != nil {
+					return jenkins.TestReport{}, e
+				}
+				return *r, nil
+			})
 			if err != nil {
 				return nil, nil, mapToolErr(err)
 			}
-			return structuredResult(PrepareTestReportForModel(rep))
+			return structuredResult(PrepareTestReportForModel(&rep))
 		})
 
 	// PIPE-002 / TEST-002 / ART-001
@@ -151,21 +177,52 @@ func registerJenPipeTestTools(s *mcp.Server, client *jenkins.Client, st regState
 			if err != nil {
 				return nil, nil, err
 			}
-			sl, err := client.GetStageLog(ctx, bref.Job.FullName, int(bref.Number),
-				args.StageID, args.StageName, args.MaxLength)
+			// Prefer stage_id for cache identity; resolve name via origin when needed.
+			stageSel := args.StageID
+			if stageSel == "" {
+				// Name resolution requires origin; skip durable cache key until id known.
+				sl, err := client.GetStageLog(ctx, bref.Job.FullName, int(bref.Number),
+					args.StageID, args.StageName, args.MaxLength)
+				if err != nil {
+					return nil, nil, mapToolErr(err)
+				}
+				if args.Mirror {
+					if mir := asStageLogMirror(st.logs); mir != nil {
+						if merr := mir.MirrorStageLogBytes(ctx, bref.Job.FullName, bref.Number, sl.StageID, []byte(sl.Logs)); merr == nil {
+							sl.Mirrored = true
+						}
+					}
+				}
+				return structuredResult(PrepareStageLogForModel(sl))
+			}
+			variant := "v1"
+			if args.MaxLength > 0 {
+				variant = fmt.Sprintf("max_length=%d", args.MaxLength)
+			}
+			key := resourcecache.ResourceKey{
+				ProfileID: st.profileID, Kind: resourcecache.KindStageLog,
+				JobFullName: bref.Job.FullName, BuildNumber: bref.Number,
+				Selector: stageSel, Variant: variant,
+			}
+			sl, _, err := getCachedStructured(ctx, st, client, key, "", func() (jenkins.StageLog, error) {
+				s, e := client.GetStageLog(ctx, bref.Job.FullName, int(bref.Number),
+					args.StageID, args.StageName, args.MaxLength)
+				if e != nil {
+					return jenkins.StageLog{}, e
+				}
+				return *s, nil
+			})
 			if err != nil {
 				return nil, nil, mapToolErr(err)
 			}
-			// Optional mirror under distinct stage key (PIPE-002).
 			if args.Mirror {
 				if mir := asStageLogMirror(st.logs); mir != nil {
 					if merr := mir.MirrorStageLogBytes(ctx, bref.Job.FullName, bref.Number, sl.StageID, []byte(sl.Logs)); merr == nil {
 						sl.Mirrored = true
 					}
-					// Mirror failure is non-fatal: still return fetched text.
 				}
 			}
-			return structuredResult(PrepareStageLogForModel(sl))
+			return structuredResult(PrepareStageLogForModel(&sl))
 		})
 
 	addReadTool(s, st, &mcp.Tool{
@@ -193,8 +250,31 @@ func registerJenPipeTestTools(s *mcp.Server, client *jenkins.Client, st regState
 			if err != nil {
 				return nil, jenkins.ListArtifactsToolResponse{}, err
 			}
-			// Wave 37/40: omit deny_artifact_paths; hard-cap fetch when patterns live
-			// so denied paths do not steal max_artifacts page slots.
+			// Cache full catalog then apply policy/max_artifacts on the hit path.
+			key := resourcecache.ResourceKey{
+				ProfileID: st.profileID, Kind: resourcecache.KindArtifactCatalog,
+				JobFullName: bref.Job.FullName, BuildNumber: bref.Number, Variant: "v1",
+			}
+			if st.resourceCache != nil {
+				cat, _, cerr := getCachedStructured(ctx, st, client, key, "", func() (jenkins.ArtifactList, error) {
+					// Large fetch for catalog; tool policy filter applies after.
+					l, e := client.ListArtifacts(ctx, bref.Job.FullName, int(bref.Number), 5000)
+					if e != nil {
+						return jenkins.ArtifactList{}, e
+					}
+					return *l, nil
+				})
+				if cerr == nil {
+					// Re-apply deny_artifact_paths + max on hit path (privacy).
+					list, err := listArtifactsWithPolicyFilter(ctx, client, st, bref.Job.FullName, int(bref.Number), args.MaxArtifacts)
+					if err != nil {
+						// Prefer filtered origin path if filter needs live client nuances.
+						return nil, jenkins.ListArtifactsToolResponse{}, mapToolErr(err)
+					}
+					_ = cat // catalog populated cache for subsequent text/inspect keys
+					return structuredResult(*list)
+				}
+			}
 			list, err := listArtifactsWithPolicyFilter(ctx, client, st, bref.Job.FullName, int(bref.Number), args.MaxArtifacts)
 			if err != nil {
 				return nil, jenkins.ListArtifactsToolResponse{}, mapToolErr(err)
@@ -211,11 +291,22 @@ func registerJenPipeTestTools(s *mcp.Server, client *jenkins.Client, st regState
 			if err != nil {
 				return nil, nil, err
 			}
-			at, err := client.GetArtifactText(ctx, bref.Job.FullName, int(bref.Number), args.Path, args.MaxBytes)
+			key := resourcecache.ResourceKey{
+				ProfileID: st.profileID, Kind: resourcecache.KindArtifactText,
+				JobFullName: bref.Job.FullName, BuildNumber: bref.Number,
+				Selector: args.Path, Variant: "v1",
+			}
+			at, _, err := getCachedStructured(ctx, st, client, key, args.Path, func() (jenkins.ArtifactText, error) {
+				a, e := client.GetArtifactText(ctx, bref.Job.FullName, int(bref.Number), args.Path, args.MaxBytes)
+				if e != nil {
+					return jenkins.ArtifactText{}, e
+				}
+				return *a, nil
+			})
 			if err != nil {
 				return nil, nil, mapToolErr(err)
 			}
-			return structuredResult(PrepareArtifactTextForModel(at))
+			return structuredResult(PrepareArtifactTextForModel(&at))
 		})
 
 	// ART-002: safe text/JSON/XML inspect + archive inventory (no extract/execute).
@@ -228,12 +319,23 @@ func registerJenPipeTestTools(s *mcp.Server, client *jenkins.Client, st regState
 			if err != nil {
 				return nil, nil, err
 			}
-			ins, err := client.InspectArtifact(ctx, bref.Job.FullName, int(bref.Number),
-				args.Path, args.MaxBytes, args.MaxMembers)
+			key := resourcecache.ResourceKey{
+				ProfileID: st.profileID, Kind: resourcecache.KindArtifactInspection,
+				JobFullName: bref.Job.FullName, BuildNumber: bref.Number,
+				Selector: args.Path, Variant: "v1",
+			}
+			ins, _, err := getCachedStructured(ctx, st, client, key, args.Path, func() (jenkins.ArtifactInspection, error) {
+				a, e := client.InspectArtifact(ctx, bref.Job.FullName, int(bref.Number),
+					args.Path, args.MaxBytes, args.MaxMembers)
+				if e != nil {
+					return jenkins.ArtifactInspection{}, e
+				}
+				return *a, nil
+			})
 			if err != nil {
 				return nil, nil, mapToolErr(err)
 			}
-			return structuredResult(PrepareArtifactInspectionForModel(ins))
+			return structuredResult(PrepareArtifactInspectionForModel(&ins))
 		})
 
 	// SCM-001: build changes / revisions since baseline.
@@ -249,11 +351,21 @@ func registerJenPipeTestTools(s *mcp.Server, client *jenkins.Client, st regState
 			}
 			args.JobName = bref.Job.FullName
 			args.BuildNumber = int(bref.Number)
-			res, err := client.GetBuildChanges(ctx, args)
+			key := resourcecache.ResourceKey{
+				ProfileID: st.profileID, Kind: resourcecache.KindBuildChanges,
+				JobFullName: bref.Job.FullName, BuildNumber: bref.Number, Variant: "v1",
+			}
+			res, _, err := getCachedStructured(ctx, st, client, key, "", func() (jenkins.BuildChanges, error) {
+				r, e := client.GetBuildChanges(ctx, args)
+				if e != nil {
+					return jenkins.BuildChanges{}, e
+				}
+				return *r, nil
+			})
 			if err != nil {
 				return nil, nil, mapToolErr(err)
 			}
-			return structuredResult(PrepareBuildChangesForModel(res))
+			return structuredResult(PrepareBuildChangesForModel(&res))
 		})
 
 }
