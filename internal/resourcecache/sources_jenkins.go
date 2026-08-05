@@ -56,6 +56,19 @@ func (s *JenkinsSources) Fetch(ctx context.Context, key ResourceKey, _ *Entry) (
 		}, nil
 	case KindArtifactText:
 		maxBytes := 256 * 1024
+		if strings.HasPrefix(key.Variant, "max_bytes=") {
+			var n int
+			if _, err := fmt.Sscanf(key.Variant, "max_bytes=%d", &n); err == nil && n > 0 {
+				maxBytes = n
+			}
+		}
+		// Variant may include |sk= after limits; parse first field only.
+		if i := strings.Index(key.Variant, "|"); i > 0 && strings.HasPrefix(key.Variant, "max_bytes=") {
+			var n int
+			if _, err := fmt.Sscanf(key.Variant[:i], "max_bytes=%d", &n); err == nil && n > 0 {
+				maxBytes = n
+			}
+		}
 		at, err := s.Client.GetArtifactText(ctx, job, bn, key.Selector, maxBytes)
 		if err != nil {
 			return FetchResult{}, err
@@ -69,13 +82,28 @@ func (s *JenkinsSources) Fetch(ctx context.Context, key ResourceKey, _ *Entry) (
 			Meta:       SourceMetadata{Completeness: comp},
 		}, nil
 	case KindArtifactInspection:
-		ins, err := s.Client.InspectArtifact(ctx, job, bn, key.Selector, 0, 0)
+		maxBytes, maxMembers := 0, 0
+		// Variant: max_bytes=N|max_members=M[|sk=…]
+		for _, part := range strings.Split(key.Variant, "|") {
+			var n int
+			if _, err := fmt.Sscanf(part, "max_bytes=%d", &n); err == nil {
+				maxBytes = n
+			}
+			if _, err := fmt.Sscanf(part, "max_members=%d", &n); err == nil {
+				maxMembers = n
+			}
+		}
+		ins, err := s.Client.InspectArtifact(ctx, job, bn, key.Selector, maxBytes, maxMembers)
 		if err != nil {
 			return FetchResult{}, err
 		}
+		comp := Complete
+		if ins != nil && ins.Truncated {
+			comp = Partial
+		}
 		return FetchResult{
 			Structured: ins,
-			Meta:       SourceMetadata{Completeness: Complete},
+			Meta:       SourceMetadata{Completeness: comp},
 		}, nil
 	case KindTestReport:
 		// Variant may be "max_failed=N"; default 50 matches common tool default.
@@ -104,10 +132,29 @@ func (s *JenkinsSources) Fetch(ctx context.Context, key ResourceKey, _ *Entry) (
 			Meta:       SourceMetadata{Completeness: Complete},
 		}, nil
 	case KindBuildChanges:
-		res, err := s.Client.GetBuildChanges(ctx, jenkins.GetBuildChangesToolArgs{
-			JobName:     job,
-			BuildNumber: bn,
-		})
+		args := jenkins.GetBuildChangesToolArgs{JobName: job, BuildNumber: bn}
+		for _, part := range strings.Split(key.Variant, "|") {
+			var n int
+			if _, err := fmt.Sscanf(part, "baseline=%d", &n); err == nil {
+				args.BaselineBuild = n
+			}
+			if _, err := fmt.Sscanf(part, "max_commits=%d", &n); err == nil {
+				args.MaxCommits = n
+			}
+			if _, err := fmt.Sscanf(part, "offset=%d", &n); err == nil {
+				args.CommitOffset = n
+			}
+			if _, err := fmt.Sscanf(part, "max_files=%d", &n); err == nil {
+				args.MaxFiles = n
+			}
+			if _, err := fmt.Sscanf(part, "max_msg=%d", &n); err == nil {
+				args.MaxMessageBytes = n
+			}
+			if _, err := fmt.Sscanf(part, "max_scan=%d", &n); err == nil {
+				args.MaxScanBuilds = n
+			}
+		}
+		res, err := s.Client.GetBuildChanges(ctx, args)
 		if err != nil {
 			return FetchResult{}, err
 		}
@@ -117,9 +164,9 @@ func (s *JenkinsSources) Fetch(ctx context.Context, key ResourceKey, _ *Entry) (
 		}, nil
 	case KindStageLog:
 		maxLen := 0
-		if strings.HasPrefix(key.Variant, "max_length=") {
+		for _, part := range strings.Split(key.Variant, "|") {
 			var n int
-			if _, err := fmt.Sscanf(key.Variant, "max_length=%d", &n); err == nil {
+			if _, err := fmt.Sscanf(part, "max_length=%d", &n); err == nil {
 				maxLen = n
 			}
 		}

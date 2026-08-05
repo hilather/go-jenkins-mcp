@@ -303,3 +303,32 @@ func TestFreshnessBuildingTTL(t *testing.T) {
 		t.Fatal("building entry should be stale")
 	}
 }
+
+func TestGetOrFetch_SubjectPrivateIsolation(t *testing.T) {
+	src := &countingSource{body: []byte("secret-for-alice")}
+	c := openTestCache(t, resourcecache.AllowAllVerifier{})
+	key := testKey(resourcecache.KindTestReport, "")
+	alice := resourcecache.FetchRequest{
+		Key: key, Access: resourcecache.AccessContext{ProfileID: "lab", SubjectKey: "alice"},
+		Source: src, Verifier: resourcecache.AllowAllVerifier{},
+	}
+	if _, _, err := c.GetOrFetch(context.Background(), alice); err != nil {
+		t.Fatal(err)
+	}
+	nAfterAlice := src.n.Load()
+	bob := resourcecache.FetchRequest{
+		Key: key, Access: resourcecache.AccessContext{ProfileID: "lab", SubjectKey: "bob"},
+		Source: src, Verifier: resourcecache.AllowAllVerifier{},
+	}
+	_, lr, err := c.GetOrFetch(context.Background(), bob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Bob must not reuse Alice's subject_private entry without re-fetch.
+	if lr.FromCache && src.n.Load() == nAfterAlice {
+		t.Fatal("bob must not hit alice subject_private cache without origin fill")
+	}
+	if src.n.Load() < nAfterAlice+1 {
+		t.Fatalf("expected bob origin fetch, n=%d", src.n.Load())
+	}
+}

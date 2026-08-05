@@ -155,6 +155,22 @@ func (c *Cache) GetOrFetch(ctx context.Context, req FetchRequest) (EntryReader, 
 			return EntryReader{}, LookupResult{}, err
 		}
 	}
+	// subject_private: isolate digests per subject so entries cannot be reused cross-subject.
+	share := c.cfg.DefaultShare
+	if share == "" {
+		share = ScopeSubjectPrivate
+	}
+	subjHash := ""
+	if share == ScopeSubjectPrivate {
+		subjHash = hashOpaque(req.Access.SubjectKey)
+		if subjHash != "" {
+			key.Variant = key.Variant + "|sk=" + subjHash
+			key, err = key.Normalize()
+			if err != nil {
+				return EntryReader{}, LookupResult{}, err
+			}
+		}
+	}
 	digest, err := key.Digest()
 	if err != nil {
 		return EntryReader{}, LookupResult{}, err
@@ -162,11 +178,14 @@ func (c *Cache) GetOrFetch(ctx context.Context, req FetchRequest) (EntryReader, 
 
 	// L0 hit
 	if er, lr, ok := c.l0Get(digest); ok && c.cfg.Freshness.IsFresh(er.Entry, c.now()) {
-		if err := c.reauth(ctx, req, key, artPath, ver); err != nil {
+		if !entryVisibleTo(er.Entry, req.Access, share) {
+			// Treat as miss (should not happen when digests include sk=).
+		} else if err := c.reauth(ctx, req, key, artPath, ver); err != nil {
 			return EntryReader{}, LookupResult{}, err
+		} else {
+			lr.AuthorizedAt = c.now()
+			return er, lr, nil
 		}
-		lr.AuthorizedAt = c.now()
-		return er, lr, nil
 	}
 
 	// Disk hit
@@ -174,7 +193,8 @@ func (c *Cache) GetOrFetch(ctx context.Context, req FetchRequest) (EntryReader, 
 		return EntryReader{}, LookupResult{}, err
 	} else if ok {
 		e := entryFromRow(row)
-		if e.State == StateReady && e.Completeness != Incomplete && c.cfg.Freshness.IsFresh(e, c.now()) {
+		if e.State == StateReady && e.Completeness != Incomplete && c.cfg.Freshness.IsFresh(e, c.now()) &&
+			entryVisibleTo(e, req.Access, share) {
 			data, err := c.readObject(e)
 			if err != nil {
 				e.State = StateCorrupt
@@ -308,10 +328,13 @@ func (c *Cache) fetchAndCommit(ctx context.Context, req FetchRequest, key Resour
 		data = enc
 	}
 
-	share := c.cfg.DefaultShare
-	subjHash := ""
-	if share == ScopeSubjectPrivate {
-		subjHash = hashOpaque(req.Access.SubjectKey)
+	writeShare := c.cfg.DefaultShare
+	if writeShare == "" {
+		writeShare = ScopeSubjectPrivate
+	}
+	writeSubj := ""
+	if writeShare == ScopeSubjectPrivate {
+		writeSubj = hashOpaque(req.Access.SubjectKey)
 	}
 	e := Entry{
 		KeyDigest:      digest,
@@ -324,8 +347,8 @@ func (c *Cache) fetchAndCommit(ctx context.Context, req FetchRequest, key Resour
 		SourceETag:     fr.Meta.ETag,
 		BuildBuilding:  fr.Meta.Building,
 		FetchedAt:      c.now(),
-		Share:          share,
-		SubjectKeyHash: subjHash,
+		Share:          writeShare,
+		SubjectKeyHash: writeSubj,
 	}
 	if err := c.db.PutRow(ctx, rowFromEntry(e, key)); err != nil {
 		return out, err
@@ -475,4 +498,21 @@ func firstNonEmpty(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// entryVisibleTo enforces subject_private isolation on hits.
+func entryVisibleTo(e Entry, ac AccessContext, defaultShare AuthorizationScope) bool {
+	share := e.Share
+	if share == "" {
+		share = defaultShare
+	}
+	if share != ScopeSubjectPrivate {
+		return true
+	}
+	want := hashOpaque(ac.SubjectKey)
+	if e.SubjectKeyHash == "" {
+		// Legacy/empty: only allow if caller also has empty subject key.
+		return want == ""
+	}
+	return e.SubjectKeyHash == want
 }

@@ -66,11 +66,52 @@ func firstNonEmptyStr(a, b string) string {
 	return b
 }
 
-// getCachedStructured fetches via ResourceCache when configured, else calls origin.
+// completenessOf detects intentional partial results for caching semantics.
+func completenessOf(v any) resourcecache.Completeness {
+	switch t := v.(type) {
+	case jenkins.ArtifactText:
+		if t.Truncated {
+			return resourcecache.Partial
+		}
+	case *jenkins.ArtifactText:
+		if t != nil && t.Truncated {
+			return resourcecache.Partial
+		}
+	case jenkins.StageLog:
+		if t.HasMore {
+			return resourcecache.Partial
+		}
+	case *jenkins.StageLog:
+		if t != nil && t.HasMore {
+			return resourcecache.Partial
+		}
+	case jenkins.ArtifactInspection:
+		if t.Truncated {
+			return resourcecache.Partial
+		}
+	case *jenkins.ArtifactInspection:
+		if t != nil && t.Truncated {
+			return resourcecache.Partial
+		}
+	case jenkins.ArtifactList:
+		if t.Truncated {
+			return resourcecache.Partial
+		}
+	case *jenkins.ArtifactList:
+		if t != nil && t.Truncated {
+			return resourcecache.Partial
+		}
+	}
+	return resourcecache.Complete
+}
+
+// getCachedStructured fetches via ResourceCache when configured.
+// Origin is used as the real fill path (preserves caller limits); never JenkinsSources
+// with hardcoded caps that ignore tool args.
 func getCachedStructured[T any](
 	ctx context.Context,
 	st regState,
-	client *jenkins.Client,
+	_ *jenkins.Client,
 	key resourcecache.ResourceKey,
 	artifactPath string,
 	origin func() (T, error),
@@ -82,7 +123,16 @@ func getCachedStructured[T any](
 		return v, resourcecache.LookupResult{Source: resourcecache.SourceOrigin}, err
 	}
 	key.ProfileID = firstNonEmptyStr(key.ProfileID, st.profileID)
-	src := &resourcecache.JenkinsSources{Client: client}
+	src := resourcecache.SourceFunc(func(ctx context.Context, _ resourcecache.ResourceKey, _ *resourcecache.Entry) (resourcecache.FetchResult, error) {
+		v, err := origin()
+		if err != nil {
+			return resourcecache.FetchResult{}, err
+		}
+		return resourcecache.FetchResult{
+			Structured: v,
+			Meta:       resourcecache.SourceMetadata{Completeness: completenessOf(v)},
+		}, nil
+	})
 	er, lr, err := rc.GetOrFetch(ctx, resourcecache.FetchRequest{
 		Key:          key,
 		Access:       resourceAccess(ctx, st, key.ProfileID),
@@ -95,7 +145,6 @@ func getCachedStructured[T any](
 	}
 	var out T
 	if err := er.DecodeStructured(&out); err != nil {
-		// Cache corrupt → origin fallback once
 		v, oerr := origin()
 		if oerr != nil {
 			return zero, lr, fmt.Errorf("cache decode: %w; origin: %v", err, oerr)
@@ -103,4 +152,20 @@ func getCachedStructured[T any](
 		return v, resourcecache.LookupResult{Source: resourcecache.SourceOrigin}, nil
 	}
 	return out, lr, nil
+}
+
+// applyCachedArtifactListLimits applies deny_artifact_paths + max_artifacts to a
+// cached catalog without calling Jenkins again.
+func applyCachedArtifactListLimits(ctx context.Context, st regState, list *jenkins.ArtifactList, maxArtifacts int) {
+	if list == nil {
+		return
+	}
+	subj := effectiveSubject(st, ctx)
+	applyArtifactListPolicyFilterForSubject(st, subj, list)
+	userMax := normalizeMaxArtifacts(maxArtifacts)
+	if len(list.Artifacts) > userMax {
+		list.Artifacts = list.Artifacts[:userMax]
+		list.Count = len(list.Artifacts)
+		list.Truncated = true
+	}
 }

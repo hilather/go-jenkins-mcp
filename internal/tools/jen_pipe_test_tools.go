@@ -250,29 +250,29 @@ func registerJenPipeTestTools(s *mcp.Server, client *jenkins.Client, st regState
 			if err != nil {
 				return nil, jenkins.ListArtifactsToolResponse{}, err
 			}
-			// Cache full catalog then apply policy/max_artifacts on the hit path.
+			// Cache a hard-cap catalog once; apply deny_artifact_paths + max_artifacts on hit path.
+			hardCap := ArtifactsHardCap()
+			if hardCap <= 0 {
+				hardCap = jenkins.DefaultArtifactsHardCap
+			}
 			key := resourcecache.ResourceKey{
 				ProfileID: st.profileID, Kind: resourcecache.KindArtifactCatalog,
-				JobFullName: bref.Job.FullName, BuildNumber: bref.Number, Variant: "v1",
+				JobFullName: bref.Job.FullName, BuildNumber: bref.Number,
+				Variant: fmt.Sprintf("hardcap=%d", hardCap),
 			}
 			if st.resourceCache != nil {
 				cat, _, cerr := getCachedStructured(ctx, st, client, key, "", func() (jenkins.ArtifactList, error) {
-					// Large fetch for catalog; tool policy filter applies after.
-					l, e := client.ListArtifacts(ctx, bref.Job.FullName, int(bref.Number), 5000)
+					l, e := client.ListArtifacts(ctx, bref.Job.FullName, int(bref.Number), hardCap)
 					if e != nil {
 						return jenkins.ArtifactList{}, e
 					}
 					return *l, nil
 				})
 				if cerr == nil {
-					// Re-apply deny_artifact_paths + max on hit path (privacy).
-					list, err := listArtifactsWithPolicyFilter(ctx, client, st, bref.Job.FullName, int(bref.Number), args.MaxArtifacts)
-					if err != nil {
-						// Prefer filtered origin path if filter needs live client nuances.
-						return nil, jenkins.ListArtifactsToolResponse{}, mapToolErr(err)
-					}
-					_ = cat // catalog populated cache for subsequent text/inspect keys
-					return structuredResult(*list)
+					// Serve the cached catalog (do not re-hit Jenkins).
+					list := cat
+					applyCachedArtifactListLimits(ctx, st, &list, args.MaxArtifacts)
+					return structuredResult(list)
 				}
 			}
 			list, err := listArtifactsWithPolicyFilter(ctx, client, st, bref.Job.FullName, int(bref.Number), args.MaxArtifacts)
@@ -291,13 +291,17 @@ func registerJenPipeTestTools(s *mcp.Server, client *jenkins.Client, st regState
 			if err != nil {
 				return nil, nil, err
 			}
+			maxB := args.MaxBytes
+			if maxB <= 0 {
+				maxB = 256 * 1024
+			}
 			key := resourcecache.ResourceKey{
 				ProfileID: st.profileID, Kind: resourcecache.KindArtifactText,
 				JobFullName: bref.Job.FullName, BuildNumber: bref.Number,
-				Selector: args.Path, Variant: "v1",
+				Selector: args.Path, Variant: fmt.Sprintf("max_bytes=%d", maxB),
 			}
 			at, _, err := getCachedStructured(ctx, st, client, key, args.Path, func() (jenkins.ArtifactText, error) {
-				a, e := client.GetArtifactText(ctx, bref.Job.FullName, int(bref.Number), args.Path, args.MaxBytes)
+				a, e := client.GetArtifactText(ctx, bref.Job.FullName, int(bref.Number), args.Path, maxB)
 				if e != nil {
 					return jenkins.ArtifactText{}, e
 				}
@@ -322,7 +326,8 @@ func registerJenPipeTestTools(s *mcp.Server, client *jenkins.Client, st regState
 			key := resourcecache.ResourceKey{
 				ProfileID: st.profileID, Kind: resourcecache.KindArtifactInspection,
 				JobFullName: bref.Job.FullName, BuildNumber: bref.Number,
-				Selector: args.Path, Variant: "v1",
+				Selector: args.Path,
+				Variant:  fmt.Sprintf("max_bytes=%d|max_members=%d", args.MaxBytes, args.MaxMembers),
 			}
 			ins, _, err := getCachedStructured(ctx, st, client, key, args.Path, func() (jenkins.ArtifactInspection, error) {
 				a, e := client.InspectArtifact(ctx, bref.Job.FullName, int(bref.Number),
@@ -351,9 +356,12 @@ func registerJenPipeTestTools(s *mcp.Server, client *jenkins.Client, st regState
 			}
 			args.JobName = bref.Job.FullName
 			args.BuildNumber = int(bref.Number)
+			// Variant encodes all pagination/aggregation args so different SCM pages do not collide.
+			variant := fmt.Sprintf("baseline=%d|max_commits=%d|offset=%d|max_files=%d|max_msg=%d|max_scan=%d",
+				args.BaselineBuild, args.MaxCommits, args.CommitOffset, args.MaxFiles, args.MaxMessageBytes, args.MaxScanBuilds)
 			key := resourcecache.ResourceKey{
 				ProfileID: st.profileID, Kind: resourcecache.KindBuildChanges,
-				JobFullName: bref.Job.FullName, BuildNumber: bref.Number, Variant: "v1",
+				JobFullName: bref.Job.FullName, BuildNumber: bref.Number, Variant: variant,
 			}
 			res, _, err := getCachedStructured(ctx, st, client, key, "", func() (jenkins.BuildChanges, error) {
 				r, e := client.GetBuildChanges(ctx, args)
