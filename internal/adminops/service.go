@@ -12,6 +12,7 @@ import (
 	"github.com/hilather/go-jenkins-mcp/internal/admin"
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/audit"
+	"github.com/hilather/go-jenkins-mcp/internal/cachecontrol"
 	"github.com/hilather/go-jenkins-mcp/internal/config"
 	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
 	"github.com/hilather/go-jenkins-mcp/internal/gateway"
@@ -47,6 +48,11 @@ type Config struct {
 	Getenv func(string) string
 	// DefaultProfileID when tool omits profile_id (serve profile).
 	DefaultProfileID string
+	// CacheControl is the optional ADR 0018 control-plane service (typed inventory/config).
+	// When nil, typed cache tools use built-in defaults without runtime overrides.
+	CacheControl *cachecontrol.Service
+	// CacheControlStore is the optional override DB (required for mode patch).
+	CacheControlStore *cachecontrol.OverrideStore
 }
 
 // Service implements admin day-2 operations for MCP tools.
@@ -1013,6 +1019,11 @@ func ToolCatalog() []string {
 		"admin_cache_status",
 		"admin_cache_evict_plan",
 		"admin_cache_evict",
+		"admin_cache_inventory",
+		"admin_cache_effective",
+		"admin_cache_patch_mode",
+		"admin_cache_plan",
+		"admin_cache_telemetry",
 		"admin_fleet_cache_status",
 		"admin_fleet_cache_doctor",
 		"admin_fleet_cache_purge",

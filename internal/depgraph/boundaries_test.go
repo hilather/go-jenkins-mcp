@@ -48,6 +48,8 @@ var requiredPackages = []string{
 	"internal/fleetcache",
 	// Resource cache (non-log typed objects).
 	"internal/resourcecache",
+	// ADR 0018 unified cache control plane.
+	"internal/cachecontrol",
 }
 
 func moduleRoot(t *testing.T) string {
@@ -284,7 +286,7 @@ func TestDependencyDirection(t *testing.T) {
 		// (identity re-verify TTL bounds, Streamable HTTP MaxBodyBytes); both are
 		// cycle-free leaves (auth/mcpserver do not import tools).
 		"internal/tools": {"internal/jenkins", "internal/apperr", "internal/contracts", "internal/policy", "internal/audit", "internal/telemetry", "internal/redact", "internal/search", "internal/logmirror", "internal/diagnostics", "internal/mutation", "internal/otelx", "internal/correlate", "internal/store", "internal/auth", "internal/mcpserver", "internal/adminops", "internal/fleetmcp", "internal/resourcecache"},
-		// Resource cache: leaf-ish control plane (store dirs, jenkins sources, structured/blob/meta).
+		// Resource cache: data plane (store dirs, jenkins sources, structured/blob/meta).
 		"internal/resourcecache": {
 			"internal/apperr", "internal/contracts", "internal/jenkins", "internal/store",
 			"internal/resourcecache/meta", "internal/resourcecache/blob", "internal/resourcecache/structured",
@@ -292,6 +294,10 @@ func TestDependencyDirection(t *testing.T) {
 		"internal/resourcecache/meta":       {"internal/apperr"},
 		"internal/resourcecache/blob":       {"internal/apperr", "internal/store"},
 		"internal/resourcecache/structured": {"internal/apperr"},
+		// ADR 0018: control plane over stores (may adapt resourcecache modes; no HTTP/MCP).
+		"internal/cachecontrol": {
+			"internal/apperr", "internal/resourcecache",
+		},
 		// depgraph is test-only package for this suite; production imports of it are empty.
 		"internal/otelx":     {},
 		"internal/correlate": {}, // INT-004 pure extractors (no network, no jenkins).
@@ -317,7 +323,8 @@ func TestDependencyDirection(t *testing.T) {
 			"internal/admin", "internal/apperr", "internal/audit", "internal/config",
 			"internal/diagnostics", "internal/gateway", "internal/policy",
 			"internal/profile", "internal/store", "internal/telemetry",
-			"internal/fleetcache", // FLC operator ops surface
+			"internal/fleetcache",   // FLC operator ops surface
+			"internal/cachecontrol", // ADR 0018 typed cache inventory/config/ops
 		},
 		// Fleet MCP: roster + peer fan-out for fleet_* tools (not multi-pod HA).
 		// FLC: peer-cache lookup/read tools call fleetcache + logmirror fill path.

@@ -52,6 +52,44 @@ $XDG_DATA_HOME/jenkins-mcp/profiles/<profile-id>/
 - Fleet share for non-log object classes is **default-off** (residual until protocol v2).
 - **`ratarmount-rs`** archive member random access is optional residual; core tools work without FUSE.
 
+### 2.1a Unified cache control plane (ADR 0018)
+
+Every managed cache type is independently discoverable and mode-gated via
+`internal/cachecontrol` (not a second storage engine):
+
+| Mode | Read | Fill | Data retained on disable |
+|------|------|------|--------------------------|
+| `off` | no | no | **yes** (purge is separate) |
+| `read_only` | yes | no | yes |
+| `write_only` | no | yes | yes |
+| `read_write` | yes | yes | yes (default when config absent) |
+
+**Type IDs:** `console_log`, `stage_log`, `artifact_blob`, `artifact_catalog`,
+`artifact_text`, `artifact_inspection`, `test_report`, `pipeline_stages`,
+`build_changes`, `diagnostic_fetch`, `survey_summary`, `ratarmount_index`.
+
+**Defaults (absent config):** available types `read_write`; `ratarmount_index`
+`off` / unqualified; fleet share off; raw dump disallowed. **Hit re-auth is
+unchanged** — modes never grant access.
+
+**Config precedence (highest first):** emergency force-off / startup ceilings →
+runtime overrides (`cache-control.sqlite`) → profile cache section → optional
+server file → built-in defaults.
+
+**Admin surfaces (additive):** MCP `admin_cache_inventory`,
+`admin_cache_effective`, `admin_cache_patch_mode`, `admin_cache_plan`,
+`admin_cache_telemetry` share the same service as adminops. Legacy
+`admin_cache_status` / `admin_cache_evict*` remain log-store compatibility tools.
+
+**Data-path enforcement:** `console_log` is gated on `logmirror.Access` (lookup/
+fill); resource kinds on `resourcecache.GetOrFetch`; `diagnostic_fetch` via
+process `FetchCache` (`getCachedBuildDetails` / `getOrFetchCached`);
+`survey_summary` via **process L1** (`surveySigCache`) **and** durable Meta —
+both honor `CacheModes` (mode=off uses neither layer; disable does not purge).
+Telemetry is recorded on hit/miss/fill (low-cardinality). Lifecycle plans are
+durable in `cache-control.sqlite`; purge epoch advances only after successful
+execute.
+
 **Rules of thumb**
 
 - Download each remote log **once per generation**; subsequent tools hit local cache.
@@ -270,6 +308,8 @@ Do **not** point production home XDG at throwaway lab dirs. Tear-down with volum
 | Profile data root | profile `dataDir` | Else `ProfileDataDir(id)` under XDG data |
 | Total physical quota | `--cache-total-quota-bytes` / `JENKINS_MCP_CACHE_TOTAL_QUOTA_BYTES` | Default **10 GiB**; min 64 MiB; max 1 TiB; empty/0 = default |
 | Low-disk threshold | `--cache-low-disk-bytes` / `JENKINS_MCP_CACHE_LOW_DISK_BYTES` | Default **1 GiB**; min 16 MiB; max 1 TiB; empty/0 = default |
+| Control-plane overrides DB | `…/profiles/<id>/cache-control/cache-control.sqlite` | ADR 0018 runtime modes; absent ⇒ built-in defaults |
+| Typed inventory / mode MCP | `admin_cache_inventory` / `admin_cache_patch_mode` | Opt-in admin MCP; mode change never purges |
 
 ### 5.2 Plane B (gateway / HTTP)
 

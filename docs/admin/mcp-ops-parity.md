@@ -91,6 +91,10 @@ Authz: process **admin role** (same as console) or stricter serve-time gate; des
 | Security self-check | `admin_security_selfcheck` | P1 | Offline default |
 | Cache status | `admin_cache_status` | P0 | |
 | Cache evict-plan / evict | `admin_cache_evict_plan`, `admin_cache_evict` | P1 | confirm `EVICT` |
+| Cache typed inventory / effective | `admin_cache_inventory`, `admin_cache_effective` | P0 | ADR 0018; viewer+ |
+| Cache mode patch (CAS) | `admin_cache_patch_mode` | P1 | operator; requires override store; no purge |
+| Cache lifecycle plan | `admin_cache_plan` | P1 | dump/purge/verify/repair/gc; confirm token; no inline body |
+| Cache telemetry rollups | `admin_cache_telemetry` | P1 | low-cardinality only |
 | Fleet-cache status / doctor | `admin_fleet_cache_status`, `admin_fleet_cache_doctor` | P1 | **implemented FLC-063; process-local; mode default off; SPA residual |
 | Fleet-cache purge | `admin_fleet_cache_purge` | P1 | **implemented FLC-063; confirm `PURGE`; operator; no HTTP peer fan-out |
 | Support bundle | `admin_support_bundle` | P1 | preview/create; secret-free |

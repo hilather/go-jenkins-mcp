@@ -18,6 +18,27 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+// ModePolicy optionally gates cache lookup/fill per kind (ADR 0018).
+// When nil, both lookup and fill are allowed (pre-control-plane compatibility).
+// Implementations must not authorize access — only mode decisions.
+type ModePolicy interface {
+	// AllowLookup reports whether existing entries may be served for kind.
+	AllowLookup(kind ResourceKind) bool
+	// AllowFill reports whether new entries may be written for kind.
+	AllowFill(kind ResourceKind) bool
+}
+
+// EpochProvider supplies the current purge epoch for a kind (late-fill protection).
+// When nil, epoch checks are skipped (compat).
+type EpochProvider interface {
+	PurgeEpoch(kind ResourceKind) uint64
+}
+
+// TelemetrySink records low-cardinality cache events (no job/path/subject labels).
+type TelemetrySink interface {
+	OnResourceEvent(kind ResourceKind, layer, outcome string, bytes int64, reason string)
+}
+
 // Config configures a Cache instance.
 type Config struct {
 	// CacheDir is the profile cache root (contains resources.sqlite + objects/).
@@ -28,6 +49,12 @@ type Config struct {
 	Freshness FreshnessPolicy
 	// DefaultShare for new entries.
 	DefaultShare AuthorizationScope
+	// Modes is optional cache-control mode policy (nil ⇒ read_write for all kinds).
+	Modes ModePolicy
+	// Epochs optional purge-epoch provider for late-fill discard.
+	Epochs EpochProvider
+	// Telemetry optional event sink.
+	Telemetry TelemetrySink
 }
 
 // Cache is the facade used by tools and diagnostics.
@@ -124,6 +151,8 @@ func (r EntryReader) DecodeStructured(dest any) error {
 }
 
 // GetOrFetch returns a ready entry from L0/disk or fetches from origin.
+// Authorization always runs before mode gates and again on hits (ADR 0017/0018).
+// Mode policy (when set) may skip lookup and/or fill; it never grants access.
 func (c *Cache) GetOrFetch(ctx context.Context, req FetchRequest) (EntryReader, LookupResult, error) {
 	if c == nil {
 		return EntryReader{}, LookupResult{}, apperr.New(apperr.CodeInternal, "resource cache is nil")
@@ -162,6 +191,10 @@ func (c *Cache) GetOrFetch(ctx context.Context, req FetchRequest) (EntryReader, 
 			return EntryReader{}, LookupResult{}, err
 		}
 	}
+
+	allowLookup := c.allowLookup(key.Kind)
+	allowFill := c.allowFill(key.Kind)
+
 	// subject_private: isolate digests per subject so entries cannot be reused cross-subject.
 	share := c.cfg.DefaultShare
 	if share == "" {
@@ -183,49 +216,87 @@ func (c *Cache) GetOrFetch(ctx context.Context, req FetchRequest) (EntryReader, 
 		return EntryReader{}, LookupResult{}, err
 	}
 
-	// L0 hit
-	if er, lr, ok := c.l0Get(digest); ok && c.cfg.Freshness.IsFresh(er.Entry, c.now()) {
-		if !entryVisibleTo(er.Entry, req.Access, share) {
-			// Treat as miss (should not happen when digests include sk=).
-		} else if err := c.reauth(ctx, req, key, artPath, ver); err != nil {
-			return EntryReader{}, LookupResult{}, err
-		} else {
-			lr.AuthorizedAt = c.now()
-			return er, lr, nil
-		}
-	}
-
-	// Disk hit
-	if row, ok, err := c.db.GetRow(ctx, digest); err != nil {
-		return EntryReader{}, LookupResult{}, err
-	} else if ok {
-		e := entryFromRow(row)
-		if e.State == StateReady && e.Completeness != Incomplete && c.cfg.Freshness.IsFresh(e, c.now()) &&
-			entryVisibleTo(e, req.Access, share) {
-			data, err := c.readObject(e)
-			if err != nil {
-				e.State = StateCorrupt
-				_ = c.db.PutRow(ctx, rowFromEntry(e, key))
+	// L0 hit (only when mode allows read)
+	if allowLookup {
+		if er, lr, ok := c.l0Get(digest); ok && c.cfg.Freshness.IsFresh(er.Entry, c.now()) {
+			if !entryVisibleTo(er.Entry, req.Access, share) {
+				// Treat as miss (should not happen when digests include sk=).
+			} else if err := c.reauth(ctx, req, key, artPath, ver); err != nil {
+				c.emitTel(key.Kind, "l0", "auth_deny", 0, "policy")
+				return EntryReader{}, LookupResult{}, err
 			} else {
-				if err := c.reauth(ctx, req, key, artPath, ver); err != nil {
-					return EntryReader{}, LookupResult{}, err
-				}
-				er := EntryReader{Entry: e, Data: data}
-				c.l0Put(digest, er)
-				return er, LookupResult{Source: SourceDisk, Entry: e, FromCache: true, AuthorizedAt: c.now()}, nil
+				lr.AuthorizedAt = c.now()
+				c.emitTel(key.Kind, "l0", "hit", int64(len(er.Data)), "")
+				return er, lr, nil
 			}
 		}
+
+		// Disk hit
+		if row, ok, err := c.db.GetRow(ctx, digest); err != nil {
+			return EntryReader{}, LookupResult{}, err
+		} else if ok {
+			e := entryFromRow(row)
+			if e.State == StateReady && e.Completeness != Incomplete && c.cfg.Freshness.IsFresh(e, c.now()) &&
+				entryVisibleTo(e, req.Access, share) {
+				data, err := c.readObject(e)
+				if err != nil {
+					e.State = StateCorrupt
+					_ = c.db.PutRow(ctx, rowFromEntry(e, key))
+				} else {
+					if err := c.reauth(ctx, req, key, artPath, ver); err != nil {
+						c.emitTel(key.Kind, "disk", "auth_deny", 0, "policy")
+						return EntryReader{}, LookupResult{}, err
+					}
+					er := EntryReader{Entry: e, Data: data}
+					c.l0Put(digest, er)
+					c.emitTel(key.Kind, "disk", "hit", int64(len(data)), "")
+					return er, LookupResult{Source: SourceDisk, Entry: e, FromCache: true, AuthorizedAt: c.now()}, nil
+				}
+			}
+		}
+	} else {
+		c.emitTel(key.Kind, "none", "bypass", 0, "mode_disallows_read")
 	}
 
-	// Miss / stale / corrupt → singleflight fetch
+	// Miss / stale / mode-bypass → singleflight fetch (fill gated inside)
+	c.emitTel(key.Kind, "none", "miss", 0, "")
+	epochAtStart := c.purgeEpoch(key.Kind)
 	v, err, _ := c.sf.Do(digest, func() (any, error) {
-		return c.fetchAndCommit(ctx, req, key, digest, artPath, ver)
+		return c.fetchAndCommit(ctx, req, key, digest, artPath, ver, allowFill, epochAtStart)
 	})
 	if err != nil {
 		return EntryReader{}, LookupResult{}, err
 	}
 	r := v.(fetchOutcome)
 	return r.er, r.lr, nil
+}
+
+func (c *Cache) purgeEpoch(kind ResourceKind) uint64 {
+	if c == nil || c.cfg.Epochs == nil {
+		return 0
+	}
+	return c.cfg.Epochs.PurgeEpoch(kind)
+}
+
+func (c *Cache) emitTel(kind ResourceKind, layer, outcome string, bytes int64, reason string) {
+	if c == nil || c.cfg.Telemetry == nil {
+		return
+	}
+	c.cfg.Telemetry.OnResourceEvent(kind, layer, outcome, bytes, reason)
+}
+
+func (c *Cache) allowLookup(kind ResourceKind) bool {
+	if c == nil || c.cfg.Modes == nil {
+		return true
+	}
+	return c.cfg.Modes.AllowLookup(kind)
+}
+
+func (c *Cache) allowFill(kind ResourceKind) bool {
+	if c == nil || c.cfg.Modes == nil {
+		return true
+	}
+	return c.cfg.Modes.AllowFill(kind)
 }
 
 type fetchOutcome struct {
@@ -246,7 +317,7 @@ func (c *Cache) reauth(ctx context.Context, req FetchRequest, key ResourceKey, a
 	return nil
 }
 
-func (c *Cache) fetchAndCommit(ctx context.Context, req FetchRequest, key ResourceKey, digest, artPath string, ver AuthorizationVerifier) (fetchOutcome, error) {
+func (c *Cache) fetchAndCommit(ctx context.Context, req FetchRequest, key ResourceKey, digest, artPath string, ver AuthorizationVerifier, allowFill bool, epochAtStart uint64) (fetchOutcome, error) {
 	var out fetchOutcome
 	src := req.Source
 	if src == nil {
@@ -283,6 +354,8 @@ func (c *Cache) fetchAndCommit(ctx context.Context, req FetchRequest, key Resour
 	var relPath string
 	var data []byte
 
+	// Materialize origin payload in memory first so read_only / off can return
+	// without writing when fill is disallowed (mode gate; data retained on disk).
 	switch class {
 	case ClassImmutableBlob:
 		var r io.Reader
@@ -292,6 +365,27 @@ func (c *Cache) fetchAndCommit(ctx context.Context, req FetchRequest, key Resour
 			r = bytes.NewReader(fr.Bytes)
 		} else {
 			return out, apperr.New(apperr.CodeInternal, "blob fetch missing body")
+		}
+		if !allowFill {
+			// Stream to memory for response only; do not commit.
+			b, err := io.ReadAll(io.LimitReader(r, 32<<20))
+			if err != nil {
+				return out, apperr.Wrap(apperr.CodeInternal, "read origin blob", err)
+			}
+			e := Entry{
+				KeyDigest:     digest,
+				Kind:          key.Kind,
+				State:         StateReady,
+				Completeness:  comp,
+				ContentSize:   int64(len(b)),
+				SourceETag:    fr.Meta.ETag,
+				BuildBuilding: fr.Meta.Building,
+				FetchedAt:     c.now(),
+			}
+			out.er = EntryReader{Entry: e, Data: b}
+			out.lr = LookupResult{Source: SourceOrigin, Entry: e, FromCache: false, AuthorizedAt: c.now()}
+			c.emitTel(key.Kind, "none", "bypass", int64(len(b)), "mode_disallows_write")
+			return out, nil
 		}
 		// If context cancelled mid-stream, CommitStream fails and staging is cleaned.
 		wr, err := c.blobs.CommitStream(r, "")
@@ -325,6 +419,22 @@ func (c *Cache) fetchAndCommit(ctx context.Context, req FetchRequest, key Resour
 		if err != nil {
 			return out, err
 		}
+		if !allowFill {
+			e := Entry{
+				KeyDigest:     digest,
+				Kind:          key.Kind,
+				State:         StateReady,
+				Completeness:  comp,
+				ContentSize:   int64(len(enc)),
+				SourceETag:    fr.Meta.ETag,
+				BuildBuilding: fr.Meta.Building,
+				FetchedAt:     c.now(),
+			}
+			out.er = EntryReader{Entry: e, Data: enc}
+			out.lr = LookupResult{Source: SourceOrigin, Entry: e, FromCache: false, AuthorizedAt: c.now()}
+			c.emitTel(key.Kind, "none", "bypass", int64(len(enc)), "mode_disallows_write")
+			return out, nil
+		}
 		wr, err := c.blobs.CommitBytes(enc, "")
 		if err != nil {
 			return out, err
@@ -357,9 +467,26 @@ func (c *Cache) fetchAndCommit(ctx context.Context, req FetchRequest, key Resour
 		Share:          writeShare,
 		SubjectKeyHash: writeSubj,
 	}
+	// Late-fill protection: discard if purge epoch advanced during origin fetch.
+	if c.cfg.Epochs != nil && c.purgeEpoch(key.Kind) != epochAtStart {
+		c.emitTel(key.Kind, "none", "fill_discarded", contentSize, "purged")
+		// Best-effort: if we already committed blob bytes they may be GC'd later;
+		// do not link a ready entry after purge.
+		out.er = EntryReader{Entry: e, Data: data}
+		out.lr = LookupResult{Source: SourceOrigin, Entry: e, FromCache: false, AuthorizedAt: c.now()}
+		return out, nil
+	}
+	// Re-check mode fill before commit (runtime mode change).
+	if !c.allowFill(key.Kind) {
+		c.emitTel(key.Kind, "none", "fill_discarded", contentSize, "mode_disallows_write")
+		out.er = EntryReader{Entry: e, Data: data}
+		out.lr = LookupResult{Source: SourceOrigin, Entry: e, FromCache: false, AuthorizedAt: c.now()}
+		return out, nil
+	}
 	if err := c.db.PutRow(ctx, rowFromEntry(e, key)); err != nil {
 		return out, err
 	}
+	c.emitTel(key.Kind, "disk", "fill_ok", contentSize, "")
 	if data == nil {
 		data, err = c.blobs.ReadAll(contentDigest)
 		if err != nil {

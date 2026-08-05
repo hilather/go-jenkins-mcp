@@ -41,6 +41,7 @@ func (b *FillBridge) Active() bool {
 // ensureOriginCoordinated runs EnsureMirrored under a fill lease when Active.
 // Waiters do not call EnsureMirrored while a healthy producer holds the lease.
 func (a *Access) ensureOriginCoordinated(ctx context.Context, job string, build int64) error {
+	// Fill mode gate is enforced inside EnsureMirrored.
 	if a == nil {
 		return apperr.New(apperr.CodeInternal, "log access is not configured")
 	}

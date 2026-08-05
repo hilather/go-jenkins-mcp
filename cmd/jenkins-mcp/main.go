@@ -20,6 +20,7 @@ import (
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/audit"
 	"github.com/hilather/go-jenkins-mcp/internal/auth"
+	"github.com/hilather/go-jenkins-mcp/internal/cachecontrol"
 	"github.com/hilather/go-jenkins-mcp/internal/config"
 	"github.com/hilather/go-jenkins-mcp/internal/contracts"
 	"github.com/hilather/go-jenkins-mcp/internal/diagnostics"
@@ -1558,6 +1559,8 @@ func runServe(args []string) error {
 	var storeFrames *store.Frames
 	var profileDataDir string
 	var frameCrypto *store.FrameCrypto
+	var cacheCtrl *cachecontrol.Service
+	var cacheCtrlStore *cachecontrol.OverrideStore
 	if profDoc != nil {
 		dataDir, err := resolveProfileDataDir(profDoc)
 		if err != nil {
@@ -1568,12 +1571,33 @@ func runServe(args []string) error {
 		if err != nil {
 			return apperr.Wrap(apperr.CodeInternal, "failed to open profile log store", err)
 		}
+		// ADR 0018: cache control plane (modes/overrides). Fail-open if store open fails.
+		if st, stErr := cachecontrol.OpenOverrideStore(filepath.Join(dataDir, "cache-control")); stErr != nil {
+			log.Printf("cache-control store open: %v", stErr)
+		} else {
+			cacheCtrlStore = st
+			defer func() { _ = cacheCtrlStore.Close() }()
+			if svc, svcErr := cachecontrol.NewService(cachecontrol.ServiceConfig{
+				OverrideStore: cacheCtrlStore,
+				ProfileID:     string(profDoc.ID),
+			}); svcErr != nil {
+				log.Printf("cache-control service: %v", svcErr)
+			} else {
+				cacheCtrl = svc
+			}
+		}
 		// Resource cache (non-log): resources.sqlite + objects/ under profile data dir.
 		// Fail-open to nil on open error so serve still works; doctor can report residual.
-		if rc, rcErr := resourcecache.Open(resourcecache.Config{
+		rcCfg := resourcecache.Config{
 			CacheDir: filepath.Join(dataDir, "resource-cache"),
 			Verifier: resourcecache.AllowAllVerifier{}, // per-call tools policyVerifier overrides
-		}); rcErr != nil {
+		}
+		if cacheCtrl != nil {
+			rcCfg.Modes = cachecontrol.NewResourceModePolicy(cacheCtrl)
+			rcCfg.Epochs = cachecontrol.NewResourceEpochProvider(cacheCtrl)
+			rcCfg.Telemetry = cachecontrol.NewResourceTelemetry(cacheCtrl)
+		}
+		if rc, rcErr := resourcecache.Open(rcCfg); rcErr != nil {
 			log.Printf("resource cache open: %v", rcErr)
 		} else {
 			resourceCache = rc
@@ -1609,6 +1633,11 @@ func runServe(args []string) error {
 		machine.ArchiveRoot = filepath.Join(dataDir, store.ArchivesDirName)
 		access := logmirror.NewAccess(string(profDoc.ID), machine)
 		access.Status = logmirror.JenkinsBuildStatus{Client: client}
+		if cacheCtrl != nil {
+			// ADR 0018: console_log mode + telemetry (disable stops new use; no purge).
+			access.Modes = cachecontrol.NewConsoleModeAdapter(cacheCtrl)
+			access.Telemetry = cachecontrol.NewConsoleTelemetryAdapter(cacheCtrl)
+		}
 		// LOG-004 multi-log: Coordinator shares profile + machine; tools expose
 		// jenkins_mirror_logs when Coord is set (optional without mirror).
 		// Catalog=storeMeta makes collection membership durable across restarts
@@ -2157,18 +2186,20 @@ func runServe(args []string) error {
 			pstore = profile.NewStore(paths)
 		}
 		adminOpsSvc = adminops.New(adminops.Config{
-			Role:             role,
-			Version:          version,
-			Commit:           commit,
-			BuildTime:        buildTime,
-			ProfileStore:     pstore,
-			Metrics:          metrics,
-			Audit:            auditSink,
-			Gate:             gate,
-			FlagReadOnly:     *readOnly,
-			AllowMutations:   *allowMutations,
-			DefaultProfileID: string(subject.ProfileID),
-			Getenv:           os.Getenv,
+			Role:              role,
+			Version:           version,
+			Commit:            commit,
+			BuildTime:         buildTime,
+			ProfileStore:      pstore,
+			Metrics:           metrics,
+			Audit:             auditSink,
+			Gate:              gate,
+			FlagReadOnly:      *readOnly,
+			AllowMutations:    *allowMutations,
+			DefaultProfileID:  string(subject.ProfileID),
+			Getenv:            os.Getenv,
+			CacheControl:      cacheCtrl,
+			CacheControlStore: cacheCtrlStore,
 		})
 		log.Printf("MCP-OPS: admin_* tools enabled role=%s (never tokens in results)", role)
 	}
@@ -2283,6 +2314,7 @@ func runServe(args []string) error {
 		Logs:                       logAccess,
 		Meta:                       storeMeta, // durable survey compact cache when profile data dir open
 		ResourceCache:              resourceCache,
+		CacheModes:                 cacheCtrl, // ADR 0018 diagnostic_fetch + survey_summary modes
 		EnableTraceRefs:            enableTraceRefs,
 		TraceExporter:              traceExporter,
 		ExternalLogs:               externalLogs,

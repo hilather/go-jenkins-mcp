@@ -123,6 +123,178 @@ func TestGetOrFetch_MissFillHit(t *testing.T) {
 	}
 }
 
+// fixedModePolicy is a test ModePolicy with independent lookup/fill flags.
+type fixedModePolicy struct {
+	lookup, fill bool
+}
+
+func (f fixedModePolicy) AllowLookup(resourcecache.ResourceKind) bool { return f.lookup }
+func (f fixedModePolicy) AllowFill(resourcecache.ResourceKind) bool   { return f.fill }
+
+func TestGetOrFetch_ModeOff_BypassesCacheWithoutPurge(t *testing.T) {
+	// Regression: mode off stops use but does not delete existing entries.
+	src := &countingSource{body: []byte(`{"v":1}`)}
+	dir := t.TempDir()
+	cacheDir := filepath.Join(dir, "cache")
+	c, err := resourcecache.Open(resourcecache.Config{
+		CacheDir: cacheDir,
+		Verifier: resourcecache.AllowAllVerifier{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := resourcecache.FetchRequest{
+		Key:    testKey(resourcecache.KindTestReport, ""),
+		Access: resourcecache.AccessContext{ProfileID: "lab", SubjectKey: "alice"},
+		Source: src,
+	}
+	if _, _, err := c.GetOrFetch(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	if src.n.Load() != 1 {
+		t.Fatal(src.n.Load())
+	}
+	// Hit while on
+	if _, lr, err := c.GetOrFetch(context.Background(), req); err != nil || !lr.FromCache {
+		t.Fatalf("expected hit: %v %+v", err, lr)
+	}
+	_ = c.Close()
+
+	// Reopen with mode off (no lookup, no fill)
+	c2, err := resourcecache.Open(resourcecache.Config{
+		CacheDir: cacheDir,
+		Verifier: resourcecache.AllowAllVerifier{},
+		Modes:    fixedModePolicy{lookup: false, fill: false},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c2.Close() })
+	_, lr, err := c2.GetOrFetch(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lr.FromCache {
+		t.Fatal("mode off must not serve cache")
+	}
+	if src.n.Load() != 2 {
+		t.Fatalf("should fetch origin under off: %d", src.n.Load())
+	}
+	// Data still on disk: reopen without mode policy should hit again
+	_ = c2.Close()
+	c3, err := resourcecache.Open(resourcecache.Config{
+		CacheDir: cacheDir,
+		Verifier: resourcecache.AllowAllVerifier{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c3.Close() })
+	_, lr3, err := c3.GetOrFetch(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !lr3.FromCache {
+		t.Fatal("data must remain after mode off (no implicit purge)")
+	}
+	if src.n.Load() != 2 {
+		t.Fatalf("no extra fetch: %d", src.n.Load())
+	}
+}
+
+func TestGetOrFetch_ModeReadOnly_NoFill(t *testing.T) {
+	src := &countingSource{body: []byte(`{"v":2}`)}
+	c, err := resourcecache.Open(resourcecache.Config{
+		CacheDir: filepath.Join(t.TempDir(), "c"),
+		Verifier: resourcecache.AllowAllVerifier{},
+		Modes:    fixedModePolicy{lookup: true, fill: false},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	req := resourcecache.FetchRequest{
+		Key:    testKey(resourcecache.KindPipelineStages, ""),
+		Access: resourcecache.AccessContext{ProfileID: "lab", SubjectKey: "a"},
+		Source: src,
+	}
+	_, lr, err := c.GetOrFetch(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lr.FromCache {
+		t.Fatal("miss should not be from cache")
+	}
+	// Second call still misses (no fill)
+	_, lr2, err := c.GetOrFetch(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lr2.FromCache {
+		t.Fatal("read_only must not fill")
+	}
+	if src.n.Load() != 2 {
+		t.Fatalf("fetches %d", src.n.Load())
+	}
+}
+
+func TestGetOrFetch_ModeWriteOnly_NeverServesHit(t *testing.T) {
+	src := &countingSource{body: []byte(`{"v":3}`)}
+	c, err := resourcecache.Open(resourcecache.Config{
+		CacheDir: filepath.Join(t.TempDir(), "c"),
+		Verifier: resourcecache.AllowAllVerifier{},
+		Modes:    fixedModePolicy{lookup: false, fill: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	req := resourcecache.FetchRequest{
+		Key:    testKey(resourcecache.KindBuildChanges, ""),
+		Access: resourcecache.AccessContext{ProfileID: "lab", SubjectKey: "a"},
+		Source: src,
+	}
+	if _, _, err := c.GetOrFetch(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	// Even after fill, write_only never serves
+	_, lr, err := c.GetOrFetch(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lr.FromCache {
+		t.Fatal("write_only must not serve cache")
+	}
+	if src.n.Load() != 2 {
+		t.Fatalf("fetches %d", src.n.Load())
+	}
+}
+
+func TestGetOrFetch_ModeOff_StillReauthRequired(t *testing.T) {
+	// Fail-closed: mode gates never skip auth.
+	src := &countingSource{body: []byte("x")}
+	c, err := resourcecache.Open(resourcecache.Config{
+		CacheDir: filepath.Join(t.TempDir(), "c"),
+		Verifier: denyJob{},
+		Modes:    fixedModePolicy{lookup: false, fill: false},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	_, _, err = c.GetOrFetch(context.Background(), resourcecache.FetchRequest{
+		Key:    testKey(resourcecache.KindArtifactCatalog, ""),
+		Access: resourcecache.AccessContext{ProfileID: "lab", SubjectKey: "a"},
+		Source: src,
+	})
+	if err == nil || apperr.CodeOf(err) != apperr.CodePolicyDenial {
+		t.Fatalf("expected policy denial, got %v", err)
+	}
+	if src.n.Load() != 0 {
+		t.Fatal("must not fetch when auth denied")
+	}
+}
+
 func TestGetOrFetch_PolicyDenyOnHit(t *testing.T) {
 	src := &countingSource{body: []byte("catalog")}
 	// First populate with allow-all
