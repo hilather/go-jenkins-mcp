@@ -778,11 +778,15 @@ func fetchCtxForFlight(ctx context.Context) (context.Context, context.CancelFunc
 // getCachedBuildDetails is the PERF-003 GetBuildDetailsByJob wrapper used by
 // diagnose/compare enrichment paths: process-local TTL cache + single-flight,
 // keyed by job|build. Never persists across process sessions.
+// ADR 0018: CacheModes.diagnostic_fetch gates lookup/fill (nil ⇒ allow).
 func getCachedBuildDetails(ctx context.Context, st regState, client *jenkins.Client, job string, build int) (*jenkins.Build, error) {
 	sess := diagSessionFrom(ctx)
 
+	allowLookup := st.cacheModes == nil || st.cacheModes.AllowLookup(cacheTypeDiagnosticFetch)
+	allowFill := st.cacheModes == nil || st.cacheModes.AllowFill(cacheTypeDiagnosticFetch)
+
 	// Fast path: warm cache without entering singleflight.
-	if st.fetchCache != nil {
+	if allowLookup && st.fetchCache != nil {
 		if b, ok := st.fetchCache.GetBuild(job, build); ok {
 			if sess != nil {
 				sess.NoteHit()
@@ -803,8 +807,8 @@ func getCachedBuildDetails(ctx context.Context, st regState, client *jenkins.Cli
 		return nil, err
 	}
 
-	// No process cache: direct fetch (still single-invocation; no cross-tool share).
-	if st.fetchCache == nil {
+	// No process cache or fill disabled: direct fetch (still single-invocation).
+	if st.fetchCache == nil || !allowFill {
 		if sess != nil {
 			sess.NoteMiss()
 		}
@@ -815,14 +819,20 @@ func getCachedBuildDetails(ctx context.Context, st regState, client *jenkins.Cli
 		if sess != nil {
 			sess.RecordRemote(approxBuildDetailsBytes)
 		}
+		// write_only: fill after origin when lookup was off but fill allowed.
+		if allowFill && st.fetchCache != nil && b != nil {
+			st.fetchCache.PutBuild(job, build, b, approxBuildDetailsBytes)
+		}
 		return b, nil
 	}
 
 	key := DiagFetchKey(job, build, FetchKindBuild)
 	v, err, shared := st.fetchCache.sf.Do(key, func() (any, error) {
 		// Double-check after winning/joining the flight (no hit/miss accounting).
-		if b, ok := st.fetchCache.peekBuild(job, build); ok {
-			return &flightResult{value: b, fromCache: true}, nil
+		if allowLookup {
+			if b, ok := st.fetchCache.peekBuild(job, build); ok {
+				return &flightResult{value: b, fromCache: true}, nil
+			}
 		}
 		fetchCtx, cancel := fetchCtxForFlight(ctx)
 		defer cancel()
@@ -830,7 +840,7 @@ func getCachedBuildDetails(ctx context.Context, st regState, client *jenkins.Cli
 		if ferr != nil {
 			return &flightResult{err: ferr}, ferr
 		}
-		if b != nil {
+		if b != nil && allowFill {
 			st.fetchCache.PutBuild(job, build, b, approxBuildDetailsBytes)
 		}
 		return &flightResult{value: b, fromCache: false}, nil
@@ -952,6 +962,7 @@ func getCachedBuildChanges(
 
 // getOrFetchCached is the shared PERF-003 cache-aside + single-flight path for
 // typed remote resources (stages, tests, artifacts).
+// ADR 0018: CacheModes.diagnostic_fetch gates lookup/fill (nil ⇒ allow).
 func getOrFetchCached[T any](
 	ctx context.Context,
 	st regState,
@@ -964,7 +975,10 @@ func getOrFetchCached[T any](
 ) (T, error) {
 	var zero T
 	sess := diagSessionFrom(ctx)
-	if st.fetchCache != nil {
+	allowLookup := st.cacheModes == nil || st.cacheModes.AllowLookup(cacheTypeDiagnosticFetch)
+	allowFill := st.cacheModes == nil || st.cacheModes.AllowFill(cacheTypeDiagnosticFetch)
+
+	if allowLookup && st.fetchCache != nil {
 		if v, ok := st.fetchCache.GetAny(job, build, kind, extra...); ok {
 			if sess != nil {
 				sess.NoteHit()
@@ -981,8 +995,8 @@ func getOrFetchCached[T any](
 		return zero, err
 	}
 
-	// No process cache: direct fetch.
-	if st.fetchCache == nil {
+	// No process cache or fill disabled: direct fetch.
+	if st.fetchCache == nil || !allowFill {
 		if sess != nil {
 			sess.NoteMiss()
 		}
@@ -993,13 +1007,19 @@ func getOrFetchCached[T any](
 		if sess != nil {
 			sess.RecordRemote(approxBytes)
 		}
+		// write_only: fill after origin when lookup was off but fill allowed.
+		if allowFill && st.fetchCache != nil {
+			st.fetchCache.PutAny(job, build, kind, val, approxBytes, extra...)
+		}
 		return val, nil
 	}
 
 	key := DiagFetchKey(job, build, kind, extra...)
 	v, err, shared := st.fetchCache.sf.Do(key, func() (any, error) {
-		if cached, _, ok := st.fetchCache.peek(DiagFetchKey(job, build, kind, extra...)); ok {
-			return &flightResult{value: cached, fromCache: true}, nil
+		if allowLookup {
+			if cached, _, ok := st.fetchCache.peek(DiagFetchKey(job, build, kind, extra...)); ok {
+				return &flightResult{value: cached, fromCache: true}, nil
+			}
 		}
 		fetchCtx, cancel := fetchCtxForFlight(ctx)
 		defer cancel()
@@ -1007,7 +1027,9 @@ func getOrFetchCached[T any](
 		if ferr != nil {
 			return &flightResult{err: ferr}, ferr
 		}
-		st.fetchCache.PutAny(job, build, kind, val, approxBytes, extra...)
+		if allowFill {
+			st.fetchCache.PutAny(job, build, kind, val, approxBytes, extra...)
+		}
 		return &flightResult{value: val, fromCache: false}, nil
 	})
 	if err != nil {

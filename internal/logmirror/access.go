@@ -43,6 +43,16 @@ func (o EnsureOptions) normalize() EnsureOptions {
 	return o
 }
 
+// ConsoleModePolicy optionally gates console_log cache lookup/fill (ADR 0018).
+// When nil, both lookup and fill are allowed (pre-control-plane compatibility).
+// Mode gates never authorize access — tools still CheckStoreRead / MCP policy.
+type ConsoleModePolicy interface {
+	// AllowConsoleLookup reports whether existing L1/L2 frames may be served.
+	AllowConsoleLookup() bool
+	// AllowConsoleFill reports whether EnsureMirrored may write new frames.
+	AllowConsoleFill() bool
+}
+
 // Access is a single-profile LogStore façade for MCP tools (LOG-004 wiring).
 // It polls progressive logs into frames and serves local ReadRange/Tail.
 //
@@ -55,6 +65,10 @@ func (o EnsureOptions) normalize() EnsureOptions {
 //
 // Optional Fill (FLC-041) coordinates EnsureMirrored under a fill lease so concurrent
 // misses share one origin body on the producer; waiters do not each pull Jenkins.
+//
+// Optional Modes (ADR 0018): when lookup is denied, local/peer cache is skipped;
+// when fill is denied, EnsureMirrored is a no-op (data retained; tools may fall
+// back to direct Jenkins progressive fetch).
 type Access struct {
 	// Profile stamps every LogKey (same-profile isolation).
 	Profile string
@@ -69,6 +83,15 @@ type Access struct {
 	Peer PeerCoordinator
 	// Fill optional fill-lease bridge (FLC-041). Nil or mode off = plain EnsureMirrored.
 	Fill *FillBridge
+	// Modes optional cache-control console_log gate (nil ⇒ read_write).
+	Modes ConsoleModePolicy
+	// Telemetry optional low-cardinality event sink (nil ⇒ no-op).
+	Telemetry ConsoleTelemetry
+}
+
+// ConsoleTelemetry records low-cardinality cache events (no job/path/subject labels).
+type ConsoleTelemetry interface {
+	OnConsoleEvent(layer, outcome string, bytes int64, reason string)
 }
 
 // NewAccess builds an Access bound to one profile + machine.
@@ -86,9 +109,15 @@ func NewAccess(profile string, m *Machine) *Access {
 //
 // Running builds may return nil with a non-sealed generation when progressive
 // data is durable enough for subsequent local reads (partial mirror).
+//
+// When Modes.AllowConsoleFill is false, this is a no-op (does not delete data).
 func (a *Access) EnsureMirrored(ctx context.Context, job string, build int64) error {
 	if a == nil || a.Machine == nil {
 		return apperr.New(apperr.CodeInternal, "log access is not configured")
+	}
+	if !a.allowFill() {
+		a.emitTel("none", "bypass", 0, "mode_disallows_write")
+		return nil
 	}
 	key := LogKey{Profile: a.Profile, Job: job, Build: build}
 	if err := key.Validate(); err != nil {
@@ -99,14 +128,22 @@ func (a *Access) EnsureMirrored(ctx context.Context, job string, build int64) er
 		MaxPolls: a.MaxPolls,
 		Status:   a.Status,
 	})
+	if err == nil {
+		a.emitTel("disk", "fill_ok", 0, "")
+	}
 	return err
 }
 
 // ReadRange returns a local byte range from committed frames (LOG-003).
 // Call EnsureMirrored first when the range may not yet be durable.
+// When Modes.AllowConsoleLookup is false, returns not_found so callers fall back.
 func (a *Access) ReadRange(ctx context.Context, job string, build int64, offset, length int64) (string, LocalReadMeta, error) {
 	if a == nil || a.Machine == nil {
 		return "", LocalReadMeta{}, apperr.New(apperr.CodeInternal, "log access is not configured")
+	}
+	if !a.allowLookup() {
+		a.emitTel("none", "bypass", 0, "mode_disallows_read")
+		return "", LocalReadMeta{}, apperr.New(apperr.CodeNotFound, "console log cache lookup disabled")
 	}
 	key := LogKey{Profile: a.Profile, Job: job, Build: build}
 	if err := key.Validate(); err != nil {
@@ -123,13 +160,19 @@ func (a *Access) ReadRange(ctx context.Context, job string, build int64, offset,
 	if err != nil {
 		return "", LocalReadMeta{}, err
 	}
+	a.emitTel("disk", "hit", int64(len(res.Data)), "")
 	return string(res.Data), metaFromRead(res, st, offset, length), nil
 }
 
 // Tail returns the last maxLen durable bytes from committed frames (LOG-003).
+// When Modes.AllowConsoleLookup is false, returns not_found so callers fall back.
 func (a *Access) Tail(ctx context.Context, job string, build int64, maxLen int64) (string, LocalReadMeta, error) {
 	if a == nil || a.Machine == nil {
 		return "", LocalReadMeta{}, apperr.New(apperr.CodeInternal, "log access is not configured")
+	}
+	if !a.allowLookup() {
+		a.emitTel("none", "bypass", 0, "mode_disallows_read")
+		return "", LocalReadMeta{}, apperr.New(apperr.CodeNotFound, "console log cache lookup disabled")
 	}
 	key := LogKey{Profile: a.Profile, Job: job, Build: build}
 	if err := key.Validate(); err != nil {
@@ -147,6 +190,72 @@ func (a *Access) Tail(ctx context.Context, job string, build int64, maxLen int64
 		return "", LocalReadMeta{}, err
 	}
 	// Offset is the absolute start of the tail slice.
+	a.emitTel("disk", "hit", int64(len(res.Data)), "")
+	return string(res.Data), metaFromRead(res, st, res.RawStart, maxLen), nil
+}
+
+func (a *Access) allowLookup() bool {
+	if a == nil || a.Modes == nil {
+		return true
+	}
+	return a.Modes.AllowConsoleLookup()
+}
+
+func (a *Access) allowFill() bool {
+	if a == nil || a.Modes == nil {
+		return true
+	}
+	return a.Modes.AllowConsoleFill()
+}
+
+func (a *Access) emitTel(layer, outcome string, bytes int64, reason string) {
+	if a == nil || a.Telemetry == nil {
+		return
+	}
+	a.Telemetry.OnConsoleEvent(layer, outcome, bytes, reason)
+}
+
+// readRangeAfterOrigin serves frames after EnsureMirrored filled (or partial).
+// write_only disallows cold lookup but still returns just-filled origin data.
+// mode off (no fill) will have empty frames and tools fall back.
+func (a *Access) readRangeAfterOrigin(ctx context.Context, job string, build int64, offset, length int64) (string, LocalReadMeta, error) {
+	if a.allowLookup() {
+		return a.ReadRange(ctx, job, build, offset, length)
+	}
+	if !a.allowFill() {
+		return "", LocalReadMeta{}, apperr.New(apperr.CodeNotFound, "console log cache disabled")
+	}
+	// Bypass mode lookup gate for post-fill response only.
+	key := LogKey{Profile: a.Profile, Job: job, Build: build}
+	st, err := a.Machine.State(ctx, key)
+	if err != nil {
+		return "", LocalReadMeta{}, err
+	}
+	res, err := a.Machine.ReadRange(ctx, key, offset, length)
+	if err != nil {
+		return "", LocalReadMeta{}, err
+	}
+	a.emitTel("disk", "fill_ok", int64(len(res.Data)), "write_only_post_fill")
+	return string(res.Data), metaFromRead(res, st, offset, length), nil
+}
+
+func (a *Access) tailAfterOrigin(ctx context.Context, job string, build int64, maxLen int64) (string, LocalReadMeta, error) {
+	if a.allowLookup() {
+		return a.Tail(ctx, job, build, maxLen)
+	}
+	if !a.allowFill() {
+		return "", LocalReadMeta{}, apperr.New(apperr.CodeNotFound, "console log cache disabled")
+	}
+	key := LogKey{Profile: a.Profile, Job: job, Build: build}
+	st, err := a.Machine.State(ctx, key)
+	if err != nil {
+		return "", LocalReadMeta{}, err
+	}
+	res, err := a.Machine.TailBytes(ctx, key, maxLen)
+	if err != nil {
+		return "", LocalReadMeta{}, err
+	}
+	a.emitTel("disk", "fill_ok", int64(len(res.Data)), "write_only_post_fill")
 	return string(res.Data), metaFromRead(res, st, res.RawStart, maxLen), nil
 }
 

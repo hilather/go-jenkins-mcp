@@ -39,6 +39,7 @@ ADR status values: **Accepted** (binding), **Proposed** (not yet binding), **Sup
 | [0015](0015-saml-sp-identity-and-groups.md) | SAML 2.0 SP for identity + groups (config SoT) | Accepted | POL-007, POL-006, UI-003 residual |
 | [0016](0016-fleet-p2p-shared-cache.md) | Pure-Go multi-fleet peer shared-cache coordination (default off; HOST-008 still cancelled) | Accepted | FLC-000…FLC-082 · MVP A peer-read first |
 | [0017](0017-resource-cache.md) | Typed non-log resource cache (`resources.sqlite` + objects; seven tools) | Accepted | Resource-cache expansion |
+| [0018](0018-cache-control-plane.md) | Unified cache control plane (registry, modes, config, adminops) | Accepted | Cache control & observability |
 
 ## Conventions
 

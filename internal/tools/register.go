@@ -147,6 +147,11 @@ type RegisterOptions struct {
 	// (stage log, artifacts, tests, stages, changes). Nil ⇒ tools call Jenkins
 	// only. Serve may open internal/resourcecache under the profile cache dir.
 	ResourceCache ResourceCache
+	// CacheModes is optional ADR 0018 per-type mode gate for diagnostic_fetch and
+	// survey_summary process/durable caches. Nil ⇒ read_write compat. Modes never
+	// authorize access (policy still applies). Console/resource kinds are gated
+	// in logmirror/resourcecache when wired by serve.
+	CacheModes CacheModeGate
 	// EnableTraceRefs registers jenkins_get_trace_refs and optional diagnose
 	// enrichment (INT-002). Default false. Pure extraction from Jenkins build
 	// parameters; no OTLP export. Serve sets true when otel-correlate adapter is enabled.
@@ -197,6 +202,19 @@ type RegisterOptions struct {
 	FleetOps *fleetmcp.Service
 }
 
+// CacheModeGate is ADR 0018 per-type lookup/fill for process-local caches
+// (diagnostic_fetch, survey_summary). Implemented by *cachecontrol.Service.
+type CacheModeGate interface {
+	AllowLookup(typeID string) bool
+	AllowFill(typeID string) bool
+}
+
+// Stable type ids for CacheModeGate (match cachecontrol.TypeID).
+const (
+	cacheTypeDiagnosticFetch = "diagnostic_fetch"
+	cacheTypeSurveySummary   = "survey_summary"
+)
+
 // regState is the effective configuration for one Register call.
 type regState struct {
 	gate            *policy.ReadOnlyGate
@@ -235,6 +253,8 @@ type regState struct {
 	meta *store.Meta
 	// Durable resource cache (optional).
 	resourceCache ResourceCache
+	// cacheModes optional ADR 0018 gate for diagnostic/survey caches.
+	cacheModes CacheModeGate
 
 	// HOST-004 / HOST-006: process-bound subject key + optional concurrent/rate limiters.
 	subjectKey            string
@@ -322,6 +342,7 @@ func resolveRegisterOptions(opts *RegisterOptions) regState {
 	st.diagBudget = opts.DiagOpBudgets
 	st.meta = opts.Meta
 	st.resourceCache = opts.ResourceCache
+	st.cacheModes = opts.CacheModes
 	st.subjectKey = strings.TrimSpace(opts.SubjectKey)
 	st.subjectKeyFromContext = opts.SubjectKeyFromContext
 	st.subjectLimiter = opts.SubjectLimiter

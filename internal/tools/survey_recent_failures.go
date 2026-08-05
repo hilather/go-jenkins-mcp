@@ -584,7 +584,13 @@ func loadSurveyBuildSummary(
 	maxLog int,
 ) (summary surveyBuildSummary, cacheHit bool, notes []string, source string) {
 	key := surveyCacheKey(profile, job, b.Number, maxLog)
-	if cache != nil {
+	// ADR 0018: survey_summary modes gate process L1 and durable L2 independently.
+	// Nil CacheModes ⇒ read_write (compat). mode=off: neither layer is used.
+	allowLookup := st.cacheModes == nil || st.cacheModes.AllowLookup(cacheTypeSurveySummary)
+	allowFill := st.cacheModes == nil || st.cacheModes.AllowFill(cacheTypeSurveySummary)
+
+	// Process L1 (surveySigCache) — must honor mode even when Meta is closed.
+	if allowLookup && cache != nil {
 		if cached, ok := cache.get(key); ok {
 			// Refresh result from listing when present.
 			if b.Result != "" {
@@ -595,12 +601,13 @@ func loadSurveyBuildSummary(
 	}
 
 	// Durable L2: profile Meta survey_summary_cache (schema v7).
-	if st.meta != nil {
-		if dur, ok := loadDurableSurveySummary(ctx, st.meta, profile, job, b.Number, maxLog); ok {
+	if allowLookup && st.meta != nil {
+		if dur, ok := loadDurableSurveySummary(ctx, st, profile, job, b.Number, maxLog); ok {
 			if b.Result != "" {
 				dur.Result = b.Result
 			}
-			if cache != nil {
+			// Promote durable → process L1 only when fill is allowed.
+			if allowFill && cache != nil {
 				cache.put(key, dur)
 			}
 			return dur, true, nil, "survey_cache_durable"
@@ -645,12 +652,13 @@ func loadSurveyBuildSummary(
 	}
 	// Do not sticky-cache incomplete extracts (budget/cancel/partial tail) for
 	// the full TTL — that under-clusters real failures until expiry (Wave 28 review).
-	if !incomplete {
+	// ADR 0018: process L1 + durable L2 fills require mode write permission.
+	if !incomplete && allowFill {
 		if cache != nil {
 			cache.put(key, summary)
 		}
 		if st.meta != nil {
-			putDurableSurveySummary(ctx, st.meta, profile, summary, maxLog)
+			putDurableSurveySummary(ctx, st, profile, summary, maxLog)
 		}
 	}
 	return summary, false, nts, src
@@ -658,11 +666,16 @@ func loadSurveyBuildSummary(
 
 func loadDurableSurveySummary(
 	ctx context.Context,
-	meta *store.Meta,
+	st regState,
 	profile, job string,
 	build, maxLog int,
 ) (surveyBuildSummary, bool) {
+	meta := st.meta
 	if meta == nil {
+		return surveyBuildSummary{}, false
+	}
+	// ADR 0018: survey_summary mode off/write_only skips durable lookup.
+	if st.cacheModes != nil && !st.cacheModes.AllowLookup(cacheTypeSurveySummary) {
 		return surveyBuildSummary{}, false
 	}
 	if err := ctx.Err(); err != nil {
@@ -703,8 +716,13 @@ func loadDurableSurveySummary(
 	}, true
 }
 
-func putDurableSurveySummary(ctx context.Context, meta *store.Meta, profile string, summary surveyBuildSummary, maxLog int) {
+func putDurableSurveySummary(ctx context.Context, st regState, profile string, summary surveyBuildSummary, maxLog int) {
+	meta := st.meta
 	if meta == nil || maxLog <= 0 || summary.Build <= 0 {
+		return
+	}
+	// ADR 0018: survey_summary mode off/read_only skips durable fill.
+	if st.cacheModes != nil && !st.cacheModes.AllowFill(cacheTypeSurveySummary) {
 		return
 	}
 	if err := ctx.Err(); err != nil {

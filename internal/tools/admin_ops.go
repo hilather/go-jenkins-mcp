@@ -243,6 +243,83 @@ func registerAdminOpsTools(s *mcp.Server, st regState, svc *adminops.Service) {
 		return structuredResult(out)
 	})
 
+	// ADR 0018 typed cache control plane (additive; legacy admin_cache_* remain).
+	addAdminTool(s, st, &mcp.Tool{
+		Name:        "admin_cache_inventory",
+		Description: "Typed cache inventory with effective modes (ADR 0018). Secret-free; viewer+.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
+		out, err := svc.CacheInventory(ctx)
+		if err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		return structuredResult(out)
+	})
+
+	type cacheEffectiveArgs struct {
+		TypeID string `json:"type_id,omitempty" jsonschema:"Optional type id; omit for all types"`
+	}
+	addAdminTool(s, st, &mcp.Tool{
+		Name:        "admin_cache_effective",
+		Description: "Effective cache configuration snapshot (ADR 0018). Secret-free; viewer+.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args cacheEffectiveArgs) (*mcp.CallToolResult, map[string]any, error) {
+		out, err := svc.CacheEffectiveConfig(ctx, args.TypeID)
+		if err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		return structuredResult(out)
+	})
+
+	addAdminTool(s, st, &mcp.Tool{
+		Name:        "admin_cache_telemetry",
+		Description: "Low-cardinality cache telemetry rollups (ADR 0018). No job names/paths/subjects.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
+		out, err := svc.CacheTelemetry(ctx)
+		if err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		return structuredResult(out)
+	})
+
+	type cachePlanArgsTyped struct {
+		TypeID   string `json:"type_id" jsonschema:"Cache type id (e.g. artifact_blob)"`
+		Kind     string `json:"kind" jsonschema:"Operation kind: dump|purge|verify|repair|gc"`
+		DumpMode string `json:"dump_mode,omitempty" jsonschema:"For dump: metadata|sanitized|storage_native|raw"`
+		Reason   string `json:"reason,omitempty" jsonschema:"Secret-free operator note"`
+	}
+	addAdminTool(s, st, &mcp.Tool{
+		Name:        "admin_cache_plan",
+		Description: "Plan cache dump/purge/verify/repair/gc (ADR 0018). Returns confirm token; never large inline body.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args cachePlanArgsTyped) (*mcp.CallToolResult, map[string]any, error) {
+		out, err := svc.CachePlanOp(ctx, adminops.CachePlanOpArgs{
+			TypeID: args.TypeID, Kind: args.Kind, DumpMode: args.DumpMode, Reason: args.Reason,
+		})
+		if err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		return structuredResult(out)
+	})
+
+	type cachePatchModeArgs struct {
+		ProfileID        string `json:"profile_id,omitempty" jsonschema:"Profile id"`
+		TypeID           string `json:"type_id" jsonschema:"Cache type id"`
+		Mode             string `json:"mode" jsonschema:"off|read_only|write_only|read_write"`
+		ExpectedRevision uint64 `json:"expected_revision" jsonschema:"CAS revision from inventory/effective"`
+		Reason           string `json:"reason,omitempty" jsonschema:"Secret-free reason"`
+	}
+	addAdminTool(s, st, &mcp.Tool{
+		Name:        "admin_cache_patch_mode",
+		Description: "Runtime mode override for one cache type (operator, CAS). Does not purge data. Requires override store.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args cachePatchModeArgs) (*mcp.CallToolResult, map[string]any, error) {
+		out, err := svc.CachePatchMode(ctx, adminops.CachePatchModeArgs{
+			ProfileID: args.ProfileID, TypeID: args.TypeID, Mode: args.Mode,
+			ExpectedRevision: args.ExpectedRevision, Reason: args.Reason,
+		})
+		if err != nil {
+			return nil, nil, mapToolErr(err)
+		}
+		return structuredResult(out)
+	})
+
 	addAdminTool(s, st, &mcp.Tool{
 		Name:        "admin_gateway_vault_status",
 		Description: "Mode A vault inventory honesty (subject key hashes only; never tokens).",

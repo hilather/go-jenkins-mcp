@@ -84,15 +84,21 @@ func (a *Access) ResolveAndReadRange(ctx context.Context, job string, build int6
 		return "", LocalReadMeta{}, apperr.New(apperr.CodeInvalidArgument, "offset and length must be non-negative")
 	}
 
-	// 1) Local durable hit covering the range start.
-	if logs, meta, ok, err := a.tryLocalByteRange(ctx, key, job, build, offset, length); err != nil {
-		return "", LocalReadMeta{}, err
-	} else if ok {
-		return logs, meta, nil
+	// 1) Local durable hit covering the range start (mode lookup gate).
+	if a.allowLookup() {
+		if logs, meta, ok, err := a.tryLocalByteRange(ctx, key, job, build, offset, length); err != nil {
+			return "", LocalReadMeta{}, err
+		} else if ok {
+			a.emitTel("disk", "hit", int64(len(logs)), "")
+			return logs, meta, nil
+		}
+	} else {
+		a.emitTel("none", "bypass", 0, "mode_disallows_read")
 	}
 
 	// 2) Peer bounded decoded read (after coordinator-internal authz freshness).
-	if !opt.SkipPeer && a.Peer != nil {
+	// Peer is still a form of cache share — skip when console lookup is off.
+	if a.allowLookup() && !opt.SkipPeer && a.Peer != nil {
 		out, hit, err := a.Peer.TryRead(ctx, PeerReadRequest{
 			Job: job, Build: build, Kind: PeerReadByteRange,
 			Start: offset, Length: length, MaxDecodedBytes: opt.MaxDecodedBytes,
@@ -111,15 +117,18 @@ func (a *Access) ResolveAndReadRange(ctx context.Context, job string, build int6
 		return "", LocalReadMeta{}, apperr.New(apperr.CodeNotFound, "log not available locally or via peer")
 	}
 	if err := a.ensureOriginCoordinated(ctx, job, build); err != nil {
-		// Partial mirror may still serve local bytes.
-		if logs, meta, ok, lerr := a.tryLocalByteRange(ctx, key, job, build, offset, length); lerr != nil {
-			return "", LocalReadMeta{}, lerr
-		} else if ok {
-			return logs, meta, err // return partial with ensure error residual path: prefer data
+		// Partial mirror may still serve local bytes when lookup allowed.
+		if a.allowLookup() {
+			if logs, meta, ok, lerr := a.tryLocalByteRange(ctx, key, job, build, offset, length); lerr != nil {
+				return "", LocalReadMeta{}, lerr
+			} else if ok {
+				return logs, meta, err // return partial with ensure error residual path: prefer data
+			}
 		}
 		return "", LocalReadMeta{}, err
 	}
-	return a.ReadRange(ctx, job, build, offset, length)
+	// Post-fill read: write_only skips cold lookup but may read just-filled frames.
+	return a.readRangeAfterOrigin(ctx, job, build, offset, length)
 }
 
 // ResolveAndTail is local → peer tail → origin EnsureMirrored → local Tail.
@@ -135,16 +144,20 @@ func (a *Access) ResolveAndTail(ctx context.Context, job string, build int64, ma
 		return "", LocalReadMeta{}, apperr.New(apperr.CodeInvalidArgument, "max_length must be non-negative")
 	}
 
-	// Local if sealed or any durable bytes.
-	st, err := a.Machine.State(ctx, key)
-	if err != nil {
-		return "", LocalReadMeta{}, err
-	}
-	if st.DurableOffset > 0 || st.Sealed {
-		return a.Tail(ctx, job, build, maxLen)
+	// Local if sealed or any durable bytes (mode lookup gate).
+	if a.allowLookup() {
+		st, err := a.Machine.State(ctx, key)
+		if err != nil {
+			return "", LocalReadMeta{}, err
+		}
+		if st.DurableOffset > 0 || st.Sealed {
+			return a.Tail(ctx, job, build, maxLen)
+		}
+	} else {
+		a.emitTel("none", "bypass", 0, "mode_disallows_read")
 	}
 
-	if !opt.SkipPeer && a.Peer != nil {
+	if a.allowLookup() && !opt.SkipPeer && a.Peer != nil {
 		out, hit, err := a.Peer.TryRead(ctx, PeerReadRequest{
 			Job: job, Build: build, Kind: PeerReadTailBytes,
 			TailN: maxLen, MaxDecodedBytes: opt.MaxDecodedBytes,
@@ -161,15 +174,17 @@ func (a *Access) ResolveAndTail(ctx context.Context, job string, build int64, ma
 		return "", LocalReadMeta{}, apperr.New(apperr.CodeNotFound, "log not available locally or via peer")
 	}
 	if err := a.ensureOriginCoordinated(ctx, job, build); err != nil {
-		if st2, serr := a.Machine.State(ctx, key); serr == nil && (st2.DurableOffset > 0 || st2.Sealed) {
-			logs, meta, rerr := a.Tail(ctx, job, build, maxLen)
-			if rerr == nil {
-				return logs, meta, err
+		if a.allowLookup() {
+			if st2, serr := a.Machine.State(ctx, key); serr == nil && (st2.DurableOffset > 0 || st2.Sealed) {
+				logs, meta, rerr := a.Tail(ctx, job, build, maxLen)
+				if rerr == nil {
+					return logs, meta, err
+				}
 			}
 		}
 		return "", LocalReadMeta{}, err
 	}
-	return a.Tail(ctx, job, build, maxLen)
+	return a.tailAfterOrigin(ctx, job, build, maxLen)
 }
 
 func (a *Access) tryLocalByteRange(ctx context.Context, key LogKey, job string, build int64, offset, length int64) (string, LocalReadMeta, bool, error) {
