@@ -74,3 +74,16 @@ func ClassOf(k ResourceKind) StorageClass {
 	}
 	return ""
 }
+
+// RequiresArtifactAuth is true when Selector (or ArtifactPath) is a Jenkins
+// artifact path that must be re-checked with artifact policy on cache hits.
+// Stage-log and other non-artifact kinds must never treat Selector as an
+// artifact path (e.g. stage id must not Evaluate jenkins_get_artifact_text).
+func RequiresArtifactAuth(k ResourceKind) bool {
+	switch k {
+	case KindArtifactBlob, KindArtifactText, KindArtifactInspection:
+		return true
+	default:
+		return false
+	}
+}

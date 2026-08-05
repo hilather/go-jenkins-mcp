@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -146,9 +147,15 @@ func (c *Cache) GetOrFetch(ctx context.Context, req FetchRequest) (EntryReader, 
 	if err := ver.AuthorizeJob(ctx, req.Access, key.JobFullName); err != nil {
 		return EntryReader{}, LookupResult{}, err
 	}
-	artPath := req.ArtifactPath
-	if artPath == "" {
+	// Artifact policy only for artifact kinds. Never fall Selector (stage id,
+	// empty catalog selector, etc.) into AuthorizeArtifact — that evaluates
+	// jenkins_get_artifact_text and deny_artifact_paths incorrectly.
+	artPath := strings.TrimSpace(req.ArtifactPath)
+	if artPath == "" && RequiresArtifactAuth(key.Kind) {
 		artPath = key.Selector
+	}
+	if !RequiresArtifactAuth(key.Kind) {
+		artPath = "" // ignore accidental ArtifactPath for non-artifact kinds
 	}
 	if artPath != "" {
 		if err := ver.AuthorizeArtifact(ctx, req.Access, key.JobFullName, artPath); err != nil {

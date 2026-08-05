@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
 	"github.com/hilather/go-jenkins-mcp/internal/jenkins"
@@ -35,6 +36,10 @@ func (v policyVerifier) AuthorizeJob(ctx context.Context, ac resourcecache.Acces
 
 func (v policyVerifier) AuthorizeArtifact(ctx context.Context, ac resourcecache.AccessContext, jobFullName, artifactPath string) error {
 	if v.st.policy == nil {
+		return nil
+	}
+	// Empty path: no artifact-level check (caller must not pass stage ids here).
+	if strings.TrimSpace(artifactPath) == "" {
 		return nil
 	}
 	subj := effectiveSubject(v.st, ctx)

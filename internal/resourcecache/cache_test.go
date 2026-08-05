@@ -304,6 +304,54 @@ func TestFreshnessBuildingTTL(t *testing.T) {
 	}
 }
 
+// Regression: artifact kinds still run AuthorizeArtifact (deny must fail).
+func TestGetOrFetch_ArtifactText_StillAuthorizesArtifact(t *testing.T) {
+	src := &countingSource{body: []byte("text"), comp: resourcecache.Complete}
+	c := openTestCache(t, denyArt{})
+	key := testKey(resourcecache.KindArtifactText, "reports/a.txt")
+	key.Variant = "max_bytes=100"
+	_, _, err := c.GetOrFetch(context.Background(), resourcecache.FetchRequest{
+		Key: key, Access: resourcecache.AccessContext{ProfileID: "lab", SubjectKey: "a"},
+		Source: src, ArtifactPath: "reports/a.txt", Verifier: denyArt{},
+	})
+	if err == nil {
+		t.Fatal("artifact_text must still fail closed on artifact deny")
+	}
+	if apperr.CodeOf(err) != apperr.CodePolicyDenial {
+		t.Fatalf("code %v", apperr.CodeOf(err))
+	}
+}
+
+// Regression: stage_log Selector (stage id) must never AuthorizeArtifact /
+// jenkins_get_artifact_text. DenyTools on artifact_text must not break stage_log.
+func TestGetOrFetch_StageLog_DoesNotAuthorizeAsArtifact(t *testing.T) {
+	src := &countingSource{body: []byte("stage log text"), comp: resourcecache.Complete}
+	// Verifier that always fails artifact auth
+	c := openTestCache(t, denyArt{})
+	key := testKey(resourcecache.KindStageLog, "flow-node-42")
+	key.Variant = "max_length=100"
+	// Even if caller accidentally passes ArtifactPath=selector, non-artifact kinds clear it.
+	req := resourcecache.FetchRequest{
+		Key:          key,
+		Access:       resourcecache.AccessContext{ProfileID: "lab", SubjectKey: "alice"},
+		Source:       src,
+		ArtifactPath: "flow-node-42", // must be ignored for KindStageLog
+		Verifier:     denyArt{},
+	}
+	_, _, err := c.GetOrFetch(context.Background(), req)
+	if err != nil {
+		t.Fatalf("stage_log must not fail via artifact auth: %v", err)
+	}
+	// Second hit still OK
+	_, lr, err := c.GetOrFetch(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !lr.FromCache {
+		t.Fatal("expected cache hit")
+	}
+}
+
 func TestGetOrFetch_SubjectPrivateIsolation(t *testing.T) {
 	src := &countingSource{body: []byte("secret-for-alice")}
 	c := openTestCache(t, resourcecache.AllowAllVerifier{})
