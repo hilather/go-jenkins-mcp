@@ -34,7 +34,7 @@ Module: `github.com/hilather/go-jenkins-mcp` · Platforms: **Rocky Linux & Ubunt
 |------|------------|------|
 | Data plane | Stdio MCP, job/build/log/test/artifact tools | [docs/features/](docs/features/) |
 | Policy | RO gate, overlays, user/group bindings, budgets | [docs/policy-rbac.md](docs/policy-rbac.md) |
-| Storage | Progressive Zstd frames, L1/L2 cache, optional fleet peer cache | [docs/caching.md](docs/caching.md) |
+| Storage | Progressive Zstd frames, L1/L2 log cache, typed resource cache, per-type control plane (ADR 0017/0018), optional fleet peer cache | [docs/caching.md](https://github.com/hilather/go-jenkins-mcp/blob/master/docs/caching.md) · [v0.7.0 notes](https://github.com/hilather/go-jenkins-mcp/blob/v0.7.0/docs/release/RELEASE_NOTES_v0.7.0.md) |
 | Admin | Local admin console + opt-in `admin_*` MCP | [docs/admin/](docs/admin/) |
 | Gateway | Optional team-hosted HTTP / multi-user modes | [docs/gateway/](docs/gateway/) |
 | Integrations | Opt-in adapters (ext-logs, work-items, OTel) | [docs/integrations/](docs/integrations/) |
