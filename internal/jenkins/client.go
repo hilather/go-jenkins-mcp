@@ -96,6 +96,9 @@ type Client struct {
 	// nil uses DefaultResilienceConfig on first use via ensureResilience.
 	res     *Resilience
 	resOnce sync.Once // race-safe lazy init under concurrent CallJenkins
+	// authMu guards User/Token/AuthScheme against concurrent applyAuth
+	// write-back (AuthProvider refresh path) racing per-request reads.
+	authMu sync.Mutex
 	// sharedTransport is the pooled Transport from NewHTTPClients, if any.
 	sharedTransport *http.Transport
 	// Capability discovery cache (JEN-001).
@@ -160,7 +163,9 @@ func (opts *Client) applyAuth(req *http.Request) error {
 	if opts == nil || req == nil {
 		return nil
 	}
+	opts.authMu.Lock()
 	user, token, scheme := opts.User, opts.Token, opts.AuthScheme
+	opts.authMu.Unlock()
 	// Prefer context-scoped provider (multi-user Obtain) so concurrent requests
 	// never share a process-bound subject or write secrets onto Client fields.
 	if opts.AuthProviderCtx != nil {
@@ -183,10 +188,13 @@ func (opts *Client) applyAuth(req *http.Request) error {
 		}
 		user, token, scheme = u, s, sch
 		// Keep static fields in sync for diagnostics / subsequent static reads
-		// (single-subject path only).
+		// (single-subject path only). Mutex-guarded: concurrent requests race
+		// on these fields otherwise (torn string reads can crash).
+		opts.authMu.Lock()
 		opts.User = u
 		opts.Token = s
 		opts.AuthScheme = sch
+		opts.authMu.Unlock()
 	}
 	if scheme == "" {
 		scheme = AuthSchemeBasic
@@ -514,6 +522,15 @@ func (opts *Client) callJenkins(
 
 		resp, lastErr = client.Do(req)
 		if lastErr != nil {
+			if errors.Is(lastErr, context.Canceled) {
+				// Caller-side cancellation is not a Jenkins health signal:
+				// never count it toward the breaker, and release the
+				// half-open probe slot if this request was the probe so
+				// the circuit cannot wedge half-open. Never retried.
+				res.onAbort()
+				recordJenkinsHTTPMetrics(opts.metrics, nil, lastErr)
+				return nil, lastErr
+			}
 			res.onFailure()
 			recordJenkinsHTTPMetrics(opts.metrics, nil, lastErr)
 			if !idempotent || !isRetryableTransportError(lastErr) || attempt+1 >= maxAttempts {
