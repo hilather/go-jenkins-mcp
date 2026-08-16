@@ -162,7 +162,7 @@ func (opts *Client) ListBuilds(ctx context.Context, args ListBuildsToolArgs) (*L
 		return nil, apperr.New(apperr.CodeAuthorization, "not authorized to list builds")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("jenkins api returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("jenkins api returned status %d: %s", resp.StatusCode, truncateForErr(string(body)))
 	}
 
 	var data struct {
@@ -275,7 +275,7 @@ func (opts *Client) ResolveBaseline(ctx context.Context, jobName string, kind Ba
 		return nil, apperr.New(apperr.CodeNotFound, fmt.Sprintf("job %q not found", jobName))
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("jenkins api returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("jenkins api returned status %d: %s", resp.StatusCode, truncateForErr(string(body)))
 	}
 
 	var data map[string]json.RawMessage

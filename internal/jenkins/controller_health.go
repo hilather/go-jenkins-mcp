@@ -103,9 +103,16 @@ func (opts *Client) GetControllerHealth(ctx context.Context, args GetControllerH
 		out.Overall = "degraded"
 		out.Notes = append(out.Notes, "capabilities: "+safeErrNote(err))
 	} else {
-		// Scrub probe notes defensively (local scrub; no internal/redact — FND-004).
-		for i := range caps.ProbeNotes {
-			caps.ProbeNotes[i] = scrubSecretsLike(caps.ProbeNotes[i])
+		// Scrub probe notes defensively (local scrub; no internal/redact —
+		// FND-004). Scrub into a fresh slice: caps may be a cache-hit shallow
+		// copy whose ProbeNotes backing array is shared with the capability
+		// cache — in-place writes would mutate the cache and race readers.
+		if len(caps.ProbeNotes) > 0 {
+			scrubbed := make([]string, len(caps.ProbeNotes))
+			for i, n := range caps.ProbeNotes {
+				scrubbed[i] = scrubSecretsLike(n)
+			}
+			caps.ProbeNotes = scrubbed
 		}
 		out.Capabilities = caps
 		out.JenkinsVersion = caps.JenkinsVersion

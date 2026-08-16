@@ -209,23 +209,32 @@ func (opts *Client) GetQueuedBuilds(ctx context.Context) ([]QueuedBuild, error) 
 	return queued, nil
 }
 
-// parseJobNameAndBuildNumber extracts job name and build number from Jenkins full display name
+// parseJobNameAndBuildNumber extracts job name and build number from Jenkins
+// full display name ("jobName #buildNumber"). The split is at the LAST " #"
+// so job names containing " #" keep their number suffix parsed, and Jenkins
+// folder display separators (" » ") normalize to typed "/" paths (matching
+// resolveJobFullName / GetQueuedBuilds).
 func parseJobNameAndBuildNumber(fullDisplayName string) (string, int) {
-	// Try to find the pattern "jobName #buildNumber"
-	parts := strings.Split(fullDisplayName, " #")
-	if len(parts) == 2 {
-		jobName := parts[0]
-		buildNumberStr := parts[1]
+	if i := strings.LastIndex(fullDisplayName, " #"); i >= 0 {
+		jobName := fullDisplayName[:i]
+		buildNumberStr := fullDisplayName[i+2:]
 
 		// Try to parse the build number
 		var buildNumber int
 		if _, err := fmt.Sscanf(buildNumberStr, "%d", &buildNumber); err == nil {
-			return jobName, buildNumber
+			return normalizeDisplayJobName(jobName), buildNumber
 		}
 	}
 
 	// If parsing fails, return the full name as job name and 0 as build number
-	return fullDisplayName, 0
+	return normalizeDisplayJobName(fullDisplayName), 0
+}
+
+// normalizeDisplayJobName converts Jenkins UI display separators (" » ") to
+// typed full-name path separators ("/").
+func normalizeDisplayJobName(name string) string {
+	name = strings.ReplaceAll(name, " » ", "/")
+	return strings.ReplaceAll(name, "»", "/")
 }
 
 // parseBuildNumberFromURL extracts the trailing numeric segment from a Jenkins build URL.

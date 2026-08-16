@@ -625,6 +625,13 @@ func parseRetryAfter(v string, now time.Time) (time.Duration, bool) {
 		if sec < 0 {
 			return 0, true
 		}
+		// Clamp before the multiply: sec * time.Second overflows int64 for
+		// sec > ~9.2e9 and can wrap negative (which the caller then clamps
+		// to 0 — an immediate, un-backed-off retry).
+		const maxSec = int64(1<<63-1) / int64(time.Second)
+		if sec > maxSec {
+			sec = maxSec
+		}
 		return time.Duration(sec) * time.Second, true
 	}
 	if t, err := http.ParseTime(v); err == nil {

@@ -121,7 +121,7 @@ func (opts *Client) ListViews(ctx context.Context, offset, limit int) (*ListView
 		return nil, fmt.Errorf("failed to read views response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("jenkins api returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("jenkins api returned status %d: %s", resp.StatusCode, truncateForErr(string(body)))
 	}
 
 	var viewsResp struct {
