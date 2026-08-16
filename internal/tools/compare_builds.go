@@ -931,8 +931,9 @@ func compareArtifactPaths(ctx context.Context, st regState, client *jenkins.Clie
 	// Wave 39 + Wave 41: drop any residual diffs matching live deny_artifact_paths
 	// (defense if a cache entry predated filter). Empty patterns → unchanged.
 	// Job deny remains call-time separate.
-	// Process-bound subject (compare path); multi-user uses st.subject from bind.
-	patterns := policy.DenyArtifactPathsForSubject(st.policy, st.subject)
+	// POL-006: use the per-request effective subject (multi-user), not the
+	// process-bound subject, so group/user bindings apply on this path too.
+	patterns := policy.DenyArtifactPathsForSubject(st.policy, effectiveSubject(st, ctx))
 	diffOmitted := 0
 	if len(patterns) > 0 {
 		var kept []CompareArtifactDiff

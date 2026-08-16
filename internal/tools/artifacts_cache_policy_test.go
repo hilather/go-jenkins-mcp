@@ -194,7 +194,7 @@ func TestGetCachedArtifactList_PolicyTightenPostFilter(t *testing.T) {
 		Mode:              policy.ModePilot,
 		DenyArtifactPaths: []string{"secrets/**", "*.pem"},
 	})
-	extra := artifactListCacheExtra(st, 50)
+	extra := artifactListCacheExtra(ctx, st, 50)
 	// Poison cache under tightened key with unfiltered full list.
 	cache.PutAny("demo", 3, FetchKindArtifacts, &jenkins.ArtifactList{
 		JobName: "demo", BuildNumber: 3,

@@ -59,8 +59,10 @@ func ContextWithCallerAndPolicySubject(ctx context.Context, c Caller, s policy.S
 //     inherited from process defaults for a different ExternalSubject.
 //     Bounded with MaxInboundGroups / MaxInboundGroupNameBytes and
 //     FailOnGroupOverage=true (production gateway default). On count overage or
-//     oversize name, groups are dropped (empty) so unbounded claims cannot
-//     attach — cannot broaden deny-only / RO.
+//     oversize name the group set cannot be trusted to evaluate group-targeted
+//     (deny-only) bindings — dropping groups would silently *broaden* access —
+//     so this wrapper fails closed: it returns an empty subject that
+//     policy.Evaluate denies (ReasonSubjectEmpty).
 //   - Entra group overage without a full groups claim fails earlier at
 //     ValidateAccessToken / ResolveHTTPInbound (auth.CheckIncompleteGroupOverage)
 //     so multi-user JWT subjects never bind with invented empty membership.
@@ -68,7 +70,13 @@ func ContextWithCallerAndPolicySubject(ctx context.Context, c Caller, s policy.S
 //   - Verified is true only when inbound.Verified and JenkinsUserID is non-empty
 //     and non-anonymous.
 func PolicySubjectFromHTTPInbound(in HTTPInbound, profileID contracts.ProfileID, defaults policy.Subject) policy.Subject {
-	s, _, _ := PolicySubjectFromHTTPInboundWithMeta(in, profileID, defaults, nil)
+	s, _, err := PolicySubjectFromHTTPInboundWithMeta(in, profileID, defaults, nil)
+	if err != nil {
+		// Group bind failure (overage / oversize under FailOnGroupOverage):
+		// fail closed. A partial subject with Groups=nil would escape every
+		// group-targeted deny binding (deny-only ⇒ missing groups broaden).
+		return policy.Subject{}
+	}
 	return s
 }
 

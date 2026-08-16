@@ -92,7 +92,7 @@ Agent rules: [agent-usage.md § Mutations](agent-usage.md#5-mutations-and-confir
 | `jenkins_cancel_queue_items_for_job` | Cancel waiting queue items for one job (MUT-016; cap 20) | `job_name`, optional `stuck_only`, `confirmation_token` | **mutate** |
 
 Without `confirmation_token` → preview token only. With valid token → single execute.  
-**MUT-017:** optional overlay `allow_mutation_tools` / `allow_interrupt_modes` / `allow_mutation_job_prefixes` further restrict registration and targets.  
+**MUT-017:** optional overlay `allow_mutation_tools` / `allow_interrupt_modes` / `allow_mutation_job_prefixes` further restrict registration and targets. Job prefixes match on **segment boundaries** (exact folder/job or subtree): `team-a` allows `team-a` and `team-a/job` but never `team-audit/job`.  
 **Not tools:** `/scriptText`, `config.xml` POST, pluginManager write, quietDown — classifier **unclassified**, fail closed.
 
 **MUT-001 rate limit and confirm cooldown** (process-local `mutation.Manager`)

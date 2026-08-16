@@ -105,8 +105,15 @@ func normalizeRequestPath(path string) string {
 }
 
 func isAuthPath(p string) bool {
-	// Jenkins CSRF crumb; required even when mutation tools are gated.
-	return strings.Contains(p, "/crumbissuer/")
+	// Jenkins CSRF crumb issuer lives only at the server root
+	// (/crumbIssuer/api/json). Segment-precise match: a job or folder named
+	// "crumbIssuer" (…/job/crumbissuer/build) must not classify as auth
+	// traffic — auth skips the RO/mutation gate (POL-004).
+	rest := strings.TrimPrefix(p, "/")
+	if rest == "crumbissuer" {
+		return true
+	}
+	return strings.HasPrefix(rest, "crumbissuer/")
 }
 
 // isKnownMutationPath matches seed and common Jenkins write endpoints.
