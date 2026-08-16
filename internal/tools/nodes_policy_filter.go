@@ -190,9 +190,12 @@ func getNodesWithPolicyFilter(ctx context.Context, client *jenkins.Client, st re
 	// do not treat a partial fleet scan as complete (Wave 36 review).
 	if incomplete {
 		truncated = true
-		if next == 0 {
+		if next == 0 && len(page) > 0 {
 			next = off + len(page)
 		}
+		// Empty filtered page: leave next=0. Offering the just-requested offset
+		// again would loop an auto-paginating client (and re-collect the fleet
+		// on every iteration).
 	}
 
 	out := &jenkins.GetNodesToolResponse{

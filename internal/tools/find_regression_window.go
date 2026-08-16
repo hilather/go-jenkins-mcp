@@ -327,6 +327,7 @@ func runRegressionFullScan(
 	logTotal := 0
 	budgetHit := false
 
+scan:
 	for _, b := range builds {
 		select {
 		case <-ctx.Done():
@@ -335,7 +336,7 @@ func runRegressionFullScan(
 				Reason: "scan cancelled: " + safeErrNote(ctx.Err()),
 			})
 			budgetHit = true
-			break
+			break scan // break the loop, not the select
 		default:
 		}
 		if logTotal >= maxLogTotal {

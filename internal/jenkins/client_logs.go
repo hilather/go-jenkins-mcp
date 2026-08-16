@@ -7,6 +7,13 @@ import (
 	"strconv"
 )
 
+// MaxLogReadBytes is the hard server-side ceiling for a single log read
+// (LOG-001 / MCP-001). Callers may request less; larger requests are clamped
+// (never silently over-read into memory — the response budget runs after the
+// bytes are buffered, so the cap must live at the read). HasMore / Offset /
+// TotalSize keep the clamp honest.
+const MaxLogReadBytes = 1 << 20 // 1 MiB
+
 // GetBuildLogTail fetches the tail of build logs from the Jenkins progressiveText API (LOG-001).
 //
 // When X-Text-Size is present on the size probe, the probe body is not read into
@@ -19,6 +26,9 @@ func (opts *Client) GetBuildLogTail(ctx context.Context, jobName string, buildNu
 	client := opts.LogsClient
 	if maxLength < 0 {
 		return nil, fmt.Errorf("max_length must be >= 0")
+	}
+	if maxLength > MaxLogReadBytes {
+		maxLength = MaxLogReadBytes
 	}
 
 	jobPath := BuildJobPath(jobName)
@@ -109,6 +119,9 @@ func (opts *Client) GetBuildLogs(ctx context.Context, jobName string, buildNumbe
 	offset, length, err = validateNonNegativeOffsetLength(offset, length)
 	if err != nil {
 		return nil, err
+	}
+	if length > MaxLogReadBytes {
+		length = MaxLogReadBytes
 	}
 
 	jobPath := BuildJobPath(jobName)
