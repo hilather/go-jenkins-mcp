@@ -455,7 +455,12 @@ func (r *Resilience) allow() error {
 	if now.Before(r.openUntil) {
 		return fmt.Errorf("%w: retry after %s", ErrCircuitOpen, r.openUntil.Sub(now).Round(time.Millisecond))
 	}
-	// Open period elapsed: allow one half-open probe.
+	// Open period elapsed: allow one half-open probe. While a probe is in
+	// flight, concurrent callers keep failing closed — otherwise a queued
+	// herd would all strike a possibly-still-down Jenkins at once.
+	if r.halfOpen {
+		return fmt.Errorf("%w: half-open probe in flight", ErrCircuitOpen)
+	}
 	r.halfOpen = true
 	return nil
 }
@@ -468,6 +473,18 @@ func (r *Resilience) onSuccess() {
 	defer r.mu.Unlock()
 	r.failures = 0
 	r.openUntil = time.Time{}
+	r.halfOpen = false
+}
+
+// onAbort releases the half-open probe slot without recording a failure.
+// Caller-side cancellation (context.Canceled) says nothing about Jenkins
+// health; a cancelled probe must neither trip nor wedge the breaker.
+func (r *Resilience) onAbort() {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.halfOpen = false
 }
 

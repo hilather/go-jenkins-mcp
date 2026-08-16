@@ -348,6 +348,11 @@ series. Doctor check `circuit_breaker` reports `Client.CircuitState()` when a
 client is wired (`DoctorOptions.Circuit`); offline CLI doctor without a live
 client **skips** the check. Open events are the only circuit counter (one
 increment per open episode, including re-open after a failed half-open probe).
+After the open period elapses, exactly **one** half-open probe is admitted at
+a time — concurrent callers keep failing closed with `ErrCircuitOpen` until
+the probe completes. Caller-side cancellations (`context.Canceled`) never
+count toward the breaker and release the probe slot; only 5xx statuses and
+genuine transport failures (including client-side timeouts) advance it.
 
 **Package boundary:** `internal/jenkins` defines `MetricsHook` only (no import of
 `telemetry`). Serve wires `client.WithMetrics(tools.JenkinsMetricsHook(metrics))`.
@@ -792,6 +797,11 @@ series. Doctor check `circuit_breaker` reports `Client.CircuitState()` when a
 client is wired (`DoctorOptions.Circuit`); offline CLI doctor without a live
 client **skips** the check. Open events are the only circuit counter (one
 increment per open episode, including re-open after a failed half-open probe).
+After the open period elapses, exactly **one** half-open probe is admitted at
+a time — concurrent callers keep failing closed with `ErrCircuitOpen` until
+the probe completes. Caller-side cancellations (`context.Canceled`) never
+count toward the breaker and release the probe slot; only 5xx statuses and
+genuine transport failures (including client-side timeouts) advance it.
 
 **Offline security self-check canary (Wave 45 Track C / NET-003):** item
 `jenkins_resilience_residual` proves offline that `DefaultResilienceConfig` is
