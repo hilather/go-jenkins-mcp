@@ -62,8 +62,8 @@ Optional registration (needs `RegisterOptions`):
 | `jenkins_get_job` | Job detail + recent builds | `name` (seed) or `job_name` (alias; preferred when both set), `max_builds` (20) | result budget | read |
 | `jenkins_get_running_builds` | Running + best-effort queue | — | result budget | read |
 | `jenkins_get_build` | Build details | `job_name`, `build_number` | result budget; params scrubbed | read |
-| `jenkins_get_build_logs` | Log range | `job_name`, `build_number`, `offset`, `length` (default 8192) | length bound; redaction; optional L1 mirror | read |
-| `jenkins_get_build_log_tail` | Log tail | `job_name`, `build_number`, `max_length` (8192) | max_length bound; redaction | read |
+| `jenkins_get_build_logs` | Log range | `job_name`, `build_number`, `offset`, `length` (default 8192, hard max 1 MiB) | length bound (clamped at `jenkins.MaxLogReadBytes`); redaction; optional L1 mirror | read |
+| `jenkins_get_build_log_tail` | Log tail | `job_name`, `build_number`, `max_length` (8192, hard max 1 MiB) | max_length bound (clamped at `jenkins.MaxLogReadBytes`); redaction | read |
 | `jenkins_get_queue_item` | Queue item state | `queue_id`, optional `profile` | result budget | read |
 | `jenkins_wait_for_queue_item` | Poll until assigned/cancel/timeout | `queue_id`, `timeout_seconds` (30), `poll_interval_seconds` (2) | wall timeout | read |
 | `jenkins_search_builds` | Search by result/params | `job_name`, filters, `limit` (5), `max_lookback` (100) | lookback/limit; secret params never returned | read |

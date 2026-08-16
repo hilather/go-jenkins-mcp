@@ -151,6 +151,11 @@ func readLogsViaAccess(ctx context.Context, st regState, job string, build, offs
 	if st.logs == nil {
 		return jenkins.BuildLogs{}, false, nil
 	}
+	// Same hard ceiling as the direct client path (LOG-001/MCP-001): the
+	// mirror must not buffer unbounded caller-requested ranges either.
+	if length > jenkins.MaxLogReadBytes {
+		length = jenkins.MaxLogReadBytes
+	}
 	// POL-004: CheckStoreRead before serving cached/mirrored content.
 	// Multi-user: per-request subject from context when wired.
 	if err := policy.CheckStoreRead(ctx, st.policy, effectiveSubject(st, ctx), job); err != nil {
@@ -193,6 +198,9 @@ func readLogsViaAccess(ctx context.Context, st regState, job string, build, offs
 func tailLogsViaAccess(ctx context.Context, st regState, job string, build, maxLength int) (jenkins.BuildLogs, bool, error) {
 	if st.logs == nil {
 		return jenkins.BuildLogs{}, false, nil
+	}
+	if maxLength > jenkins.MaxLogReadBytes {
+		maxLength = jenkins.MaxLogReadBytes
 	}
 	if err := policy.CheckStoreRead(ctx, st.policy, effectiveSubject(st, ctx), job); err != nil {
 		return jenkins.BuildLogs{}, false, err

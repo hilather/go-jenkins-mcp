@@ -167,9 +167,11 @@ func listViewsWithPolicyFilter(ctx context.Context, client *jenkins.Client, st r
 	page, truncated, next, off, lim := PaginateViews(kept, offset, limit)
 	if incomplete {
 		truncated = true
-		if next == 0 {
+		if next == 0 && len(page) > 0 {
 			next = off + len(page)
 		}
+		// Empty filtered page: leave next=0 — a non-advancing cursor would loop
+		// an auto-paginating client (same contract as the nodes path).
 	}
 
 	out := &jenkins.ListViewsToolResponse{
