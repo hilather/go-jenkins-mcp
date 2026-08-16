@@ -84,7 +84,13 @@ func CheckMutationJobAllowed(p *MutationPolicy, jobFullName string) error {
 		if pref == "" {
 			continue
 		}
-		if job == pref || strings.HasPrefix(job, pref) {
+		// Segment-boundary match (same contract as the deny-side pattern
+		// language): bare prefix "team-a" must not allow "team-audit/job".
+		pref = strings.TrimSuffix(pref, "/")
+		if pref == "" {
+			continue
+		}
+		if job == pref || strings.HasPrefix(job, pref+"/") {
 			return nil
 		}
 	}

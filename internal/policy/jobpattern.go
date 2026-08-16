@@ -89,7 +89,10 @@ func MatchDenyJobPattern(pattern, job string) bool {
 		return false
 	}
 	// Defense in depth: never treat absolute / traversal patterns as a match.
-	if strings.Contains(pattern, "..") || strings.HasPrefix(pattern, "/") {
+	// Traversal means an exact "." / ".." segment; a ".." substring inside a
+	// segment (e.g. "release..2024") is a legal Jenkins name and must stay
+	// both matchable and writable as an exact pattern.
+	if hasDotSegment(pattern) || strings.HasPrefix(pattern, "/") {
 		return false
 	}
 
@@ -131,15 +134,28 @@ func matchDenyJobPatternPlain(pattern, jobNorm string) bool {
 	return matchPatternPrefix(pSegs, jSegs)
 }
 
+// hasDotSegment reports whether s contains an exact "." or ".." path segment
+// (path traversal). A ".." substring inside a segment is a legal Jenkins name
+// character sequence, not traversal.
+func hasDotSegment(s string) bool {
+	for _, seg := range strings.Split(s, "/") {
+		if seg == ".." || seg == "." {
+			return true
+		}
+	}
+	return false
+}
+
 // NormalizeJobFullName collapses empty segments and strips leading/trailing
 // slashes so deny matching aligns with jenkins.BuildJobPath (which skips empty
-// segments). Returns ok=false on path traversal ("..").
+// segments). Returns ok=false on path traversal — exact "." / ".." segments
+// only, matching contracts.ParseJobFullName. A ".." *substring* inside a
+// segment (e.g. the legal job name "release..2024") is valid and must stay
+// normalizable: rejecting it used to make every deny matcher report
+// "no match", so such jobs could never be denied (fail-open).
 func NormalizeJobFullName(job string) (string, bool) {
 	job = strings.TrimSpace(job)
 	if job == "" {
-		return "", false
-	}
-	if strings.Contains(job, "..") {
 		return "", false
 	}
 	raw := strings.Split(job, "/")
@@ -148,8 +164,8 @@ func NormalizeJobFullName(job string) (string, bool) {
 		if s == "" {
 			continue // same as BuildJobPath — collapse // and leading /
 		}
-		if s == ".." {
-			return "", false
+		if s == ".." || s == "." {
+			return "", false // exact traversal segment only
 		}
 		segs = append(segs, s)
 	}
@@ -171,9 +187,9 @@ func ValidateDenyJobPattern(pattern string) error {
 		return apperr.New(apperr.CodeInvalidArgument,
 			"deny_job_prefixes entry must be a relative job path (not absolute)")
 	}
-	if strings.Contains(p, "..") {
+	if hasDotSegment(p) {
 		return apperr.New(apperr.CodeInvalidArgument,
-			"deny_job_prefixes entry must not contain path traversal")
+			"deny_job_prefixes entry must not contain path traversal (. or .. segment)")
 	}
 	// Unsupported metacharacters (keep language minimal and deterministic).
 	// Character classes […] are Wave 31; still reject ? and \.

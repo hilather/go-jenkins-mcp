@@ -907,14 +907,14 @@ func getCachedTestReport(ctx context.Context, st regState, client *jenkins.Clien
 // deny policies. Return path always re-applies live FilterDeniedArtifacts on a
 // clone so stale/wider cache rows cannot leak denied paths after policy tighten.
 func getCachedArtifactList(ctx context.Context, st regState, client *jenkins.Client, job string, build, maxArts int) (*jenkins.ArtifactList, error) {
-	extra := artifactListCacheExtra(st, maxArts)
+	extra := artifactListCacheExtra(ctx, st, maxArts)
 	list, err := getOrFetchCached(ctx, st, job, build, FetchKindArtifacts, 512, extra, func(ctx context.Context) (*jenkins.ArtifactList, error) {
 		return listArtifactsWithPolicyFilter(ctx, client, st, job, build, maxArts)
 	})
 	if err != nil {
 		return nil, err
 	}
-	return filterCachedArtifactListLive(st, list), nil
+	return filterCachedArtifactListLive(ctx, st, list), nil
 }
 
 // getCachedBuildChanges prefers FetchCache then GetBuildChanges (SCM-001 / DIAG-003).

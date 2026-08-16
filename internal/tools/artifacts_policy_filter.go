@@ -293,17 +293,12 @@ func listArtifactsWithPolicyFilter(ctx context.Context, client *jenkins.Client, 
 	return list, nil
 }
 
-// applyArtifactListPolicyFilter mutates list in place when live
-// deny_artifact_paths is non-empty: drops matching rows, recomputes Count,
-// and sets policy_filtered / policy_omitted_count when omitted > 0.
-// Truncated is left unchanged here; listArtifactsWithPolicyFilter re-slices
-// and sets Truncated honesty after filter (Wave 40).
+// applyArtifactListPolicyFilterForSubject mutates list in place when the
+// subject's live deny_artifact_paths is non-empty: drops matching rows,
+// recomputes Count, and sets policy_filtered / policy_omitted_count when
+// omitted > 0. Truncated is left unchanged here; listArtifactsWithPolicyFilter
+// re-slices and sets Truncated honesty after filter (Wave 40).
 // Empty evaluator / empty patterns → no change.
-func applyArtifactListPolicyFilter(st regState, list *jenkins.ArtifactList) {
-	// Process-bound subject (unit tests / no request ctx).
-	applyArtifactListPolicyFilterForSubject(st, st.subject, list)
-}
-
 func applyArtifactListPolicyFilterForSubject(st regState, subj policy.Subject, list *jenkins.ArtifactList) {
 	if list == nil {
 		return
@@ -352,9 +347,11 @@ func ArtifactPolicyFingerprintMaterialForSubject(st regState, subj policy.Subjec
 // artifactListCacheExtra builds FetchCache extras for artifact lists (Wave 41):
 // normalized max_artifacts plus sorted deny_artifact_paths fingerprint so
 // entries are not reused across different deny policies (or page sizes).
-func artifactListCacheExtra(st regState, maxArts int) []string {
+// POL-006: the fingerprint uses the per-request effective subject so entries
+// filled under one subject's patterns are never served to another subject.
+func artifactListCacheExtra(ctx context.Context, st regState, maxArts int) []string {
 	extra := []string{fmt.Sprintf("max=%d", normalizeMaxArtifacts(maxArts))}
-	if fp := ArtifactPolicyFingerprintMaterial(st); len(fp) > 0 {
+	if fp := ArtifactPolicyFingerprintMaterialForSubject(st, effectiveSubject(st, ctx)); len(fp) > 0 {
 		extra = append(extra, fp...)
 	}
 	return extra
@@ -380,11 +377,14 @@ func cloneArtifactList(list *jenkins.ArtifactList) *jenkins.ArtifactList {
 // (Wave 41 dual approach). Ensures process-cache hits never return denied paths
 // after policy tighten even when a stale/wider entry is present under the key.
 // Empty patterns → clone only (deny-only; no invented rows).
-func filterCachedArtifactListLive(st regState, list *jenkins.ArtifactList) *jenkins.ArtifactList {
+// filterCachedArtifactListLive re-applies the *request* subject's live deny
+// patterns on a clone (POL-006): a cache entry filled under a different
+// subject or an older policy can never leak newly-denied rows.
+func filterCachedArtifactListLive(ctx context.Context, st regState, list *jenkins.ArtifactList) *jenkins.ArtifactList {
 	out := cloneArtifactList(list)
 	if out == nil {
 		return nil
 	}
-	applyArtifactListPolicyFilter(st, out)
+	applyArtifactListPolicyFilterForSubject(st, effectiveSubject(st, ctx), out)
 	return out
 }
