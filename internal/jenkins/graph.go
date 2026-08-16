@@ -70,7 +70,9 @@ type BuildGraphNode struct {
 type BuildGraphEdge struct {
 	From string `json:"from"`
 	To   string `json:"to"`
-	// Kind: upstream_cause | downstream_ref | cycle_skipped
+	// Kind: upstream_cause | downstream_ref
+	// (CycleDetected is computed over the directed cause→effect relation, so
+	// DAG cross-edges and diamond joins no longer report false cycles.)
 	Kind string `json:"kind"`
 }
 
@@ -176,6 +178,7 @@ func (opts *Client) GetBuildGraph(ctx context.Context, args GetBuildGraphToolArg
 	}
 
 	queue = append(queue, pending{job: jobName, num: args.BuildNumber, depth: 0, role: "root"})
+	seen[rootID] = true // mark at enqueue: each node is expanded at most once
 
 	for len(queue) > 0 {
 		if reqs >= maxGraphNetworkReqs {
@@ -191,12 +194,6 @@ func (opts *Client) GetBuildGraph(ctx context.Context, args GetBuildGraphToolArg
 		cur := queue[0]
 		queue = queue[1:]
 		id := graphNodeID(cur.job, cur.num)
-		if seen[id] {
-			cycle = true
-			edges = append(edges, BuildGraphEdge{From: id, To: id, Kind: "cycle_skipped"})
-			continue
-		}
-		seen[id] = true
 
 		if len(nodes) >= maxNodes && id != rootID {
 			truncated = true
@@ -215,20 +212,23 @@ func (opts *Client) GetBuildGraph(ctx context.Context, args GetBuildGraphToolArg
 			continue
 		}
 
-		// Upstream expansion.
+		// Upstream expansion. A relation pointing at an already-seen node is a
+		// DAG cross-edge (e.g. the reverse of the edge just traversed, or a
+		// diamond join) — not a cycle. Real cycles are detected post-hoc over
+		// the collected cause→effect edges below.
 		if (dir == GraphDirectionBoth || dir == GraphDirectionUpstream) && cur.depth < maxDepth {
 			for _, u := range ups {
 				causeEdges++
 				uid := graphNodeID(u.job, u.num)
 				edges = append(edges, BuildGraphEdge{From: uid, To: id, Kind: "upstream_cause"})
 				if seen[uid] {
-					cycle = true
 					continue
 				}
 				if len(nodes)+len(queue) >= maxNodes {
 					truncated = true
 					continue
 				}
+				seen[uid] = true
 				queue = append(queue, pending{job: u.job, num: u.num, depth: cur.depth + 1, role: "upstream"})
 			}
 		}
@@ -239,13 +239,13 @@ func (opts *Client) GetBuildGraph(ctx context.Context, args GetBuildGraphToolArg
 				did := graphNodeID(d.job, d.num)
 				edges = append(edges, BuildGraphEdge{From: id, To: did, Kind: "downstream_ref"})
 				if seen[did] {
-					cycle = true
 					continue
 				}
 				if len(nodes)+len(queue) >= maxNodes {
 					truncated = true
 					continue
 				}
+				seen[did] = true
 				queue = append(queue, pending{job: d.job, num: d.num, depth: cur.depth + 1, role: "downstream"})
 			}
 		}
@@ -253,6 +253,11 @@ func (opts *Client) GetBuildGraph(ctx context.Context, args GetBuildGraphToolArg
 
 	// Deduplicate edges.
 	edges = dedupeEdges(edges)
+
+	// Cycle detection over the directed cause→effect relation (both edge kinds
+	// point cause→effect after dedupe). Precise: DAG cross-edges and diamond
+	// joins do not flag; only a genuine directed cycle does.
+	cycle = graphHasDirectedCycle(nodes, edges)
 
 	// Compute earliest failure + first failing leaves.
 	var earliest *time.Time
@@ -315,6 +320,46 @@ type graphRef struct {
 
 func graphNodeID(job string, num int) string {
 	return fmt.Sprintf("%s#%d", job, num)
+}
+
+// graphHasDirectedCycle reports whether the cause→effect edges contain a
+// directed cycle (DFS three-color). Both upstream_cause (From=upstream) and
+// downstream_ref (From=current) edges point cause→effect. Bounded by the
+// graph node cap, so recursion depth stays shallow.
+func graphHasDirectedCycle(nodes []BuildGraphNode, edges []BuildGraphEdge) bool {
+	const (
+		white = 0 // unvisited
+		gray  = 1 // on current DFS path
+		black = 2 // fully explored
+	)
+	adj := make(map[string][]string, len(nodes))
+	for _, e := range edges {
+		if e.Kind != "upstream_cause" && e.Kind != "downstream_ref" {
+			continue
+		}
+		adj[e.From] = append(adj[e.From], e.To)
+	}
+	color := make(map[string]int, len(nodes))
+	var dfs func(u string) bool
+	dfs = func(u string) bool {
+		color[u] = gray
+		for _, v := range adj[u] {
+			if color[v] == gray {
+				return true
+			}
+			if color[v] == white && dfs(v) {
+				return true
+			}
+		}
+		color[u] = black
+		return false
+	}
+	for _, n := range nodes {
+		if color[n.ID] == white && dfs(n.ID) {
+			return true
+		}
+	}
+	return false
 }
 
 func (opts *Client) fetchGraphBuild(ctx context.Context, jobName string, buildNumber int) (BuildGraphNode, []graphRef, []graphRef, error) {

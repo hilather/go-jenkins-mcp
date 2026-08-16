@@ -247,7 +247,7 @@ func (opts *Client) ListJobs(ctx context.Context, args ListJobsToolArgs) (*ListJ
 			return apperr.New(apperr.CodeAuthorization, "not authorized to list jobs")
 		}
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("jenkins api returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			return fmt.Errorf("jenkins api returned status %d: %s", resp.StatusCode, truncateForErr(string(body)))
 		}
 
 		var payload struct {

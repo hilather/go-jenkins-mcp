@@ -34,6 +34,7 @@ type WaitCoordinator struct {
 type sharedWait struct {
 	key     string
 	refs    int
+	ctx     context.Context // loop context; Err() != nil once abandoned/cancelled
 	cancel  context.CancelFunc
 	done    chan struct{}
 	resultQ *WaitForQueueItemToolResponse
@@ -146,15 +147,21 @@ func (opts *Client) waitQueueShared(ctx context.Context, queueID int, timeout ti
 	c := opts.waitC
 	c.mu.Lock()
 	if sw, ok := c.queue[queueID]; ok {
-		sw.refs++
-		c.mu.Unlock()
-		return opts.awaitQueueShared(ctx, sw)
+		if sw.ctx.Err() == nil {
+			sw.refs++
+			c.mu.Unlock()
+			return opts.awaitQueueShared(ctx, sw)
+		}
+		// Abandoned loop winding down; replace with a fresh wait so a new
+		// caller never joins a cancelled loop.
+		delete(c.queue, queueID)
 	}
 	// Start leader poll loop.
 	loopCtx, cancel := context.WithCancel(context.Background())
 	sw := &sharedWait{
 		key:    fmt.Sprintf("queue:%d", queueID),
 		refs:   1,
+		ctx:    loopCtx,
 		cancel: cancel,
 		done:   make(chan struct{}),
 		kind:   "queue",
@@ -167,12 +174,25 @@ func (opts *Client) waitQueueShared(ctx context.Context, queueID int, timeout ti
 	return opts.awaitQueueShared(ctx, sw)
 }
 
+// releaseQueueWaiter drops one waiter reference; when the last waiter
+// abandons, the shared poll loop is cancelled so it stops polling Jenkins
+// instead of running to the wait deadline with no listeners (JEN-004).
+func (opts *Client) releaseQueueWaiter(sw *sharedWait) {
+	c := opts.waitC
+	c.mu.Lock()
+	sw.refs--
+	if sw.refs <= 0 && sw.ctx.Err() == nil {
+		sw.cancel()
+	}
+	c.mu.Unlock()
+}
+
 func (opts *Client) awaitQueueShared(ctx context.Context, sw *sharedWait) (*WaitForQueueItemToolResponse, error) {
 	select {
 	case <-sw.done:
 		return cloneQueueWaitResult(sw)
 	case <-ctx.Done():
-		// Caller cancelled: do not cancel shared loop (other waiters may remain).
+		opts.releaseQueueWaiter(sw)
 		// Best-effort latest state.
 		item, _ := opts.GetQueueItem(context.Background(), parseQueueKey(sw.key))
 		st := "context_cancelled"
@@ -209,7 +229,11 @@ func (opts *Client) runQueueWait(loopCtx context.Context, sw *sharedWait, queueI
 	defer func() {
 		close(sw.done)
 		opts.waitC.mu.Lock()
-		delete(opts.waitC.queue, queueID)
+		// Delete only our own entry: an abandoned loop may already have been
+		// replaced by a fresh shared wait under the same key.
+		if opts.waitC.queue[queueID] == sw {
+			delete(opts.waitC.queue, queueID)
+		}
 		if opts.queuePollSnap == nil {
 			opts.queuePollSnap = make(map[int]int)
 		}
@@ -335,14 +359,19 @@ func (opts *Client) waitBuildShared(ctx context.Context, jobName string, buildNu
 	c := opts.waitC
 	c.mu.Lock()
 	if sw, ok := c.build[key]; ok {
-		sw.refs++
-		c.mu.Unlock()
-		return opts.awaitBuildShared(ctx, sw, jobName, buildNumber)
+		if sw.ctx.Err() == nil {
+			sw.refs++
+			c.mu.Unlock()
+			return opts.awaitBuildShared(ctx, sw, jobName, buildNumber)
+		}
+		// Abandoned loop winding down; replace with a fresh wait.
+		delete(c.build, key)
 	}
 	loopCtx, cancel := context.WithCancel(context.Background())
 	sw := &sharedWait{
 		key:    key,
 		refs:   1,
+		ctx:    loopCtx,
 		cancel: cancel,
 		done:   make(chan struct{}),
 		kind:   "build",
@@ -359,6 +388,7 @@ func (opts *Client) awaitBuildShared(ctx context.Context, sw *sharedWait, jobNam
 	case <-sw.done:
 		return cloneBuildWaitResult(sw)
 	case <-ctx.Done():
+		opts.releaseBuildWaiter(sw)
 		st := "context_cancelled"
 		if ctx.Err() == context.DeadlineExceeded {
 			st = "timeout"
@@ -370,6 +400,18 @@ func (opts *Client) awaitBuildShared(ctx context.Context, sw *sharedWait, jobNam
 			TimedOut:    st == "timeout",
 		}, nil
 	}
+}
+
+// releaseBuildWaiter drops one waiter reference; when the last waiter
+// abandons, the shared poll loop is cancelled (JEN-004).
+func (opts *Client) releaseBuildWaiter(sw *sharedWait) {
+	c := opts.waitC
+	c.mu.Lock()
+	sw.refs--
+	if sw.refs <= 0 && sw.ctx.Err() == nil {
+		sw.cancel()
+	}
+	c.mu.Unlock()
 }
 
 func cloneBuildWaitResult(sw *sharedWait) (*WaitForRunningBuildToolResponse, error) {
@@ -388,7 +430,11 @@ func (opts *Client) runBuildWait(loopCtx context.Context, sw *sharedWait, jobNam
 	defer func() {
 		close(sw.done)
 		opts.waitC.mu.Lock()
-		delete(opts.waitC.build, key)
+		// Delete only our own entry: an abandoned loop may already have been
+		// replaced by a fresh shared wait under the same key.
+		if opts.waitC.build[key] == sw {
+			delete(opts.waitC.build, key)
+		}
 		if opts.buildPollSnap == nil {
 			opts.buildPollSnap = make(map[string]int)
 		}
