@@ -73,6 +73,52 @@ func TestGatewayMutations_EmitAuditEvents(t *testing.T) {
 	}
 }
 
+// Regression (review follow-up): the BFF subject-invalidate audit derived the
+// decision only from the validation error, but InvalidateSubjectKeyLocal
+// reports partial cache failures via cleared flags (nil error) — a 200 with
+// principal_cleared=false audited "success", understating failed
+// invalidations. The decision now reflects the cleared flags.
+func TestSubjectInvalidate_AuditFailOnPartialCacheFailure(t *testing.T) {
+	paths := opsTestPaths(t)
+	dataRoot := paths.ProfileDataDir("admin")
+	if err := os.MkdirAll(dataRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// Corrupt principal cache file → FilePrincipalCache.Delete fails at load.
+	cachePath := filepath.Join(t.TempDir(), "principal.json")
+	if err := os.WriteFile(cachePath, []byte("{corrupt"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JENKINS_MCP_GATEWAY_PRINCIPAL_CACHE_PATH", cachePath)
+
+	h := newOpsHandler(t, paths, admin.RoleOperator, "tok", nil)
+	body, _ := json.Marshal(map[string]any{"subject_key": "tenant|subject|corp"})
+	req := httptest.NewRequest(http.MethodPost, "/admin/v1/gateway/subject-invalidate", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer tok")
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	// The response honestly reports the partial failure...
+	if !strings.Contains(rr.Body.String(), `"principal_cleared":false`) {
+		t.Fatalf("expected principal_cleared=false: %s", rr.Body.String())
+	}
+	// ...and the audit decision must not claim success.
+	data, err := os.ReadFile(filepath.Join(dataRoot, "audit", "audit.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "admin_subject_invalidate") {
+		t.Fatalf("missing event: %s", data)
+	}
+	if strings.Contains(string(data), `"decision":"success"`) ||
+		strings.Contains(string(data), `"decision": "success"`) {
+		t.Fatalf("partial failure must not audit success: %s", data)
+	}
+}
+
 // Regression: fleet-cache purge authorized against the static PROCESS role
 // after CheckPermission passed with the SAML-aware REQUEST role — a
 // SAML-mapped operator was 403'd whenever the process ran as viewer.

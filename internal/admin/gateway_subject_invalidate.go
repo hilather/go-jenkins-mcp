@@ -94,7 +94,15 @@ func (s *server) handleGatewaySubjectInvalidate(w http.ResponseWriter, r *http.R
 	res, ierr := gateway.InvalidateSubjectKeyLocal(sk, req.Workload, principals, tokens)
 	// AUD-001: security-relevant admin mutation — record success and failure
 	// (parity with the admin_subject_invalidate MCP twin). Hash-only target.
-	s.emitAdminAudit("", auditEvent(audit.TypeAdminSubjectInvalid, "subject_invalidate", ierr, sk))
+	// The helper reports partial cache failures via cleared flags (not an
+	// error), so derive the decision from those too: a 200 with
+	// principal_cleared=false must not audit "success".
+	ev := auditEvent(audit.TypeAdminSubjectInvalid, "subject_invalidate", ierr, sk)
+	if ierr == nil && (!res.PrincipalCleared || (tokenPathConfigured && !res.TokenCacheCleared)) {
+		ev.Decision = audit.DecisionFail
+		ev.ReasonCode = "admin_bff_partial"
+	}
+	s.emitAdminAudit("", ev)
 	if ierr != nil {
 		writeAppErr(w, ierr)
 		return
