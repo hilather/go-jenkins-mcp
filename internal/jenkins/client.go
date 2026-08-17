@@ -464,8 +464,15 @@ func (opts *Client) callJenkins(
 	}
 	defer res.release()
 
-	if err := res.allow(); err != nil {
+	probe, err := res.allow()
+	if err != nil {
 		return nil, err
+	}
+	if probe {
+		// This call holds the single half-open probe slot; release it on every
+		// exit path that did not already resolve it (onSuccess/onFailure/
+		// onAbort) so the breaker cannot wedge half-open.
+		defer res.onProbeDone()
 	}
 
 	// Origin-pinned redirect policy (NET-001): refuse cross-origin redirects.

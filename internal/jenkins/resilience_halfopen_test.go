@@ -30,20 +30,20 @@ func TestCircuitBreaker_HalfOpenAdmitsSingleProbe(t *testing.T) {
 	now := res.now()
 	res.now = func() time.Time { return now.Add(2 * time.Hour) }
 
-	if err := res.allow(); err != nil {
+	if _, err := res.allow(); err != nil {
 		t.Fatalf("first half-open probe must be admitted: %v", err)
 	}
 	if st := res.State(); st.State != "half-open" {
 		t.Fatalf("state = %s, want half-open", st.State)
 	}
 	// Second concurrent caller must be rejected while the probe is in flight.
-	if err := res.allow(); !errors.Is(err, ErrCircuitOpen) {
+	if _, err := res.allow(); !errors.Is(err, ErrCircuitOpen) {
 		t.Fatalf("concurrent probe during half-open = %v, want ErrCircuitOpen", err)
 	}
 
 	// Probe success closes the breaker; subsequent calls flow again.
 	res.onSuccess()
-	if err := res.allow(); err != nil {
+	if _, err := res.allow(); err != nil {
 		t.Fatalf("allow after probe success: %v", err)
 	}
 	if st := res.State(); st.State != "closed" {
@@ -63,7 +63,7 @@ func TestCircuitBreaker_HalfOpenProbeFailureReopens(t *testing.T) {
 
 	base := res.now()
 	res.now = func() time.Time { return base.Add(2 * time.Hour) }
-	if err := res.allow(); err != nil {
+	if _, err := res.allow(); err != nil {
 		t.Fatalf("half-open probe: %v", err)
 	}
 	res.onFailure() // probe failed → re-open
@@ -71,13 +71,50 @@ func TestCircuitBreaker_HalfOpenProbeFailureReopens(t *testing.T) {
 		t.Fatalf("state after failed probe = %s, want open", st.State)
 	}
 	// Still inside the new open window: reject.
-	if err := res.allow(); !errors.Is(err, ErrCircuitOpen) {
+	if _, err := res.allow(); !errors.Is(err, ErrCircuitOpen) {
 		t.Fatalf("allow during re-opened window = %v, want ErrCircuitOpen", err)
 	}
 	// After the new open period, a fresh probe is admitted.
 	res.now = func() time.Time { return base.Add(4 * time.Hour) }
-	if err := res.allow(); err != nil {
+	if _, err := res.allow(); err != nil {
 		t.Fatalf("probe after second open period: %v", err)
+	}
+}
+
+// Regression (review follow-up): single-probe half-open gating must not wedge.
+// Early exit paths AFTER allow() admits the probe (auth provider failure,
+// backoff sleep abort, body-wrap error) previously left halfOpen=true forever
+// — every later call returned ErrCircuitOpen and the breaker never recovered.
+// The probe owner now releases the slot on all exit paths (defer onProbeDone).
+func TestCircuitBreaker_ProbeSlotReleasedOnEarlyExits(t *testing.T) {
+	t.Parallel()
+	res := NewResilience(ResilienceConfig{
+		CircuitFailureThreshold: 1,
+		CircuitOpenDuration:     time.Hour,
+	})
+	res.onFailure() // open
+	now := res.now()
+	res.now = func() time.Time { return now.Add(2 * time.Hour) }
+
+	// Probe admitted via a call that fails in applyAuth (before any Do).
+	c := &Client{
+		URL:    "http://127.0.0.1:9",
+		Client: &http.Client{},
+		AuthProvider: func() (string, string, AuthScheme, error) {
+			return "", "", "", errors.New("refresh failed")
+		},
+	}
+	c.res = res
+	if _, err := c.CallJenkins(context.Background(), c.Client, http.MethodGet, "/api/json", nil, nil); err == nil {
+		t.Fatal("auth failure expected")
+	}
+	// The probe slot must be free again: a new probe is admitted.
+	if _, err := res.allow(); err != nil {
+		t.Fatalf("probe slot leaked after early exit: %v", err)
+	}
+	res.onProbeDone() // release the test's probe
+	if _, err := res.allow(); err != nil {
+		t.Fatalf("probe slot not reusable: %v", err)
 	}
 }
 
