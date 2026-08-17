@@ -442,27 +442,45 @@ func (r *Resilience) release() {
 }
 
 // allow returns ErrCircuitOpen when the breaker is open (no probe slot).
-func (r *Resilience) allow() error {
+// probe is true when this call was admitted as the single half-open probe —
+// the caller MUST resolve the slot (onSuccess/onFailure/onAbort) or release
+// it (onProbeDone) on every exit path, otherwise the breaker wedges
+// half-open and rejects all future calls.
+func (r *Resilience) allow() (probe bool, err error) {
 	if r == nil {
-		return nil
+		return false, nil
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := r.now()
 	if r.openUntil.IsZero() {
-		return nil
+		return false, nil
 	}
 	if now.Before(r.openUntil) {
-		return fmt.Errorf("%w: retry after %s", ErrCircuitOpen, r.openUntil.Sub(now).Round(time.Millisecond))
+		return false, fmt.Errorf("%w: retry after %s", ErrCircuitOpen, r.openUntil.Sub(now).Round(time.Millisecond))
 	}
 	// Open period elapsed: allow one half-open probe. While a probe is in
 	// flight, concurrent callers keep failing closed — otherwise a queued
 	// herd would all strike a possibly-still-down Jenkins at once.
 	if r.halfOpen {
-		return fmt.Errorf("%w: half-open probe in flight", ErrCircuitOpen)
+		return false, fmt.Errorf("%w: half-open probe in flight", ErrCircuitOpen)
 	}
 	r.halfOpen = true
-	return nil
+	return true, nil
+}
+
+// onProbeDone releases the half-open probe slot without recording an outcome.
+// Deferred by the probe owner so early non-Do exit paths (auth failure,
+// backoff abort, body-wrap error) cannot wedge the breaker half-open.
+// Terminal outcomes (onSuccess/onFailure/onAbort) already clear the slot;
+// an extra clear is a no-op.
+func (r *Resilience) onProbeDone() {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.halfOpen = false
 }
 
 func (r *Resilience) onSuccess() {
@@ -479,6 +497,7 @@ func (r *Resilience) onSuccess() {
 // onAbort releases the half-open probe slot without recording a failure.
 // Caller-side cancellation (context.Canceled) says nothing about Jenkins
 // health; a cancelled probe must neither trip nor wedge the breaker.
+// Equivalent to onProbeDone; kept named for the cancellation call site.
 func (r *Resilience) onAbort() {
 	if r == nil {
 		return

@@ -254,7 +254,7 @@ func TestCircuitBreaker_OpenHookCountsOnce(t *testing.T) {
 	// Half-open probe failure re-opens and counts again.
 	now := res.now()
 	res.now = func() time.Time { return now.Add(2 * time.Hour) }
-	if err := res.allow(); err != nil {
+	if _, err := res.allow(); err != nil {
 		t.Fatalf("allow half-open: %v", err)
 	}
 	if st := res.State(); st.State != "half-open" {
