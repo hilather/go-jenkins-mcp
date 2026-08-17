@@ -27,7 +27,7 @@ func runDoctor(args []string) error {
 	// Mirror serve RO inputs so doctor mutations check matches process posture (Wave 32).
 	readOnly := fs.Bool("read-only", false, "Treat CLI --read-only as set (same as serve)")
 	allowMutations := fs.Bool("allow-mutations", false, "Treat --allow-mutations as set (same as serve; for mutations doctor check)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -93,7 +93,7 @@ func runSupportBundle(args []string) error {
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	preview := fs.Bool("preview", false, "List included/excluded categories without writing a zip")
 	offline := fs.Bool("offline", true, "Skip network identity verify when embedding doctor (default true)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -235,7 +235,7 @@ func runCacheKeyInit(args []string, rotate bool) error {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Profile id (required)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -308,7 +308,7 @@ func runCacheKeyStatus(args []string) error {
 	fs := flag.NewFlagSet("cache key status", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Profile id (required)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -342,7 +342,7 @@ func runCacheStatus(args []string) error {
 	fs := flag.NewFlagSet("cache status", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Profile id (required)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -377,7 +377,7 @@ func runCacheVerify(args []string) error {
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	full := fs.Bool("full", false, "Verify every pack (cancellable)")
 	sample := fs.Int("sample", diagnostics.DefaultVerifySample, "Max packs to check when not --full")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true, "sample": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -417,7 +417,7 @@ func runCacheRepair(args []string) error {
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	indexOnly := fs.Bool("index-only", true, "Rebuild sidecar indexes only (default; pack bodies never rewritten)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {

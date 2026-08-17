@@ -70,10 +70,7 @@ func runCacheEvictionPlan(args []string) error {
 	targetBytesFlag := fs.String("target-bytes", "", "Additional bytes to free beyond bringing usage under quota (optional)")
 	cacheTotalQuotaFlag := fs.String("cache-total-quota-bytes", "", "Per-profile L1+L2 total physical cache quota in bytes (empty/0=default 10GiB; env JENKINS_MCP_CACHE_TOTAL_QUOTA_BYTES fallback; flag wins; min 64MiB; max 1TiB absolute fail-closed)")
 	cacheLowDiskFlag := fs.String("cache-low-disk-bytes", "", "Free-space threshold for eviction planning in bytes (empty/0=default 1GiB; env JENKINS_MCP_CACHE_LOW_DISK_BYTES fallback; flag wins; min 16MiB; max 1TiB absolute fail-closed)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"profile": true, "target-bytes": true,
-		"cache-total-quota-bytes": true, "cache-low-disk-bytes": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -189,10 +186,7 @@ func runCacheEvict(args []string) error {
 	cacheLowDiskFlag := fs.String("cache-low-disk-bytes", "", "Free-space threshold for eviction planning in bytes (empty/0=default 1GiB; env JENKINS_MCP_CACHE_LOW_DISK_BYTES fallback; flag wins; min 16MiB; max 1TiB absolute fail-closed)")
 	confirm := fs.Bool("confirm", false, "Required to apply eviction (destructive)")
 	yes := fs.Bool("yes", false, "Alias for --confirm (destructive)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"profile": true, "target-bytes": true,
-		"cache-total-quota-bytes": true, "cache-low-disk-bytes": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -364,10 +358,7 @@ func runCacheQuota(args []string) error {
 	asJSON := fs.Bool("json", false, "Emit secret-free JSON usage stats")
 	cacheTotalQuotaFlag := fs.String("cache-total-quota-bytes", "", "Per-profile L1+L2 total physical cache quota in bytes (empty/0=default 10GiB; env JENKINS_MCP_CACHE_TOTAL_QUOTA_BYTES fallback; flag wins; min 64MiB; max 1TiB absolute fail-closed)")
 	cacheLowDiskFlag := fs.String("cache-low-disk-bytes", "", "Free-space threshold for eviction planning in bytes (empty/0=default 1GiB; env JENKINS_MCP_CACHE_LOW_DISK_BYTES fallback; flag wins; min 16MiB; max 1TiB absolute fail-closed)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"profile":                 true,
-		"cache-total-quota-bytes": true, "cache-low-disk-bytes": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {

@@ -97,15 +97,7 @@ func runGatewayVaultPut(args []string) error {
 	user := fs.String("user", "", "Jenkins username for Basic auth")
 	tokenEnv := fs.String("token-env", "", "Env var name holding the personal API token (not the token value)")
 	vaultPath := fs.String("vault-path", "", "Vault file path (default: $JENKINS_MCP_GATEWAY_VAULT_PATH or XDG data)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"subject":    true,
-		"tenant":     true,
-		"subject-id": true,
-		"profile":    true,
-		"user":       true,
-		"token-env":  true,
-		"vault-path": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 
@@ -148,13 +140,7 @@ func runGatewayVaultDelete(args []string) error {
 	subjectID := fs.String("subject-id", "", "Subject (user) id when composing subject key")
 	profile := fs.String("profile", "", "Profile id when composing subject key")
 	vaultPath := fs.String("vault-path", "", "Vault file path (default: $JENKINS_MCP_GATEWAY_VAULT_PATH or XDG data)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"subject":    true,
-		"tenant":     true,
-		"subject-id": true,
-		"profile":    true,
-		"vault-path": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	sub, err := resolveVaultSubjectKey(*subject, *tenant, *subjectID, *profile)
@@ -178,9 +164,7 @@ func runGatewayVaultList(args []string) error {
 	fs := flag.NewFlagSet("gateway vault list", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	vaultPath := fs.String("vault-path", "", "Vault file path (default: $JENKINS_MCP_GATEWAY_VAULT_PATH or XDG data)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"vault-path": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	path := resolveVaultFilePath(*vaultPath)
@@ -211,13 +195,7 @@ func runGatewayVaultStatus(args []string) error {
 	subjectID := fs.String("subject-id", "", "Subject (user) id when composing subject key")
 	profile := fs.String("profile", "", "Profile id when composing subject key")
 	vaultPath := fs.String("vault-path", "", "Vault file path (default: $JENKINS_MCP_GATEWAY_VAULT_PATH or XDG data)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"subject":    true,
-		"tenant":     true,
-		"subject-id": true,
-		"profile":    true,
-		"vault-path": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	sub, err := resolveVaultSubjectKey(*subject, *tenant, *subjectID, *profile)

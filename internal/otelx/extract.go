@@ -1,6 +1,7 @@
 package otelx
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -77,8 +78,17 @@ func ExtractFromParams(params map[string]string, opts ExtractOptions) ExtractRes
 	}
 
 	// Index normalized key → original key + value (first wins for dups).
+	// Iterate in sorted key order: Go map iteration is random, and the dup
+	// winner is correlation evidence — it must be deterministic (smallest
+	// original key wins).
 	byNorm := make(map[string]paramEntry, len(params))
-	for k, v := range params {
+	keys := make([]string, 0, len(params))
+	for k := range params {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := params[k]
 		if k == "" {
 			continue
 		}

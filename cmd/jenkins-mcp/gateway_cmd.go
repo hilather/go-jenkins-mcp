@@ -60,9 +60,7 @@ func runGatewayQualify(args []string) error {
 	fs := flag.NewFlagSet("gateway qualify", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	offline := fs.Bool("offline", false, "Run in-process mock suite (no live AgentCore/Entra network)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"offline": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if !*offline {
@@ -208,14 +206,7 @@ func runGatewaySubjectInvalidate(args []string) error {
 	subjectID := fs.String("subject-id", "", "Subject (user) id when composing subject key")
 	profile := fs.String("profile", "", "Profile id when composing subject key")
 	workload := fs.String("workload", "", "Optional workload for exact CacheKey fallback (usually unused with FileTokenCache subject purge)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"subject-key": true,
-		"subject":     true,
-		"tenant":      true,
-		"subject-id":  true,
-		"profile":     true,
-		"workload":    true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 
@@ -318,12 +309,7 @@ func runGatewayConsentPurge(args []string) error {
 	confirm := fs.String("confirm", "", `Required with --all; must be exactly CLEAR_ALL (parity with admin clear_all confirm)`)
 	sessionID := fs.String("session-id", "", "Delete one consent session by id (metadata only)")
 	pathFlag := fs.String("path", "", "Consent metadata file path (else JENKINS_MCP_CONSENT_STORE_PATH / XDG default)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		// --all is a bool flag (no value). session-id, path, and confirm take values.
-		"session-id": true,
-		"path":       true,
-		"confirm":    true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	sid := strings.TrimSpace(*sessionID)

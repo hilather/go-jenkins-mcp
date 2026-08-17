@@ -186,7 +186,12 @@ func loadAdminToken(envVarName, filePath string) (string, error) {
 		return "", apperr.Wrap(apperr.CodeInvalidArgument,
 			fmt.Sprintf("read admin token file %q", filePath), err)
 	}
-	token := strings.TrimSpace(string(raw))
+	// Strip a single trailing newline convention; do not TrimSpace the whole
+	// secret (spaces may be intentional). Same rules as the Streamable HTTP
+	// token loader (serve_http_token.go).
+	token := string(raw)
+	token = strings.TrimSuffix(token, "\n")
+	token = strings.TrimSuffix(token, "\r")
 	if token == "" {
 		return "", apperr.New(apperr.CodeInvalidArgument,
 			fmt.Sprintf("admin token file %q is empty", filePath))

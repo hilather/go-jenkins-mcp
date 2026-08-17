@@ -172,7 +172,8 @@ func (opts *Client) fetchProgressiveRange(
 
 	logs := string(logData)
 	if length >= 0 && len(logs) > length {
-		logs = logs[:length]
+		// Rune-safe: never split a multi-byte rune at the byte cap.
+		logs, _ = truncateBytes(logs, length)
 	}
 
 	hasMore := false

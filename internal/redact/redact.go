@@ -136,6 +136,13 @@ var builtinDetectors = []detector{
 	// Cookies / session ids.
 	{CategoryCookie, regexp.MustCompile(`(?i)(cookie\s*:\s*)([^\n\r]+)`), true},
 	{CategoryCookie, regexp.MustCompile(`(?i)(jsessionid\s*=\s*)([^;\s\n\r]+)`), true},
+	// JSON-quoted labeled forms: "key":"value" / "key": "value" (and the
+	// single-quote variant). The value's closing quote is never part of the
+	// match, so redacted output stays well-formed. Serialized JSON is the most
+	// common carrier in logs/error text; without this the labeled forms below
+	// never match it (their key must be followed by = or :).
+	{CategoryStructuredKey, regexp.MustCompile(`(?i)("(?:password|passwd|pwd|secret|secret[_-]?key|api[_-]?key|x-api-key|api[_-]?token|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|token|authorization)"\s*:\s*")([^"]*)`), true},
+	{CategoryStructuredKey, regexp.MustCompile(`(?i)('(?:password|passwd|pwd|secret|secret[_-]?key|api[_-]?key|x-api-key|api[_-]?token|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|token|authorization)'\s*:\s*')([^']*)`), true},
 	// Common secret parameter forms.
 	{CategoryAPIToken, regexp.MustCompile(`(?i)(api[_-]?token\s*[=:]\s*)(\S+)`), true},
 	{CategoryAPIToken, regexp.MustCompile(`(?i)(access[_-]?token\s*[=:]\s*)(\S+)`), true},
@@ -421,6 +428,12 @@ func redactAny(v any, rep *Report) any {
 func ContainsSecretHint(s string) bool {
 	if s == "" {
 		return false
+	}
+	// JSON-quoted labeled forms (same blind spot RedactText had). The value
+	// must start with a non-quote, non-'[' char so the [REDACTED] marker and
+	// empty values do not flag.
+	if regexp.MustCompile(`(?i)["'](?:password|passwd|pwd|secret|secret[_-]?key|api[_-]?key|x-api-key|api[_-]?token|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|token|authorization)["']\s*:\s*["'][^"'\[]`).MatchString(s) {
+		return true
 	}
 	// Common unredacted forms.
 	if regexp.MustCompile(`(?i)bearer\s+[a-z0-9._\-+/=]{12,}`).MatchString(s) {

@@ -51,7 +51,7 @@ func runRedactValidatePatterns(args []string) error {
 	fs.SetOutput(os.Stderr)
 	file := fs.String("file", "", "Enterprise redact patterns JSON path (required)")
 	asJSON := fs.Bool("json", false, "Emit machine-readable JSON")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"file": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	path := strings.TrimSpace(*file)

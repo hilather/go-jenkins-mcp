@@ -92,14 +92,7 @@ func runGatewayJWTVaultPut(args []string) error {
 	profile := fs.String("profile", "", "Profile id when composing subject key")
 	tokenEnv := fs.String("token-env", "", "Env var name holding the access token (not the token value)")
 	vaultPath := fs.String("vault-path", "", "JWT vault file path (default: $JENKINS_MCP_GATEWAY_JWT_VAULT_PATH or XDG data)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"subject":    true,
-		"tenant":     true,
-		"subject-id": true,
-		"profile":    true,
-		"token-env":  true,
-		"vault-path": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 
@@ -134,13 +127,7 @@ func runGatewayJWTVaultDelete(args []string) error {
 	subjectID := fs.String("subject-id", "", "Subject (user) id when composing subject key")
 	profile := fs.String("profile", "", "Profile id when composing subject key")
 	vaultPath := fs.String("vault-path", "", "JWT vault file path")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"subject":    true,
-		"tenant":     true,
-		"subject-id": true,
-		"profile":    true,
-		"vault-path": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	sub, err := resolveVaultSubjectKey(*subject, *tenant, *subjectID, *profile)
@@ -164,9 +151,7 @@ func runGatewayJWTVaultList(args []string) error {
 	fs := flag.NewFlagSet("gateway jwt-vault list", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	vaultPath := fs.String("vault-path", "", "JWT vault file path")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"vault-path": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	path := resolveJWTVaultFilePath(*vaultPath)
@@ -193,13 +178,7 @@ func runGatewayJWTVaultStatus(args []string) error {
 	subjectID := fs.String("subject-id", "", "Subject (user) id when composing subject key")
 	profile := fs.String("profile", "", "Profile id when composing subject key")
 	vaultPath := fs.String("vault-path", "", "JWT vault file path")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"subject":    true,
-		"tenant":     true,
-		"subject-id": true,
-		"profile":    true,
-		"vault-path": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	sub, err := resolveVaultSubjectKey(*subject, *tenant, *subjectID, *profile)

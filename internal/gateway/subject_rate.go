@@ -455,12 +455,14 @@ func (l *SubjectRateLimiter) Allow(subjectKey string) error {
 	if err := ValidateSubjectKey(key); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, "subject key is invalid for multi-tenant rate limit")
 	}
+
+	// Lock before reading l.ratePerMinute: LowerRate writes it under l.mu
+	// (policy reload callback) while Allow runs on every tool dispatch.
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if l.ratePerMinute <= 0 {
 		return apperr.New(apperr.CodeQuota, "subject tool rate limit disabled residual rejects all")
 	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
 	now := l.now()
 	if l.now == nil {
 		now = time.Now()

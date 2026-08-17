@@ -225,6 +225,13 @@ func VerifyIdentityHTTP(ctx context.Context, pr Profile, sess Session, hc *http.
 	if expected == "" {
 		expected = user
 	}
+	// The OIDC placeholder label means "no username label known yet" — treat it
+	// as empty so the documented escape works (bind solely to whoAmI principal).
+	// Previously the literal placeholder defeated the check and failed every
+	// real principal closed at serve start.
+	if expected == PlaceholderUserOIDC {
+		expected = ""
+	}
 	// OIDC: when no profile/session username label is known yet (opaque token
 	// path), bind solely to whoAmI principal (AUTH-004 still required).
 	if expected != "" && !strings.EqualFold(p.ID, expected) {

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -223,20 +224,7 @@ func (opts *Client) InspectArtifact(ctx context.Context, jobName string, buildNu
 			out.Residuals = []string{"full structured walk residual when truncated"}
 			return out, nil
 		}
-		dec := json.NewDecoder(bytes.NewReader(data))
-		// Safe: no custom unmarshaler execution; standard library only.
-		var v any
-		if err := dec.Decode(&v); err != nil {
-			out.JSONValid = false
-			out.ParseError = "JSON parse failed: " + truncateForErr(err.Error())
-		} else {
-			out.JSONValid = true
-			// Reject trailing garbage lightly.
-			if err := dec.Decode(&struct{}{}); err == nil {
-				out.ParseError = "JSON has trailing values"
-				out.JSONValid = false
-			}
-		}
+		out.JSONValid, out.ParseError = inspectJSONValidity(data)
 		return out, nil
 
 	case InspectKindXML:
@@ -326,4 +314,27 @@ func bytesToText(data []byte) string {
 		content = strings.ToValidUTF8(content, "\uFFFD")
 	}
 	return content
+}
+
+// inspectJSONValidity parses data as a single JSON value. Trailing content of
+// ANY type (object, array, scalar) or a malformed trailing fragment marks the
+// stream invalid — the previous probe decoded into struct{}{}, which missed
+// trailing numbers/strings/arrays (their decode error was treated as "no
+// trailing data").
+func inspectJSONValidity(data []byte) (valid bool, parseErr string) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	// Safe: no custom unmarshaler execution; standard library only.
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return false, "JSON parse failed: " + truncateForErr(err.Error())
+	}
+	var extra any
+	err := dec.Decode(&extra)
+	switch {
+	case err == nil:
+		return false, "JSON has trailing values"
+	case !errors.Is(err, io.EOF):
+		return false, "JSON has trailing garbage: " + truncateForErr(err.Error())
+	}
+	return true, ""
 }
