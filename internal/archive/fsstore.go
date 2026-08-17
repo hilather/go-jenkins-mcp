@@ -65,10 +65,15 @@ func (s *FSStore) packPath(packID string) (string, error) {
 
 // PutPack writes pack bytes to disk after validation, then builds a sibling index.
 // Journal-lite: write temp → validate via OpenPack → atomic rename → index.
+// Serialized: concurrent PutPack calls share neither the temp path nor the
+// catalog update (the temp name is also unpredictable, so even a cross-process
+// collision cannot interleave writes).
 func (s *FSStore) PutPack(ctx context.Context, pack PackDescriptor) error {
 	if err := ctx.Err(); err != nil {
 		return apperr.Wrap(apperr.CodeCancelled, "context cancelled", err)
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	// Validate + catalog in memory first (OpenPack + VerifyContentFrames).
 	if err := s.mem.PutPack(ctx, pack); err != nil {
 		return err
@@ -78,29 +83,37 @@ func (s *FSStore) PutPack(ctx context.Context, pack PackDescriptor) error {
 		_ = s.mem.DeletePack(ctx, ArchiveRef{PackID: pack.PackID})
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, pack.Data, 0o600); err != nil {
+	tmp, err := os.CreateTemp(s.root, ".pack-*.tmp")
+	if err != nil {
+		_ = s.mem.DeletePack(ctx, ArchiveRef{PackID: pack.PackID})
+		return apperr.Wrap(apperr.CodeInternal, "failed to stage pack", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op after a successful rename
+	if _, err := tmp.Write(pack.Data); err != nil {
+		_ = tmp.Close()
+		_ = s.mem.DeletePack(ctx, ArchiveRef{PackID: pack.PackID})
+		return apperr.Wrap(apperr.CodeInternal, "failed to write pack", err)
+	}
+	if err := tmp.Close(); err != nil {
 		_ = s.mem.DeletePack(ctx, ArchiveRef{PackID: pack.PackID})
 		return apperr.Wrap(apperr.CodeInternal, "failed to write pack", err)
 	}
 	// Re-open from temp before publish (journal-lite verify step).
 	p, err := OpenPack(pack.Data)
 	if err != nil {
-		_ = os.Remove(tmp)
 		_ = s.mem.DeletePack(ctx, ArchiveRef{PackID: pack.PackID})
 		return err
 	}
 	if err := p.VerifyContentFrames(); err != nil {
 		p.Close()
-		_ = os.Remove(tmp)
 		_ = s.mem.DeletePack(ctx, ArchiveRef{PackID: pack.PackID})
 		return err
 	}
 	st := p.SeekTable()
 	p.Close()
 
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
+	if err := os.Rename(tmpName, path); err != nil {
 		_ = s.mem.DeletePack(ctx, ArchiveRef{PackID: pack.PackID})
 		return apperr.Wrap(apperr.CodeInternal, "failed to publish pack", err)
 	}

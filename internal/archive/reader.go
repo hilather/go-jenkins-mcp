@@ -261,14 +261,23 @@ func (p *Pack) VerifyContentFrames() error {
 		if f.CompressedOffset < 0 || f.CompressedOffset+f.CompressedSize > int64(len(p.data)) {
 			return apperr.New(apperr.CodeCorruptCache, "frame compressed range out of bounds")
 		}
+		// Every writer sets frame hashes; an empty field is anomalous
+		// (corrupt/tampered seek table) and must fail closed, not skip the check.
+		if f.FrameSHA256 == "" {
+			return apperr.New(apperr.CodeCorruptCache,
+				fmt.Sprintf("frame %d frame_sha256 missing", f.Index))
+		}
 		slice := p.data[f.CompressedOffset : f.CompressedOffset+f.CompressedSize]
-		if got := sha256Hex(slice); got != f.FrameSHA256 && f.FrameSHA256 != "" {
+		if got := sha256Hex(slice); got != f.FrameSHA256 {
 			return apperr.New(apperr.CodeCorruptCache,
 				fmt.Sprintf("frame %d frame_sha256 mismatch", f.Index))
 		}
 		_, _ = h.Write(slice)
 	}
-	if p.table.PackSHA256 != "" && sha256Hex(h.Sum(nil)) != p.table.PackSHA256 {
+	if p.table.PackSHA256 == "" {
+		return apperr.New(apperr.CodeCorruptCache, "pack_sha256 missing")
+	}
+	if sha256Hex(h.Sum(nil)) != p.table.PackSHA256 {
 		return apperr.New(apperr.CodeCorruptCache, "pack_sha256 mismatch")
 	}
 	return nil
@@ -296,10 +305,12 @@ func (p *Pack) decompressFrame(f SeekFrame) ([]byte, error) {
 		return nil, apperr.New(apperr.CodeCorruptCache, "frame slice out of bounds")
 	}
 	slice := p.data[f.CompressedOffset : f.CompressedOffset+f.CompressedSize]
-	if f.FrameSHA256 != "" {
-		if got := sha256Hex(slice); got != f.FrameSHA256 {
-			return nil, apperr.New(apperr.CodeCorruptCache, "frame checksum mismatch before decode")
-		}
+	// Writers always set frame hashes; empty must fail closed, not skip.
+	if f.FrameSHA256 == "" {
+		return nil, apperr.New(apperr.CodeCorruptCache, "frame checksum missing")
+	}
+	if got := sha256Hex(slice); got != f.FrameSHA256 {
+		return nil, apperr.New(apperr.CodeCorruptCache, "frame checksum mismatch before decode")
 	}
 	raw, err := p.dec.DecodeAll(slice, make([]byte, 0, f.RawSize))
 	if err != nil {
@@ -309,7 +320,10 @@ func (p *Pack) decompressFrame(f SeekFrame) ([]byte, error) {
 		return nil, apperr.New(apperr.CodeCorruptCache,
 			fmt.Sprintf("frame raw size mismatch: got %d want %d", len(raw), f.RawSize))
 	}
-	if f.ContentSHA256 != "" && sha256Hex(raw) != f.ContentSHA256 {
+	if f.ContentSHA256 == "" {
+		return nil, apperr.New(apperr.CodeCorruptCache, "frame content checksum missing")
+	}
+	if sha256Hex(raw) != f.ContentSHA256 {
 		return nil, apperr.New(apperr.CodeCorruptCache, "frame content checksum mismatch")
 	}
 	return raw, nil

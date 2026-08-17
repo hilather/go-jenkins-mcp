@@ -167,7 +167,18 @@ func QuarantinePack(root, packID, packPath string) error {
 		return apperr.Wrap(apperr.CodeInternal, "failed to create quarantine dir", err)
 	}
 	stamp := time.Now().UTC().Format("20060102T150405Z")
+	// Second-granularity stamps collide for rapid double-quarantine; os.Rename
+	// would silently replace the first quarantined file. Disambiguate.
 	dest := filepath.Join(qdir, fmt.Sprintf("%s-%s.tar.zst", packID, stamp))
+	for i := 1; ; i++ {
+		if _, err := os.Lstat(dest); os.IsNotExist(err) {
+			break
+		}
+		if i > 1000 {
+			return apperr.New(apperr.CodeInternal, "failed to allocate quarantine name")
+		}
+		dest = filepath.Join(qdir, fmt.Sprintf("%s-%s-%d.tar.zst", packID, stamp, i))
+	}
 	if err := os.Rename(packPath, dest); err != nil {
 		// Cross-device fallback: copy+remove not required on Tier-1 same FS.
 		return apperr.Wrap(apperr.CodeInternal, "failed to quarantine pack", err)
@@ -193,12 +204,40 @@ func IsQuarantined(root, packID string) bool {
 	if err != nil {
 		return false
 	}
+	// Match the exact <packID>-<timestamp>[-N].tar.zst name shape: a bare
+	// prefix match would report pack "a" quarantined when only "a-b" was
+	// ("a-b-<ts>.tar.zst" has prefix "a-").
 	prefix := packID + "-"
 	for _, e := range entries {
 		name := e.Name()
-		if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".tar.zst") {
+		if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, ".tar.zst") {
+			continue
+		}
+		mid := name[len(prefix) : len(name)-len(".tar.zst")]
+		if quarantineStampShape(mid) {
 			return true
 		}
 	}
 	return false
+}
+
+// quarantineStampShape reports whether mid matches the quarantine timestamp
+// shape: YYYYMMDDTHHMMSSZ with an optional -N disambiguation suffix.
+func quarantineStampShape(mid string) bool {
+	base, _, _ := strings.Cut(mid, "-")
+	if len(base) != len("20060102T150405Z") {
+		return false
+	}
+	if base[8] != 'T' || base[len(base)-1] != 'Z' {
+		return false
+	}
+	for i, c := range base {
+		if i == 8 || i == len(base)-1 {
+			continue
+		}
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }

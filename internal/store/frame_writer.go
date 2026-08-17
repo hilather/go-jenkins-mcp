@@ -259,6 +259,11 @@ func (f *Frames) resultLocked(og *openGen) AppendResult {
 }
 
 func (f *Frames) ensureOpenLocked(ctx context.Context, generationID int64) (*openGen, error) {
+	if f.open == nil {
+		// Close nils the map; use-after-close must error, not panic on a nil
+		// map write (in-flight request during shutdown / embedded reuse).
+		return nil, apperr.New(apperr.CodeInternal, "frames store is closed")
+	}
 	if og, ok := f.open[generationID]; ok {
 		return og, nil
 	}

@@ -176,6 +176,7 @@ func (c *Cache) GetOrFetch(ctx context.Context, req FetchRequest) (EntryReader, 
 	if err := ver.AuthorizeJob(ctx, req.Access, key.JobFullName); err != nil {
 		return EntryReader{}, LookupResult{}, err
 	}
+
 	// Artifact policy only for artifact kinds. Never fall Selector (stage id,
 	// empty catalog selector, etc.) into AuthorizeArtifact — that evaluates
 	// jenkins_get_artifact_text and deny_artifact_paths incorrectly.
@@ -200,18 +201,7 @@ func (c *Cache) GetOrFetch(ctx context.Context, req FetchRequest) (EntryReader, 
 	if share == "" {
 		share = ScopeSubjectPrivate
 	}
-	subjHash := ""
-	if share == ScopeSubjectPrivate {
-		subjHash = hashOpaque(req.Access.SubjectKey)
-		if subjHash != "" {
-			key.Variant = key.Variant + "|sk=" + subjHash
-			key, err = key.Normalize()
-			if err != nil {
-				return EntryReader{}, LookupResult{}, err
-			}
-		}
-	}
-	digest, err := key.Digest()
+	digest, err := c.storageDigest(key, req.Access)
 	if err != nil {
 		return EntryReader{}, LookupResult{}, err
 	}
@@ -533,13 +523,47 @@ func (c *Cache) l0Put(digest string, er EntryReader) {
 	c.l0[digest] = l0entry{entry: er.Entry, body: er.Data, at: c.now()}
 }
 
-// Invalidate removes L0+disk entry for key (best-effort).
-func (c *Cache) Invalidate(ctx context.Context, key ResourceKey) error {
+// storageDigest computes the digest GetOrFetch stores (key, ac) under:
+// profile fill + subject-private variant fold + normalize + digest.
+// An empty AccessContext yields the plain key digest (shared/empty-subject
+// entries) — identical to the pre-InvalidateFor behavior of Invalidate/Status.
+func (c *Cache) storageDigest(key ResourceKey, ac AccessContext) (string, error) {
 	key, err := key.Normalize()
 	if err != nil {
-		return err
+		return "", err
 	}
-	d, err := key.Digest()
+	key.ProfileID = firstNonEmpty(key.ProfileID, ac.ProfileID)
+	key, err = key.Normalize()
+	if err != nil {
+		return "", err
+	}
+	share := c.cfg.DefaultShare
+	if share == "" {
+		share = ScopeSubjectPrivate
+	}
+	if share == ScopeSubjectPrivate {
+		if subjHash := hashOpaque(ac.SubjectKey); subjHash != "" {
+			key.Variant = key.Variant + "|sk=" + subjHash
+			key, err = key.Normalize()
+			if err != nil {
+				return "", err
+			}
+		}
+	}
+	return key.Digest()
+}
+
+// Invalidate removes the L0+disk entry for the plain (empty-subject) key
+// digest (best-effort). For entries filled with a non-empty SubjectKey
+// (subject_private, the default scope), use InvalidateFor — the plain digest
+// is never written by GetOrFetch for those, so plain Invalidate misses them.
+func (c *Cache) Invalidate(ctx context.Context, key ResourceKey) error {
+	return c.InvalidateFor(ctx, key, AccessContext{})
+}
+
+// InvalidateFor removes the L0+disk entry stored under (key, ac).
+func (c *Cache) InvalidateFor(ctx context.Context, key ResourceKey, ac AccessContext) error {
+	d, err := c.storageDigest(key, ac)
 	if err != nil {
 		return err
 	}
@@ -549,13 +573,15 @@ func (c *Cache) Invalidate(ctx context.Context, key ResourceKey) error {
 	return c.db.DeleteEntry(ctx, d)
 }
 
-// Status returns disk metadata without body.
+// Status returns disk metadata without body for the plain (empty-subject) key
+// digest. Subject-private entries require StatusFor with the filling context.
 func (c *Cache) Status(ctx context.Context, key ResourceKey) (Entry, bool, error) {
-	key, err := key.Normalize()
-	if err != nil {
-		return Entry{}, false, err
-	}
-	d, err := key.Digest()
+	return c.StatusFor(ctx, key, AccessContext{})
+}
+
+// StatusFor returns disk metadata without body for (key, ac).
+func (c *Cache) StatusFor(ctx context.Context, key ResourceKey, ac AccessContext) (Entry, bool, error) {
+	d, err := c.storageDigest(key, ac)
 	if err != nil {
 		return Entry{}, false, err
 	}

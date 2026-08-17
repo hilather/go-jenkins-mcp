@@ -505,6 +505,23 @@ func (m *Machine) appendLocked(ctx context.Context, key LogKey, segment Segment)
 	return st, nil
 }
 
+// RotateGeneration abandons the latest generation and opens a fresh one at
+// offset 0 for push-style full-snapshot sources (e.g. stage logs): the next
+// Append writes the new snapshot into it. Pull sources use Poll-driven rewrite
+// detection instead (which drops stale-offset bodies by design).
+func (m *Machine) RotateGeneration(ctx context.Context, key LogKey) (State, error) {
+	if err := key.Validate(); err != nil {
+		return State{}, err
+	}
+	unlock := m.lockKey(key)
+	defer unlock()
+	st, err := m.ensureOpenLocked(ctx, key)
+	if err != nil {
+		return State{}, err
+	}
+	return m.startNewGeneration(ctx, key, st.Generation)
+}
+
 // startNewGeneration abandons the open previous generation and inserts nextGen at offset 0.
 // The caller must Poll again to download the new log from the beginning.
 func (m *Machine) startNewGeneration(ctx context.Context, key LogKey, prevGeneration int64) (State, error) {

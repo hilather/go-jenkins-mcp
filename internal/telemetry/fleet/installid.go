@@ -50,18 +50,27 @@ func LoadOrCreateInstallationID(paths config.Paths) (string, error) {
 		return "", fmt.Errorf("fleet: create telemetry dir: %w", err)
 	}
 	_ = os.Chmod(dir, dirPerm)
-	// O_EXCL-style best effort: write temp then rename.
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(id+"\n"), filePerm); err != nil {
+	// Unpredictable O_EXCL temp in the same directory: two processes
+	// first-running at once must not interleave writes to a shared <path>.tmp
+	// (which could publish one id while the other process returns its own).
+	tmp, err := os.CreateTemp(dir, ".installation_id-*.tmp")
+	if err != nil {
+		return "", fmt.Errorf("fleet: stage installation_id: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op after a successful rename
+	if _, err := tmp.WriteString(id + "\n"); err != nil {
+		_ = tmp.Close()
 		return "", fmt.Errorf("fleet: write installation_id: %w", err)
 	}
-	_ = os.Chmod(tmp, filePerm)
-	if err := os.Rename(tmp, path); err != nil {
+	if err := tmp.Close(); err != nil {
+		return "", fmt.Errorf("fleet: write installation_id: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
 		// Race: another process may have created it.
 		if b, rerr := os.ReadFile(path); rerr == nil {
 			existing := strings.TrimSpace(string(b))
 			if isValidInstallID(existing) {
-				_ = os.Remove(tmp)
 				return existing, nil
 			}
 		}

@@ -334,12 +334,20 @@ func (r *ReleaseManager) applyReleaseItem(ctx context.Context, item *releaseJour
 		return true, nil
 	}
 
-	// Re-check pin/lease before destructive steps.
-	if pinned, _ := r.Meta.IsPinned(ctx, PinKindGeneration, strconv.FormatInt(item.GenerationID, 10)); pinned {
-		return false, apperr.New(apperr.CodePolicyDenial, "generation is pinned")
-	}
-	if r.Leases != nil && r.Leases.IsLeased(item.GenerationID) {
-		return false, apperr.New(apperr.CodePolicyDenial, "generation is leased")
+	// Re-check pin/lease before the destructive metadata step (pending →
+	// meta_done). The meta_done → done step only purges leftover L1 files for
+	// an already logically released generation — it must proceed despite a
+	// pin/lease (the pin protects against NEW reads; the files are orphans).
+	// Previously the re-check ran unconditionally, so a meta_done item for a
+	// pinned generation could never finish: the journal stuck and every
+	// maintenance releaseTick failed until the pin was manually removed.
+	if item.Status == "pending" {
+		if pinned, _ := r.Meta.IsPinned(ctx, PinKindGeneration, strconv.FormatInt(item.GenerationID, 10)); pinned {
+			return false, apperr.New(apperr.CodePolicyDenial, "generation is pinned")
+		}
+		if r.Leases != nil && r.Leases.IsLeased(item.GenerationID) {
+			return false, apperr.New(apperr.CodePolicyDenial, "generation is leased")
+		}
 	}
 
 	if item.Status == "pending" {
