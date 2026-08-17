@@ -371,7 +371,9 @@ func (s *Service) ExecuteOperation(ctx context.Context, plan OperationPlan, conf
 	execErr := a.Execute(ctx, oc, plan)
 	if execErr != nil {
 		if s.store != nil && plan.PlanID != "" {
-			_ = s.store.UpdatePlanState(ctx, plan.PlanID, OpStateFailed, ReasonUnsupportedOp, tc.PurgeEpoch)
+			// Record an honest execution-failure code; ReasonUnsupportedOp is
+			// for plan-shape rejections, not adapter IO/cancel failures.
+			_ = s.store.UpdatePlanState(ctx, plan.PlanID, OpStateFailed, "execute_failed", tc.PurgeEpoch)
 		}
 		return execErr
 	}

@@ -160,7 +160,13 @@ FROM cache_runtime_override WHERE profile_id = ?`, profileID)
 		}
 		if expires.Valid && expires.String != "" {
 			exp, err := time.Parse(time.RFC3339, expires.String)
-			if err == nil && now.After(exp) {
+			if err != nil {
+				// Fail closed: a corrupt expiry must not turn a time-boxed
+				// override (e.g. emergency mode=off) into a permanent one.
+				return nil, apperr.Wrap(apperr.CodeCorruptCache,
+					"override "+typeID+"."+fieldPath+" has malformed expires_at", err)
+			}
+			if now.After(exp) {
 				continue // expired ignored
 			}
 		}
@@ -433,7 +439,8 @@ func (s *OverrideStore) LoadPlan(ctx context.Context, planID string) (OperationR
 		return OperationRecord{}, apperr.New(apperr.CodeInternal, "override store is nil")
 	}
 	var rec OperationRecord
-	var kind, typeID, dumpMode, state, exp, created, updated string
+	var kind, typeID, dumpMode, state, created, updated string
+	var exp sql.NullString // nullable: plans saved without an expiry store NULL
 	var estB, estC, cfgRev, pe int64
 	err := s.db.QueryRowContext(ctx, `
 SELECT plan_id, profile_id, kind, type_id, dump_mode, confirm_token, fingerprint, state,
@@ -458,8 +465,8 @@ FROM cache_operation WHERE plan_id=?`, planID).Scan(
 	rec.EstimatedCount = estC
 	rec.ConfigRevision = uint64(cfgRev)
 	rec.PurgeEpoch = uint64(pe)
-	if exp != "" {
-		if t, e := time.Parse(time.RFC3339, exp); e == nil {
+	if exp.Valid && exp.String != "" {
+		if t, e := time.Parse(time.RFC3339, exp.String); e == nil {
 			rec.ExpiresAtUnix = t.Unix()
 		}
 	}

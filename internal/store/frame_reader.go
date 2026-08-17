@@ -129,7 +129,15 @@ func (r *LogReader) ReadRange(ctx context.Context, generationID int64, start, le
 	}
 
 	var out bytes.Buffer
+	expectRaw := int64(-1)
 	for _, c := range chunks {
+		// Fail closed on a raw-offset gap: a missing middle chunk row (frame
+		// file lost, recovery deleted the row) must not silently splice the
+		// following chunk's bytes into the wrong offsets.
+		if expectRaw >= 0 && c.RawStart != expectRaw {
+			return res, apperr.New(apperr.CodeCorruptCache,
+				fmt.Sprintf("frame gap before seq %d: raw_start %d, expected %d (missing frame rows)", c.Seq, c.RawStart, expectRaw))
+		}
 		raw, err := r.decompressChunk(ctx, c)
 		if err != nil {
 			return res, err
@@ -148,6 +156,7 @@ func (r *LogReader) ReadRange(ctx context.Context, generationID int64, start, le
 			hi = c.RawEnd
 		}
 		if hi <= lo {
+			expectRaw = c.RawEnd
 			continue
 		}
 		from := int(lo - c.RawStart)
@@ -157,6 +166,7 @@ func (r *LogReader) ReadRange(ctx context.Context, generationID int64, start, le
 				fmt.Sprintf("frame %d size mismatch: meta %d file %d", c.Seq, c.UncompressedSize, len(raw)))
 		}
 		out.Write(raw[from:to])
+		expectRaw = c.RawEnd
 	}
 	res.Data = out.Bytes()
 	res.RawEnd = start + int64(len(res.Data))
@@ -204,7 +214,15 @@ func (r *LogReader) ReadLineRange(ctx context.Context, generationID int64, start
 		line0    int64
 	}
 	var segs []seg
+	expectLine := int64(-1)
 	for _, c := range chunks {
+		// Fail closed on a line gap (missing middle chunk). Tolerate the
+		// mid-line-cut overlap where the next frame's LineStart is one less
+		// than the previous frame's LineEnd (shared line in progress).
+		if expectLine >= 0 && c.LineStart > expectLine {
+			return res, apperr.New(apperr.CodeCorruptCache,
+				fmt.Sprintf("frame gap before seq %d: line_start %d beyond previous line_end %d (missing frame rows)", c.Seq, c.LineStart, expectLine))
+		}
 		raw, err := r.decompressChunk(ctx, c)
 		if err != nil {
 			return res, err
@@ -213,6 +231,9 @@ func (r *LogReader) ReadLineRange(ctx context.Context, generationID int64, start
 		res.FramesOpened++
 		res.ContentSHA256 = append(res.ContentSHA256, c.ContentSHA256)
 		segs = append(segs, seg{raw: raw, rawStart: c.RawStart, line0: c.LineStart})
+		if c.LineEnd > expectLine {
+			expectLine = c.LineEnd
+		}
 	}
 
 	var (

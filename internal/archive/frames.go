@@ -46,8 +46,9 @@ func scanFrames(data []byte) ([]frameLoc, error) {
 			if off+total > len(data) {
 				return nil, apperr.New(apperr.CodeCorruptCache, "truncated skippable frame payload")
 			}
-			if int(psz) > MaxSeekTableBytes && len(out) > 0 {
-				// Only the seek table should be large skippable; still bound.
+			if int(psz) > MaxSeekTableBytes {
+				// Only the seek table should be large skippable; still bound —
+				// and the bound applies to the FIRST frame too (no exemption).
 				return nil, apperr.New(apperr.CodeCorruptCache, "skippable frame exceeds size limit")
 			}
 			out = append(out, frameLoc{
