@@ -1,7 +1,6 @@
 package logmirror
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -48,23 +47,13 @@ func (a *Access) MirrorStageLogBytes(ctx context.Context, job string, build int6
 		}
 		return st, nil
 	}
-	// Push-only source: data is a full fresh snapshot. When the existing
-	// generation is sealed, Append's sealed branch would route to
-	// startNewGeneration and DROP the body (that path exists for pull-mode
-	// rewrite detection, where the body was fetched for the old log's offset).
-	// Here the body is authoritative: identical content is a no-op; changed
-	// content rotates the generation first so the snapshot is actually written.
-	if st, err := a.Machine.State(ctx, key); err != nil {
-		return State{}, err
-	} else if st.Sealed {
-		if rr, rerr := a.Machine.ReadRange(ctx, key, 0, int64(len(data))+1); rerr == nil && bytes.Equal(rr.Data, data) {
-			return st, nil // idempotent retry
-		}
-		if _, err := a.Machine.RotateGeneration(ctx, key); err != nil {
-			return State{}, fmt.Errorf("mirror stage log rotate: %w", err)
-		}
-	}
-	st, err := a.Machine.Append(ctx, key, Segment{
+	// Push-only source: data is a full fresh snapshot. AppendSnapshot handles
+	// the sealed case atomically under the per-key lock (identical content is
+	// a no-op; changed content rotates the generation and is written into it).
+	// Append's sealed branch deliberately drops bodies — it exists for
+	// pull-mode rewrite detection, where the body was fetched for the old
+	// log's offset; never call bare Append for push snapshots.
+	st, err := a.Machine.AppendSnapshot(ctx, key, Segment{
 		Data:               data,
 		ReportedNextOffset: int64(len(data)),
 		MoreData:           false,
@@ -72,13 +61,6 @@ func (a *Access) MirrorStageLogBytes(ctx context.Context, job string, build int6
 	})
 	if err != nil {
 		return State{}, fmt.Errorf("mirror stage log: %w", err)
-	}
-	// Seal complete stage log generation when no more data.
-	if !st.MoreData && st.BuildComplete && !st.Sealed {
-		st, err = a.Machine.Seal(ctx, key)
-		if err != nil {
-			return st, err
-		}
 	}
 	return st, nil
 }
