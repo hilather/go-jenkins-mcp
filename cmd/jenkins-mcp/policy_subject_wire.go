@@ -8,6 +8,13 @@ import (
 	"github.com/hilather/go-jenkins-mcp/internal/policy"
 )
 
+// subjectIsZeroValue reports whether s is the zero Subject (the bind path's
+// fail-closed signal). policy.Subject contains a slice and is not comparable.
+func subjectIsZeroValue(s policy.Subject) bool {
+	return s.ProfileID == "" && s.JenkinsUserID == "" && s.ExternalSubject == "" &&
+		s.Tenant == "" && s.WorkloadID == "" && len(s.Groups) == 0 && !s.Verified
+}
+
 // policySubjectFromGatewayCtx builds the multi-user policy.Subject for
 // tools.RegisterOptions.SubjectFromContext (HOST multi-user RBAC).
 //
@@ -48,6 +55,15 @@ func policySubjectFromGatewayCtxWithCache(ctx context.Context, cache gateway.Pri
 	s, hasPS := gateway.PolicySubjectFromContext(ctx)
 	c, hasCaller := gateway.CallerFromContext(ctx)
 	callerOK := hasCaller && c.Valid()
+	// A stored zero subject is a deliberate fail-closed signal from the bind
+	// path (group overage/oversize under FailOnGroupOverage: deny-only group
+	// bindings cannot be evaluated without a trusted group set). Do NOT rebuild
+	// identity from the Caller/PrincipalCache below — that would resurrect a
+	// valid subject with Groups=nil and every group-targeted deny would stop
+	// matching (fail open). Evaluate denies the zero subject (ReasonSubjectEmpty).
+	if hasPS && subjectIsZeroValue(s) {
+		return policy.Subject{}, true
+	}
 	if !hasPS && !callerOK {
 		return policy.Subject{}, false
 	}
