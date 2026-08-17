@@ -309,7 +309,9 @@ func sanitizeNodeText(s string) string {
 	out := b.String()
 	const max = 512
 	if len(out) > max {
-		out = out[:max] + "…"
+		// Rune-safe: never split a multi-byte rune at the byte cap.
+		out, _ = truncateBytes(out, max)
+		out += "…"
 	}
 	return out
 }

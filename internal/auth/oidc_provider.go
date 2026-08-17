@@ -125,7 +125,9 @@ func (p *OIDCProvider) Authenticate(ctx context.Context, pr Profile) (Session, e
 	user := strings.TrimSpace(pr.User)
 	if user == "" {
 		// Non-secret label; OIDC may not set username until whoAmI (OAUTH-005 residual).
-		user = "oidc"
+		// VerifyIdentityHTTP treats this placeholder as "no label" and binds
+		// solely to the whoAmI principal.
+		user = PlaceholderUserOIDC
 	}
 	return Session{
 		ProfileID: pr.ID,
@@ -135,6 +137,12 @@ func (p *OIDCProvider) Authenticate(ctx context.Context, pr Profile) (Session, e
 		ExpiresAt: bundle.ExpiresAt,
 	}, nil
 }
+
+// PlaceholderUserOIDC is the non-secret username label written by
+// OIDCProvider.Authenticate when the profile has no username yet (the real
+// principal is only known after a whoAmI). Identity binding treats it as
+// "no label" (bind solely to the verified whoAmI principal).
+const PlaceholderUserOIDC = "oidc"
 
 // ensureValidBundle returns a usable access token, refreshing under singleflight
 // when the access token is expired/near-expiry and a refresh token is present.

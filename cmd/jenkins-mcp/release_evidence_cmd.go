@@ -219,9 +219,7 @@ func runReleaseEvidence(args []string) error {
 	offline := fs.Bool("offline", true, "Local checks only (default true; network never required for MVP lite)")
 	profileFlag := fs.String("profile", "", "Optional profile id for doctor + cache status")
 	outPath := fs.String("output", "", "Write JSON to this path (default: stdout; use dist/release-evidence.json for release kits)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"profile": true, "output": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	// --offline is accepted for CLI symmetry; network is never used in this lite path.

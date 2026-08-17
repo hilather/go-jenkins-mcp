@@ -65,7 +65,7 @@ func runPilotCheck(args []string) error {
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	offline := fs.Bool("offline", false, "Skip network identity verify (whoAmI)")
 	sample := fs.Int("sample", diagnostics.DefaultVerifySample, "Max packs to sample-verify")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true, "sample": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if strings.TrimSpace(*profileFlag) == "" {

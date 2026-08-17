@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"strings"
 	"sync"
 
@@ -153,6 +154,21 @@ func rejectIDTokenAsAPICredential(token string) error {
 		return nil
 	}
 	// id_token must never be used as Jenkins API credential (HOST-010).
+	// Parse the payload as JSON first: the previous substring match was
+	// bypassable by valid JSON whitespace ("token_use" : "id_token").
+	var claims struct {
+		TokenUse string `json:"token_use"`
+		Typ      string `json:"typ"`
+	}
+	if err := json.Unmarshal([]byte(payload), &claims); err == nil {
+		if strings.EqualFold(strings.TrimSpace(claims.TokenUse), "id_token") ||
+			strings.EqualFold(strings.TrimSpace(claims.Typ), "id_token") {
+			return apperr.New(apperr.CodeInvalidArgument,
+				"id_token cannot be used as jenkins api credential; store access tokens only")
+		}
+		return nil
+	}
+	// Backstop for non-JSON payloads (should not happen for JWT): substring scan.
 	pl := strings.ToLower(payload)
 	if strings.Contains(pl, `"token_use":"id_token"`) ||
 		strings.Contains(pl, `"token_use": "id_token"`) ||

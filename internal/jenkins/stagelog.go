@@ -160,7 +160,8 @@ func (opts *Client) GetStageLog(ctx context.Context, jobName string, buildNumber
 	}
 	hasMore := raw.HasMore
 	if len(text) > maxLength {
-		text = text[:maxLength]
+		// Rune-safe: never split a multi-byte rune at the byte cap.
+		text, _ = truncateBytes(text, maxLength)
 		hasMore = true
 	}
 	// Truncate to maxLength even when Jenkins length field says otherwise.

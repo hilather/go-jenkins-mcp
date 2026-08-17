@@ -56,7 +56,7 @@ func runSecuritySelfCheck(args []string) error {
 	fs.SetOutput(os.Stderr)
 	asJSON := fs.Bool("json", false, "Emit report as JSON")
 	profileFlag := fs.String("profile", "", "Optional profile id for OIDC structural checks")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 

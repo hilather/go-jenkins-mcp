@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -26,11 +27,28 @@ func NewStore(paths config.Paths) *Store {
 	return &Store{Paths: paths}
 }
 
+// profileIDPattern restricts profile ids to single safe file-name segments
+// (same shape as admin.ValidateProfileID). Load/Delete/Exists build filesystem
+// paths from the id — without this check a traversal id ("../../victim")
+// escaped the profiles directory.
+var profileIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
+
+func validateStoreProfileID(id string) error {
+	if !profileIDPattern.MatchString(id) {
+		return apperr.New(apperr.CodeInvalidArgument,
+			"profile id must be 1-64 chars of [a-zA-Z0-9._-], starting alphanumeric")
+	}
+	return nil
+}
+
 // Load reads, migrates, and validates a profile by id.
 func (s *Store) Load(id string) (*Profile, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, apperr.New(apperr.CodeInvalidArgument, "profile id is required")
+	}
+	if err := validateStoreProfileID(id); err != nil {
+		return nil, err
 	}
 	path := s.Paths.ProfileFile(id)
 	data, err := os.ReadFile(path)
@@ -134,6 +152,9 @@ func (s *Store) Delete(id string) error {
 	if id == "" {
 		return apperr.New(apperr.CodeInvalidArgument, "profile id is required")
 	}
+	if err := validateStoreProfileID(id); err != nil {
+		return err
+	}
 	path := s.Paths.ProfileFile(id)
 	err := os.Remove(path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -144,7 +165,11 @@ func (s *Store) Delete(id string) error {
 
 // Exists reports whether a profile file is present.
 func (s *Store) Exists(id string) bool {
-	_, err := os.Stat(s.Paths.ProfileFile(strings.TrimSpace(id)))
+	id = strings.TrimSpace(id)
+	if err := validateStoreProfileID(id); err != nil {
+		return false
+	}
+	_, err := os.Stat(s.Paths.ProfileFile(id))
 	return err == nil
 }
 

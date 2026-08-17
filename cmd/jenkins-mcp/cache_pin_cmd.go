@@ -53,7 +53,7 @@ func runCachePinGeneration(args []string) error {
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	genFlag := fs.String("generation", "", "Log generation SQLite id (required)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true, "generation": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -81,7 +81,7 @@ func runCacheUnpinGeneration(args []string) error {
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	genFlag := fs.String("generation", "", "Log generation SQLite id (required)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true, "generation": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -109,7 +109,7 @@ func runCachePinPack(args []string) error {
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	packFlag := fs.String("pack", "", "L2 pack id (required)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true, "pack": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -137,7 +137,7 @@ func runCacheUnpinPack(args []string) error {
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	packFlag := fs.String("pack", "", "L2 pack id (required)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true, "pack": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -177,7 +177,7 @@ func runCachePins(args []string) error {
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	asJSON := fs.Bool("json", false, "Emit pin list as secret-free JSON")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{"profile": true})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {

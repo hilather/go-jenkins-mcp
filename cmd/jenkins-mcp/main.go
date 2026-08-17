@@ -401,10 +401,7 @@ func runProfileAdd(args []string) error {
 	clientCert := fs.String("client-cert", "", "Optional absolute path to mTLS client cert PEM")
 	clientKey := fs.String("client-key", "", "Optional absolute path to mTLS client key PEM")
 	// Allow `profile add corp --url URL` (flags after positionals).
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"url": true, "display-name": true, "auth-method": true,
-		"ca-bundle": true, "proxy": true, "client-cert": true, "client-key": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if fs.NArg() != 1 {
@@ -544,9 +541,7 @@ func runLogin(args []string) error {
 	userFlag := fs.String("user", "", "Jenkins username (optional if set via env; api-token)")
 	methodFlag := fs.String("method", "", "Auth method: api-token | oidc (default: profile authMethod)")
 	oidcFlag := fs.Bool("oidc", false, "Use external-IdP Authorization Code + PKCE (OAUTH-002)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"profile": true, "user": true, "method": true, "oidc": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *profileFlag == "" {
@@ -619,8 +614,10 @@ func runOIDCLogin(p *profile.Profile) error {
 		Timeout:     auth.DefaultOIDCLoginTimeout,
 	})
 	if err != nil {
+		emitLoginAudit(p, "", audit.DecisionFail, auditReasonFromErr(err))
 		return err
 	}
+	emitLoginAudit(p, result.Session.User, audit.DecisionSuccess, "oidc")
 	// Never print access/refresh/id tokens. Non-secret status only.
 	// JWT-shaped access tokens were validated offline (OAUTH-003) inside LoginOIDC.
 	// Live Jenkins jwt-auth-filter / bearer principal binding is OAUTH-005/009 residual.
@@ -695,6 +692,7 @@ func runAPITokenLogin(store *profile.Store, p *profile.Profile, userFlag string)
 	if err != nil {
 		// Do not write keyring or profile credentials on failed verification.
 		// Surface TLS chain/hostname guidance without suggesting permanent skip.
+		emitLoginAudit(p, "", audit.DecisionFail, auditReasonFromErr(err))
 		if tlsMsg := jenkins.FormatTLSError(err); tlsMsg != "" && tlsMsg != err.Error() {
 			return apperr.Wrap(apperr.CodeOf(err), tlsMsg, err)
 		}
@@ -713,6 +711,7 @@ func runAPITokenLogin(store *profile.Store, p *profile.Profile, userFlag string)
 		// Keyring has the token; profile metadata missing is recoverable via status/re-login.
 		return err
 	}
+	emitLoginAudit(p, principal.ID, audit.DecisionSuccess, "api_token")
 	// Never print token. Status/identity only (KD-004).
 	fmt.Print(formatAPITokenLoginStatus(string(p.ID), user, principal.ID))
 	return nil
@@ -971,35 +970,11 @@ func runServe(args []string) error {
 	initialBackoffFlag := fs.String("initial-backoff", "", "Jenkins GET/HEAD retry initial backoff (Go duration; empty/0=default 100ms; env JENKINS_MCP_INITIAL_BACKOFF fallback; flag wins; min 10ms; max 2s absolute fail-closed; 0 means default; must be ≤ --max-backoff)")
 	// Wave 51 Track A / NET-003: GET/HEAD retry max backoff (default 5s; min 100ms; absolute 1m; 0 → default; must be ≥ initial).
 	maxBackoffFlag := fs.String("max-backoff", "", "Jenkins GET/HEAD retry max backoff / Retry-After cap (Go duration; empty/0=default 5s; env JENKINS_MCP_MAX_BACKOFF fallback; flag wins; min 100ms; max 1m absolute fail-closed; 0 means default; must be ≥ --initial-backoff)")
-	// Bool flags take no value; only string flags are listed as taking values.
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"profile": true, "url": true, "auth": true, "http": true,
-		"ca-bundle": true, "proxy": true, "cache-maintenance-interval": true,
-		"identity-reverify-ttl": true, "hard-max-bytes": true, "target-bytes": true,
-		"list-jobs-collect-max-pages":      true,
-		"nodes-collect-max-pages":          true,
-		"views-collect-max-pages":          true,
-		"artifacts-hard-cap":               true,
-		"artifacts-list-body-bytes":        true,
-		"max-json-body-bytes":              true,
-		"max-retries":                      true,
-		"circuit-failure-threshold":        true,
-		"circuit-open-duration":            true,
-		"max-concurrent":                   true,
-		"initial-backoff":                  true,
-		"max-backoff":                      true,
-		"mutation-confirm-cooldown":        true,
-		"mutation-max-previews-per-minute": true,
-		"mutation-token-ttl":               true,
-		"log-level":                        true,
-		"adapter-allowlist":                true, "adapter-allowlist-min-signatures": true,
-		"adapter-ext-logs-backend": true, "adapter-ext-logs-base-url": true,
-		"adapter-otel-export-backend": true, "adapter-otel-export-base-url": true,
-		"enable-adapter": true, "http-allowed-origin": true, "http-allowed-host": true,
-		"http-token-env": true, "http-token-file": true,
-		"http-max-body-bytes": true, "http-path-prefix": true,
-		"admin-role": true,
-	})); err != nil {
+	// Bool flags take no value; every other registered flag takes one. Derive
+	// the reorder set from the FlagSet itself — the previous hand-maintained
+	// map silently mis-parsed any string flag missing from it (a space-separated
+	// value became a positional and the flag swallowed the next flag token).
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if *showVer {
@@ -1652,6 +1627,10 @@ func runServe(args []string) error {
 		// Prefer reader that already carries FrameCrypto so search decrypts correctly.
 		if sink, err := audit.OpenProfileSink(dataDir); err == nil {
 			auditFile = sink
+		} else {
+			// Never silent: without this log the durable audit trail is degraded to
+			// the capped in-memory sink with zero operator signal (AUD-001 posture).
+			log.Printf("WARN: profile audit file sink unavailable (audit falls back to capped in-memory sink): %v", err)
 		}
 		if eng, err := search.NewWithReader(storeMeta, reader); err == nil {
 			logSearch = eng
@@ -2574,6 +2553,20 @@ func transportConfigFromProfile(p *profile.Profile, caBundleFlag, proxyFlag stri
 // reorderFlagArgs moves `-flag value` pairs ahead of positionals so stdlib flag
 // can parse `cmd positional --flag value` forms.
 // valueFlags names long options that take a following argument (without leading dashes).
+// valueTakingFlags derives the reorderFlagArgs value set from the registered
+// flags: every non-bool flag takes a value. Bool detection uses the standard
+// library's IsBoolFlag interface (implemented by flag's boolValue).
+func valueTakingFlags(fs *flag.FlagSet) map[string]bool {
+	m := make(map[string]bool)
+	fs.VisitAll(func(f *flag.Flag) {
+		if bf, ok := f.Value.(interface{ IsBoolFlag() bool }); ok && bf.IsBoolFlag() {
+			return
+		}
+		m[f.Name] = true
+	})
+	return m
+}
+
 func reorderFlagArgs(args []string, valueFlags map[string]bool) []string {
 	var flags, pos []string
 	for i := 0; i < len(args); i++ {

@@ -178,7 +178,15 @@ func (f *HTTPTokenFetcher) FetchJenkinsCredential(ctx context.Context, caller Ca
 
 	expiresAt := f.clock().Add(time.Hour) // default when expires_in absent
 	if tr.ExpiresIn > 0 {
-		expiresAt = f.clock().Add(time.Duration(tr.ExpiresIn) * time.Second)
+		// Clamp before the multiply: expires_in ≥ ~9.2e9 overflows int64
+		// nanoseconds and can wrap to a far-future ExpiresAt, so the Obtain
+		// cache would serve a token long past its real IdP expiry.
+		const maxExpiresInSec = int64(365 * 24 * 3600) // 1 year ceiling
+		sec := int64(tr.ExpiresIn)
+		if sec > maxExpiresInSec {
+			sec = maxExpiresInSec
+		}
+		expiresAt = f.clock().Add(time.Duration(sec) * time.Second)
 	}
 
 	// Principal from response label only (non-secret); empty is ok (GWY-002 binds later).

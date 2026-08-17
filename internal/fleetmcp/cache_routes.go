@@ -62,6 +62,14 @@ func NewPeerMuxWithOptions(cfg Config, local *LocalProvider, opts PeerMuxOptions
 	mux.HandleFunc(PeerPathPrefix+"/doctor", handle(CollectionDoctor))
 	mux.HandleFunc(PeerPathPrefix+"/cache-status", handle(CollectionCache))
 	mux.HandleFunc(PeerPathPrefix+"/member", auth(func(w http.ResponseWriter, r *http.Request) {
+		if cfg.Roster == nil {
+			// Every sibling handler nil-checks the roster; a hand-built
+			// Config{Roster: nil} must not panic per-connection.
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"error":"fleet roster not configured"}`))
+			return
+		}
 		self := cfg.Roster.MemberByID(cfg.MemberID)
 		out := map[string]any{
 			"id":         cfg.MemberID,

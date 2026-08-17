@@ -42,9 +42,7 @@ func runOAuthValidateProfile(args []string) error {
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	offline := fs.Bool("offline", false, "Structural checks only (skip network discovery)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"profile": true, "offline": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if strings.TrimSpace(*profileFlag) == "" {
@@ -129,9 +127,7 @@ func runOAuthProbeRS(args []string) error {
 	fs.SetOutput(os.Stderr)
 	profileFlag := fs.String("profile", "", "Profile id (required)")
 	offline := fs.Bool("offline", false, "Matrix and residuals only (skip network probes)")
-	if err := fs.Parse(reorderFlagArgs(args, map[string]bool{
-		"profile": true, "offline": true,
-	})); err != nil {
+	if err := fs.Parse(reorderFlagArgs(args, valueTakingFlags(fs))); err != nil {
 		return apperr.New(apperr.CodeInvalidArgument, err.Error())
 	}
 	if strings.TrimSpace(*profileFlag) == "" {

@@ -3,6 +3,7 @@ package correlate
 import (
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -104,7 +105,15 @@ func ExtractFromParams(params map[string]string, opts ExtractOptions) ExtractRes
 	if len(params) == 0 {
 		return out
 	}
-	for k, v := range params {
+	// Sorted key order: map iteration order is random, and both output order
+	// and the over-cap truncation set must be reproducible for evidence.
+	keys := make([]string, 0, len(params))
+	for k := range params {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := params[k]
 		if k == "" || isSensitiveKey(k) {
 			continue
 		}
