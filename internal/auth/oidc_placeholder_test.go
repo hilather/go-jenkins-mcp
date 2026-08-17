@@ -55,3 +55,23 @@ func TestVerifyIdentityHTTP_RealLabelStillBinds(t *testing.T) {
 		t.Fatal("mismatched real label must fail closed")
 	}
 }
+
+// Regression (review follow-up): a profile whose stored Jenkins username is
+// literally "oidc" must NOT skip the AUTH-004 mismatch gate — the placeholder
+// relaxation applies only to the session label when the profile has no
+// username. A profile-configured "oidc" binds strictly.
+func TestVerifyIdentityHTTP_ProfileNamedOIDCStillBindsStrictly(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// whoAmI reports a DIFFERENT principal than the configured "oidc".
+		_, _ = w.Write([]byte(`{"id":"alice","anonymous":false,"authenticated":true}`))
+	}))
+	defer srv.Close()
+
+	pr := auth.Profile{ID: "corp", URL: srv.URL, User: "oidc"} // real label
+	sess := auth.Session{ProfileID: "corp", Method: auth.MethodOIDC, User: "oidc", Secret: "x"}
+	if _, err := auth.VerifyIdentityHTTP(context.Background(), pr, sess, srv.Client()); err == nil {
+		t.Fatal("profile-configured 'oidc' username must bind strictly and fail on mismatch")
+	}
+}
