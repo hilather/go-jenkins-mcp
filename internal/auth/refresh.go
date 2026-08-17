@@ -32,11 +32,17 @@ type tokenEndpointResponse struct {
 // doRefreshTokenExchange POSTs grant_type=refresh_token to tokenEndpoint.
 // On invalid_grant the caller must clear the store (fail closed).
 // Returned TokenBundle never logs tokens; errors are secret-free.
+//
+// resource is the optional RFC 8707 resource indicator (Jenkins API audience).
+// Login sends it so the minted access token is audience-scoped; refresh must
+// send it too — an IdP that honors the refresh-time resource parameter may
+// otherwise mint a default-audience token this client then presents to Jenkins.
 func doRefreshTokenExchange(
 	ctx context.Context,
 	client *http.Client,
 	tokenEndpoint, clientID, refreshToken string,
 	now time.Time,
+	resource string,
 ) (TokenBundle, error) {
 	if err := ctx.Err(); err != nil {
 		return TokenBundle{}, apperr.Wrap(apperr.CodeCancelled, "token refresh cancelled", err)
@@ -61,6 +67,10 @@ func doRefreshTokenExchange(
 	form.Set("grant_type", "refresh_token")
 	form.Set("refresh_token", refreshToken)
 	form.Set("client_id", clientID)
+	if r := strings.TrimSpace(resource); r != "" {
+		// RFC 8707: keep the Jenkins API audience on refresh (login parity).
+		form.Set("resource", r)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(form.Encode()))
 	if err != nil {

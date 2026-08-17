@@ -1,6 +1,7 @@
 package saml
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
@@ -36,12 +37,18 @@ func MapIdentity(cfg Config, nameID string, attrs AttributeValues, issuer string
 	if groupsAttr != "" {
 		groups = attrs[groupsAttr]
 		// Also try URI-style keys ending with the short name (fixture flexibility).
+		// Deterministic: smallest matching key wins (Go map iteration order is
+		// random, and the chosen groups feed role mapping — authz-relevant).
 		if len(groups) == 0 {
-			for k, v := range attrs {
+			var keys []string
+			for k := range attrs {
 				if strings.EqualFold(k, groupsAttr) || strings.HasSuffix(strings.ToLower(k), "/"+strings.ToLower(groupsAttr)) {
-					groups = v
-					break
+					keys = append(keys, k)
 				}
+			}
+			if len(keys) > 0 {
+				sort.Strings(keys)
+				groups = attrs[keys[0]]
 			}
 		}
 	}
@@ -72,13 +79,19 @@ func firstAttr(attrs AttributeValues, name string) string {
 	}
 	vals := attrs[name]
 	if len(vals) == 0 {
-		// Case-insensitive key match.
+		// Case-insensitive key match; deterministic smallest key wins (Go map
+		// iteration order is random and the result is identity-relevant).
+		var keys []string
 		for k, v := range attrs {
 			if strings.EqualFold(k, name) && len(v) > 0 {
-				return strings.TrimSpace(v[0])
+				keys = append(keys, k)
 			}
 		}
-		return ""
+		if len(keys) == 0 {
+			return ""
+		}
+		sort.Strings(keys)
+		vals = attrs[keys[0]]
 	}
 	return strings.TrimSpace(vals[0])
 }

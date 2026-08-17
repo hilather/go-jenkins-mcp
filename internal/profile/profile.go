@@ -2,6 +2,7 @@ package profile
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -393,6 +394,15 @@ func validateOIDCIssuerURL(raw string) error {
 	if u.Scheme != "https" && u.Scheme != "http" {
 		return apperr.New(apperr.CodeInvalidArgument, "oidc.issuer scheme must be https (or http for test fixtures)")
 	}
+	if u.Scheme == "http" && !isLoopbackHost(u.Hostname()) {
+		// Cleartext http is only safe on loopback (unit tests, local labs):
+		// discovery, the token endpoint (auth code + PKCE verifier +
+		// refresh_token on every refresh), and the JWKS document all flow over
+		// this channel. A network MITM could otherwise steal refresh tokens and
+		// substitute JWKS keys (forging every access token this client checks).
+		return apperr.New(apperr.CodeInvalidArgument,
+			"oidc.issuer scheme http is only allowed for loopback hosts (use https for a remote IdP)")
+	}
 	if u.Host == "" {
 		return apperr.New(apperr.CodeInvalidArgument, "oidc.issuer must include a host")
 	}
@@ -406,6 +416,21 @@ func validateOIDCIssuerURL(raw string) error {
 		return apperr.New(apperr.CodeInvalidArgument, "oidc.issuer must not include a query string")
 	}
 	return nil
+}
+
+// isLoopbackHost reports whether host is a loopback IP or "localhost".
+func isLoopbackHost(host string) bool {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }
 
 func validateRedirectURI(raw string) error {

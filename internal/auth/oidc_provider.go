@@ -212,7 +212,7 @@ func (p *OIDCProvider) ensureOnce(ctx context.Context, pr Profile) (TokenBundle,
 			"oidc client id is required for token refresh")
 	}
 
-	next, err := doRefreshTokenExchange(ctx, p.HTTP, tokenEndpoint, clientID, bundle.RefreshToken, p.clock())
+	next, err := doRefreshTokenExchange(ctx, p.HTTP, tokenEndpoint, clientID, bundle.RefreshToken, p.clock(), pr.OIDCJenkinsAudience)
 	if err != nil {
 		if isRefreshAuthError(err) {
 			// invalid_grant / revoked — fail closed: clear durable + memory.

@@ -189,6 +189,7 @@ func ProfileFrom(p *profile.Profile) Profile {
 	if p.OIDC != nil {
 		out.OIDCIssuer = p.OIDC.Issuer
 		out.OIDCClientID = p.OIDC.ClientID
+		out.OIDCJenkinsAudience = p.OIDC.JenkinsAudience
 	}
 	return out
 }
