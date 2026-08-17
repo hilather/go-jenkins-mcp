@@ -120,19 +120,27 @@ func ParseAssertionXML(raw []byte) (ParsedAssertion, error) {
 	}
 	if xa.Subject.SubjectConfirmation != nil && xa.Subject.SubjectConfirmation.SubjectConfirmationData != nil {
 		pa.Recipient = strings.TrimSpace(xa.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient)
-		if t, err := parseSAMLTime(xa.Subject.SubjectConfirmation.SubjectConfirmationData.NotOnOrAfter); err == nil {
-			if pa.NotOnOrAfter.IsZero() || t.Before(pa.NotOnOrAfter) {
-				pa.NotOnOrAfter = t
-			}
+		t, err := parseSecurityTimeAttr("SubjectConfirmationData.NotOnOrAfter", xa.Subject.SubjectConfirmation.SubjectConfirmationData.NotOnOrAfter)
+		if err != nil {
+			return ParsedAssertion{}, err
 		}
-	}
-	if t, err := parseSAMLTime(xa.Conditions.NotBefore); err == nil {
-		pa.NotBefore = t
-	}
-	if t, err := parseSAMLTime(xa.Conditions.NotOnOrAfter); err == nil {
-		if pa.NotOnOrAfter.IsZero() || t.Before(pa.NotOnOrAfter) {
+		if !t.IsZero() && (pa.NotOnOrAfter.IsZero() || t.Before(pa.NotOnOrAfter)) {
 			pa.NotOnOrAfter = t
 		}
+	}
+	nb, err := parseSecurityTimeAttr("Conditions.NotBefore", xa.Conditions.NotBefore)
+	if err != nil {
+		return ParsedAssertion{}, err
+	}
+	if !nb.IsZero() {
+		pa.NotBefore = nb
+	}
+	noa, err := parseSecurityTimeAttr("Conditions.NotOnOrAfter", xa.Conditions.NotOnOrAfter)
+	if err != nil {
+		return ParsedAssertion{}, err
+	}
+	if !noa.IsZero() && (pa.NotOnOrAfter.IsZero() || noa.Before(pa.NotOnOrAfter)) {
+		pa.NotOnOrAfter = noa
 	}
 	// Signed payload = assertion without Signature element (fixture contract).
 	pa.SignedPayload = stripSignatureElement(payload)
@@ -160,6 +168,23 @@ func DecodeSAMLResponse(b64 string) ([]byte, error) {
 		}
 	}
 	return raw, nil
+}
+
+// parseSecurityTimeAttr parses a security-critical SAML timestamp attribute.
+// Absent (empty) is not an error here — ValidateParsed enforces presence of
+// the expiry. Present-but-malformed fails closed: previously a malformed
+// timestamp was silently treated as "absent", which used to mean the
+// assertion had no time bound at all.
+func parseSecurityTimeAttr(attr, raw string) (time.Time, error) {
+	if strings.TrimSpace(raw) == "" {
+		return time.Time{}, nil
+	}
+	t, err := parseSAMLTime(raw)
+	if err != nil {
+		return time.Time{}, apperr.New(apperr.CodeInvalidArgument,
+			"saml assertion has malformed "+attr+" timestamp")
+	}
+	return t, nil
 }
 
 func parseSAMLTime(s string) (time.Time, error) {

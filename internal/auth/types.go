@@ -31,6 +31,10 @@ type Profile struct {
 	OIDCClientID           string
 	OIDCTokenEndpoint      string // optional; discovery used when empty and Issuer set
 	OIDCRevocationEndpoint string // optional; best-effort revoke on logout
+	// OIDCJenkinsAudience is the RFC 8707 resource indicator for the Jenkins API
+	// (profile.OIDC.JenkinsAudience). Sent on refresh so the IdP keeps minting
+	// Jenkins-audience access tokens instead of a default audience.
+	OIDCJenkinsAudience string
 }
 
 // Session is a short-lived, in-memory auth session. It must not be logged or

@@ -220,7 +220,7 @@ func TestSAML_FailClosed_MissingSignature(t *testing.T) {
 	_, pub := testRSA(t)
 	cfg := testCfg()
 	raw := []byte(`<Assertion ID="a1"><Issuer>https://idp.example/metadata</Issuer>
-  <Subject><NameID>x</NameID></Subject>
+  <Subject><NameID>x</NameID><SubjectConfirmation><SubjectConfirmationData Recipient="https://mcp.example/admin/v1/saml/acs"/></SubjectConfirmation></Subject>
   <Conditions NotOnOrAfter="2099-01-01T00:00:00Z"><AudienceRestriction><Audience>https://mcp.example/sp</Audience></AudienceRestriction></Conditions>
 </Assertion>`)
 	_, err := saml.ValidateAndMap(cfg, raw, saml.ValidateOptions{Trust: saml.TrustMaterial{PublicKey: pub}})

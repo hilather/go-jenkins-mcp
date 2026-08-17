@@ -127,17 +127,28 @@ func ValidateParsed(cfg Config, pa ParsedAssertion, opts ValidateOptions) error 
 		return apperr.New(apperr.CodeAuthentication, "saml assertion audience mismatch")
 	}
 
-	// Recipient = ACS URL when present on assertion
+	// Recipient = ACS URL. The SAML bearer profile requires the assertion to
+	// carry Recipient and for it to equal the ACS URL — a missing Recipient is
+	// NOT skipped (that would accept assertions minted for another SP/ACS).
 	wantRec := strings.TrimSpace(cfg.ACSURL)
-	if strings.TrimSpace(pa.Recipient) != "" && wantRec != "" && pa.Recipient != wantRec {
-		return apperr.New(apperr.CodeAuthentication, "saml assertion recipient mismatch")
+	if wantRec != "" {
+		if strings.TrimSpace(pa.Recipient) == "" {
+			return apperr.New(apperr.CodeAuthentication, "saml assertion recipient missing")
+		}
+		if pa.Recipient != wantRec {
+			return apperr.New(apperr.CodeAuthentication, "saml assertion recipient mismatch")
+		}
 	}
 
-	// Time window
+	// Time window. An expiry is required: a correctly-signed assertion without
+	// NotOnOrAfter is otherwise a permanent bearer credential.
+	if pa.NotOnOrAfter.IsZero() {
+		return apperr.New(apperr.CodeAuthentication, "saml assertion has no expiry (NotOnOrAfter required)")
+	}
 	if !pa.NotBefore.IsZero() && now.Add(skew).Before(pa.NotBefore) {
 		return apperr.New(apperr.CodeAuthentication, "saml assertion not yet valid")
 	}
-	if !pa.NotOnOrAfter.IsZero() && !now.Add(-skew).Before(pa.NotOnOrAfter) {
+	if !now.Add(-skew).Before(pa.NotOnOrAfter) {
 		// now >= NotOnOrAfter (with skew)
 		return apperr.New(apperr.CodeAuthentication, "saml assertion expired")
 	}

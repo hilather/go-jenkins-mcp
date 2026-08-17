@@ -63,18 +63,31 @@ func (f *FileBackend) load() (fileStore, error) {
 }
 
 func (f *FileBackend) save(m fileStore) error {
-	if err := os.MkdirAll(filepath.Dir(f.path), 0o700); err != nil {
+	dir := filepath.Dir(f.path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
-	tmp := f.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	// Unpredictable O_EXCL temp in the same directory: a pre-planted symlink at
+	// a guessed <path>.tmp must not receive the secrets write (shared-dir CI
+	// pattern). CreateTemp uses mode 0600 and fails rather than following links.
+	tmp, err := os.CreateTemp(dir, ".keyring-*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, f.path)
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op after a successful rename
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, f.path)
 }
 
 // Set implements Backend.
