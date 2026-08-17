@@ -83,12 +83,10 @@ func SanitizeCheck(c Check) Check {
 			if looksSecretKey(lk) {
 				continue
 			}
-			switch t := v.(type) {
-			case string:
-				out[k] = redact.Secrets(t)
-			default:
-				out[k] = v
-			}
+			// Recursive: nested maps/slices in Details must not bypass
+			// redaction (this is the designated sanitization point for all
+			// doctor output and bundle doctor.json).
+			out[k] = sanitizeResidualValue(v)
 		}
 		c.Details = out
 	}

@@ -127,6 +127,42 @@ type CachePatchModeArgs struct {
 	Confirm          string // optional; not required for mode patch
 }
 
+// classifyCachePatchError maps cachecontrol Patch failures (stable Reason*
+// prefixes) to typed apperr codes + audit reasons.
+func classifyCachePatchError(err error) (code apperr.Code, reason string) {
+	msg := err.Error()
+	for _, r := range []string{
+		cachecontrol.ReasonRuntimeMutationsOff,
+		cachecontrol.ReasonCASConflict,
+		cachecontrol.ReasonUnknownType,
+		cachecontrol.ReasonUnknownField,
+		cachecontrol.ReasonUnsupportedMode,
+		cachecontrol.ReasonUnqualified,
+		cachecontrol.ReasonConstraintViolation,
+	} {
+		if strings.HasPrefix(msg, r) {
+			reason = r
+			break
+		}
+	}
+	switch reason {
+	case cachecontrol.ReasonRuntimeMutationsOff:
+		return apperr.CodePolicyDenial, reason
+	case "":
+		return apperr.CodeInternal, "patch_failed"
+	default:
+		return apperr.CodeInvalidArgument, reason
+	}
+}
+
+// decisionForReason audits "deny" only for policy-gate rejections.
+func decisionForReason(reason string) string {
+	if reason == cachecontrol.ReasonRuntimeMutationsOff {
+		return audit.DecisionDeny
+	}
+	return audit.DecisionFail
+}
+
 // CachePatchMode applies a single-type mode override (operator, CAS).
 func (s *Service) CachePatchMode(ctx context.Context, args CachePatchModeArgs) (map[string]any, error) {
 	if err := RequirePermission(s.Role(), PermCacheDestructive); err != nil {
@@ -155,9 +191,13 @@ func (s *Service) CachePatchMode(ctx context.Context, args CachePatchModeArgs) (
 		},
 	})
 	if err != nil {
-		// reasonCode is stable; never put free-form secrets in audit.
-		s.emitWriteAudit(s.profileID(args.ProfileID), audit.TypeAdminCacheEvict, "cache_mode_patch", "deny", "cache_mode_patch_failed")
-		return nil, apperr.New(apperr.CodeInvalidArgument, "cache mode patch rejected")
+		// Preserve the typed failure reason (CAS conflict / runtime mutations
+		// disabled / unqualified type) instead of erasing it into a generic
+		// invalid_argument, and audit the real decision: "deny" only for the
+		// policy gate, "fail" for operational failures.
+		code, reason := classifyCachePatchError(err)
+		s.emitWriteAudit(s.profileID(args.ProfileID), audit.TypeAdminCacheEvict, "cache_mode_patch", decisionForReason(reason), reason)
+		return nil, apperr.New(code, "cache mode patch rejected: "+reason)
 	}
 	s.emitWriteAudit(s.profileID(args.ProfileID), audit.TypeAdminCacheEvict, "cache_mode_patch", "allow", "admin_mcp")
 	return map[string]any{

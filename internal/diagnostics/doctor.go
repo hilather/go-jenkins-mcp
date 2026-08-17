@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -414,10 +415,23 @@ func checkTLSPaths(p *profile.Profile) []Check {
 			Name:    "proxy",
 			Status:  StatusOK,
 			Message: "proxyURL configured",
-			Details: map[string]any{"proxyURL": p.ProxyURL},
+			Details: map[string]any{"proxyURL": stripURLUserinfo(p.ProxyURL)},
 		}))
 	}
 	return out
+}
+
+// stripURLUserinfo removes any userinfo (user:password@) from a URL before it
+// is emitted into reports/bundles. Profile validation rejects credential-bearing
+// proxy URLs; this is defense in depth for library callers that skip Validate.
+// redact.Secrets provably does not mask URL userinfo, so do it structurally.
+func stripURLUserinfo(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "configured (unparseable)"
+	}
+	u.User = nil
+	return u.String()
 }
 
 func checkDataDir(dataDir string, resolveErr error) Check {

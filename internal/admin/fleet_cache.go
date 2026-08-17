@@ -95,9 +95,17 @@ func (s *server) handleFleetCachePurge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Console destructive permission is operator-only; map process role for library.
-	role := string(s.cfg.Role)
-	if role != fleetcache.PurgeRoleOperator && role != fleetcache.PurgeRolePolicyAdmin {
+	// Authorize against the REQUEST role (SAML-mapped, attached by the auth
+	// middleware and already checked for PermCacheDestructive above) — not the
+	// static process role, which would 403 a SAML-mapped operator whenever the
+	// process runs with the default viewer role.
+	var role string
+	switch RoleFromContext(r.Context()) {
+	case RoleOperator:
+		role = fleetcache.PurgeRoleOperator
+	case RolePolicyAdmin:
+		role = fleetcache.PurgeRolePolicyAdmin
+	default:
 		// Defensive: permission middleware should already have denied viewer.
 		writeJSONError(w, http.StatusForbidden, "permission_denied",
 			"fleet-cache purge requires operator role")
@@ -119,7 +127,7 @@ func (s *server) handleFleetCachePurge(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Best-effort AUD-001 (process/profile data dir when available).
-	s.emitFleetCacheAudit(req.ProfileID, audit.Event{
+	s.emitAdminAudit(req.ProfileID, audit.Event{
 		Type:       audit.TypeAdminFleetCachePurge,
 		Action:     "fleet_cache_purge",
 		Decision:   auditDecision(err),
@@ -134,9 +142,34 @@ func (s *server) handleFleetCachePurge(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// emitFleetCacheAudit best-effort writes under default profile or XDG audit dir.
-func (s *server) emitFleetCacheAudit(profileID string, e audit.Event) {
+// auditEvent builds a secret-free admin mutation audit event (AUD-001):
+// decision derived from the operation error, opaque hash-only target.
+func auditEvent(typ, action string, opErr error, target string) audit.Event {
+	e := audit.Event{
+		Type:       typ,
+		Action:     action,
+		Decision:   auditDecision(opErr),
+		ReasonCode: "admin_bff",
+	}
+	if t := strings.TrimSpace(target); t != "" {
+		e.TargetHash = audit.HashOpaque(t)
+	}
+	return e
+}
+
+// emitAdminAudit best-effort writes a secret-free admin mutation event under
+// the profile's audit JSONL dir (AUD-001). Failures are ignored (must not
+// break the primary op); the event itself is hash-only and secret-free.
+func (s *server) emitAdminAudit(profileID string, e audit.Event) {
 	id := strings.TrimSpace(profileID)
+	// The request-body profile_id is audit correlation only, but it feeds a
+	// filesystem path — validate like every other profile-scoped handler so a
+	// traversal value ("../../..") can never escape the profiles root.
+	if id != "" {
+		if err := ValidateProfileID(id); err != nil {
+			id = ""
+		}
+	}
 	if id == "" {
 		id = strings.TrimSpace(s.cfg.ProfileID)
 	}

@@ -384,6 +384,10 @@ Clears multi-user caches for one subject so the next Obtain re-fetches:
 cache path values. **Not** live Entra/AgentCore revocation. **Not** multi-pod
 fan-out (HOST-008 residual).
 
+**Audit (AUD-001):** emits `admin_subject_invalidate` (success and failure) to
+the profile audit JSONL with an opaque subject-key hash — parity with the
+`admin_subject_invalidate` MCP tool.
+
 ### Request body
 
 Provide **`subject_key`** *or* compose parts (`subject_id` required when key omitted):
@@ -486,6 +490,9 @@ store path values, or `session_id` echo. **Not** multi-pod HA (HOST-008 residual
 **Not** browser 3LO automation. Same-host file reload-before-persist implemented lite
 (admin/CLI purge not resurrected by serve Put of stale memory). Memory-only serve
 process is **not** cleared unless it shares the same file path.
+
+**Audit (AUD-001):** emits `admin_consent_purge` (success and failure) to the
+profile audit JSONL — parity with the `admin_consent_purge` MCP tool.
 
 ### Request body
 

@@ -664,14 +664,9 @@ func scrubMap(in map[string]any) map[string]any {
 		if looksSecretKey(lk) {
 			continue
 		}
-		switch t := v.(type) {
-		case string:
-			out[k] = redact.Secrets(t)
-		case map[string]any:
-			out[k] = scrubMap(t)
-		default:
-			out[k] = v
-		}
+		// Recursive: secret-like keys nested inside slices/maps must not leak
+		// into shareable bundles (same walk as sanitizeResidualValue).
+		out[k] = sanitizeResidualValue(v)
 	}
 	return out
 }
