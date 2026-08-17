@@ -22,8 +22,11 @@ func TestFileSink_RotationFailureDoesNotKillSink(t *testing.T) {
 	dir := t.TempDir()
 	auditDir := filepath.Join(dir, "audit")
 	// Tiny MaxBytes so the second emit triggers rotation (first emit is exempt
-	// via the s.size > 0 guard).
-	f, err := audit.NewFile(audit.FileConfig{Dir: auditDir, MaxBytes: 64, MaxRotated: 2})
+	// via the s.size > 0 guard). MaxRotated is generous so retention never
+	// drops a rotated file — the assertion below counts events across all of
+	// them, and must hold whether or not the chmod actually blocks the rename
+	// (root in containers bypasses the read-only dir bits, e.g. Rocky CI).
+	f, err := audit.NewFile(audit.FileConfig{Dir: auditDir, MaxBytes: 64, MaxRotated: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
