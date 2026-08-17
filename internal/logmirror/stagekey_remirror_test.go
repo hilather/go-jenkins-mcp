@@ -3,6 +3,7 @@ package logmirror_test
 import (
 	"context"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/hilather/go-jenkins-mcp/internal/logmirror"
@@ -86,5 +87,71 @@ func TestMirrorStageLogBytes_RemirrorWritesNewSnapshot(t *testing.T) {
 	}
 	if !st3.Sealed {
 		t.Fatalf("re-mirrored snapshot must seal: %+v", st3)
+	}
+}
+
+// Regression (review follow-up): the check-compare-rotate-append-seal sequence
+// as separate locked calls raced under concurrent re-mirrors — one caller
+// could skip the sealed handling while another rotated, or two full snapshots
+// concatenated into one generation. AppendSnapshot runs the whole sequence
+// under one per-key lock hold. Concurrent pushes must leave the mirror holding
+// exactly one of the pushed snapshots — never empty, never concatenated.
+func TestMirrorStageLogBytes_ConcurrentRemirrorConsistent(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "profiles", "corp")
+	meta, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = meta.Close() })
+	fr, err := store.NewFrames(meta, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = fr.Close() })
+	if _, err := fr.Recover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	reader, err := fr.Reader()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := logmirror.NewMachine(meta, &logmirror.FakeSource{Log: []byte("console\n"), Running: false})
+	m.Frames = fr
+	m.Reader = reader
+	a := logmirror.NewAccess("corp", m)
+	ctx := context.Background()
+	stageKey := logmirror.StageLogKey("corp", "demo", 7, "12")
+
+	snapshots := [][]byte{[]byte("stage v1\n"), []byte("stage v1\nstage v2\n")}
+	var wg sync.WaitGroup
+	for w := 0; w < 8; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := 0; i < 25; i++ {
+				if _, err := a.MirrorStageLogBytes(ctx, "demo", 7, "12", snapshots[(w+i)%2]); err != nil {
+					t.Errorf("mirror: %v", err)
+					return
+				}
+			}
+		}(w)
+	}
+	wg.Wait()
+
+	rr, err := m.ReadRange(ctx, stageKey, 0, 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(rr.Data)
+	if got != string(snapshots[0]) && got != string(snapshots[1]) {
+		t.Fatalf("mirror holds %q — must be exactly one pushed snapshot (never empty/concatenated)", got)
+	}
+	// And the mirror is sealed + readable (no wedged empty generation).
+	st, err := m.State(ctx, stageKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Sealed {
+		t.Fatalf("final state must be sealed: %+v", st)
 	}
 }

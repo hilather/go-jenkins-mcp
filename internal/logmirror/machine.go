@@ -1,6 +1,7 @@
 package logmirror
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -166,7 +167,11 @@ func (m *Machine) Seal(ctx context.Context, key LogKey) (State, error) {
 	}
 	unlock := m.lockKey(key)
 	defer unlock()
+	return m.sealLocked(ctx, key)
+}
 
+// sealLocked is Seal under the per-key lock (caller holds it).
+func (m *Machine) sealLocked(ctx context.Context, key LogKey) (State, error) {
 	g, err := m.meta.GetLatestGeneration(ctx, key)
 	if err != nil {
 		return State{}, err
@@ -505,21 +510,49 @@ func (m *Machine) appendLocked(ctx context.Context, key LogKey, segment Segment)
 	return st, nil
 }
 
-// RotateGeneration abandons the latest generation and opens a fresh one at
-// offset 0 for push-style full-snapshot sources (e.g. stage logs): the next
-// Append writes the new snapshot into it. Pull sources use Poll-driven rewrite
-// detection instead (which drops stale-offset bodies by design).
-func (m *Machine) RotateGeneration(ctx context.Context, key LogKey) (State, error) {
+// AppendSnapshot appends a full fresh snapshot from a push-only source (stage
+// logs) and seals it when complete — atomically under the per-key lock, so
+// concurrent pushes of the same key cannot interleave (a State/ReadRange/
+// Rotate/Append/Seal sequence as separate calls races: one caller could skip
+// the sealed handling while another rotates, or two full snapshots could
+// concatenate into one generation).
+//
+// Sealed generation handling: identical content is a no-op; changed content
+// rotates the generation and the snapshot is written into it. (Append's
+// sealed branch deliberately drops bodies — it exists for pull-mode rewrite
+// detection, where the body was fetched for the old log's offset.)
+func (m *Machine) AppendSnapshot(ctx context.Context, key LogKey, segment Segment) (State, error) {
 	if err := key.Validate(); err != nil {
 		return State{}, err
 	}
 	unlock := m.lockKey(key)
 	defer unlock()
+
 	st, err := m.ensureOpenLocked(ctx, key)
 	if err != nil {
 		return State{}, err
 	}
-	return m.startNewGeneration(ctx, key, st.Generation)
+	if st.Sealed {
+		// ReadRange does not take the per-key lock (meta/frames have their
+		// own) — safe to call here.
+		if rr, rerr := m.ReadRange(ctx, key, 0, int64(len(segment.Data))+1); rerr == nil && bytes.Equal(rr.Data, segment.Data) {
+			return st, nil // idempotent retry
+		}
+		if st, err = m.startNewGeneration(ctx, key, st.Generation); err != nil {
+			return State{}, err
+		}
+	}
+	st, err = m.appendLocked(ctx, key, segment)
+	if err != nil {
+		return State{}, err
+	}
+	if !st.MoreData && st.BuildComplete && !st.Sealed {
+		st, err = m.sealLocked(ctx, key)
+		if err != nil {
+			return State{}, err
+		}
+	}
+	return st, nil
 }
 
 // startNewGeneration abandons the open previous generation and inserts nextGen at offset 0.
