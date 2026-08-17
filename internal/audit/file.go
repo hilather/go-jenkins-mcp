@@ -132,11 +132,9 @@ func (s *File) Emit(ctx context.Context, e Event) error {
 }
 
 func (s *File) rotateLocked() error {
-	if s.f != nil {
-		_ = s.f.Close()
-		s.f = nil
-	}
-	// Shift .N-1 -> .N, ..., active -> .1
+	// Shift .N-1 -> .N, ..., active -> .1. The active handle stays OPEN for the
+	// whole chain: a write racing the rename lands in the rotated file (no event
+	// loss), and a mid-chain failure leaves the sink writable.
 	for i := s.cfg.MaxRotated; i >= 1; i-- {
 		from := s.path
 		if i > 1 {
@@ -153,9 +151,16 @@ func (s *File) rotateLocked() error {
 			return fmt.Errorf("audit: rotate %s -> %s: %w", from, to, err)
 		}
 	}
+	// Open the fresh active file BEFORE closing the old handle: when the reopen
+	// fails, the old handle (now pointing at the rotated file) stays usable and
+	// the next Emit retries rotation — a transient filesystem error must not
+	// permanently kill the audit sink.
 	f, size, err := openAuditFile(s.path)
 	if err != nil {
 		return err
+	}
+	if s.f != nil {
+		_ = s.f.Close()
 	}
 	s.f = f
 	s.size = size

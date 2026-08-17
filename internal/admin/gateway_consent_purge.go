@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
 	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 )
 
@@ -97,31 +98,28 @@ func (s *server) handleGatewayConsentPurge(w http.ResponseWriter, r *http.Reques
 	}
 
 	deleted := 0
+	var opErr error
 	switch action {
 	case "clear_all":
 		// Honest deleted_count includes expired + live entries present before clear.
 		deleted = store.EntryCount()
 		// Fail closed: 500 with secret-free message when file-backed persist fails.
-		if err := store.Clear(); err != nil {
-			writeAppErr(w, err)
-			return
-		}
+		opErr = store.Clear()
 	case "delete_session":
-		ok, err := store.DeleteSession(sessionID)
-		if err != nil {
-			writeAppErr(w, err)
-			return
-		}
-		if ok {
+		var ok bool
+		ok, opErr = store.DeleteSession(sessionID)
+		if opErr == nil && ok {
 			deleted = 1
 		}
 	default: // purge_expired
-		n, err := store.PurgeExpired()
-		if err != nil {
-			writeAppErr(w, err)
-			return
-		}
-		deleted = n
+		deleted, opErr = store.PurgeExpired()
+	}
+	// AUD-001: security-relevant admin mutation — record success and failure
+	// (parity with the admin_consent_purge MCP twin). Never hashes session_id.
+	s.emitAdminAudit("", auditEvent(audit.TypeAdminConsentPurge, "consent_purge", opErr, action))
+	if opErr != nil {
+		writeAppErr(w, opErr)
+		return
 	}
 
 	remaining := len(store.List())

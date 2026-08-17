@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hilather/go-jenkins-mcp/internal/apperr"
+	"github.com/hilather/go-jenkins-mcp/internal/audit"
 	"github.com/hilather/go-jenkins-mcp/internal/gateway"
 )
 
@@ -91,6 +92,9 @@ func (s *server) handleGatewaySubjectInvalidate(w http.ResponseWriter, r *http.R
 	}
 
 	res, ierr := gateway.InvalidateSubjectKeyLocal(sk, req.Workload, principals, tokens)
+	// AUD-001: security-relevant admin mutation — record success and failure
+	// (parity with the admin_subject_invalidate MCP twin). Hash-only target.
+	s.emitAdminAudit("", auditEvent(audit.TypeAdminSubjectInvalid, "subject_invalidate", ierr, sk))
 	if ierr != nil {
 		writeAppErr(w, ierr)
 		return
