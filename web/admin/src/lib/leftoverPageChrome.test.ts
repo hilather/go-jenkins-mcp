@@ -57,12 +57,18 @@ describe("leftover page chrome", () => {
     expect(callout).not.toContain("data.residual");
     expect(callout).not.toContain("data.notes");
 
-    const status = sliceBetween(accessSrc, 'role="status"', "subjects.users");
+    const status = sliceBetween(
+      accessSrc,
+      'className="muted" role="status"',
+      "subjects.users",
+    );
     expect(status).toContain("available=");
     expect(status).toContain("fleet_sot=");
     expect(status).toContain("path_base=");
 
-    const banner = sliceBetween(accessSrc, "banner warn", 'role="status"');
+    const banner = sliceBetween(accessSrc, "banner warn", "</div>");
+    expect(banner).toContain("data.residual");
+    expect(banner).toContain("data.notes");
     expect(banner).not.toContain("fleet_sot");
   });
 
@@ -83,6 +89,8 @@ describe("leftover page chrome", () => {
     const callout = residualCalloutSlice(auditSrc);
     expect(callout).toContain("AUDIT_RESIDUAL_DETAILS");
     expect(callout).not.toContain("settingsQ");
+    expect(auditSrc).toContain('type="datetime-local"');
+    expect(auditSrc).toMatch(/type="datetime-local"[\s\S]*className="input mono"/);
   });
 
   it("Profiles, Cache, Doctor, Audit wrap tables in table-scroll", () => {
@@ -99,6 +107,7 @@ describe("leftover page chrome", () => {
     expect(cacheSrc).toContain("No eviction candidates");
     expect(cacheSrc).toContain("Nothing to reclaim.");
     expect(cacheSrc).not.toMatch(/Dry-run found nothing/);
+    expect(cacheSrc).not.toContain("pins are skipped");
     expect(auditSrc).toContain("EmptyState");
     expect(auditSrc).toContain("No matching events");
     expect(auditSrc).toContain("No event selected");
@@ -122,5 +131,6 @@ describe("leftover page chrome", () => {
     expect(page.slice(headerAt, residualAt)).not.toContain("gatewayResidual");
     expect(page).toContain("DOCTOR_RESIDUAL_CAVEAT");
     expect(page).toContain('badge="HOST-007"');
+    expect(page).toMatch(/gatewayResidual \? \([\s\S]*DoctorGatewayResidualCard/);
   });
 });
