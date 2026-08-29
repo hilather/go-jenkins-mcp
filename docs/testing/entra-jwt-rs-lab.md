@@ -53,6 +53,8 @@ compares issuer and tenant **exactly**.
 - `jenkins-mcp login --profile <id> --oidc`; prove with Bearer `GET /whoAmI/api/json` and `GET /api/json`.
 - Never bake secrets or tokens. Isolated XDG + `JENKINS_MCP_KEYRING_FILE` for the lab.
 - This does **not** flip `mode_*_live_*_qualified` or close OAUTH-009/010.
+- Complementary sibling lab (not a prerequisite for this walkthrough; jwt-rs /
+  Entra fill-in **being added** there): see [Related](#related).
 
 ## Terms (one line each)
 
@@ -448,6 +450,11 @@ Compose `down -v` does **not** remove Entra apps or the isolated profile.
 ## Related
 
 - Default Keycloak lab: [`../../testdata/jwt-rs-lab/README.md`](../../testdata/jwt-rs-lab/README.md)
+- Full-stack sibling lab (separate clone; read **that** repo’s AGENTS.md /
+  README first, then `make up` / `make smoke` there — not an Entra/jwt-rs
+  runbook until the fill-in profile exists; default smoke does not prove
+  Jenkins or Entra):
+  [hilather/mcp-integration-lab](https://github.com/hilather/mcp-integration-lab)
 - Qualification policy: [qualification.md](qualification.md)
 - Auth modes: [../integrations/auth-modes.md](../integrations/auth-modes.md)
 - OAUTH-009 residuals: [../auth/jwt-auth-filter-qualification.md](../auth/jwt-auth-filter-qualification.md)
