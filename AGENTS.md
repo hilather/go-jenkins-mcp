@@ -160,7 +160,8 @@ PKCE + jwt-auth-filter) lives at
 - Public / native client (`publicClient`), **not** SPA.
 - `requestedAccessTokenVersion=2` on the **API** app (not the gateway app).
 - `jenkinsAudience` and jwt-auth-filter `allowedAudience` are the API **app id GUID**.
-- JWKS is the Entra v2 keys URL. `login --oidc`. Prove with Bearer whoAmI + `/api/json`.
+- App A Token configuration: optional claims on the **access** token — `preferred_username` (optionally `name`, `email`). Scope `profile` is a companion only; it does not replace those claims.
+- JWKS is the Entra v2 keys URL. Scopes: `openid`, `profile`, `api://{api-app-id}/jenkins.access`. `login --oidc`. Prove with Bearer whoAmI + `/api/json`.
 - Never bake secrets. Isolated XDG + `JENKINS_MCP_KEYRING_FILE` for the lab.
 - Does **not** flip `mode_*_live_*_qualified` or close OAUTH-009/010.
 

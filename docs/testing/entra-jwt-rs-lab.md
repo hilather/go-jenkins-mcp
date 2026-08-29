@@ -47,7 +47,8 @@ compares issuer and tenant **exactly**.
 - Two **separate** Entra app registrations (API resource + public client). Do not merge them.
 - Public / native client (`publicClient`), **not** Single-page application.
 - `api.requestedAccessTokenVersion` = `2` on the **API** app (not the gateway app).
-- Profile `oidc.jenkinsAudience` and Jenkins `JWT_RS_AUDIENCE` are the API **app id GUID**, not `api://…`. Scopes still use `api://{api-app-id}/jenkins.access`.
+- Profile `oidc.jenkinsAudience` and Jenkins `JWT_RS_AUDIENCE` are the API **app id GUID**, not `api://…`. Scopes still use `openid`, `profile`, and `api://{api-app-id}/jenkins.access`.
+- App A Token configuration: optional claims on the **access** token — `preferred_username` (optionally `name`, `email`). Scope `profile` is a companion only; it does not replace those claims.
 - JWKS is `https://login.microsoftonline.com/{tenant-id}/discovery/v2.0/keys`.
 - `jenkins-mcp login --profile <id> --oidc`; prove with Bearer `GET /whoAmI/api/json` and `GET /api/json`.
 - Never bake secrets or tokens. Isolated XDG + `JENKINS_MCP_KEYRING_FILE` for the lab.
@@ -107,6 +108,10 @@ access token).
 3. Add a **delegated** scope named `jenkins.access` (admins and users can consent).
 4. In the app manifest (Microsoft Graph / new manifest), set
    `api.requestedAccessTokenVersion` to `2`.
+5. Token configuration → optional claims on the **access** token:
+   `preferred_username` (optionally `name`, `email`). JCasC maps
+   `usernameClaim: preferred_username`. Scope `profile` (below) does not
+   replace this step.
 
 **Why version 2:** if this is `null` or `1`, Entra issues **v1** access tokens
 whose issuer is `https://sts.windows.net/{tenant-id}/`. jenkins-mcp compares the
@@ -179,6 +184,7 @@ Filename stem must equal `id`. Nested `"oidc"` object (not dotted keys):
     "jenkinsAudience": "{api-app-id}",
     "scopes": [
       "openid",
+      "profile",
       "api://{api-app-id}/jenkins.access"
     ],
     "redirectUris": [
@@ -196,7 +202,7 @@ Write that file to `$XDG_CONFIG_HOME/jenkins-mcp/profiles/entra-lab.json`.
 | `oidc.issuer` | `https://login.microsoftonline.com/{tenant-id}/v2.0` (GUID, not the `.onmicrosoft.com` domain) |
 | `oidc.clientId` | `{gateway-app-id}` (public client). Token `azp` must match this. |
 | `oidc.jenkinsAudience` | `{api-app-id}` — the **app id GUID**, not `api://{api-app-id}` |
-| `oidc.scopes` | `openid` **and** `api://{api-app-id}/jenkins.access` (the scope still uses the URI) |
+| `oidc.scopes` | `openid`, `profile`, and `api://{api-app-id}/jenkins.access` (the Jenkins scope still uses the URI) |
 | `oidc.redirectUris` | Must include `http://127.0.0.1:8400/callback` |
 | `oidc.tenantId` | `{tenant-id}` (GUID) |
 | `jenkinsURL` | jwt-auth-filter Jenkins (lab default `http://127.0.0.1:18092/`) |
@@ -208,8 +214,9 @@ Write that file to `$XDG_CONFIG_HOME/jenkins-mcp/profiles/entra-lab.json`.
 issued a good token.
 
 Omitting `scopes` defaults to `openid` only — Entra then mints a token that is
-not for Jenkins. Omitting `redirectUris` lets the file load but `login --oidc`
-fails.
+not for Jenkins. Include `profile` as a companion; it does not replace App A
+optional access-token claims. Omitting `redirectUris` lets the file load but
+`login --oidc` fails.
 
 Optional check (secret-free): `jenkins-mcp oauth validate-profile --profile entra-lab`.
 
@@ -270,11 +277,29 @@ auto-loads that and would change the default Keycloak lab). The copy
 Jenkins must **reach** `login.microsoftonline.com` to fetch JWKS.
 
 **Environment footnote (not a product requirement):** if the Docker daemon has
-no NAT/iptables (bridge DNS fails), host networking plus
-`--httpPort=18092 --httpListenAddress=127.0.0.1` can be used on **only** the
-Jenkins service. `make live-jwt-rs-up` cannot do that (`depends_on` still starts
-Keycloak; the image listens on 8080 by default). Prefer method A/B on a daemon
-that can NAT to the public internet.
+no NAT/iptables (bridge DNS fails), Jenkins cannot fetch Entra JWKS from the
+compose bridge. Prefer method A/B when the daemon can NAT. `make live-jwt-rs-up`
+cannot do host networking (published `18092:8080`, healthcheck on 8080).
+
+Use a **copy** of the host-net example (Docker Compose v2.24+ for `!reset`).
+Do **not** `-f` the tracked file (literals `{tenant-id}` would be used):
+
+```bash
+cp testdata/jwt-rs-lab/entra.hostnet.override.example.yml \
+  testdata/jwt-rs-lab/entra.hostnet.override.yml
+# replace {tenant-id} and {api-app-id} in the copy only
+docker compose -f testdata/jwt-rs-lab/docker-compose.yml \
+  -f testdata/jwt-rs-lab/entra.hostnet.override.yml up -d
+```
+
+That override sets `network_mode: host`, clears published ports (and the
+default project network), `JENKINS_OPTS=--httpPort=18092 --httpListenAddress=127.0.0.1`
+(official image war flags — the base Dockerfile does not set a `command`),
+healthcheck on `http://127.0.0.1:18092/login`, and the same Entra JWKS/audience
+placeholders as method B. Keycloak may still start on the bridge (`depends_on`)
+and stay unused as JWKS. Omit `--build` if NAT is already broken (image build
+still uses the daemon build network); use a previously built jwt-rs Jenkins
+image. The working copy `entra.hostnet.override.yml` is gitignored.
 
 Wait until Jenkins answers before proving login:
 

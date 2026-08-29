@@ -1,0 +1,38 @@
+# Lab-only Compose override example — Entra JWKS + Jenkins on host networking.
+# Environment footnote, not a product requirement. Prefer entra.override.example.yml
+# (bridge) when the Docker daemon can NAT to login.microsoftonline.com.
+#
+# Requires Docker Compose v2.24+ (!reset merge tags).
+# Default docker-compose.yml stays Keycloak + published 18092→8080.
+#
+# Usage (repo root):
+#   cp testdata/jwt-rs-lab/entra.hostnet.override.example.yml \
+#      testdata/jwt-rs-lab/entra.hostnet.override.yml
+#   # replace {tenant-id} and {api-app-id} in the copy
+#   docker compose -f testdata/jwt-rs-lab/docker-compose.yml \
+#     -f testdata/jwt-rs-lab/entra.hostnet.override.yml up -d
+#   # omit --build if bridge NAT is already broken (image build still uses
+#   # the daemon build network). Use a previously built jwt-rs Jenkins image.
+#
+# Do not -f this tracked example (literals {tenant-id} would be used).
+# Do not name the working file docker-compose.override.yml (Compose auto-loads it).
+# entra.hostnet.override.yml is gitignored. Mapping-form environment merges.
+#
+# Walkthrough: docs/testing/entra-jwt-rs-lab.md
+
+services:
+  jenkins:
+    network_mode: host
+    ports: !reset []
+    networks: !reset []
+    environment:
+      JWT_RS_JWKS_URL: "https://login.microsoftonline.com/{tenant-id}/discovery/v2.0/keys"
+      JWT_RS_AUDIENCE: "{api-app-id}"
+      JWT_RS_PROTECTED_PATHS: "/**/api/**"
+      JENKINS_OPTS: "--httpPort=18092 --httpListenAddress=127.0.0.1"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18092/login >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 48
+      start_period: 120s

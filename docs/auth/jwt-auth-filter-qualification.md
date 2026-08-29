@@ -164,6 +164,10 @@ unclassified:
     # Prefer deny-by-default with explicit includes over broad excludes.
 ```
 
+Entra **v2** access tokens use a GUID `aud` (the API app id), not
+`api://…`. The `api://` form is the **scope URI** only. See the optional
+operator walkthrough [../testing/entra-jwt-rs-lab.md](../testing/entra-jwt-rs-lab.md).
+
 Approved reverse proxy (alternative): terminate JWT at the edge with the same
 audience/issuer/JWKS rules and inject a trusted identity to Jenkins only after
 validation — still subject to full route coverage and fallthrough tests.

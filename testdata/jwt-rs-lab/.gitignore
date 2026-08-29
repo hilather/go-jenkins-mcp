@@ -3,4 +3,5 @@
 
 # Local Entra override with real IDs (copy of entra.override.example.yml)
 entra.override.yml
+entra.hostnet.override.yml
 
