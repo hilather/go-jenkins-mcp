@@ -1,24 +1,51 @@
 import { describe, expect, it } from "vitest";
 import {
+  FORBIDDEN_METRIC_ALIASES,
   METRICS_HISTORY_MAX_POINTS,
+  PREFERRED_METRIC_KEYS,
   appendMetricsHistory,
   buildMetricsExportPayload,
   selectMetricKeys,
 } from "./metricsHistory";
 
+describe("PREFERRED_METRIC_KEYS", () => {
+  it("matches Go registry and excludes forbidden aliases", () => {
+    expect(PREFERRED_METRIC_KEYS).toContain("tool_calls");
+    expect(PREFERRED_METRIC_KEYS).toContain("mcp_tool_error");
+    expect(PREFERRED_METRIC_KEYS).toContain("jenkins_http_wire_bytes_total");
+    expect(PREFERRED_METRIC_KEYS).toContain("cache_evict_items");
+    expect(PREFERRED_METRIC_KEYS).toContain("cache_maint_ticks");
+    expect(PREFERRED_METRIC_KEYS).toContain("jenkins_circuit_open_events_total");
+    expect(PREFERRED_METRIC_KEYS).toContain("cache_usage_bytes");
+    for (const banned of FORBIDDEN_METRIC_ALIASES) {
+      expect(PREFERRED_METRIC_KEYS).not.toContain(banned);
+    }
+  });
+});
+
 describe("selectMetricKeys", () => {
-  it("prefers known operational names when present", () => {
+  it("prefers Go registry names and never forbidden aliases", () => {
     const keys = selectMetricKeys({
       counters: {
         tool_calls: 10,
         mcp_tool_ok: 8,
+        jenkins_http_requests_total: 4,
+        cache_hits: 2,
+        cache_evict_items: 1,
+        http_requests: 99,
+        cache_evict: 50,
+        identity_reverify_deny: 7,
         zzz_other: 999,
       },
-      gauges: { cache_evict: 1 },
+      gauges: { cache_usage_bytes: 100 },
     });
     expect(keys[0]).toBe("tool_calls");
     expect(keys).toContain("mcp_tool_ok");
-    expect(keys).toContain("cache_evict");
+    expect(keys).toContain("cache_evict_items");
+    expect(keys).toContain("jenkins_http_requests_total");
+    expect(keys).not.toContain("cache_evict");
+    expect(keys).not.toContain("http_requests");
+    expect(keys).not.toContain("identity_reverify_deny");
     expect(keys.indexOf("tool_calls")).toBeLessThan(keys.indexOf("zzz_other"));
   });
 

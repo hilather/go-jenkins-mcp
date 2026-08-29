@@ -62,20 +62,26 @@ function DoctorGatewayResidualCard({
         Gateway residual status{" "}
         <span className="residual-badge">HOST-007</span>
       </h2>
-      <p className="muted" style={{ marginTop: 0 }}>
-        HOST-007 doctor embed (
-        <code>gateway_residual_status</code>) — same secret-free map as{" "}
-        <code>gateway residual-status</code> / Overview residual card.
-        Informational only; does not drive overall. Live pin residual honesty:{" "}
-        <code>{doc}</code>
-        {doc.includes("live-pin-blockers") ? null : (
-          <>
-            {" "}
-            · see also <code>docs/gateway/live-pin-blockers.md</code>
-          </>
-        )}
-        . Never tokens or subjects; not live GO.
+      <p className="residual-caveat muted">
+        Offline residual — not production GO. Never tokens or subjects.
       </p>
+      <details className="residual-details">
+        <summary>HOST-* details</summary>
+        <p className="muted">
+          HOST-007 doctor embed (
+          <code>gateway_residual_status</code>) — same secret-free map as{" "}
+          <code>gateway residual-status</code> / Overview residual card.
+          Informational only; does not drive overall. Live pin residual honesty:{" "}
+          <code>{doc}</code>
+          {doc.includes("live-pin-blockers") ? null : (
+            <>
+              {" "}
+              · see also <code>docs/gateway/live-pin-blockers.md</code>
+            </>
+          )}
+          .
+        </p>
+      </details>
       <dl className="dl">
         <dt>mode_a_live_obtain_qualified</dt>
         <dd>

@@ -18,7 +18,7 @@ import type {
   GatewayResidualStatusResponse,
   GatewaySubjectInvalidateResponse,
 } from "../api/types";
-import { EChart } from "../components/charts/EChart";
+import { ResidualCallout } from "../components/ResidualCallout";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
 import { PageHeader } from "../components/PageHeader";
 import { StatusChipRow } from "../components/StatusChip";
@@ -26,10 +26,13 @@ import {
   canSubmitConsentPurge,
   CLEAR_ALL_CONFIRM_TOKEN,
 } from "../lib/consentPurge";
+import { isAdminAuthError, isBffUnreachable } from "../lib/adminErrors";
+import { buildOverviewStatusChips } from "../lib/overviewHealth";
 import {
-  buildOverviewStatusChips,
-  overviewLivePinBarOption,
-} from "../lib/overviewHealth";
+  K8S_CHECKLIST_ITEMS,
+  VAULT_PUT_SNIPPET,
+  formatHealthRateCaption,
+} from "../lib/overviewInventory";
 import {
   CONSENT_FILE_BACKED_HONESTY,
   CONSENT_MULTI_REPLICA_SHARED_HONESTY,
@@ -93,7 +96,8 @@ export function OverviewPage() {
     enabled: health.isSuccess,
   });
 
-  const apiDown = health.isError;
+  const apiDown = isBffUnreachable(health.error);
+  const apiAuth = isAdminAuthError(health.error);
   // Hide card when older BFF lacks the route (404) or BFF is down.
   const vaultMissing =
     vault.isError &&
@@ -141,27 +145,16 @@ export function OverviewPage() {
     ],
   );
 
-  const livePinChart = useMemo(
-    () =>
-      overviewLivePinBarOption({
-        residualAvailable: residual.isSuccess && !residualMissing,
-        modeALive: livePins?.mode_a_live_obtain_qualified,
-        modeBLive: livePins?.mode_b_live_rs_qualified,
-        modeCLive: livePins?.mode_c_live_agentcore_qualified,
-      }),
-    [
-      residual.isSuccess,
-      residualMissing,
-      livePins?.mode_a_live_obtain_qualified,
-      livePins?.mode_b_live_rs_qualified,
-      livePins?.mode_c_live_agentcore_qualified,
-    ],
+  const rateCaption = formatHealthRateCaption(
+    health.data?.ratePerMinute,
+    health.data?.rateBurst,
   );
 
   return (
     <>
       <PageHeader title="Overview">
-        Profile <code>{profileId}</code> · admin BFF <code>/admin/v1</code>
+        Health and residual posture for profile <code>{profileId}</code>.
+        Secret-free — no Jenkins tokens, paths, or subjects.
       </PageHeader>
 
       {apiDown && (
@@ -172,6 +165,12 @@ export function OverviewPage() {
           <code>npm run dev</code> with the Vite proxy. This residual is
           expected until the BFF is running — no secrets are required in the
           SPA for health/version.
+        </div>
+      )}
+      {apiAuth && !apiDown && (
+        <div className="banner warn" role="status">
+          <strong>Admin token required or rejected.</strong> BFF is reachable.
+          Save a Bearer in the rail (loopback only). Not a login page.
         </div>
       )}
 
@@ -198,26 +197,9 @@ export function OverviewPage() {
         </div>
       )}
 
-      {(residual.isSuccess || residual.isLoading) && !residualMissing && (
-        <div className="card residual-card">
-          <h2>
-            Live pin residual{" "}
-            <span className="residual-badge">offline honesty</span>
-          </h2>
-          <p className="muted" style={{ marginTop: 0 }}>
-            ECharts counts of <code>mode_*_live_*_qualified</code> still false
-            (typical offline: three residual flags). Not production GO.
-          </p>
-          <EChart
-            option={livePinChart}
-            height={200}
-            ariaLabel="Live pin residual bar chart"
-          />
-        </div>
-      )}
-
+      <div className="snapshot-grid">
       <div className="card">
-        <h2>Health</h2>
+        <h2>Runtime</h2>
         {health.isSuccess ? (
           <dl className="dl">
             <dt>status</dt>
@@ -326,12 +308,84 @@ export function OverviewPage() {
                 <dd className="muted">{health.data.residual}</dd>
               </>
             ) : null}
+            {rateCaption ? (
+              <>
+                <dt>rate (health)</dt>
+                <dd>{rateCaption}</dd>
+              </>
+            ) : null}
           </dl>
         ) : (
           !health.isLoading && (
             <p className="muted">No health payload (BFF offline or error).</p>
           )
         )}
+        {version.isLoading && health.isSuccess && <Loading />}
+        {version.isError && <ErrorBanner error={version.error} />}
+        {version.isSuccess ? (
+          <dl className="dl" style={{ marginTop: "0.75rem" }}>
+            <dt>buildTime</dt>
+            <dd>{version.data.buildTime}</dd>
+            <dt>goVersion</dt>
+            <dd>{version.data.goVersion}</dd>
+            <dt>os/arch</dt>
+            <dd>
+              {version.data.os}/{version.data.arch}
+            </dd>
+          </dl>
+        ) : (
+          !version.isLoading && (
+            <p className="muted">
+              Version endpoint not loaded (depends on health).
+            </p>
+          )
+        )}
+      </div>
+
+      <div className="card">
+        <h2>
+          Live pins{" "}
+          <span className="residual-badge">offline honesty</span>
+        </h2>
+        <div className="live-pin-grid">
+          <div className="live-pin-card">
+            <div className="muted">Mode A</div>
+            <strong>
+              {livePins?.mode_a_live_obtain_qualified ? "live" : "not live"}
+            </strong>
+            <p className="muted" style={{ margin: "0.25rem 0 0" }}>
+              Obtain residual — {LIVE_PIN_RESIDUAL_HONESTY}
+            </p>
+          </div>
+          <div className="live-pin-card">
+            <div className="muted">Mode B</div>
+            <strong>
+              {livePins?.mode_b_live_rs_qualified ? "live" : "not live"}
+            </strong>
+            <p className="muted" style={{ margin: "0.25rem 0 0" }}>
+              RS / Entra residual — {LIVE_PIN_RESIDUAL_HONESTY}
+            </p>
+          </div>
+          <div className="live-pin-card">
+            <div className="muted">Mode C</div>
+            <strong>
+              {livePins?.mode_c_live_agentcore_qualified ? "live" : "not live"}
+            </strong>
+            <p className="muted" style={{ margin: "0.25rem 0 0" }}>
+              AgentCore residual — {LIVE_PIN_RESIDUAL_HONESTY}
+            </p>
+          </div>
+        </div>
+        <p className="chart-caption muted">
+          Enabled{" "}
+          {residual.data?.mode_a_enabled ? "A" : "—"}
+          {" / "}
+          {residual.data?.mode_b_enabled ? "B" : "—"}
+          {" / "}
+          {residual.data?.mode_c_enabled ? "C" : "—"}
+          {" · config only, not production GO. Ready is serve /readyz."}
+        </p>
+      </div>
       </div>
 
       {health.isSuccess && health.data.kubernetesEnvDetected && (
@@ -345,19 +399,9 @@ export function OverviewPage() {
             <code>docs/gateway/deployment.md</code> §9.
           </p>
           <ul className="muted" style={{ margin: 0, paddingLeft: "1.2rem" }}>
-            <li>
-              Sticky sessions or shared session store (
-              <code>sessionAffinityRecommended</code> when multi-user)
-            </li>
-            <li>
-              Durable shared vault (not emptyDir) —{" "}
-              <code>multiPodVaultResidual=true</code>
-            </li>
-            <li>Shared subject rate (process-local rate residual today)</li>
-            <li>Shared Obtain / token cache across pods</li>
-            <li>
-              <code>haMultiReplica=false</code> until runtime HA
-            </li>
+            {K8S_CHECKLIST_ITEMS.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
           </ul>
           {health.data.residual ? (
             <p className="muted" style={{ marginBottom: 0 }}>
@@ -369,9 +413,12 @@ export function OverviewPage() {
 
       {/* Mode C residual card when Mode C is active, or always for gateway_ops
           so operators can purge consent metadata without Mode C health flags. */}
+      <div className="ops-grid">
       {health.isSuccess && (modeC || canGatewayOps) && (
         <div className="card">
-          <h2>Progressive consent residual (Mode C)</h2>
+          <h2>
+            Consent purge <span className="residual-badge">metadata only</span>
+          </h2>
           <p className="muted" style={{ marginTop: 0 }}>
             OAUTH-010 / GWY-001 honesty from{" "}
             <code>GET /admin/v1/health</code> (
@@ -469,77 +516,6 @@ export function OverviewPage() {
         </div>
       )}
 
-      <div className="card">
-        <h2>Version</h2>
-        {version.isLoading && health.isSuccess && <Loading />}
-        {version.isError && <ErrorBanner error={version.error} />}
-        {version.isSuccess ? (
-          <dl className="dl">
-            <dt>version</dt>
-            <dd>{version.data.version}</dd>
-            <dt>commit</dt>
-            <dd>{version.data.commit}</dd>
-            <dt>buildTime</dt>
-            <dd>{version.data.buildTime}</dd>
-            <dt>goVersion</dt>
-            <dd>{version.data.goVersion}</dd>
-            <dt>os/arch</dt>
-            <dd>
-              {version.data.os}/{version.data.arch}
-            </dd>
-          </dl>
-        ) : (
-          !version.isLoading && (
-            <p className="muted">
-              Version endpoint not loaded (depends on health).
-            </p>
-          )
-        )}
-      </div>
-
-      {!residualMissing && (
-        <div className="card">
-          <h2>Gateway residual status</h2>
-          <p className="muted" style={{ marginTop: 0 }}>
-            HOST-007 unified residual snapshot (
-            <code>GET /admin/v1/gateway/residual-status</code>) — same secret-free
-            fields as <code>jenkins-mcp gateway residual-status</code>. Env/static
-            honesty only; never tokens or subjects. Live pin residual honesty:{" "}
-            <code>docs/gateway/live-pin-blockers.md</code>.
-          </p>
-          {residual.isLoading && health.isSuccess && <Loading />}
-          {residual.isError &&
-            !(residual.error instanceof AdminApiError && residual.error.status === 404) && (
-              <ErrorBanner error={residual.error} />
-            )}
-          {residual.isSuccess ? (
-            <ResidualStatusDl data={residual.data} />
-          ) : (
-            !residual.isLoading &&
-            !residual.isError && (
-              <p className="muted">Residual status not loaded.</p>
-            )
-          )}
-        </div>
-      )}
-
-      {canGatewayOps ? (
-        <SubjectInvalidateCard />
-      ) : (
-        health.isSuccess &&
-        me.isSuccess && (
-          <div className="card">
-            <h2>Subject invalidate (force re-auth)</h2>
-            <p className="muted" style={{ marginTop: 0 }}>
-              Requires <code>gateway_ops</code> (
-              <code>operator</code> or <code>policy_admin</code>). Current role{" "}
-              <code>{me.data.role}</code> is read-only for this action. CLI:{" "}
-              <code>jenkins-mcp gateway subject-invalidate</code>.
-            </p>
-          </div>
-        )
-      )}
-
       {!vaultMissing && (
         <div className="card">
           <h2>Gateway vault</h2>
@@ -549,10 +525,7 @@ export function OverviewPage() {
             <code>SubjectKeyHash</code> only — never tokens. Provision via CLI:
           </p>
           <pre className="mono" style={{ fontSize: "0.85rem", overflow: "auto" }}>
-            {`jenkins-mcp gateway vault-put \\
-  --subject 'tenant|sub|profile' \\
-  --user alice \\
-  --token-env MY_TOKEN`}
+            {VAULT_PUT_SNIPPET}
           </pre>
           {vault.isLoading && health.isSuccess && <Loading />}
           {vault.isError && !(vault.error instanceof AdminApiError && vault.error.status === 404) && (
@@ -680,8 +653,55 @@ export function OverviewPage() {
           )}
         </div>
       )}
+      </div>
 
-      <div className="card">
+      {!residualMissing && (
+        <ResidualCallout
+          caveat="Offline honesty — not live GO. Paths and tokens never shown."
+        >
+          <h2>Gateway residual status</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            HOST-007 unified residual snapshot (
+            <code>GET /admin/v1/gateway/residual-status</code>) — same secret-free
+            fields as <code>jenkins-mcp gateway residual-status</code>. Env/static
+            honesty only; never tokens or subjects. Live pin residual honesty:{" "}
+            <code>docs/gateway/live-pin-blockers.md</code>.
+          </p>
+          {residual.isLoading && health.isSuccess && <Loading />}
+          {residual.isError &&
+            !(residual.error instanceof AdminApiError && residual.error.status === 404) && (
+              <ErrorBanner error={residual.error} />
+            )}
+          {residual.isSuccess ? (
+            <ResidualStatusDl data={residual.data} />
+          ) : (
+            !residual.isLoading &&
+            !residual.isError && (
+              <p className="muted">Residual status not loaded.</p>
+            )
+          )}
+        </ResidualCallout>
+      )}
+
+      {canGatewayOps ? (
+        <SubjectInvalidateCard />
+      ) : (
+        health.isSuccess &&
+        me.isSuccess && (
+          <div className="card">
+            <h2>Subject invalidate (force re-auth)</h2>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Requires <code>gateway_ops</code> (
+              <code>operator</code> or <code>policy_admin</code>). Current role{" "}
+              <code>{me.data.role}</code> is read-only for this action. CLI:{" "}
+              <code>jenkins-mcp gateway subject-invalidate</code>.
+            </p>
+          </div>
+        )
+      )}
+
+
+      <ResidualCallout caveat="HOST-* honesty — never live GO, tokens, or paths.">
         <h2>Residuals (v1)</h2>
         <ul className="muted" style={{ margin: 0, paddingLeft: "1.2rem" }}>
           <li>
@@ -759,7 +779,7 @@ export function OverviewPage() {
             this SPA.
           </li>
         </ul>
-      </div>
+      </ResidualCallout>
     </>
   );
 }

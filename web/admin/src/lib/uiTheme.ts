@@ -17,22 +17,22 @@ export type ChartThemeTokens = {
   mono: string;
 };
 
-/** Dark theme (default) — matches styles.css :root. */
+/** Dark lab (forced) — matches styles.css :root. */
 export const chartThemeDark: ChartThemeTokens = {
-  text: "#e7ecf3",
-  textMuted: "#9aa8bc",
-  border: "#2d3a4d",
-  accent: "#3d8bfd",
-  accentSoft: "rgba(61, 139, 253, 0.35)",
+  text: "#ecece8",
+  textMuted: "#9aa3ad",
+  border: "#2a2d33",
+  accent: "#6ea8fe",
+  accentSoft: "rgba(110, 168, 254, 0.35)",
   ok: "#3dd68c",
   warn: "#f5a524",
   fail: "#f31260",
   bg: "transparent",
-  font: 'system-ui, "Segoe UI", sans-serif',
-  mono: 'ui-monospace, "Cascadia Code", Menlo, monospace',
+  font: '"IBM Plex Sans", system-ui, sans-serif',
+  mono: '"IBM Plex Mono", ui-monospace, monospace',
 };
 
-/** Light theme — matches styles.css prefers-color-scheme: light. */
+/** Unused fixture after force-dark (do not use in production builders). */
 export const chartThemeLight: ChartThemeTokens = {
   text: "#1a2332",
   textMuted: "#5c6b7f",
@@ -50,15 +50,12 @@ export const chartThemeLight: ChartThemeTokens = {
 export type MediaQueryProbe = (query: string) => boolean;
 
 /**
- * Resolve chart tokens for light/dark. Injectable probe for unit tests
- * (avoids real matchMedia in jsdom).
+ * Forced dark-lab charts. Probe is accepted for call-site compatibility
+ * but light OS preference must not paint light tokens on dark chrome.
  */
 export function resolveChartTheme(
-  probe: MediaQueryProbe = defaultMediaProbe,
+  _probe: MediaQueryProbe = defaultMediaProbe,
 ): ChartThemeTokens {
-  if (probe("(prefers-color-scheme: light)")) {
-    return chartThemeLight;
-  }
   return chartThemeDark;
 }
 

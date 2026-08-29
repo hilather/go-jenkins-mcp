@@ -1,10 +1,7 @@
 /**
- * Overview status chips + optional numeric health chart (UI-POLISH-003).
- * Pure builders — drive ECharts via metricCharts.snapshotBarOption.
+ * Overview status chips (UI-POLISH-003). Live-pin 0/1 ECharts bar removed —
+ * chips already show A/B/C.
  */
-
-import type { AdminChartOption } from "../components/charts/EChart";
-import { snapshotBarOption } from "./metricCharts";
 
 export type StatusChipTone = "ok" | "warn" | "fail" | "neutral" | "residual";
 
@@ -72,7 +69,7 @@ export function buildOverviewStatusChips(input: OverviewHealthInput): StatusChip
 
   chips.push({
     id: "gateway-ready",
-    label: "Gateway ready (BFF)",
+    label: "Gateway ready",
     value: input.gatewayReady ? "yes" : "no",
     tone: input.gatewayReady ? "ok" : "residual",
     title: "Admin BFF residual; serve /readyz is authoritative",
@@ -80,7 +77,7 @@ export function buildOverviewStatusChips(input: OverviewHealthInput): StatusChip
 
   chips.push({
     id: "ha",
-    label: "HA multi-replica",
+    label: "HA replica",
     value: input.haMultiReplica ? "yes" : "no",
     tone: input.haMultiReplica ? "warn" : "ok",
     title: "HOST-008 Tier A expects no (single-replica)",
@@ -100,34 +97,4 @@ export function buildOverviewStatusChips(input: OverviewHealthInput): StatusChip
   }
 
   return chips;
-}
-
-/**
- * Numeric residual honesty chart: counts of live-qualified flags still false
- * vs true (ECharts only). Always returns an option (empty shell if no residual).
- */
-export function overviewLivePinBarOption(input: {
-  modeALive?: boolean;
-  modeBLive?: boolean;
-  modeCLive?: boolean;
-  residualAvailable?: boolean;
-}): AdminChartOption {
-  if (input.residualAvailable === false) {
-    return snapshotBarOption("Live pin flags", {});
-  }
-  const data: Record<string, number> = {
-    mode_a_live_false: input.modeALive ? 0 : 1,
-    mode_b_live_false: input.modeBLive ? 0 : 1,
-    mode_c_live_false: input.modeCLive ? 0 : 1,
-    mode_a_live_true: input.modeALive ? 1 : 0,
-    mode_b_live_true: input.modeBLive ? 1 : 0,
-    mode_c_live_true: input.modeCLive ? 1 : 0,
-  };
-  // Prefer showing residual false counts (typical offline: three 1s).
-  const residualFacing: Record<string, number> = {
-    "A not live-qualified": data.mode_a_live_false,
-    "B not live-qualified": data.mode_b_live_false,
-    "C not live-qualified": data.mode_c_live_false,
-  };
-  return snapshotBarOption("Live pin residual (1 = still residual)", residualFacing);
 }

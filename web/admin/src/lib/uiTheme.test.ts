@@ -9,15 +9,18 @@ import {
 } from "./uiTheme";
 
 describe("resolveChartTheme", () => {
-  it("returns light tokens when prefers light", () => {
+  it("stays dark-lab even when OS prefers light", () => {
     const t = resolveChartTheme((q) => q.includes("prefers-color-scheme: light"));
-    expect(t.accent).toBe(chartThemeLight.accent);
-    expect(t.text).toBe(chartThemeLight.text);
+    expect(t.accent).toBe("#6ea8fe");
+    expect(t.text).toBe("#ecece8");
+    expect(t.font).toContain("IBM Plex");
+    expect(t.accent).not.toBe(chartThemeLight.accent);
   });
 
-  it("returns dark tokens otherwise", () => {
+  it("returns dark tokens by default", () => {
     const t = resolveChartTheme(() => false);
     expect(t.accent).toBe(chartThemeDark.accent);
+    expect(t.bg).toBe("transparent");
   });
 });
 
