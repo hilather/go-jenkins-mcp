@@ -62,21 +62,8 @@ function DoctorGatewayResidualCard({
   const showConsent = Boolean(data.progressive_consent);
 
   return (
-    <>
-      <ResidualCallout badge="HOST-007" caveat={DOCTOR_RESIDUAL_CAVEAT}>
-        <p className="muted">
-          {DOCTOR_RESIDUAL_DETAILS}{" "}
-          <code>{doc}</code>
-          {doc.includes("live-pin-blockers") ? null : (
-            <>
-              {" "}
-              · see also <code>docs/gateway/live-pin-blockers.md</code>
-            </>
-          )}
-        </p>
-      </ResidualCallout>
-      <div className="card">
-        <h2>Gateway residual status</h2>
+    <div className="card">
+      <h2>Gateway residual status</h2>
       <dl className="dl">
         <dt>mode_a_live_obtain_qualified</dt>
         <dd>
@@ -214,8 +201,7 @@ function DoctorGatewayResidualCard({
           <code>{doc}</code>
         </dd>
       </dl>
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -240,6 +226,10 @@ export function DoctorPage() {
       <PageHeader title="Doctor">
         Offline doctor report for profile <code>{profileId}</code>
       </PageHeader>
+
+      <ResidualCallout badge="HOST-007" caveat={DOCTOR_RESIDUAL_CAVEAT}>
+        <p className="muted">{DOCTOR_RESIDUAL_DETAILS}</p>
+      </ResidualCallout>
 
       <div className="toolbar">
         <label className="check-label">

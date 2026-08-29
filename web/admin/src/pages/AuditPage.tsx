@@ -291,9 +291,6 @@ export function AuditPage() {
 
       <ResidualCallout caveat={AUDIT_RESIDUAL_CAVEAT}>
         <p className="muted">{AUDIT_RESIDUAL_DETAILS}</p>
-        {settingsQ.data?.residual ? (
-          <p className="muted">{settingsQ.data.residual}</p>
-        ) : null}
       </ResidualCallout>
 
       <section className="card filters-card" aria-labelledby="audit-settings-heading">
@@ -395,7 +392,7 @@ export function AuditPage() {
       <form className="card filters-card" onSubmit={applyFilters}>
         <h2>Filters</h2>
         <div className="filters-grid">
-          <label className="field">
+          <label className="form-field">
             <span>type</span>
             <select
               className="input mono"
@@ -411,7 +408,7 @@ export function AuditPage() {
               ))}
             </select>
           </label>
-          <label className="field">
+          <label className="form-field">
             <span>limit</span>
             <select
               className="input"
@@ -430,7 +427,7 @@ export function AuditPage() {
               ))}
             </select>
           </label>
-          <label className="field">
+          <label className="form-field">
             <span>before (datetime-local)</span>
             <input
               type="datetime-local"
@@ -441,7 +438,7 @@ export function AuditPage() {
               }
             />
           </label>
-          <label className="field field-wide">
+          <label className="form-field form-field-wide">
             <span>before (RFC3339 text; used if local empty)</span>
             <input
               type="text"
@@ -454,7 +451,7 @@ export function AuditPage() {
               autoComplete="off"
             />
           </label>
-          <label className="field field-wide">
+          <label className="form-field form-field-wide">
             <span>
               externalSubject (BFF exact match via external_subject; never a
               token)

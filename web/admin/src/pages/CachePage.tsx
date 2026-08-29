@@ -63,7 +63,7 @@ function PlanCard({
       </dl>
       {!plan.candidates?.length ? (
         <EmptyState title="No eviction candidates">
-          Nothing to reclaim; pins are skipped.
+          Nothing to reclaim.
         </EmptyState>
       ) : (
         <div className="table-scroll">

@@ -102,18 +102,6 @@ export function AccessPage() {
 
       <ResidualCallout caveat={ACCESS_RESIDUAL_CAVEAT}>
         <p className="muted">{ACCESS_RESIDUAL_DETAILS}</p>
-        <p className="muted">
-          {data?.fleet_sot ||
-            "configuration/signed policy (MGR-001); SPA is pilot break-glass only"}
-        </p>
-        {data?.residual ? <p className="muted">{data.residual}</p> : null}
-        {data?.notes?.length ? (
-          <ul className="muted" style={{ margin: 0, paddingLeft: "1.2rem" }}>
-            {data.notes.map((n) => (
-              <li key={n}>{n}</li>
-            ))}
-          </ul>
-        ) : null}
       </ResidualCallout>
 
       {q.isSuccess && data ? (
@@ -130,7 +118,10 @@ export function AccessPage() {
 
           <p className="muted" role="status">
             available={String(data.available)} · signature_state=
-            {data.signature_state || "—"} · path_base={data.path_base || "—"}
+            {data.signature_state || "—"} · path_base={data.path_base || "—"} ·
+            fleet_sot=
+            {data.fleet_sot ||
+              "configuration/signed policy (MGR-001); SPA is pilot break-glass only"}
           </p>
 
           <section className="card" aria-label="User bindings editor">

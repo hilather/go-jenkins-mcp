@@ -372,7 +372,7 @@ export function PolicyPage() {
       </ResidualCallout>
 
       <div className="card">
-        <h2>Pilot pilot overlay (draft → validate → apply)</h2>
+        <h2>Pilot overlay (draft → validate → apply)</h2>
         {overlayQ.isLoading && <Loading />}
         {overlayQ.isError && <ErrorBanner error={overlayQ.error} />}
         {overlayQ.isSuccess && !overlayQ.data.available && (
