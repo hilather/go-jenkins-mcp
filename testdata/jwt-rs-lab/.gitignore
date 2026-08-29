@@ -1,7 +1,7 @@
 # Generated smoke artifacts (if any)
 .generated/
 
-# Local Entra override with real IDs (copy of entra.override.example.yml)
+# Local Entra overrides with real IDs (copies of *.override.example.yml)
 entra.override.yml
 entra.hostnet.override.yml
 

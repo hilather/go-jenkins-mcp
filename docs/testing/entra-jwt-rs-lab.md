@@ -292,14 +292,17 @@ docker compose -f testdata/jwt-rs-lab/docker-compose.yml \
   -f testdata/jwt-rs-lab/entra.hostnet.override.yml up -d
 ```
 
-That override sets `network_mode: host`, clears published ports (and the
-default project network), `JENKINS_OPTS=--httpPort=18092 --httpListenAddress=127.0.0.1`
+That override sets `network_mode: host`, clears Jenkins published ports, and
+detaches **Jenkins** from the default project network (`ports: !reset []`,
+`networks: !reset []`). It sets
+`JENKINS_OPTS="--httpPort=18092 --httpListenAddress=127.0.0.1"`
 (official image war flags — the base Dockerfile does not set a `command`),
 healthcheck on `http://127.0.0.1:18092/login`, and the same Entra JWKS/audience
 placeholders as method B. Keycloak may still start on the bridge (`depends_on`)
-and stay unused as JWKS. Omit `--build` if NAT is already broken (image build
-still uses the daemon build network); use a previously built jwt-rs Jenkins
-image. The working copy `entra.hostnet.override.yml` is gitignored.
+and stay unused as JWKS. The image `go-jenkins-mcp/jwt-rs-jenkins:lts` must
+**already exist** — `up` without `--build` still builds if the tag is missing,
+and that build uses the daemon build network (not host net). The working copy
+`entra.hostnet.override.yml` is gitignored.
 
 Wait until Jenkins answers before proving login:
 
