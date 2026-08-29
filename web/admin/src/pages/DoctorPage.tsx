@@ -5,6 +5,11 @@ import type { GatewayResidualStatusResponse } from "../api/types";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
 import { PageHeader } from "../components/PageHeader";
+import { ResidualCallout } from "../components/ResidualCallout";
+import {
+  DOCTOR_RESIDUAL_CAVEAT,
+  DOCTOR_RESIDUAL_DETAILS,
+} from "../lib/leftoverResiduals";
 import {
   CONSENT_FILE_BACKED_HONESTY,
   CONSENT_MULTI_REPLICA_SHARED_HONESTY,
@@ -57,25 +62,8 @@ function DoctorGatewayResidualCard({
   const showConsent = Boolean(data.progressive_consent);
 
   return (
-    <div className="card residual-card">
-      <h2>
-        Gateway residual status{" "}
-        <span className="residual-badge">HOST-007</span>
-      </h2>
-      <p className="muted" style={{ marginTop: 0 }}>
-        HOST-007 doctor embed (
-        <code>gateway_residual_status</code>) — same secret-free map as{" "}
-        <code>gateway residual-status</code> / Overview residual card.
-        Informational only; does not drive overall. Live pin residual honesty:{" "}
-        <code>{doc}</code>
-        {doc.includes("live-pin-blockers") ? null : (
-          <>
-            {" "}
-            · see also <code>docs/gateway/live-pin-blockers.md</code>
-          </>
-        )}
-        . Never tokens or subjects; not live GO.
-      </p>
+    <div className="card">
+      <h2>Gateway residual status</h2>
       <dl className="dl">
         <dt>mode_a_live_obtain_qualified</dt>
         <dd>
@@ -238,6 +226,10 @@ export function DoctorPage() {
       <PageHeader title="Doctor">
         Offline doctor report for profile <code>{profileId}</code>
       </PageHeader>
+
+      <ResidualCallout badge="HOST-007" caveat={DOCTOR_RESIDUAL_CAVEAT}>
+        <p className="muted">{DOCTOR_RESIDUAL_DETAILS}</p>
+      </ResidualCallout>
 
       <div className="toolbar">
         <label className="check-label">

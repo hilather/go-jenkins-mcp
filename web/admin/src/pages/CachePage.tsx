@@ -10,7 +10,14 @@ import {
   postCacheEvictPlan,
 } from "../api/client";
 import type { EvictionPlanResponse } from "../api/types";
+import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
+import { PageHeader } from "../components/PageHeader";
+import { ResidualCallout } from "../components/ResidualCallout";
+import {
+  CACHE_RESIDUAL_CAVEAT,
+  CACHE_RESIDUAL_DETAILS,
+} from "../lib/leftoverResiduals";
 
 const EVICT_TOKEN = "EVICT";
 
@@ -55,8 +62,11 @@ function PlanCard({
         )}
       </dl>
       {!plan.candidates?.length ? (
-        <p className="muted">No eviction candidates.</p>
+        <EmptyState title="No eviction candidates">
+          Nothing to reclaim.
+        </EmptyState>
       ) : (
+        <div className="table-scroll">
         <table className="data">
           <thead>
             <tr>
@@ -77,6 +87,7 @@ function PlanCard({
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );
@@ -142,12 +153,14 @@ export function CachePage() {
 
   return (
     <>
-      <h1 className="page-title">Cache</h1>
-      <p className="page-sub">
+      <PageHeader title="Cache">
         Quota and eviction for profile <code>{profileId}</code> (
-        <code>GET /admin/v1/profiles/{"{id}"}/cache</code>). Pin list and full
-        cache repair remain CLI residuals.
-      </p>
+        <code>GET /admin/v1/profiles/{"{id}"}/cache</code>).
+      </PageHeader>
+
+      <ResidualCallout caveat={CACHE_RESIDUAL_CAVEAT}>
+        <p className="muted">{CACHE_RESIDUAL_DETAILS}</p>
+      </ResidualCallout>
 
       {cache.isLoading && <Loading />}
       {cache.isError && <ErrorBanner error={cache.error} />}

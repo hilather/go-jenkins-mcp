@@ -88,7 +88,8 @@ export function historyLineOption(
     },
     yAxis: {
       type: "value",
-      scale: true,
+      min: 0,
+      scale: false,
       axisLabel: { color: theme.textMuted, fontSize: 10 },
       splitLine: { lineStyle: { color: theme.border, type: "dashed" } },
     },
@@ -251,7 +252,8 @@ export function multiHistoryLineOption(
     },
     yAxis: {
       type: "value",
-      scale: true,
+      min: 0,
+      scale: false,
       axisLabel: { color: theme.textMuted, fontSize: 10 },
       splitLine: { lineStyle: { color: theme.border, type: "dashed" } },
     },
@@ -268,4 +270,164 @@ export function multiHistoryLineOption(
       };
     }),
   };
+}
+
+function emptyShell(title: string, sub: string, opts?: ChartOptionOpts): EChartsOption {
+  const theme = themeOf(opts);
+  return {
+    backgroundColor: theme.bg,
+    animationDuration: animOf(opts),
+    title: {
+      text: title,
+      left: "center",
+      top: "middle",
+      textStyle: {
+        color: theme.textMuted,
+        fontSize: 13,
+        fontWeight: 400,
+        fontFamily: theme.font,
+      },
+      subtext: sub,
+      subtextStyle: { color: theme.textMuted, fontSize: 11 },
+    },
+    xAxis: { show: false },
+    yAxis: { show: false },
+    series: [],
+  };
+}
+
+const BYTE_KEY_RE = /bytes/i;
+
+/**
+ * Cumulative tool outcomes. Always returns an option (empty shell if <2 pts).
+ * y includes 0. Never includes byte series.
+ */
+export function toolOutcomesLineOption(
+  seriesByKey: Record<string, MetricSeriesPoint[]>,
+  opts?: ChartOptionOpts,
+): EChartsOption {
+  const names = ["tool_calls", "mcp_tool_ok", "mcp_tool_error", "mcp_tool_deny"];
+  const filtered: Record<string, MetricSeriesPoint[]> = {};
+  for (const name of names) {
+    if (BYTE_KEY_RE.test(name)) {
+      continue;
+    }
+    filtered[name] = seriesByKey[name] ?? [];
+  }
+  const opt = multiHistoryLineOption(filtered, 4, opts);
+  if (!opt) {
+    return emptyShell(
+      "TOOL OUTCOMES",
+      "need ≥2 samples · cumulative counts · y includes 0",
+      opts,
+    );
+  }
+  return opt;
+}
+
+/**
+ * One usage/quota bar. Values must come from snapshot.gauges.
+ * quota ≤ 0 → empty shell (never invent 256 MiB).
+ */
+export function cacheUsageMeterOption(
+  usageBytes: number,
+  quotaBytes: number,
+  opts?: ChartOptionOpts,
+): EChartsOption {
+  const theme = themeOf(opts);
+  const usage = Number(usageBytes) || 0;
+  const quota = Number(quotaBytes) || 0;
+  if (!(quota > 0)) {
+    return emptyShell(
+      "CACHE POSTURE",
+      "cache_quota_bytes missing · no invented quota",
+      opts,
+    );
+  }
+  const pct = Math.min(100, Math.max(0, (usage / quota) * 100));
+  return {
+    backgroundColor: theme.bg,
+    animationDuration: animOf(opts),
+    textStyle: { color: theme.text, fontFamily: theme.font },
+    tooltip: { trigger: "item", confine: true },
+    grid: { left: 12, right: 16, top: 8, bottom: 8, containLabel: true },
+    xAxis: {
+      type: "value",
+      min: 0,
+      max: quota,
+      axisLabel: { color: theme.textMuted, fontSize: 10, show: false },
+      splitLine: { show: false },
+    },
+    yAxis: {
+      type: "category",
+      data: ["cache_usage_bytes"],
+      axisLabel: { color: theme.text, fontSize: 11, fontFamily: theme.mono },
+      axisTick: { show: false },
+    },
+    series: [
+      {
+        name: "cache_usage_bytes",
+        type: "bar",
+        data: [usage],
+        itemStyle: { color: theme.accent, borderRadius: [0, 4, 4, 0] },
+        label: {
+          show: true,
+          position: "right",
+          color: theme.textMuted,
+          fontSize: 10,
+          formatter: `${pct.toFixed(0)}%`,
+        },
+      },
+    ],
+  };
+}
+
+/** Subject quota denials only (CodeQuota totals). Never subject keys. */
+export function subjectQuotaLineOption(
+  seriesByKey: Record<string, MetricSeriesPoint[]>,
+  opts?: ChartOptionOpts,
+): EChartsOption {
+  const filtered = {
+    mcp_subject_rate_quota: seriesByKey.mcp_subject_rate_quota ?? [],
+    mcp_subject_slot_quota: seriesByKey.mcp_subject_slot_quota ?? [],
+  };
+  const opt = multiHistoryLineOption(filtered, 2, opts);
+  if (!opt) {
+    return emptyShell(
+      "SUBJECT QUOTA",
+      "CodeQuota totals · never subject keys · need ≥2 samples",
+      opts,
+    );
+  }
+  return opt;
+}
+
+export function pickNamedRows(
+  data: Record<string, number> | undefined,
+  names: readonly string[],
+): Record<string, number> {
+  const src = data ?? {};
+  const out: Record<string, number> = {};
+  for (const n of names) {
+    if (n in src) {
+      out[n] = Number(src[n]) || 0;
+    }
+  }
+  return out;
+}
+
+/** Snapshot keys not already on a named Metrics surface. */
+export function leftoverSnapshotRows(
+  counters: Record<string, number> | undefined,
+  gauges: Record<string, number> | undefined,
+  claimed: readonly string[],
+): Record<string, number> {
+  const claimedSet = new Set(claimed);
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries({ ...(counters ?? {}), ...(gauges ?? {}) })) {
+    if (!claimedSet.has(k) && !/bytes/i.test(k)) {
+      out[k] = Number(v) || 0;
+    }
+  }
+  return out;
 }

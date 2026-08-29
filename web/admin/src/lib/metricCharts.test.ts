@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  cacheUsageMeterOption,
   historyLineOption,
+  leftoverSnapshotRows,
   multiHistoryLineOption,
+  pickNamedRows,
   snapshotBarOption,
+  subjectQuotaLineOption,
+  toolOutcomesLineOption,
 } from "./metricCharts";
 import { chartThemeLight } from "./uiTheme";
 
@@ -84,7 +89,7 @@ describe("multiHistoryLineOption", () => {
     expect(opt?.animationDuration).toBe(0);
   });
 
-  it("uses light theme tokens when probe asks for light", () => {
+  it("uses explicit light theme only when passed (force-dark default)", () => {
     const opt = snapshotBarOption(
       "C",
       { a: 2 },
@@ -93,5 +98,99 @@ describe("multiHistoryLineOption", () => {
     );
     const series = opt.series as { itemStyle: { color: string } }[];
     expect(series[0].itemStyle.color).toBe(chartThemeLight.accent);
+  });
+});
+
+describe("toolOutcomesLineOption", () => {
+  it("includes 0 on the y axis and never byte keys", () => {
+    const opt = toolOutcomesLineOption({
+      tool_calls: [
+        { t: 1, v: 1 },
+        { t: 2, v: 3 },
+      ],
+      mcp_tool_ok: [
+        { t: 1, v: 1 },
+        { t: 2, v: 2 },
+      ],
+      jenkins_http_wire_bytes_total: [
+        { t: 1, v: 1000 },
+        { t: 2, v: 2000 },
+      ],
+    });
+    const y = opt.yAxis as { min?: number; scale?: boolean };
+    expect(y.min).toBe(0);
+    expect(y.scale).toBe(false);
+    const series = opt.series as { name: string }[];
+    const names = series.map((s) => s.name);
+    expect(names).toEqual(
+      expect.arrayContaining(["tool_calls", "mcp_tool_ok"]),
+    );
+    expect(names.some((n) => /bytes/i.test(n))).toBe(false);
+  });
+
+  it("returns empty shell when fewer than 2 points", () => {
+    const opt = toolOutcomesLineOption({ tool_calls: [{ t: 1, v: 0 }] });
+    expect(opt.series).toEqual([]);
+    expect(opt.title).toBeTruthy();
+  });
+});
+
+describe("cacheUsageMeterOption", () => {
+  it("reads usage/quota as one bar and never invents 256 MiB", () => {
+    const opt = cacheUsageMeterOption(18 * 1024 * 1024, 256 * 1024 * 1024);
+    const series = opt.series as { type: string; data: number[] }[];
+    expect(series[0].type).toBe("bar");
+    expect(series[0].data[0]).toBe(18 * 1024 * 1024);
+    const x = opt.xAxis as { max?: number };
+    expect(x.max).toBe(256 * 1024 * 1024);
+  });
+
+  it("empty shell when quota missing — not a fake 256 MiB", () => {
+    const fromCountersOnly = cacheUsageMeterOption(0, 0);
+    expect(fromCountersOnly.series).toEqual([]);
+    const text = JSON.stringify(fromCountersOnly);
+    expect(text).not.toContain("268435456");
+  });
+});
+
+describe("subjectQuotaLineOption", () => {
+  it("only plots CodeQuota names", () => {
+    const opt = subjectQuotaLineOption({
+      mcp_subject_rate_quota: [
+        { t: 1, v: 1 },
+        { t: 2, v: 3 },
+      ],
+      mcp_subject_slot_quota: [
+        { t: 1, v: 0 },
+        { t: 2, v: 1 },
+      ],
+      "tenant|alice|secret": [
+        { t: 1, v: 99 },
+        { t: 2, v: 99 },
+      ],
+    });
+    const names = (opt.series as { name: string }[]).map((s) => s.name);
+    expect(names).toEqual(["mcp_subject_rate_quota", "mcp_subject_slot_quota"]);
+  });
+});
+
+describe("pickNamedRows / leftoverSnapshotRows", () => {
+  it("splits HTTP counts from leftover registry names", () => {
+    const counters = {
+      jenkins_http_requests_total: 140,
+      mcp_bytes_out: 12,
+      cache_packs_created: 2,
+      tool_calls: 3,
+    };
+    expect(pickNamedRows(counters, ["jenkins_http_requests_total"])).toEqual({
+      jenkins_http_requests_total: 140,
+    });
+    const left = leftoverSnapshotRows(counters, { cache_usage_bytes: 1 }, [
+      "tool_calls",
+      "jenkins_http_requests_total",
+      "cache_usage_bytes",
+    ]);
+    expect(left).toEqual({ cache_packs_created: 2 });
+    expect(left).not.toHaveProperty("mcp_bytes_out");
   });
 });

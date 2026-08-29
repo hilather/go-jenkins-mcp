@@ -6,16 +6,33 @@
 /** Max points retained per series (process-local SPA ring buffer). */
 export const METRICS_HISTORY_MAX_POINTS = 60;
 
-/** Preferred counter/gauge names when present in a snapshot. */
+/**
+ * Go registry names (internal/telemetry.Metrics). Never legacy aliases
+ * http_requests / cache_evict / identity_reverify_deny.
+ */
 export const PREFERRED_METRIC_KEYS = [
   "tool_calls",
   "mcp_tool_ok",
   "mcp_tool_error",
   "mcp_tool_deny",
+  "jenkins_http_requests_total",
+  "jenkins_http_errors_total",
+  "jenkins_http_wire_bytes_total",
+  "jenkins_http_decoded_bytes_total",
+  "cache_hits",
+  "cache_evict_items",
+  "cache_maint_ticks",
+  "jenkins_circuit_open_events_total",
   // HOST-006 / OBS residual lite — process-local subject rate/slot CodeQuota
   // (never subject keys as series labels).
   "mcp_subject_rate_quota",
   "mcp_subject_slot_quota",
+  // Gauges (eviction-path SetGauge only).
+  "cache_usage_bytes",
+  "cache_quota_bytes",
+] as const;
+
+export const FORBIDDEN_METRIC_ALIASES = [
   "http_requests",
   "http_errors",
   "http_bytes_in",
@@ -24,6 +41,35 @@ export const PREFERRED_METRIC_KEYS = [
   "cache_evict",
   "cache_maint",
   "identity_reverify_deny",
+] as const;
+
+export const TOOL_OUTCOME_KEYS = [
+  "tool_calls",
+  "mcp_tool_ok",
+  "mcp_tool_error",
+  "mcp_tool_deny",
+] as const;
+
+export const SUBJECT_QUOTA_KEYS = [
+  "mcp_subject_rate_quota",
+  "mcp_subject_slot_quota",
+] as const;
+
+export const HTTP_COUNT_KEYS = [
+  "jenkins_http_requests_total",
+  "jenkins_http_errors_total",
+] as const;
+
+export const HTTP_BYTE_KEYS = [
+  "jenkins_http_wire_bytes_total",
+  "jenkins_http_decoded_bytes_total",
+] as const;
+
+export const LEFTOVER_COUNT_KEYS = [
+  "cache_hits",
+  "cache_evict_items",
+  "cache_maint_ticks",
+  "jenkins_circuit_open_events_total",
 ] as const;
 
 export interface MetricsSnapshotMaps {
@@ -51,13 +97,14 @@ export function selectMetricKeys(
     ...(maps.counters ?? {}),
     ...(maps.gauges ?? {}),
   };
+  const banned = new Set<string>(FORBIDDEN_METRIC_ALIASES);
   const preferred = PREFERRED_METRIC_KEYS.filter((k) => k in merged);
   if (preferred.length >= maxKeys) {
     return preferred.slice(0, maxKeys);
   }
   const preferredSet = new Set<string>(preferred);
   const rest = Object.entries(merged)
-    .filter(([k]) => !preferredSet.has(k))
+    .filter(([k]) => !preferredSet.has(k) && !banned.has(k))
     .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]) || a[0].localeCompare(b[0]))
     .map(([k]) => k);
   return [...preferred, ...rest].slice(0, maxKeys);

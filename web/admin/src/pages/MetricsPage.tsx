@@ -1,30 +1,52 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchMetrics } from "../api/client";
+import { fetchHealth, fetchMetrics } from "../api/client";
 import { EChart } from "../components/charts/EChart";
+import { ResidualCallout } from "../components/ResidualCallout";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
 import { PageHeader } from "../components/PageHeader";
+import { StatusChipRow } from "../components/StatusChip";
 import { downloadJson } from "../lib/download";
 import {
-  historyLineOption,
-  multiHistoryLineOption,
-  snapshotBarOption,
+  cacheUsageMeterOption,
+  leftoverSnapshotRows,
+  pickNamedRows,
+  subjectQuotaLineOption,
+  toolOutcomesLineOption,
 } from "../lib/metricCharts";
+import { formatBytesMiB, formatHealthRateCaption } from "../lib/overviewInventory";
 import {
+  HTTP_BYTE_KEYS,
+  HTTP_COUNT_KEYS,
+  LEFTOVER_COUNT_KEYS,
   METRICS_HISTORY_MAX_POINTS,
+  SUBJECT_QUOTA_KEYS,
+  TOOL_OUTCOME_KEYS,
   appendMetricsHistory,
   buildMetricsExportPayload,
-  selectMetricKeys,
   type MetricsHistory,
 } from "../lib/metricsHistory";
+import type { StatusChip } from "../lib/overviewHealth";
 
 const REFRESH_MS = 15_000;
 
+const CLAIMED_METRIC_KEYS = [
+  ...TOOL_OUTCOME_KEYS,
+  ...SUBJECT_QUOTA_KEYS,
+  ...HTTP_COUNT_KEYS,
+  ...HTTP_BYTE_KEYS,
+  ...LEFTOVER_COUNT_KEYS,
+  "cache_usage_bytes",
+  "cache_quota_bytes",
+] as const;
+
 function MapTable({
   title,
+  subtitle,
   data,
 }: {
   title: string;
+  subtitle?: string;
   data: Record<string, number>;
 }) {
   const entries = Object.entries(data ?? {}).sort(([a], [b]) =>
@@ -32,7 +54,14 @@ function MapTable({
   );
   return (
     <div className="card">
-      <h2>{title} (table)</h2>
+      <h2>
+        {title}{" "}
+        {subtitle ? (
+          <span className="muted" style={{ fontWeight: 400 }}>
+            ({subtitle})
+          </span>
+        ) : null}
+      </h2>
       {entries.length === 0 ? (
         <p className="muted">Empty.</p>
       ) : (
@@ -54,39 +83,6 @@ function MapTable({
             </tbody>
           </table>
         </div>
-      )}
-    </div>
-  );
-}
-
-function HistoryCard({
-  label,
-  series,
-}: {
-  label: string;
-  series: { t: number; v: number }[];
-}) {
-  const latest = series.length ? series[series.length - 1].v : 0;
-  const option = useMemo(
-    () => historyLineOption(label, series),
-    [label, series],
-  );
-  return (
-    <div className="metric-chart-card" title={label}>
-      <div className="metric-chart-head">
-        <span className="mono sparkline-name">{label}</span>
-        <span className="mono sparkline-value">{latest}</span>
-      </div>
-      {option ? (
-        <EChart
-          option={option}
-          height={140}
-          ariaLabel={`${label} history, ${series.length} points, latest ${latest}`}
-        />
-      ) : (
-        <p className="muted metric-chart-empty">
-          need ≥2 samples for ECharts history
-        </p>
       )}
     </div>
   );
@@ -119,48 +115,46 @@ export function MetricsPage() {
     refetchIntervalInBackground: false,
   });
 
-  // Record one history sample per successful fetch (including flat counters).
+  const healthQ = useQuery({
+    queryKey: ["health"],
+    queryFn: fetchHealth,
+    retry: 1,
+    staleTime: 30_000,
+  });
+
   useEffect(() => {
-    if (!q.isSuccess || !q.data) {
+    if (!q.isSuccess || !q.data || !q.data.available) {
       return;
     }
     const maps = {
       counters: q.data.counters ?? {},
       gauges: q.data.gauges ?? {},
     };
-    const keys = selectMetricKeys(maps, 8);
-    if (keys.length === 0 && !q.data.available) {
-      return;
-    }
-    const trackKeys =
-      keys.length > 0
-        ? keys
-        : selectMetricKeys(
-            { counters: maps.counters, gauges: maps.gauges },
-            8,
-          );
-    if (trackKeys.length === 0) {
-      return;
-    }
+    const trackKeys = [...TOOL_OUTCOME_KEYS, ...SUBJECT_QUOTA_KEYS];
     setHistory((prev) =>
       appendMetricsHistory(prev, maps, trackKeys, q.dataUpdatedAt || Date.now()),
     );
   }, [q.dataUpdatedAt, q.isSuccess, q.data]);
 
-  const trackedKeys = useMemo(() => Object.keys(history).sort(), [history]);
+  const counters = q.data?.counters ?? {};
+  const gauges = q.data?.gauges ?? {};
+  const available = Boolean(q.data?.available);
 
-  const countersBar = useMemo(
-    () => snapshotBarOption("Counters", q.data?.counters ?? {}),
-    [q.data?.counters],
+  const outcomes = useMemo(() => toolOutcomesLineOption(history), [history]);
+  const quotaChart = useMemo(() => subjectQuotaLineOption(history), [history]);
+  const cacheMeter = useMemo(
+    () =>
+      cacheUsageMeterOption(
+        Number(gauges.cache_usage_bytes ?? 0),
+        Number(gauges.cache_quota_bytes ?? 0),
+      ),
+    [gauges.cache_usage_bytes, gauges.cache_quota_bytes],
   );
-  const gaugesBar = useMemo(
-    () => snapshotBarOption("Gauges", q.data?.gauges ?? {}),
-    [q.data?.gauges],
-  );
-  const overlay = useMemo(
-    () => multiHistoryLineOption(history, 6),
-    [history],
-  );
+
+  const httpCounts = pickNamedRows(counters, HTTP_COUNT_KEYS);
+  const httpBytes = pickNamedRows(counters, HTTP_BYTE_KEYS);
+  const leftoverNamed = pickNamedRows(counters, LEFTOVER_COUNT_KEYS);
+  const leftoverOther = leftoverSnapshotRows(counters, gauges, CLAIMED_METRIC_KEYS);
 
   const exportSnapshot = () => {
     if (!q.data) {
@@ -181,23 +175,71 @@ export function MetricsPage() {
       ? "paused (tab hidden)"
       : `auto every ${REFRESH_MS / 1000}s`;
 
+  const rateCaption = formatHealthRateCaption(
+    healthQ.data?.ratePerMinute,
+    healthQ.data?.rateBurst,
+  );
+
+  const chips: StatusChip[] = available
+    ? [
+        {
+          id: "registry",
+          label: "Registry",
+          value: "available",
+          tone: "ok",
+        },
+        {
+          id: "tool_calls",
+          label: "tool_calls",
+          value: String(counters.tool_calls ?? 0),
+          tone: "neutral",
+        },
+        {
+          id: "ok",
+          label: "mcp_tool_ok",
+          value: String(counters.mcp_tool_ok ?? 0),
+          tone: "ok",
+        },
+        {
+          id: "err-deny",
+          label: "error / deny",
+          value: `${counters.mcp_tool_error ?? 0} · ${counters.mcp_tool_deny ?? 0}`,
+          tone: "warn",
+        },
+        {
+          id: "hits",
+          label: "cache_hits",
+          value: String(counters.cache_hits ?? 0),
+          tone: "neutral",
+        },
+        {
+          id: "quota",
+          label: "quota denials",
+          value: `rate ${counters.mcp_subject_rate_quota ?? 0} · slot ${counters.mcp_subject_slot_quota ?? 0}`,
+          tone: "residual",
+        },
+      ]
+    : [
+        {
+          id: "registry",
+          label: "Registry",
+          value: "unavailable",
+          tone: "residual",
+          title: "No linked serve registry — not a live zero snapshot",
+        },
+      ];
+
+  const usage = Number(gauges.cache_usage_bytes ?? 0);
+  const quota = Number(gauges.cache_quota_bytes ?? 0);
+
   return (
     <>
       <PageHeader title="Metrics">
-        Process-local telemetry · charts: <strong>Apache ECharts</strong>
+        Process-local counters for this process. No fleet, no job graphs —
+        GET /admin/v1/metrics only.
       </PageHeader>
 
-      <div className="banner warn" role="status">
-        <strong>Residual:</strong> counters/gauges are{" "}
-        <em>process-local only</em> for the admin BFF / linked serve registry.
-        Multi-process fleet aggregation is out of scope (MGR-002 residual). Empty
-        maps when the registry is unset are expected, not an error. Subject quota
-        counters (<code>mcp_subject_rate_quota</code> /{" "}
-        <code>mcp_subject_slot_quota</code>) are process-local HOST-006 CodeQuota
-        totals only — never subject keys as labels; multi-pod aggregation residual.
-        History series are browser-session only (max{" "}
-        {METRICS_HISTORY_MAX_POINTS} points per key).
-      </div>
+      <StatusChipRow chips={chips} />
 
       <div className="toolbar">
         <button
@@ -222,10 +264,12 @@ export function MetricsPage() {
           onClick={exportSnapshot}
           disabled={!q.isSuccess}
         >
-          Export JSON
+          Export snapshot
         </button>
         <span className="toolbar-meta muted" role="status">
           {refreshStateLabel}
+          {" · session ring ≤ "}
+          {METRICS_HISTORY_MAX_POINTS}
           {q.isFetching ? " · fetching…" : ""}
           {q.dataUpdatedAt
             ? ` · last ${new Date(q.dataUpdatedAt).toLocaleTimeString()}`
@@ -238,98 +282,102 @@ export function MetricsPage() {
 
       {q.isSuccess && (
         <>
-          {!q.data.available && (
+          <ResidualCallout
+            caveat="Process-local snapshot · no fleet aggregation · session history ≤ 60 pts"
+          >
+            {q.data.residual ? <p className="muted">{q.data.residual}</p> : null}
+            <p className="muted">
+              available={String(q.data.available)}. Export is the current
+              snapshot only (not the session ring). Never subject keys.
+            </p>
+          </ResidualCallout>
+
+          {!available && (
             <div className="banner warn" role="status">
               Metrics registry not available.
-              {q.data.residual ? ` ${q.data.residual}` : ""}
-            </div>
-          )}
-          {q.data.available && q.data.residual && (
-            <div className="banner warn" role="status">
-              {q.data.residual}
-            </div>
-          )}
-          <div className="card">
-            <h2>Status</h2>
-            <dl className="dl">
-              <dt>available</dt>
-              <dd>{String(q.data.available)}</dd>
-              <dt>tracked series</dt>
-              <dd>
-                {trackedKeys.length
-                  ? trackedKeys.join(", ")
-                  : "(waiting for samples)"}
-              </dd>
-              <dt>chart library</dt>
-              <dd>Apache ECharts (canvas)</dd>
-            </dl>
-          </div>
-
-          <div className="metrics-charts-grid">
-            <div className="card metric-snapshot-card">
-              <h2>Counters snapshot</h2>
-              <EChart
-                option={countersBar}
-                height={Math.max(
-                  160,
-                  Math.min(
-                    360,
-                    64 + Object.keys(q.data.counters ?? {}).length * 22,
-                  ),
-                )}
-                ariaLabel="Counters bar chart"
-              />
-            </div>
-            <div className="card metric-snapshot-card">
-              <h2>Gauges snapshot</h2>
-              <EChart
-                option={gaugesBar}
-                height={Math.max(
-                  160,
-                  Math.min(
-                    360,
-                    64 + Object.keys(q.data.gauges ?? {}).length * 22,
-                  ),
-                )}
-                ariaLabel="Gauges bar chart"
-              />
-            </div>
-          </div>
-
-          {overlay && (
-            <div className="card">
-              <h2>
-                History overlay{" "}
-                <span className="muted" style={{ fontWeight: 400 }}>
-                  (ECharts · session ring ≤ {METRICS_HISTORY_MAX_POINTS})
-                </span>
-              </h2>
-              <EChart
-                option={overlay}
-                height={280}
-                ariaLabel="Multi-series metrics history"
-              />
+              {q.data.residual ? ` ${q.data.residual}` : ""}{" "}
+              Empty maps are expected — not a live zero process.
             </div>
           )}
 
-          {trackedKeys.length > 0 && (
-            <div className="card">
-              <h2>
-                Per-metric history{" "}
-                <span className="muted" style={{ fontWeight: 400 }}>
-                  (ECharts line)
-                </span>
-              </h2>
-              <div className="metric-chart-list">
-                {trackedKeys.map((k) => (
-                  <HistoryCard key={k} label={k} series={history[k] ?? []} />
-                ))}
+          {available && (
+            <>
+              <div className="metrics-split">
+                <div className="card metric-snapshot-card">
+                  <h2>
+                    Tool outcomes{" "}
+                    <span className="muted" style={{ fontWeight: 400 }}>
+                      cumulative counts · y includes 0
+                    </span>
+                  </h2>
+                  <EChart
+                    option={outcomes}
+                    height={280}
+                    ariaLabel="Tool outcome cumulative counts"
+                  />
+                  <p className="chart-caption muted">
+                    Same unit. tool_calls = ok + error + deny. Quota denials
+                    also increment mcp_tool_error (not a fourth outcome). Not a
+                    rate — flat means no new Inc this interval.
+                  </p>
+                </div>
+                <div>
+                  <div className="card metric-snapshot-card">
+                    <h2>
+                      Cache posture{" "}
+                      <span className="muted" style={{ fontWeight: 400 }}>
+                        gauges · bytes
+                      </span>
+                    </h2>
+                    <EChart
+                      option={cacheMeter}
+                      height={140}
+                      ariaLabel="Cache usage versus quota"
+                    />
+                    <p className="chart-caption muted">
+                      {quota > 0
+                        ? `${formatBytesMiB(usage)} cache_usage_bytes of ${formatBytesMiB(quota)} quota`
+                        : "cache_quota_bytes missing — no invented quota. One comparison, one unit."}
+                    </p>
+                  </div>
+                  <div className="card metric-snapshot-card">
+                    <h2>
+                      Subject quota{" "}
+                      <span className="residual-badge">HOST-006</span>
+                    </h2>
+                    <EChart
+                      option={quotaChart}
+                      height={180}
+                      ariaLabel="Subject rate and slot quota denials"
+                    />
+                    <p className="chart-caption muted">
+                      CodeQuota totals.
+                      {rateCaption ? ` ${rateCaption}.` : " "}
+                      Never subject keys.
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
 
-          <MapTable title="Counters" data={q.data.counters} />
-          <MapTable title="Gauges" data={q.data.gauges} />
+              <div className="metrics-tables">
+                <MapTable
+                  title="Jenkins HTTP"
+                  subtitle="counts"
+                  data={httpCounts}
+                />
+                <MapTable
+                  title="Bytes"
+                  subtitle="not on the count charts"
+                  data={httpBytes}
+                />
+              </div>
+              <MapTable
+                title="Other registry counts"
+                subtitle="leftover preferred + overflow"
+                data={{ ...leftoverNamed, ...leftoverOther }}
+              />
+            </>
+          )}
         </>
       )}
     </>

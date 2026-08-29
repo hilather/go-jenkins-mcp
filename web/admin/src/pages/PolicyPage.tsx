@@ -19,6 +19,11 @@ import type {
 } from "../api/types";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
 import { PageHeader } from "../components/PageHeader";
+import { ResidualCallout } from "../components/ResidualCallout";
+import {
+  POLICY_RESIDUAL_CAVEAT,
+  POLICY_RESIDUAL_DETAILS,
+} from "../lib/leftoverResiduals";
 
 function StringList({
   items,
@@ -362,9 +367,13 @@ export function PolicyPage() {
         </>
       )}
 
+      <ResidualCallout caveat={POLICY_RESIDUAL_CAVEAT}>
+        <p className="muted">{POLICY_RESIDUAL_DETAILS}</p>
+      </ResidualCallout>
+
       <div className="card">
-        <h2>Pilot pilot overlay (draft → validate → apply)</h2>
-        {overlayQ.isLoading && <p className="muted">Loading overlay…</p>}
+        <h2>Pilot overlay (draft → validate → apply)</h2>
+        {overlayQ.isLoading && <Loading />}
         {overlayQ.isError && <ErrorBanner error={overlayQ.error} />}
         {overlayQ.isSuccess && !overlayQ.data.available && (
           <div className="banner warn" role="status">
@@ -384,16 +393,6 @@ export function PolicyPage() {
           </div>
         )}
 
-        <div className="banner warn" role="note" style={{ marginBottom: "0.75rem" }}>
-          <strong>Subject rate residual (HOST-006 / HOST-008):</strong>{" "}
-          <code>max_tools_per_minute</code> / <code>max_tools_burst</code>{" "}
-          overlay knobs <strong>lower only</strong> under a live gateway serve
-          via <code>SubjectRateLimiter.LowerRate</code> (never raise above the
-          env bootstrap ceiling). Raising the bootstrap needs a serve restart
-          with higher <code>JENKINS_MCP_SUBJECT_RATE_*</code>. Rate is
-          process-local; multi-replica shared rate remains residual
-          (HOST-008). Empty draft fields omit the overlay keys (no change).
-        </div>
 
         <div className="form-grid">
           <label className="form-field">
@@ -615,7 +614,7 @@ export function PolicyPage() {
               Does <strong>not</strong> sign. Cannot widen enterprise{" "}
               <code>force_read_only</code>. No private keys are sent.
             </p>
-            <div className="toolbar">
+            <div className="modal-actions">
               <button
                 type="button"
                 className="btn"

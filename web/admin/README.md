@@ -33,7 +33,7 @@ the console or MCP ops surface silently stale. Full rules: root `AGENTS.md` →
 | Rule | Detail |
 |------|--------|
 | **Charts = ECharts only** | All charts go through `src/components/charts/EChart.tsx` + option builders (e.g. `src/lib/metricCharts.ts`). Do **not** add Recharts, Chart.js, Plotly, Visx, Nivo, or ad-hoc SVG chart UIs. |
-| **Metrics must visualize** | Counters/gauges/rates on the Metrics page always have **at least** a basic ECharts chart (snapshot bar and/or history line), not tables alone. Empty maps still show an ECharts empty shell. |
+| **Metrics must visualize** | Tool outcomes, cache usage/quota, and subject quota always have **Apache ECharts** (empty shell when &lt;2 samples or quota missing). HTTP counts/bytes and leftover registry names may be **tables**. Never mix bytes on a count axis. |
 | **Same change** | New BFF metric fields → update Metrics charts in the same PR. |
 | **Root policy** | See root `AGENTS.md` → “Admin SPA charts and metrics visualization”. |
 
@@ -43,11 +43,11 @@ the console or MCP ops surface silently stale. Full rules: root `AGENTS.md` →
 |----|--------|--------|
 | **001** | Done | Tokens/density + `PageHeader` |
 | **002** | Done | Sticky topbar/sidebar; active nav; mobile nav residual honesty |
-| **003** | Done | Overview chips + ECharts live-pin residual chart |
+| **003** | Done | Overview chips; live-pin 0/1 ECharts bar **removed** (chips already show A/B/C) |
 | **004** | Done | Sticky table headers; empty states |
 | **005** | Done | Doctor residual hierarchy (`check-pill`, residual badge) |
 | **006** | Done | Focus rings; chart aria; reduced-motion |
-| **007** | Done | Light CSS + light ECharts theme tokens |
+| **007** | Done | Forced dark-lab chrome (`#0b0c0e` / `#6ea8fe` / IBM Plex). Light theme unused. |
 | **008** | Done\* residual | Tree-shaken ECharts (`lib/echartsSetup.ts`). **Current prod assets:** JS ~**887 kB** min / ~**287 kB** gzip; CSS ~14 kB. Further dynamic `import()` split is optional residual — not a merge blocker. |
 
 ## Prerequisites
@@ -125,32 +125,32 @@ localStorage.setItem("jenkins-mcp.admin.profile", "corp");
 
 | Path | Page | API |
 |------|------|-----|
-| `/` | Overview | `GET /admin/v1/health`, `/version` |
-| `/profiles` | Profiles (UI-007) | `GET /admin/v1/profiles`, `/profiles/{id}`, self-check, support-bundle (operator) |
-| `/policy` | Policy | `GET /admin/v1/profiles/{id}/policy/effective` |
-| `/metrics` | Metrics | `GET /admin/v1/metrics` |
-| `/audit` | Audit | `GET /admin/v1/profiles/{id}/audit` |
-| `/doctor` | Doctor | `GET /admin/v1/profiles/{id}/doctor?offline=1` |
-| `/cache` | Cache (UI-007) | `GET .../cache`, `POST .../cache/evict-plan`, `POST .../cache/evict` (operator) |
+| `/` | Overview (Status) | `GET /admin/v1/health`, `/version`, residual-status, vault |
+| `/metrics` | Metrics (Status) | `GET /admin/v1/metrics` |
+| `/doctor` | Doctor (Status) | `GET /admin/v1/profiles/{id}/doctor?offline=1` |
+| `/profiles` | Profiles (Config) | `GET /admin/v1/profiles`, `/profiles/{id}`, self-check, support-bundle (operator) |
+| `/policy` | Policy (Config) | `GET /admin/v1/profiles/{id}/policy/effective` |
+| `/access` | Access (Config) | bindings GET/PUT (policy_admin) |
+| `/audit` | Audit (Ops) | `GET /admin/v1/profiles/{id}/audit` |
+| `/cache` | Cache (Ops) | `GET .../cache`, `POST .../cache/evict-plan`, `POST .../cache/evict` (operator) |
 
 ### Profiles / Cache pages (UI-007)
 
 - **Profiles:** list + detail (no secrets; `hasCredential` boolean only), offline security self-check, support-bundle preview/create when `/me` has `cache_destructive`.
 - **Cache:** quota/usage (`available:false` residual when store missing), non-destructive eviction plan for all roles, destructive evict only when role is operator — double-confirm modal (type `EVICT` twice); server also requires exact `confirm: "EVICT"`.
 - **Overview consent purge (HOST-007 Mode C):** `purge_expired` / `delete_session` as usual; destructive **clear_all** requires typing `CLEAR_ALL` (server also requires exact `confirm: "CLEAR_ALL"`; CLI `--all --confirm=CLEAR_ALL`).
-- **Doctor:** run button + offline toggle (online needs admin shared secret on the BFF).
-- **Doctor:** run button + offline toggle (online needs admin shared secret on the BFF). When the report includes `gateway_residual_status`, a residual card (`shared_subject_rate_file` / `shared_principal_cache_file` / `shared_jwks_file` / `shared_token_cache_file` / `shared_api_token_vault_file` / `shared_jwt_vault_file`, principal count honesty, live-pin-blockers pointer) appears after Overall — HOST-007 lite; does not drive overall; never tokens; path values never shown.
+- **Doctor:** run button + offline toggle (online needs admin shared secret on the BFF). Page-level ResidualCallout (HOST-007 badge + caveat + HOST-* details) is always shown. When the report includes `gateway_residual_status`, the field DL appears after Overall — informational only; does not drive overall; never tokens; path values never shown.
 - **Residuals:** pin list UI, full cache repair/verify from SPA (use CLI); policy apply (UI-004).
 
 ### Metrics page (UI-005)
 
 - Auto-refresh every **15s**; **pauses when the tab is hidden** (`document.visibilityState`) and resumes when visible.
 - Manual **Pause / Resume** toggle and **Refresh now**.
-- **ECharts** snapshot **bar charts** for counters and gauges (always mounted; empty-state option when maps are empty).
-- Session **history** via ECharts (multi-series overlay + per-metric line cards) for preferred keys / top magnitude. Cap **≤ 60 points** per series (browser memory bound).
-- Tables remain under the charts for exact values.
-- **Export JSON** downloads the current secret-free snapshot as `metrics-snapshot.json` (client-side only).
-- **Residual:** process-local registry only; **no multi-process / fleet aggregation** in v1 (MGR-002 residual). Empty maps when the registry is unset are expected.
+- **ECharts** grouped surfaces: tool outcomes (cumulative counts from 0), one cache usage/quota meter (`cache_usage_bytes` / `cache_quota_bytes` **gauges**), subject quota (`mcp_subject_rate_quota` / `mcp_subject_slot_quota`). Empty shell when &lt;2 samples or quota missing — never invent 256 MiB.
+- Preferred keys match the Go registry (`tool_calls`, `mcp_tool_*`, `jenkins_http_*_total`, `cache_hits`, `cache_evict_items`, `cache_maint_ticks`, `jenkins_circuit_open_events_total`). Never `http_requests` / `cache_evict` / `identity_reverify_deny`.
+- HTTP counts and byte totals are **tables**, not a shared bar. Leftover registry names stay in an overflow table.
+- Session ring **≤ 60 points** (browser memory). **Export snapshot** is the current secret-free snapshot only (not the ring).
+- **Residual:** process-local registry only; **no multi-process / fleet aggregation**. `available: false` is not a live zero process. Health rate/burst may caption subject quota — not a `/metrics` field.
 
 ### Audit page (UI-006)
 

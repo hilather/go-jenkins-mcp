@@ -13,6 +13,11 @@ import type { AuditEvent, AuditQuery } from "../api/types";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
 import { PageHeader } from "../components/PageHeader";
+import { ResidualCallout } from "../components/ResidualCallout";
+import {
+  AUDIT_RESIDUAL_CAVEAT,
+  AUDIT_RESIDUAL_DETAILS,
+} from "../lib/leftoverResiduals";
 import {
   AUDIT_LIMIT_OPTIONS,
   AUDIT_TYPE_HINTS,
@@ -284,6 +289,10 @@ export function AuditPage() {
         Profile <code>{profileId}</code> · privacy-preserving event list
       </PageHeader>
 
+      <ResidualCallout caveat={AUDIT_RESIDUAL_CAVEAT}>
+        <p className="muted">{AUDIT_RESIDUAL_DETAILS}</p>
+      </ResidualCallout>
+
       <section className="card filters-card" aria-labelledby="audit-settings-heading">
         <h2 id="audit-settings-heading">Event type settings</h2>
         <p className="muted" style={{ marginTop: 0 }}>
@@ -371,11 +380,11 @@ export function AuditPage() {
                 </span>
               )}
             </div>
-            {settingsQ.data.residual && (
+            {settingsQ.data.residual ? (
               <p className="muted" style={{ fontSize: "0.8rem", marginBottom: 0 }}>
                 Residual: {settingsQ.data.residual}
               </p>
-            )}
+            ) : null}
           </>
         )}
       </section>
@@ -383,7 +392,7 @@ export function AuditPage() {
       <form className="card filters-card" onSubmit={applyFilters}>
         <h2>Filters</h2>
         <div className="filters-grid">
-          <label className="field">
+          <label className="form-field">
             <span>type</span>
             <select
               className="input mono"
@@ -399,7 +408,7 @@ export function AuditPage() {
               ))}
             </select>
           </label>
-          <label className="field">
+          <label className="form-field">
             <span>limit</span>
             <select
               className="input"
@@ -418,7 +427,7 @@ export function AuditPage() {
               ))}
             </select>
           </label>
-          <label className="field">
+          <label className="form-field">
             <span>before (datetime-local)</span>
             <input
               type="datetime-local"
@@ -429,7 +438,7 @@ export function AuditPage() {
               }
             />
           </label>
-          <label className="field field-wide">
+          <label className="form-field form-field-wide">
             <span>before (RFC3339 text; used if local empty)</span>
             <input
               type="text"
@@ -442,7 +451,7 @@ export function AuditPage() {
               autoComplete="off"
             />
           </label>
-          <label className="field field-wide">
+          <label className="form-field form-field-wide">
             <span>
               externalSubject (BFF exact match via external_subject; never a
               token)
@@ -515,10 +524,10 @@ export function AuditPage() {
               {!loaded.length ? (
                 <EmptyState title="No audit events">{emptyMessage}</EmptyState>
               ) : !displayed.length ? (
-                <p className="muted">
+                <EmptyState title="No matching events">
                   No events match externalSubject exact filter (BFF
                   external_subject; client residual for older BFF).
-                </p>
+                </EmptyState>
               ) : (
                 <div className="table-scroll">
                   <table className="data">
@@ -607,7 +616,9 @@ export function AuditPage() {
             >
               <h2>Event detail</h2>
               {!selected ? (
-                <p className="muted">Select a row to inspect schema fields.</p>
+                <EmptyState title="No event selected">
+                  Select a row to inspect schema fields.
+                </EmptyState>
               ) : (
                 <>
                   <dl className="dl">
