@@ -159,18 +159,23 @@ in-repo `make live-*` already covers the change.
 For full-stack / multi-protocol Docker testing (DNS, LDAP, TACACS+/RADIUS, mail,
 NFS, LabMITM, labinfo, MCPJungle), clone
 [hilather/mcp-integration-lab](https://github.com/hilather/mcp-integration-lab)
-and run `make up` / `make smoke` **in that repository**. Those targets do not
-exist in this repo. Follow that repo’s `AGENTS.md` and `README.md` for toolchain
-and bring-up (separate clone; do not assume its default ports coexist with
-`testdata/jenkins-compose` or `testdata/jwt-rs-lab`).
+as a **separate tree**. Read **that** repo’s `AGENTS.md` and `README.md` first
+(toolchain, all-interfaces bind, profile ports — this repo’s Go 1.25 toolchain
+is not sufficient). Then run `make up` / `make smoke` **in that repository**.
+Those targets do not exist in this repo. Do not assume sibling defaults coexist
+with in-repo labs: LabDNS REST/UI is **18080** (same as `testdata/jenkins-compose`
+and `deploy/local`); labinfo is **18090** (same as `testdata/saml-lab`). Remap
+in the sibling profile; do not treat `testdata/jwt-rs-lab` (18091/18092) as the
+collision.
 
 Jenkins jwt-rs plus an optional Entra fill-in profile is **being added** there
 (Entra IDs in a gitignored team profile; default `make smoke` does not need
 Azure). Until that profile lands, the Entra/jwt-rs path in **this** repo remains
 `testdata/jwt-rs-lab` and
-[`docs/testing/entra-jwt-rs-lab.md`](docs/testing/entra-jwt-rs-lab.md). Do not
-treat the sibling’s Phase 1 MCP-gateway OAuth/OIDC plan as this product’s
-Jenkins jwt-rs or Entra walkthrough. Do not duplicate that walkthrough here.
+[`docs/testing/entra-jwt-rs-lab.md`](docs/testing/entra-jwt-rs-lab.md)
+(§ Agent hints for Entra pitfalls). Do not treat the sibling’s Phase 1
+MCP-gateway OAuth/OIDC plan as this product’s Jenkins jwt-rs or Entra
+walkthrough. Do not duplicate that walkthrough here.
 
 ### Optional operator Entra lab
 
@@ -179,10 +184,11 @@ Keycloak `jwt-rs-lab` remains the default **Free-lab validated** plugin lab.
 - In-repo optional operator walkthrough (this repo’s `testdata/jwt-rs-lab`
   pointed at Entra):
   [`docs/testing/entra-jwt-rs-lab.md`](docs/testing/entra-jwt-rs-lab.md).
-- Full-stack jwt-rs + optional Entra fill-in (**being added**): clone
+- Full-stack jwt-rs + optional Entra fill-in is **being added** in
   [hilather/mcp-integration-lab](https://github.com/hilather/mcp-integration-lab)
-  and follow **that** repo’s `AGENTS.md` / `README.md`. Entra IDs belong in a
-  gitignored team profile; default smoke does not need Azure.
+  (gitignored team profile; default smoke does not need Azure). Do **not** use
+  that repo’s README as an Entra/jwt-rs runbook until the fill-in profile
+  exists — current path is the in-repo walkthrough above.
 - Does **not** flip `mode_*_live_*_qualified` or close OAUTH-009/010.
 - Never bake secrets or real tenant / app IDs.
 

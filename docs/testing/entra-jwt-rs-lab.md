@@ -53,13 +53,8 @@ compares issuer and tenant **exactly**.
 - `jenkins-mcp login --profile <id> --oidc`; prove with Bearer `GET /whoAmI/api/json` and `GET /api/json`.
 - Never bake secrets or tokens. Isolated XDG + `JENKINS_MCP_KEYRING_FILE` for the lab.
 - This does **not** flip `mode_*_live_*_qualified` or close OAUTH-009/010.
-- Full-stack / multi-protocol Docker (DNS, LDAP, TACACS+/RADIUS, mail, NFS,
-  LabMITM, labinfo, MCPJungle) plus jwt-rs / optional Entra fill-in (**being
-  added**) lives in
-  [hilather/mcp-integration-lab](https://github.com/hilather/mcp-integration-lab).
-  Clone that repo and follow its `AGENTS.md` / `README.md`. Default smoke there
-  does not need Azure (Entra IDs are a gitignored team profile). This page
-  remains the walkthrough for **this** repo’s `testdata/jwt-rs-lab`.
+- Complementary sibling lab (not a prerequisite for this walkthrough; jwt-rs /
+  Entra fill-in **being added** there): see [Related](#related).
 
 ## Terms (one line each)
 
