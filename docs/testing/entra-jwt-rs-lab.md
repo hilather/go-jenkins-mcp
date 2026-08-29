@@ -53,6 +53,13 @@ compares issuer and tenant **exactly**.
 - `jenkins-mcp login --profile <id> --oidc`; prove with Bearer `GET /whoAmI/api/json` and `GET /api/json`.
 - Never bake secrets or tokens. Isolated XDG + `JENKINS_MCP_KEYRING_FILE` for the lab.
 - This does **not** flip `mode_*_live_*_qualified` or close OAUTH-009/010.
+- Full-stack / multi-protocol Docker (DNS, LDAP, TACACS+/RADIUS, mail, NFS,
+  LabMITM, labinfo, MCPJungle) plus jwt-rs / optional Entra fill-in (**being
+  added**) lives in
+  [hilather/mcp-integration-lab](https://github.com/hilather/mcp-integration-lab).
+  Clone that repo and follow its `AGENTS.md` / `README.md`. Default smoke there
+  does not need Azure (Entra IDs are a gitignored team profile). This page
+  remains the walkthrough for **this** repo’s `testdata/jwt-rs-lab`.
 
 ## Terms (one line each)
 
@@ -448,6 +455,8 @@ Compose `down -v` does **not** remove Entra apps or the isolated profile.
 ## Related
 
 - Default Keycloak lab: [`../../testdata/jwt-rs-lab/README.md`](../../testdata/jwt-rs-lab/README.md)
+- Full-stack sibling lab (clone, then `make up` / `make smoke` in that tree):
+  [hilather/mcp-integration-lab](https://github.com/hilather/mcp-integration-lab)
 - Qualification policy: [qualification.md](qualification.md)
 - Auth modes: [../integrations/auth-modes.md](../integrations/auth-modes.md)
 - OAUTH-009 residuals: [../auth/jwt-auth-filter-qualification.md](../auth/jwt-auth-filter-qualification.md)

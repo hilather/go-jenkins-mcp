@@ -149,21 +149,42 @@ tests remain the default `make test` gate; containers are **opt-in**.
 
 Secrets: ephemeral only; never bake production tokens into images or compose files.
 
+### Full-stack / multi-protocol Docker lab (sibling repo)
+
+In-repo disposable labs in the table above remain the **default free-lab
+qualification**. The sibling lab does **not** replace them. It is complementary
+— not a merge gate, not a qualification obligation, and not required when
+in-repo `make live-*` already covers the change.
+
+For full-stack / multi-protocol Docker testing (DNS, LDAP, TACACS+/RADIUS, mail,
+NFS, LabMITM, labinfo, MCPJungle), clone
+[hilather/mcp-integration-lab](https://github.com/hilather/mcp-integration-lab)
+and run `make up` / `make smoke` **in that repository**. Those targets do not
+exist in this repo. Follow that repo’s `AGENTS.md` and `README.md` for toolchain
+and bring-up (separate clone; do not assume its default ports coexist with
+`testdata/jenkins-compose` or `testdata/jwt-rs-lab`).
+
+Jenkins jwt-rs plus an optional Entra fill-in profile is **being added** there
+(Entra IDs in a gitignored team profile; default `make smoke` does not need
+Azure). Until that profile lands, the Entra/jwt-rs path in **this** repo remains
+`testdata/jwt-rs-lab` and
+[`docs/testing/entra-jwt-rs-lab.md`](docs/testing/entra-jwt-rs-lab.md). Do not
+treat the sibling’s Phase 1 MCP-gateway OAuth/OIDC plan as this product’s
+Jenkins jwt-rs or Entra walkthrough. Do not duplicate that walkthrough here.
+
 ### Optional operator Entra lab
 
 Keycloak `jwt-rs-lab` remains the default **Free-lab validated** plugin lab.
-An optional operator walkthrough that points that Jenkins at Entra (browser
-PKCE + jwt-auth-filter) lives at
-[`docs/testing/entra-jwt-rs-lab.md`](docs/testing/entra-jwt-rs-lab.md).
 
-- Two app registrations (API resource + public client). Do not merge them.
-- Public / native client (`publicClient`), **not** SPA.
-- `requestedAccessTokenVersion=2` on the **API** app (not the gateway app).
-- `jenkinsAudience` and jwt-auth-filter `allowedAudience` are the API **app id GUID**.
-- App A Token configuration: optional claims on the **access** token — `preferred_username` (optionally `name`, `email`). Scope `profile` is a companion only; it does not replace those claims.
-- JWKS is the Entra v2 keys URL. Scopes: `openid`, `profile`, `api://{api-app-id}/jenkins.access`. `login --oidc`. Prove with Bearer whoAmI + `/api/json`.
-- Never bake secrets. Isolated XDG + `JENKINS_MCP_KEYRING_FILE` for the lab.
+- In-repo optional operator walkthrough (this repo’s `testdata/jwt-rs-lab`
+  pointed at Entra):
+  [`docs/testing/entra-jwt-rs-lab.md`](docs/testing/entra-jwt-rs-lab.md).
+- Full-stack jwt-rs + optional Entra fill-in (**being added**): clone
+  [hilather/mcp-integration-lab](https://github.com/hilather/mcp-integration-lab)
+  and follow **that** repo’s `AGENTS.md` / `README.md`. Entra IDs belong in a
+  gitignored team profile; default smoke does not need Azure.
 - Does **not** flip `mode_*_live_*_qualified` or close OAUTH-009/010.
+- Never bake secrets or real tenant / app IDs.
 
 ## Non-negotiable: code review
 
