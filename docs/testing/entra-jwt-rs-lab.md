@@ -450,7 +450,10 @@ Compose `down -v` does **not** remove Entra apps or the isolated profile.
 ## Related
 
 - Default Keycloak lab: [`../../testdata/jwt-rs-lab/README.md`](../../testdata/jwt-rs-lab/README.md)
-- Full-stack sibling lab (clone, then `make up` / `make smoke` in that tree):
+- Full-stack sibling lab (separate clone; read **that** repo’s AGENTS.md /
+  README first, then `make up` / `make smoke` there — not an Entra/jwt-rs
+  runbook until the fill-in profile exists; default smoke does not prove
+  Jenkins or Entra):
   [hilather/mcp-integration-lab](https://github.com/hilather/mcp-integration-lab)
 - Qualification policy: [qualification.md](qualification.md)
 - Auth modes: [../integrations/auth-modes.md](../integrations/auth-modes.md)
