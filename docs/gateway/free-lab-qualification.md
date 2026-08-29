@@ -44,7 +44,8 @@ Default `make test` / `make ci` stay **offline** (no Docker requirement).
 Optional free extensions (nice-to-have, not product blockers):
 
 - Keycloak **OIDC** + disposable Jenkins + real `jwt-auth-filter` — **implemented free lab (`make live-jwt-rs-*`, `testdata/jwt-rs-lab/`)  
-- Free-tier Entra **only** when an operator chooses Microsoft-shaped evidence  
+- Free-tier Entra **only** when an operator chooses Microsoft-shaped evidence
+  ([optional walkthrough](../testing/entra-jwt-rs-lab.md); not a production pin)  
 
 ---
 

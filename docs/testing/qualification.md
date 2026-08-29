@@ -19,7 +19,8 @@ make docs-check
 |-----|---------|--------|
 | Jenkins LTS | `make live-jenkins-test` | HTTP client + RO smoke |
 | OAuth mock | `make live-oauth-test` | Gateway OAuth modes |
-| JWT RS + Keycloak | `make live-jwt-rs-test` | jwt-auth-filter free lab |
+| JWT RS + Keycloak | `make live-jwt-rs-test` | jwt-auth-filter free lab (default) |
+| Optional operator Entra + jwt-auth-filter | [entra-jwt-rs-lab.md](entra-jwt-rs-lab.md) (manual; not a merge gate) | Browser PKCE + real Entra JWKS on the same Jenkins lab |
 | SAML Keycloak | `make live-saml-test` | SAML SP |
 | Fleet cache | `make fleet-cache-lab-smoke` | Peer cache offline/lab |
 | Local Docker admin | `make local-docker-smoke` | Admin stack |

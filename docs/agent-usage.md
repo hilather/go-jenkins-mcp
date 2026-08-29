@@ -2,7 +2,7 @@
 
 How **Cursor / coding agents** should use go-jenkins-mcp efficiently and safely.
 
-Companion: [tool-contracts.md](tool-contracts.md) · [user guide](user/README.md)  
+Companion: [tool-contracts.md](tool-contracts.md) · [user guide](user/README.md) · optional Entra jwt-rs lab (not a pin): [testing/entra-jwt-rs-lab.md](testing/entra-jwt-rs-lab.md)  
 **Wave 20 sync:** includes Wave 18–19 tools (queue cancel, external-logs ACL, change correlation, L1 search re-eval, start_job param defs).
 
 ---

@@ -19,6 +19,10 @@ approved reverse-proxy JWT RS, or a hardened fork).
 > (plugin/Jenkins LTS pins, JCasC, security review) — see §8. Offline `implemented`
 > **never** closes live Entra / jwt-auth-filter pin.
 >
+> A worked **optional operator** Entra + jwt-rs-lab walkthrough lives at
+> [../testing/entra-jwt-rs-lab.md](../testing/entra-jwt-rs-lab.md). That page is
+> **not** a production pin and does not flip `mode_*_live_*_qualified`.
+>
 > **HOST-010 / Mode B note:** Gateway Mode B offline path (`JWTRSBearerProvider`
 > + `JWTVault` under `internal/gateway`) can Obtain → Bearer for lab tokens
 > keyed by subject. That is **not** a live jwt-auth-filter production pin.
@@ -159,6 +163,10 @@ unclassified:
       - "/**"
     # Prefer deny-by-default with explicit includes over broad excludes.
 ```
+
+Entra **v2** access tokens use a GUID `aud` (the API app id), not
+`api://…`. The `api://` form is the **scope URI** only. See the optional
+operator walkthrough [../testing/entra-jwt-rs-lab.md](../testing/entra-jwt-rs-lab.md).
 
 Approved reverse proxy (alternative): terminate JWT at the edge with the same
 audience/issuer/JWKS rules and inject a trusted identity to Jenkins only after

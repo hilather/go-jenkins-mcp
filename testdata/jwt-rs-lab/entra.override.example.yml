@@ -1,0 +1,21 @@
+# Lab-only Compose override example — point jwt-rs-lab Jenkins at Entra JWKS.
+# Default docker-compose.yml stays Keycloak. This file is placeholders only.
+#
+# Usage (repo root):
+#   cp testdata/jwt-rs-lab/entra.override.example.yml testdata/jwt-rs-lab/entra.override.yml
+#   # replace {tenant-id} and {api-app-id} in the copy
+#   docker compose -f testdata/jwt-rs-lab/docker-compose.yml \
+#     -f testdata/jwt-rs-lab/entra.override.yml up -d --build
+#
+# Do not name the working file docker-compose.override.yml (Compose auto-loads it).
+# Do not commit filled IDs. entra.override.yml is gitignored.
+# Mapping-form environment merges with the base service (do not use a YAML list).
+#
+# Walkthrough: docs/testing/entra-jwt-rs-lab.md
+
+services:
+  jenkins:
+    environment:
+      JWT_RS_JWKS_URL: "https://login.microsoftonline.com/{tenant-id}/discovery/v2.0/keys"
+      JWT_RS_AUDIENCE: "{api-app-id}"
+      JWT_RS_PROTECTED_PATHS: "/**/api/**"
