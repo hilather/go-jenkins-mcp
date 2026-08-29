@@ -5,6 +5,12 @@ Disposable **Keycloak** OIDC IdP + **Jenkins LTS** with the real
 
 **Not production.** Not Microsoft Entra. Not multi-pod HA.
 
+To point **this** Jenkins at Entra instead of Keycloak (browser PKCE, optional
+operator walkthrough — not a production pin and not a merge gate), see
+[docs/testing/entra-jwt-rs-lab.md](../../docs/testing/entra-jwt-rs-lab.md).
+Do **not** run `make live-jwt-rs-smoke` / `live-jwt-rs-test` against Entra JWKS
+(those mint Keycloak tokens). Default compose JWKS stays Keycloak.
+
 **Not part of** default `make test` / `make ci`.
 
 Existing lightweight mock RS (no real plugin) remains:

@@ -149,6 +149,21 @@ tests remain the default `make test` gate; containers are **opt-in**.
 
 Secrets: ephemeral only; never bake production tokens into images or compose files.
 
+### Optional operator Entra lab
+
+Keycloak `jwt-rs-lab` remains the default **Free-lab validated** plugin lab.
+An optional operator walkthrough that points that Jenkins at Entra (browser
+PKCE + jwt-auth-filter) lives at
+[`docs/testing/entra-jwt-rs-lab.md`](docs/testing/entra-jwt-rs-lab.md).
+
+- Two app registrations (API resource + public client). Do not merge them.
+- Public / native client (`publicClient`), **not** SPA.
+- `requestedAccessTokenVersion=2` on the **API** app (not the gateway app).
+- `jenkinsAudience` and jwt-auth-filter `allowedAudience` are the API **app id GUID**.
+- JWKS is the Entra v2 keys URL. `login --oidc`. Prove with Bearer whoAmI + `/api/json`.
+- Never bake secrets. Isolated XDG + `JENKINS_MCP_KEYRING_FILE` for the lab.
+- Does **not** flip `mode_*_live_*_qualified` or close OAUTH-009/010.
+
 ## Non-negotiable: code review
 
 Do not treat implementation as done until the change set has been code-reviewed

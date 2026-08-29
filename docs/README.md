@@ -65,6 +65,7 @@ Historical material is under [archive/](archive/).
 | Intent | Go to |
 |--------|--------|
 | Qualification policy & free labs | [testing/qualification.md](testing/qualification.md) |
+| Optional operator Entra + jwt-auth-filter (not a merge gate) | [testing/entra-jwt-rs-lab.md](testing/entra-jwt-rs-lab.md) |
 | Live Jenkins route matrix | [tst/README.md](tst/README.md) |
 | Contributor CI | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
 

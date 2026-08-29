@@ -18,3 +18,4 @@ External systems and optional adapters. Core Jenkins path does **not** require a
 
 - Features: [../features/README.md](../features/README.md)
 - Architecture: [../architecture/integrations.md](../architecture/integrations.md)
+- Optional operator Entra + jwt-auth-filter walkthrough (not a production pin): [../testing/entra-jwt-rs-lab.md](../testing/entra-jwt-rs-lab.md)

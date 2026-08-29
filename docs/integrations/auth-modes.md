@@ -27,3 +27,4 @@ Switch profile `authMethod` back to token; disable gateway multi-user flags.
 
 - [../auth-architecture.md](../auth-architecture.md)
 - [../auth/oauth-capability-matrix.md](../auth/oauth-capability-matrix.md)
+- Optional operator Entra walkthrough (not a production pin): [../testing/entra-jwt-rs-lab.md](../testing/entra-jwt-rs-lab.md)

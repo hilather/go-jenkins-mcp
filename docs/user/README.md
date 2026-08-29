@@ -84,6 +84,9 @@ When the profile `authMethod` is `oidc_bearer` (or you pass `--oidc`):
 jenkins-mcp login --profile corp --oidc
 ```
 
+Optional operator Entra + jwt-auth-filter lab (not a production pin):
+[entra-jwt-rs-lab.md](../testing/entra-jwt-rs-lab.md).
+
 **Residual (live RS lab):** offline OIDC discovery, claim validation, and
 resource-server contract tests are implemented. **Live** Jenkins LTS +
 `jwt-auth-filter` (or approved proxy) pin, JWKS outage under load, and

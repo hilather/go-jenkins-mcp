@@ -175,6 +175,16 @@ jenkins-mcp security self-check --json --profile <id>
 
 ### 3.1 Entra app registration (resource + client)
 
+A worked **optional operator** walkthrough (local browser PKCE +
+`testdata/jwt-rs-lab` pointed at Entra JWKS) lives at
+[../testing/entra-jwt-rs-lab.md](../testing/entra-jwt-rs-lab.md). That page does
+**not** complete this checklist, close OAUTH-010, or flip
+`mode_*_live_*_qualified`. Anonymized operator checklist from that walkthrough
+(placeholders only): two single-tenant apps (API resource + public client, not
+SPA); `requestedAccessTokenVersion=2` on the **API** app; profile
+`jenkinsAudience` and Jenkins `allowedAudience` = API **app id GUID**; JWKS =
+Entra v2 keys URL.
+
 Fill during live lab; keep secrets out of git, tickets, and support bundles.
 
 | Item | Required | Evidence |

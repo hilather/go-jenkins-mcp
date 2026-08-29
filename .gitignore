@@ -23,4 +23,5 @@ web/admin/node_modules/
 
 # Local Docker + host shared XDG (lab cache; never commit tokens)
 .local-mcp/
+.entra-lab/
 deploy/local/docker-compose.override.yml

@@ -16,3 +16,5 @@ flowchart TB
 | Customer production pin | No — optional |
 
 See [../testing/qualification.md](../testing/qualification.md).
+Optional operator Entra walkthrough (not a merge gate or production pin):
+[../testing/entra-jwt-rs-lab.md](../testing/entra-jwt-rs-lab.md).
