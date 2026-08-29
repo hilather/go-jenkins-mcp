@@ -102,7 +102,10 @@ export function AccessPage() {
 
       <ResidualCallout caveat={ACCESS_RESIDUAL_CAVEAT}>
         <p className="muted">{ACCESS_RESIDUAL_DETAILS}</p>
-        {data?.fleet_sot ? <p className="muted">{data.fleet_sot}</p> : null}
+        <p className="muted">
+          {data?.fleet_sot ||
+            "configuration/signed policy (MGR-001); SPA is pilot break-glass only"}
+        </p>
         {data?.residual ? <p className="muted">{data.residual}</p> : null}
         {data?.notes?.length ? (
           <ul className="muted" style={{ margin: 0, paddingLeft: "1.2rem" }}>
@@ -115,6 +118,15 @@ export function AccessPage() {
 
       {q.isSuccess && data ? (
         <>
+          {(!data.available || data.residual || data.notes?.length) && (
+            <div className="banner warn" role="status">
+              {!data.available
+                ? "Plain overlay bindings not available for edit. "
+                : null}
+              {data.residual ? `${data.residual} ` : null}
+              {data.notes?.length ? data.notes.join(" ") : null}
+            </div>
+          )}
 
           <p className="muted" role="status">
             available={String(data.available)} · signature_state=

@@ -31,6 +31,7 @@ describe("leftover page chrome", () => {
     expect(accessSrc).toContain("form-field");
     expect(accessSrc).not.toContain("new Error(err)");
     expect(accessSrc).toContain("ErrorBanner error={actionError}");
+    expect(accessSrc).toContain("Plain overlay bindings not available for edit");
   });
 
   it("Policy ResidualCallout is hoisted before the overlay editor card", () => {
