@@ -425,7 +425,7 @@ export function leftoverSnapshotRows(
   const claimedSet = new Set(claimed);
   const out: Record<string, number> = {};
   for (const [k, v] of Object.entries({ ...(counters ?? {}), ...(gauges ?? {}) })) {
-    if (!claimedSet.has(k)) {
+    if (!claimedSet.has(k) && !/bytes/i.test(k)) {
       out[k] = Number(v) || 0;
     }
   }

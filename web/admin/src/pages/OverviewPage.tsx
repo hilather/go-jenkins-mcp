@@ -27,7 +27,7 @@ import {
   CLEAR_ALL_CONFIRM_TOKEN,
 } from "../lib/consentPurge";
 import { isAdminAuthError, isBffUnreachable } from "../lib/adminErrors";
-import { buildOverviewStatusChips } from "../lib/overviewHealth";
+import { buildOverviewStatusChips, livePinCardValue } from "../lib/overviewHealth";
 import {
   K8S_CHECKLIST_ITEMS,
   VAULT_PUT_SNIPPET,
@@ -324,6 +324,10 @@ export function OverviewPage() {
         {version.isError && <ErrorBanner error={version.error} />}
         {version.isSuccess ? (
           <dl className="dl" style={{ marginTop: "0.75rem" }}>
+            <dt>version</dt>
+            <dd>{version.data.version}</dd>
+            <dt>commit</dt>
+            <dd>{version.data.commit}</dd>
             <dt>buildTime</dt>
             <dd>{version.data.buildTime}</dd>
             <dt>goVersion</dt>
@@ -342,6 +346,7 @@ export function OverviewPage() {
         )}
       </div>
 
+      {!residualMissing && (
       <div className="card">
         <h2>
           Live pins{" "}
@@ -351,7 +356,10 @@ export function OverviewPage() {
           <div className="live-pin-card">
             <div className="muted">Mode A</div>
             <strong>
-              {livePins?.mode_a_live_obtain_qualified ? "live" : "not live"}
+              {livePinCardValue(
+                residual.isSuccess,
+                livePins?.mode_a_live_obtain_qualified,
+              )}
             </strong>
             <p className="muted" style={{ margin: "0.25rem 0 0" }}>
               Obtain residual — {LIVE_PIN_RESIDUAL_HONESTY}
@@ -360,7 +368,10 @@ export function OverviewPage() {
           <div className="live-pin-card">
             <div className="muted">Mode B</div>
             <strong>
-              {livePins?.mode_b_live_rs_qualified ? "live" : "not live"}
+              {livePinCardValue(
+                residual.isSuccess,
+                livePins?.mode_b_live_rs_qualified,
+              )}
             </strong>
             <p className="muted" style={{ margin: "0.25rem 0 0" }}>
               RS / Entra residual — {LIVE_PIN_RESIDUAL_HONESTY}
@@ -369,7 +380,10 @@ export function OverviewPage() {
           <div className="live-pin-card">
             <div className="muted">Mode C</div>
             <strong>
-              {livePins?.mode_c_live_agentcore_qualified ? "live" : "not live"}
+              {livePinCardValue(
+                residual.isSuccess,
+                livePins?.mode_c_live_agentcore_qualified,
+              )}
             </strong>
             <p className="muted" style={{ margin: "0.25rem 0 0" }}>
               AgentCore residual — {LIVE_PIN_RESIDUAL_HONESTY}
@@ -386,6 +400,7 @@ export function OverviewPage() {
           {" · config only, not production GO. Ready is serve /readyz."}
         </p>
       </div>
+      )}
       </div>
 
       {health.isSuccess && health.data.kubernetesEnvDetected && (
@@ -655,6 +670,12 @@ export function OverviewPage() {
       )}
       </div>
 
+      {!residualMissing && residual.isLoading && health.isSuccess && <Loading />}
+      {!residualMissing &&
+        residual.isError &&
+        !(residual.error instanceof AdminApiError && residual.error.status === 404) && (
+          <ErrorBanner error={residual.error} />
+        )}
       {!residualMissing && (
         <ResidualCallout
           caveat="Offline honesty — not live GO. Paths and tokens never shown."
@@ -667,11 +688,6 @@ export function OverviewPage() {
             honesty only; never tokens or subjects. Live pin residual honesty:{" "}
             <code>docs/gateway/live-pin-blockers.md</code>.
           </p>
-          {residual.isLoading && health.isSuccess && <Loading />}
-          {residual.isError &&
-            !(residual.error instanceof AdminApiError && residual.error.status === 404) && (
-              <ErrorBanner error={residual.error} />
-            )}
           {residual.isSuccess ? (
             <ResidualStatusDl data={residual.data} />
           ) : (

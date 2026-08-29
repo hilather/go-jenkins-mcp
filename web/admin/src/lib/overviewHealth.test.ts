@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOverviewStatusChips } from "./overviewHealth";
+import { buildOverviewStatusChips, livePinCardValue } from "./overviewHealth";
 
 describe("buildOverviewStatusChips", () => {
   it("returns BFF unreachable chip only when API down (not 401)", () => {
@@ -39,5 +39,14 @@ describe("buildOverviewStatusChips", () => {
     expect(chips.find((c) => c.id === "ha")?.value).toBe("no");
     expect(chips.find((c) => c.id === "ha")?.label).toBe("HA replica");
     expect(chips.find((c) => c.id === "live-pins")?.value).toBe("———");
+  });
+});
+
+describe("livePinCardValue", () => {
+  it("does not claim not live until residual-status succeeds", () => {
+    expect(livePinCardValue(false, false)).toBe("—");
+    expect(livePinCardValue(false, true)).toBe("—");
+    expect(livePinCardValue(true, false)).toBe("not live");
+    expect(livePinCardValue(true, true)).toBe("live");
   });
 });

@@ -98,3 +98,14 @@ export function buildOverviewStatusChips(input: OverviewHealthInput): StatusChip
 
   return chips;
 }
+
+/** Live-pin card value: never claim "not live" before residual-status succeeds. */
+export function livePinCardValue(
+  residualReady: boolean,
+  live?: boolean,
+): "live" | "not live" | "—" {
+  if (!residualReady) {
+    return "—";
+  }
+  return live ? "live" : "not live";
+}

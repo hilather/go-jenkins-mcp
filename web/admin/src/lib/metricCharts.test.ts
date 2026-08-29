@@ -179,6 +179,7 @@ describe("pickNamedRows / leftoverSnapshotRows", () => {
     const counters = {
       jenkins_http_requests_total: 140,
       mcp_bytes_out: 12,
+      cache_packs_created: 2,
       tool_calls: 3,
     };
     expect(pickNamedRows(counters, ["jenkins_http_requests_total"])).toEqual({
@@ -189,6 +190,7 @@ describe("pickNamedRows / leftoverSnapshotRows", () => {
       "jenkins_http_requests_total",
       "cache_usage_bytes",
     ]);
-    expect(left).toEqual({ mcp_bytes_out: 12 });
+    expect(left).toEqual({ cache_packs_created: 2 });
+    expect(left).not.toHaveProperty("mcp_bytes_out");
   });
 });
