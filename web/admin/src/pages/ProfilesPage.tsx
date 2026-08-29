@@ -10,7 +10,14 @@ import {
   formatApiError,
   fetchMe,
 } from "../api/client";
+import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
+import { PageHeader } from "../components/PageHeader";
+import { ResidualCallout } from "../components/ResidualCallout";
+import {
+  PROFILES_RESIDUAL_CAVEAT,
+  PROFILES_RESIDUAL_DETAILS,
+} from "../lib/leftoverResiduals";
 import { useSearchParams } from "react-router-dom";
 
 export function ProfilesPage() {
@@ -64,12 +71,15 @@ export function ProfilesPage() {
 
   return (
     <>
-      <h1 className="page-title">Profiles</h1>
-      <p className="page-sub">
+      <PageHeader title="Profiles">
         Secret-free connection profiles (
         <code>GET /admin/v1/profiles</code>). Tokens and keyring material are
         never returned — only <code>hasCredential</code> presence.
-      </p>
+      </PageHeader>
+
+      <ResidualCallout caveat={PROFILES_RESIDUAL_CAVEAT}>
+        <p className="muted">{PROFILES_RESIDUAL_DETAILS}</p>
+      </ResidualCallout>
 
       {list.isLoading && <Loading />}
       {list.isError && <ErrorBanner error={list.error} />}
@@ -78,8 +88,11 @@ export function ProfilesPage() {
         <div className="card">
           <h2>All profiles</h2>
           {!list.data.profiles?.length ? (
-            <p className="muted">No profiles found under XDG config.</p>
+            <EmptyState title="No profiles">
+              No profiles found under XDG config.
+            </EmptyState>
           ) : (
+            <div className="table-scroll">
             <table className="data">
               <thead>
                 <tr>
@@ -120,6 +133,7 @@ export function ProfilesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}
@@ -179,6 +193,7 @@ export function ProfilesPage() {
                 {selfCheck.data.overall}
               </span>
             </p>
+            <div className="table-scroll">
             <table className="data">
               <thead>
                 <tr>
@@ -201,6 +216,7 @@ export function ProfilesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </>
         )}
       </div>

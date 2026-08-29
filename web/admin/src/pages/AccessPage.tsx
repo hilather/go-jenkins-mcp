@@ -11,6 +11,11 @@ import {
 import type { GroupBinding, UserBinding } from "../api/types";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
 import { PageHeader } from "../components/PageHeader";
+import { ResidualCallout } from "../components/ResidualCallout";
+import {
+  ACCESS_RESIDUAL_CAVEAT,
+  ACCESS_RESIDUAL_DETAILS,
+} from "../lib/leftoverResiduals";
 
 /**
  * UI-011 Access: pilot/break-glass editor for POL-006 user/group deny bindings.
@@ -85,130 +90,147 @@ export function AccessPage() {
     },
   });
 
-  if (q.isLoading) {
-    return <Loading label="Loading bindings…" />;
-  }
-  if (q.isError) {
-    const { code, message } = formatApiError(q.error);
-    return <ErrorBanner title="Access load failed" detail={`${code}: ${message}`} />;
-  }
-
   const data = q.data;
 
   return (
-    <div className="page">
-      <PageHeader
-        title="Access"
-        subtitle="User & group deny bindings (POL-006). Multi-fleet SoT is signed config — this page is pilot break-glass only."
-      />
+    <>
+      <PageHeader title="Access">
+        User &amp; group deny bindings (POL-006). Multi-fleet SoT is signed
+        config — this page is pilot break-glass only.
+      </PageHeader>
 
-      <section className="card" aria-label="Fleet source of truth">
-        <h2>Fleet honesty</h2>
-        <p className="muted">
-          {data?.fleet_sot ||
-            "configuration/signed policy (MGR-001); SPA is pilot break-glass only"}
-        </p>
-        {data?.residual ? (
-          <p className="residual-badge" role="status">
-            Residual: {data.residual}
+      {q.isLoading && <Loading />}
+      {q.isError && <ErrorBanner error={q.error} />}
+      {err ? <ErrorBanner error={new Error(err)} /> : null}
+
+      {q.isSuccess && data ? (
+        <>
+          <ResidualCallout caveat={ACCESS_RESIDUAL_CAVEAT}>
+            <p className="muted">{ACCESS_RESIDUAL_DETAILS}</p>
+            <p className="muted">
+              {data.fleet_sot ||
+                "configuration/signed policy (MGR-001); SPA is pilot break-glass only"}
+            </p>
+            {data.residual ? <p className="muted">{data.residual}</p> : null}
+            {data.notes?.length ? (
+              <ul className="muted" style={{ margin: 0, paddingLeft: "1.2rem" }}>
+                {data.notes.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+            ) : null}
+          </ResidualCallout>
+
+          <p className="muted" role="status">
+            available={String(data.available)} · signature_state=
+            {data.signature_state || "—"} · path_base={data.path_base || "—"}
           </p>
-        ) : null}
-        {data?.notes?.length ? (
-          <ul className="list-plain">
-            {data.notes.map((n) => (
-              <li key={n}>{n}</li>
-            ))}
-          </ul>
-        ) : null}
-        <p className="muted">
-          available={String(data?.available)} · signature_state=
-          {data?.signature_state || "—"} · path_base={data?.path_base || "—"}
-        </p>
-      </section>
 
-      {err ? <ErrorBanner title="Action failed" detail={err} /> : null}
+          <section className="card" aria-label="User bindings editor">
+            <h2>subjects.users (JSON)</h2>
+            <label className="form-field">
+              <span>User bindings JSON</span>
+              <textarea
+                rows={10}
+                value={usersText}
+                onChange={(e) => setUsersText(e.target.value)}
+                spellCheck={false}
+                aria-label="User bindings JSON"
+                disabled={!canWrite}
+              />
+            </label>
+          </section>
 
-      <section className="card" aria-label="User bindings editor">
-        <h2>subjects.users (JSON)</h2>
-        <textarea
-          className="code-input"
-          rows={10}
-          value={usersText}
-          onChange={(e) => setUsersText(e.target.value)}
-          spellCheck={false}
-          aria-label="User bindings JSON"
-          disabled={!canWrite}
-        />
-      </section>
+          <section className="card" aria-label="Group bindings editor">
+            <h2>subjects.groups (JSON)</h2>
+            <label className="form-field">
+              <span>Group bindings JSON</span>
+              <textarea
+                rows={10}
+                value={groupsText}
+                onChange={(e) => setGroupsText(e.target.value)}
+                spellCheck={false}
+                aria-label="Group bindings JSON"
+                disabled={!canWrite}
+              />
+            </label>
+          </section>
 
-      <section className="card" aria-label="Group bindings editor">
-        <h2>subjects.groups (JSON)</h2>
-        <textarea
-          className="code-input"
-          rows={10}
-          value={groupsText}
-          onChange={(e) => setGroupsText(e.target.value)}
-          spellCheck={false}
-          aria-label="Group bindings JSON"
-          disabled={!canWrite}
-        />
-      </section>
+          <div className="toolbar">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!canWrite || putMut.isPending}
+              onClick={() => putMut.mutate()}
+            >
+              {putMut.isPending ? "Saving…" : "Save bindings (plain overlay)"}
+            </button>
+            {!canWrite ? (
+              <span className="toolbar-meta muted">
+                Requires policy_admin role to write.
+              </span>
+            ) : null}
+          </div>
 
-      <div className="row gap">
-        <button
-          type="button"
-          className="btn primary"
-          disabled={!canWrite || putMut.isPending}
-          onClick={() => putMut.mutate()}
-        >
-          {putMut.isPending ? "Saving…" : "Save bindings (plain overlay)"}
-        </button>
-        {!canWrite ? (
-          <span className="muted">Requires policy_admin role to write.</span>
-        ) : null}
-      </div>
-
-      <section className="card" aria-label="Effective preview">
-        <h2>Effective preview</h2>
-        <p className="muted">
-          Dry-run deny-only evaluator for a hypothetical subject (not process authn).
-        </p>
-        <div className="form-grid">
-          <label>
-            jenkins_user_id
-            <input value={previewUser} onChange={(e) => setPreviewUser(e.target.value)} />
-          </label>
-          <label>
-            groups (comma-separated)
-            <input
-              value={previewGroups}
-              onChange={(e) => setPreviewGroups(e.target.value)}
-            />
-          </label>
-          <label>
-            tool_name
-            <input value={previewTool} onChange={(e) => setPreviewTool(e.target.value)} />
-          </label>
-          <label>
-            job_name (optional)
-            <input value={previewJob} onChange={(e) => setPreviewJob(e.target.value)} />
-          </label>
-        </div>
-        <button
-          type="button"
-          className="btn"
-          disabled={previewMut.isPending}
-          onClick={() => previewMut.mutate()}
-        >
-          Preview
-        </button>
-        {previewResult ? (
-          <p role="status" className="mono">
-            {previewResult}
-          </p>
-        ) : null}
-      </section>
-    </div>
+          <section className="card" aria-label="Effective preview">
+            <h2>Effective preview</h2>
+            <p className="muted">
+              Dry-run deny-only evaluator for a hypothetical subject (not
+              process authn).
+            </p>
+            <div className="form-grid">
+              <label className="form-field">
+                <span>jenkins_user_id</span>
+                <input
+                  type="text"
+                  value={previewUser}
+                  onChange={(e) => setPreviewUser(e.target.value)}
+                />
+              </label>
+              <label className="form-field">
+                <span>groups (comma-separated)</span>
+                <input
+                  type="text"
+                  value={previewGroups}
+                  onChange={(e) => setPreviewGroups(e.target.value)}
+                />
+              </label>
+              <label className="form-field">
+                <span>tool_name</span>
+                <input
+                  type="text"
+                  value={previewTool}
+                  onChange={(e) => setPreviewTool(e.target.value)}
+                />
+              </label>
+              <label className="form-field">
+                <span>job_name (optional)</span>
+                <input
+                  type="text"
+                  value={previewJob}
+                  onChange={(e) => setPreviewJob(e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="toolbar">
+              <button
+                type="button"
+                className="btn"
+                disabled={previewMut.isPending}
+                onClick={() => previewMut.mutate()}
+              >
+                Preview
+              </button>
+            </div>
+            {previewResult ? (
+              <p role="status" className="mono">
+                {previewResult}
+              </p>
+            ) : null}
+          </section>
+        </>
+      ) : null}
+    </>
   );
 }
 

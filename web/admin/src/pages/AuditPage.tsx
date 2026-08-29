@@ -13,6 +13,11 @@ import type { AuditEvent, AuditQuery } from "../api/types";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner, Loading } from "../components/ErrorBanner";
 import { PageHeader } from "../components/PageHeader";
+import { ResidualCallout } from "../components/ResidualCallout";
+import {
+  AUDIT_RESIDUAL_CAVEAT,
+  AUDIT_RESIDUAL_DETAILS,
+} from "../lib/leftoverResiduals";
 import {
   AUDIT_LIMIT_OPTIONS,
   AUDIT_TYPE_HINTS,
@@ -284,6 +289,13 @@ export function AuditPage() {
         Profile <code>{profileId}</code> · privacy-preserving event list
       </PageHeader>
 
+      <ResidualCallout caveat={AUDIT_RESIDUAL_CAVEAT}>
+        <p className="muted">{AUDIT_RESIDUAL_DETAILS}</p>
+        {settingsQ.data?.residual ? (
+          <p className="muted">{settingsQ.data.residual}</p>
+        ) : null}
+      </ResidualCallout>
+
       <section className="card filters-card" aria-labelledby="audit-settings-heading">
         <h2 id="audit-settings-heading">Event type settings</h2>
         <p className="muted" style={{ marginTop: 0 }}>
@@ -371,11 +383,6 @@ export function AuditPage() {
                 </span>
               )}
             </div>
-            {settingsQ.data.residual && (
-              <p className="muted" style={{ fontSize: "0.8rem", marginBottom: 0 }}>
-                Residual: {settingsQ.data.residual}
-              </p>
-            )}
           </>
         )}
       </section>
@@ -515,10 +522,10 @@ export function AuditPage() {
               {!loaded.length ? (
                 <EmptyState title="No audit events">{emptyMessage}</EmptyState>
               ) : !displayed.length ? (
-                <p className="muted">
+                <EmptyState title="No matching events">
                   No events match externalSubject exact filter (BFF
                   external_subject; client residual for older BFF).
-                </p>
+                </EmptyState>
               ) : (
                 <div className="table-scroll">
                   <table className="data">
@@ -607,7 +614,9 @@ export function AuditPage() {
             >
               <h2>Event detail</h2>
               {!selected ? (
-                <p className="muted">Select a row to inspect schema fields.</p>
+                <EmptyState title="No event selected">
+                  Select a row to inspect schema fields.
+                </EmptyState>
               ) : (
                 <>
                   <dl className="dl">
