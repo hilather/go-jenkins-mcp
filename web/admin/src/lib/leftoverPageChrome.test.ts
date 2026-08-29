@@ -29,6 +29,8 @@ describe("leftover page chrome", () => {
     expect(accessSrc).not.toContain("btn primary");
     expect(accessSrc).toContain("btn-primary");
     expect(accessSrc).toContain("form-field");
+    expect(accessSrc).not.toContain("new Error(err)");
+    expect(accessSrc).toContain("ErrorBanner error={actionError}");
   });
 
   it("Policy ResidualCallout is hoisted before the overlay editor card", () => {
@@ -51,6 +53,7 @@ describe("leftover page chrome", () => {
     expect(profilesSrc).toContain("No profiles");
     expect(cacheSrc).toContain("EmptyState");
     expect(cacheSrc).toContain("No eviction candidates");
+    expect(cacheSrc).not.toMatch(/Dry-run found nothing/);
     expect(auditSrc).toContain("EmptyState");
     expect(auditSrc).toContain("No matching events");
     expect(auditSrc).toContain("No event selected");

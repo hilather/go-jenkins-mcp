@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import {
   fetchMe,
   fetchPolicyBindings,
-  formatApiError,
   hasPolicyWrite,
   previewPolicyBindings,
   putPolicyBindings,
@@ -38,7 +37,7 @@ export function AccessPage() {
   const [previewTool, setPreviewTool] = useState("jenkins_get_build_logs");
   const [previewJob, setPreviewJob] = useState("");
   const [previewResult, setPreviewResult] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
 
   useEffect(() => {
     if (q.data && !seeded) {
@@ -55,13 +54,12 @@ export function AccessPage() {
       return putPolicyBindings({ users, groups });
     },
     onSuccess: async () => {
-      setErr(null);
+      setActionError(null);
       setSeeded(false);
       await qc.invalidateQueries({ queryKey: ["policy-bindings"] });
     },
     onError: (e: unknown) => {
-      const { code, message } = formatApiError(e);
-      setErr(`${code}: ${message}`);
+      setActionError(e);
     },
   });
 
@@ -82,11 +80,10 @@ export function AccessPage() {
           ? `allowed (reason=${data.reason_code || "ok"})`
           : `DENIED (reason=${data.reason_code || "deny"})`,
       );
-      setErr(null);
+      setActionError(null);
     },
     onError: (e: unknown) => {
-      const { code, message } = formatApiError(e);
-      setErr(`${code}: ${message}`);
+      setActionError(e);
     },
   });
 
@@ -101,25 +98,23 @@ export function AccessPage() {
 
       {q.isLoading && <Loading />}
       {q.isError && <ErrorBanner error={q.error} />}
-      {err ? <ErrorBanner error={new Error(err)} /> : null}
+      {actionError != null ? <ErrorBanner error={actionError} /> : null}
+
+      <ResidualCallout caveat={ACCESS_RESIDUAL_CAVEAT}>
+        <p className="muted">{ACCESS_RESIDUAL_DETAILS}</p>
+        {data?.fleet_sot ? <p className="muted">{data.fleet_sot}</p> : null}
+        {data?.residual ? <p className="muted">{data.residual}</p> : null}
+        {data?.notes?.length ? (
+          <ul className="muted" style={{ margin: 0, paddingLeft: "1.2rem" }}>
+            {data.notes.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        ) : null}
+      </ResidualCallout>
 
       {q.isSuccess && data ? (
         <>
-          <ResidualCallout caveat={ACCESS_RESIDUAL_CAVEAT}>
-            <p className="muted">{ACCESS_RESIDUAL_DETAILS}</p>
-            <p className="muted">
-              {data.fleet_sot ||
-                "configuration/signed policy (MGR-001); SPA is pilot break-glass only"}
-            </p>
-            {data.residual ? <p className="muted">{data.residual}</p> : null}
-            {data.notes?.length ? (
-              <ul className="muted" style={{ margin: 0, paddingLeft: "1.2rem" }}>
-                {data.notes.map((n) => (
-                  <li key={n}>{n}</li>
-                ))}
-              </ul>
-            ) : null}
-          </ResidualCallout>
 
           <p className="muted" role="status">
             available={String(data.available)} · signature_state=

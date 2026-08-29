@@ -383,6 +383,11 @@ export function AuditPage() {
                 </span>
               )}
             </div>
+            {settingsQ.data.residual ? (
+              <p className="muted" style={{ fontSize: "0.8rem", marginBottom: 0 }}>
+                Residual: {settingsQ.data.residual}
+              </p>
+            ) : null}
           </>
         )}
       </section>

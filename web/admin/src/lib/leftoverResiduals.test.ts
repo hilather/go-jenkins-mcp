@@ -41,6 +41,7 @@ describe("leftover residual caveats", () => {
   it("Doctor does not claim live GO", () => {
     expect(DOCTOR_RESIDUAL_CAVEAT).toMatch(/not production GO/);
     expect(DOCTOR_RESIDUAL_DETAILS).toMatch(/HOST-007/);
+    expect(DOCTOR_RESIDUAL_DETAILS).not.toMatch(/live-pin-blockers\.md/);
   });
 
   it("Cache mentions CLI pin residual", () => {

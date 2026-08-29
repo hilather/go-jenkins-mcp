@@ -32,7 +32,7 @@ export const DOCTOR_RESIDUAL_CAVEAT =
   "Offline residual — not production GO. Never tokens or subjects.";
 
 export const DOCTOR_RESIDUAL_DETAILS =
-  "HOST-007 doctor embed (gateway_residual_status) — same secret-free map as gateway residual-status / Overview residual card. Informational only; does not drive overall. Live pin residual honesty: docs/gateway/live-pin-blockers.md.";
+  "HOST-007 doctor embed (gateway_residual_status) — same secret-free map as gateway residual-status / Overview residual card. Informational only; does not drive overall. Live pin residual honesty pointer is the payload doc field (never tokens).";
 
 export const CACHE_RESIDUAL_CAVEAT =
   "Pin list and full cache repair remain CLI residuals — this page is quota and eviction only.";
