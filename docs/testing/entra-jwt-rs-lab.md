@@ -148,8 +148,8 @@ callback succeeds.
 ### 1.3 jenkins-mcp profile (`authMethod: oidc_bearer`)
 
 There is **no** CLI flag for issuer, audience, or client id.
-`jenkins-mcp profile add --auth-method oidc_bearer` fails without an `oidc`
-block. Write the JSON yourself.
+`profile add <id> --url … --auth-method oidc_bearer` fails `Validate()` without
+an `oidc` block. Write the JSON yourself.
 
 **Isolated XDG (recommended for a lab)** so operator home config is untouched.
 Export these for **every** `jenkins-mcp` command in that shell:
@@ -237,10 +237,11 @@ wipes the Jenkins volume) so CASC is not mixed with a prior Keycloak apply.
 
 ### Bring-up method A — export then Make
 
-`make live-jwt-rs-up` only prefixes host/port vars. Compose still reads
-`JWT_RS_*` from the **process environment**. Use `export`, not a Make-only
-`JWT_RS_JWKS_URL=… make …` argument (Make will not forward that to Compose
-unless it is exported):
+`make live-jwt-rs-up` only prefixes host/port in the recipe. Compose still
+reads `JWT_RS_*` from the process environment. `export` **or** a Make
+command-line assignment (`JWT_RS_JWKS_URL=… make live-jwt-rs-up`) both work
+on GNU Make. Keycloak still starts and must become healthy (`depends_on`)
+even though it is unused as JWKS:
 
 ```bash
 export JWT_RS_JWKS_URL="https://login.microsoftonline.com/{tenant-id}/discovery/v2.0/keys"
@@ -305,14 +306,18 @@ Online `doctor` / `oauth probe-rs` are **residual / honesty**, not pass/fail for
 this walkthrough (they warn on whoAmI fallthrough and print an oic-auth residual
 string even when this lab has the plugin).
 
-The CLI never prints the access token. The isolated file keyring is JSON:
-service `go-jenkins-mcp` → account `profile=entra-lab;method=oidc_tokens` → a
-**string** whose contents are TokenBundle JSON (`v`, `access_token`, …). Parse
-that inner string locally (for example `jq` `fromjson`); put the token in a
-shell variable; **do not echo or paste it**.
+The CLI never prints the access token. When `JENKINS_MCP_KEYRING_FILE` is set,
+the file is JSON: service `go-jenkins-mcp` → account
+`profile=entra-lab;method=oidc_tokens` → a **string** whose contents are
+TokenBundle JSON (`v`, `access_token`, …). Parse that inner string into a
+variable; **do not echo or paste it**. (Without the file backend, tokens are
+in the OS keyring and this recipe does not apply.)
 
 ```bash
-# ACCESS_TOKEN must be set locally from the isolated keyring. Never echo it.
+ACCESS_TOKEN="$(jq -r --arg id entra-lab \
+  '.["go-jenkins-mcp"]["profile="+$id+";method=oidc_tokens"] | fromjson | .access_token' \
+  "$JENKINS_MCP_KEYRING_FILE")"
+# do not echo "$ACCESS_TOKEN"
 curl -sS -o /tmp/whoami.json -w '%{http_code}\n' \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
   http://127.0.0.1:18092/whoAmI/api/json
@@ -377,6 +382,7 @@ Plugin may ignore an invalid JWT and continue. Jenkins
 | `jwt authorized party does not match client id` | `oidc.clientId` is the API app, not the public client. | `clientId` = `{gateway-app-id}`. |
 | `jwt tenant does not match profile` | `tenantId` or issuer used the domain instead of the GUID. | Use `{tenant-id}` only. |
 | Login hangs, then times out | No GUI browser / `xdg-open`. CLI does not print the authorize URL. | Use a local desktop session; set `$BROWSER`. Timeout is 5 minutes. |
+| `failed to bind loopback callback` | Something else is using `127.0.0.1:8400`. | Change the port in **both** profile `redirectUris` and the Entra public-client registration. |
 | whoAmI 200 but `name=anonymous` with a “good” token | Token omitted `preferred_username`. JCasC hard-codes that claim (do not edit `casc.yaml`). | Entra Token configuration → optional claims on the **access** token for App A: `preferred_username`, `name`, `email`. |
 | `/api/json` 403 with a token that passed login | Jenkins JWKS/audience still Keycloak defaults, or container cannot reach Entra JWKS. | Confirm env on the running Jenkins container; recreate with `down -v` after a Keycloak run. |
 | `make live-jwt-rs-smoke` fails after pointing at Entra | Smoke mints Keycloak tokens. | Do not run Keycloak smoke against Entra JWKS. |
