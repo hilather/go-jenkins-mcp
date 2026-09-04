@@ -15,6 +15,7 @@
 ## Test plan
 
 - [ ] `make test` (or scoped `go test` for packages touched)
+- [ ] `make admin-ui-check` (CI always; run locally when `web/admin` changed)
 - [ ] Regression coverage for bugs (if applicable)
 - [ ] Free labs run: <!-- list, or "none — reason" -->
 - [ ] `make docs-check` (when docs or links changed)

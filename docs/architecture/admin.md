@@ -18,6 +18,7 @@ flowchart TB
 | Secret-free | No tokens in JSON, logs, support bundles |
 | Charts | Apache ECharts only in SPA |
 | Opt-in | `--enable-admin-mcp` for admin tools on serve |
+| SPA merge gate | `make admin-ui-check` / CI job `admin-ui` (Node 22). Go `lint-test-build` does not typecheck TSX. |
 
 ## Related
 

@@ -93,11 +93,19 @@ make admin-ui
 
 ```bash
 cd web/admin
-npm test          # vitest unit smoke (api client helpers)
-npm run build     # primary v1 CI smoke: typecheck + production bundle
+npm test          # vitest (jsdom): api client, option builders, shell contract
+npm run build     # tsc --noEmit + production Vite bundle
 ```
 
-**v1 residual:** CI may treat `npm run build` as the merge-gate smoke when Node is available; full component e2e against the BFF is UI-002+.
+From repo root, the merge-gate target is:
+
+```bash
+make admin-ui-check   # npm ci && npm test && npm run build
+```
+
+GitHub Actions job **`admin-ui`** (Node 22) runs that on every push/PR. It is a
+required merge check — Go-only `lint-test-build` does **not** compile TSX.
+Full browser e2e against the BFF remains opt-in (`make admin-e2e` / UI-009).
 
 ## Profile and optional admin token
 

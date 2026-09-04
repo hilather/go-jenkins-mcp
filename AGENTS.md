@@ -210,7 +210,7 @@ never tool arguments.
 4. If operator-relevant: admin BFF/SPA + admin_* MCP or residual Issue
 5. If integration-facing: Docker lab scaffold or residual Issue
 6. Update docs (and diagrams) in the same change
-7. make lint && make test (and race/package/vuln when touching those surfaces)
+7. make lint && make test (and race/package/vuln/admin-ui-check when touching those surfaces)
 8. make docs-check   # when available; link/policy coverage
 9. Structured code review; fix bug findings
 10. PR: tests run, free labs run or “why N/A”, verification + rollback

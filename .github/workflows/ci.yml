@@ -3,6 +3,8 @@
 # Merge gate (configure branch protection required checks for these job names):
 #   - lint-test-build   (job id: check)  — gofmt, vet, test, race (Ubuntu), build, package
 #   - govulncheck                        — vulnerability scan
+#   - admin-ui                           — web/admin vitest + tsc + production Vite build
+#   - docs-check                         — Markdown links / policy / coverage
 #
 # Optional / non-blocking (continue-on-error or workflow_dispatch only):
 #   - package-smoke     — PKG-001 offline tarball smoke (bare Ubuntu only)
@@ -153,7 +155,23 @@ jobs:
       - name: Run govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
+  # Go lint-test-build does not compile web/admin; this job is the SPA gate.
+  admin-ui:
+    name: admin-ui
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/admin/package-lock.json
+
+      - name: Admin SPA test + typecheck + production build
+        run: make admin-ui-check
 
   docs-check:
     name: docs-check

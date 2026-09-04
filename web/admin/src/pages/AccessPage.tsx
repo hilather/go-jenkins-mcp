@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import {
   fetchMe,
   fetchPolicyBindings,
-  formatApiError,
   hasPolicyWrite,
   previewPolicyBindings,
   putPolicyBindings,
@@ -33,7 +32,6 @@ export function AccessPage() {
   const [previewTool, setPreviewTool] = useState("jenkins_get_build_logs");
   const [previewJob, setPreviewJob] = useState("");
   const [previewResult, setPreviewResult] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (q.data && !seeded) {
@@ -50,13 +48,8 @@ export function AccessPage() {
       return putPolicyBindings({ users, groups });
     },
     onSuccess: async () => {
-      setErr(null);
       setSeeded(false);
       await qc.invalidateQueries({ queryKey: ["policy-bindings"] });
-    },
-    onError: (e: unknown) => {
-      const { code, message } = formatApiError(e);
-      setErr(`${code}: ${message}`);
     },
   });
 
@@ -77,30 +70,24 @@ export function AccessPage() {
           ? `allowed (reason=${data.reason_code || "ok"})`
           : `DENIED (reason=${data.reason_code || "deny"})`,
       );
-      setErr(null);
-    },
-    onError: (e: unknown) => {
-      const { code, message } = formatApiError(e);
-      setErr(`${code}: ${message}`);
     },
   });
 
   if (q.isLoading) {
-    return <Loading label="Loading bindings…" />;
+    return <Loading />;
   }
   if (q.isError) {
-    const { code, message } = formatApiError(q.error);
-    return <ErrorBanner title="Access load failed" detail={`${code}: ${message}`} />;
+    return <ErrorBanner error={q.error} />;
   }
 
   const data = q.data;
 
   return (
     <div className="page">
-      <PageHeader
-        title="Access"
-        subtitle="User & group deny bindings (POL-006). Multi-fleet SoT is signed config — this page is pilot break-glass only."
-      />
+      <PageHeader title="Access">
+        User & group deny bindings (POL-006). Multi-fleet SoT is signed config —
+        this page is pilot break-glass only.
+      </PageHeader>
 
       <section className="card" aria-label="Fleet source of truth">
         <h2>Fleet honesty</h2>
@@ -126,7 +113,8 @@ export function AccessPage() {
         </p>
       </section>
 
-      {err ? <ErrorBanner title="Action failed" detail={err} /> : null}
+      {putMut.isError ? <ErrorBanner error={putMut.error} /> : null}
+      {previewMut.isError ? <ErrorBanner error={previewMut.error} /> : null}
 
       <section className="card" aria-label="User bindings editor">
         <h2>subjects.users (JSON)</h2>

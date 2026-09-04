@@ -56,6 +56,7 @@ help:
 	@echo "  make ci         lint + test + build (merge gate subset)"
 	@echo "  make docs-check Markdown links, policy, coverage (docs CI)"
 	@echo "  make admin-ui   UI-001 production build of web/admin → web/admin/dist"
+	@echo "  make admin-ui-check  Admin SPA vitest + typecheck + production build (merge gate)"
 	@echo "  make admin-ui-embed  Build SPA and copy into internal/admin/uiembed/dist (UI-008)"
 	@echo "  make admin-ui-dev  UI-001 Vite dev server (proxies /admin → :8787)"
 	@echo "  make admin-e2e  UI-009 opt-in admin BFF+SPA smoke (not in default test/ci; artifact dist/admin-e2e/)"
@@ -286,6 +287,13 @@ admin-ui:
 	@# Stamp secret-free UI build id for health/version (UI-008).
 	@printf '%s\n' "$(VERSION)" > web/admin/dist/UI_BUILD
 	@echo "admin-ui: wrote web/admin/dist (UI_BUILD=$(VERSION))"
+
+# Merge-gate SPA check: unit tests + tsc + production Vite bundle.
+# Does not stamp UI_BUILD (that is admin-ui / packaging). Node 22 in CI.
+.PHONY: admin-ui-check
+admin-ui-check:
+	cd web/admin && npm ci && npm test && npm run build
+	@echo "admin-ui-check: vitest + typecheck + vite build ok"
 
 # UI-008: bake production SPA into go:embed tree for self-contained binary.
 # Requires Node. Binary builds without this target still succeed (placeholder embed).

@@ -23,7 +23,8 @@ make test                # unit/contract tests (no live Jenkins)
 make build
 make package             # optional; required CI also packages
 make vuln                # govulncheck (required CI job)
-make ci                  # lint + test + build (fast local gate)
+make ci                  # lint + test + build (fast local Go gate)
+make admin-ui-check      # SPA vitest + tsc + production build (required CI job)
 make docs-check          # Markdown links, policy, integration coverage
 ```
 
@@ -63,8 +64,9 @@ go test -count=1 -timeout=20m ./...
 make build
 make package
 make vuln
+make admin-ui-check      # Node 22; SPA vitest + tsc + vite build
 
-# Fast combined gate (lint + test + build; not package/vuln):
+# Fast combined Go gate (lint + test + build; not package/vuln/SPA):
 make ci
 ```
 
@@ -95,16 +97,17 @@ OAuth secrets.
 
 | Job name (display) | Merge gate? | Notes |
 |--------------------|-------------|-------|
-| `lint-test-build` | **Yes** | Ubuntu + Rocky 9; gofmt, vet, test, race (Ubuntu), build, package |
+| `lint-test-build` | **Yes** | Ubuntu + Rocky 9; gofmt, vet, test, race (Ubuntu), build, package (Go only — does not compile `web/admin`) |
 | `govulncheck` | **Yes** | `golang.org/x/vuln` scan of `./...` |
+| `admin-ui` | **Yes** | Node 22; `make admin-ui-check` (vitest + `tsc --noEmit` + Vite production build) |
 | `docs-check` | **Yes** (when present) | Links, policy greps, integration coverage |
 | `package-smoke` | No | `continue-on-error` |
 | `fuzz-smoke` | No | `continue-on-error` |
 | `stdio-smoke` | No | Offline MCP binary host-lifecycle; not Cursor product CI |
 | `live-jenkins-smoke` | No | `workflow_dispatch` only |
 
-**Branch protection** should require `lint-test-build`, `govulncheck`, and
-`docs-check` (when the job exists).
+**Branch protection** should require `lint-test-build`, `govulncheck`,
+`admin-ui`, and `docs-check` (when the job exists).
 
 ## Chaos / fault-injection
 
