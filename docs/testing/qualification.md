@@ -10,6 +10,7 @@
 
 ```bash
 make fmt && make lint && make test && make build && make package && make vuln
+make admin-ui-check
 make docs-check
 ```
 

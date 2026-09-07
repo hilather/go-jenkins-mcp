@@ -73,7 +73,7 @@ Full narrative: `docs/admin/api-v1.md`.
 ## Consequences
 
 - New packages: `internal/admin` (BFF), `web/admin` (SPA), CLI `admin serve`
-- Make target `admin-ui`; CI optional smoke for UI build when node available
+- Make target `admin-ui` (packaged assets) and `admin-ui-check` (vitest + `tsc` + Vite production build). Merge-gate CI job `admin-ui` (Node 22) is required; Go-only `lint-test-build` does not compile TSX. Release `make admin-ui` is fail-closed (no `continue-on-error`).
 - Security review for CSP and token residual on loopback without secret
 - UI-003 roles + /me landed; UI-004+ write paths extend this ADR without changing secret-free rules
 - **Agents must keep the console current** when shipping operator-relevant features (policy, metrics, audit, doctor/cache, profiles, packaging): update BFF + SPA + `docs/admin/api-v1.md` in the same change or document residual — see root `AGENTS.md`
