@@ -168,11 +168,14 @@ and `deploy/local` profile `with-jenkins`); labinfo is **18090** (same as
 `testdata/saml-lab`). Remap in the sibling profile; do not treat
 `testdata/jwt-rs-lab` (18091/18092) as the collision.
 
-Jenkins jwt-rs plus an optional Entra fill-in profile is **being added** there
-(Entra IDs in a gitignored team profile; default `make smoke` does not need
-Azure and does not prove Jenkins jwt-rs or Entra). Until that profile lands,
-do **not** use that repo’s README as an Entra/jwt-rs runbook. The path in
-**this** repo remains `testdata/jwt-rs-lab` and
+The sibling has **no** Jenkins, jwt-rs, or Entra profile. Its only profile is
+`profiles/default/` and its only compose overlays are `labldap` and
+`labtacacs`; Jenkins is not in its integrator
+([mcp-integration-lab#12](https://github.com/hilather/mcp-integration-lab/pull/12),
+a LabJenkins jwt-rs + Entra profile, was closed unmerged). Its `make smoke`
+does not exercise Jenkins jwt-rs or Entra. Do **not** use that repo’s README
+as an Entra/jwt-rs runbook. The path in **this** repo remains
+`testdata/jwt-rs-lab` and
 [`docs/testing/entra-jwt-rs-lab.md`](docs/testing/entra-jwt-rs-lab.md#agent-hints).
 Do not treat the sibling’s Phase 1 MCP-gateway OAuth/OIDC plan as this
 product’s Jenkins jwt-rs or Entra walkthrough. Do not duplicate that
@@ -185,8 +188,8 @@ Keycloak `jwt-rs-lab` remains the default **Free-lab validated** plugin lab.
 - In-repo optional operator walkthrough (this repo’s `testdata/jwt-rs-lab`
   pointed at Entra):
   [`docs/testing/entra-jwt-rs-lab.md`](docs/testing/entra-jwt-rs-lab.md).
-- Full-stack jwt-rs + optional Entra fill-in is **being added** in the sibling
-  lab above. Until it lands, use the in-repo walkthrough — not that README.
+- The sibling lab above has no jwt-rs or Entra profile. Use the in-repo
+  walkthrough — not that README.
 - Does **not** flip `mode_*_live_*_qualified` or close OAUTH-009/010.
 - Never bake secrets or real tenant / app IDs.
 
