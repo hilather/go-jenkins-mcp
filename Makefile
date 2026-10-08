@@ -296,7 +296,7 @@ admin-ui-check:
 	@echo "admin-ui-check: vitest + typecheck + vite build ok"
 
 # UI-008: bake production SPA into go:embed tree for self-contained binary.
-# Requires Node. Binary builds without this target still succeed (placeholder embed).
+# Requires Node. Binary builds without this target still succeed (using the committed embed).
 .PHONY: admin-ui-embed
 admin-ui-embed: admin-ui
 	@rm -rf internal/admin/uiembed/dist

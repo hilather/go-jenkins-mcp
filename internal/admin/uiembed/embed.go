@@ -1,8 +1,9 @@
 // Package uiembed holds optional embedded admin SPA static assets (UI-008).
 //
-// The committed dist/ tree is a minimal placeholder so `go build` succeeds
-// without Node. Release/package flows may replace dist/ with a full Vite build
-// via `make admin-ui-embed` (build SPA → copy into this package) before compile.
+// The committed dist/ tree is a full production build of web/admin produced by
+// `make admin-ui-embed`. Regenerate and commit it when web/admin changes, so
+// `go build` serves the SPA without Node. If dist/ has no index.html, the
+// placeholder fallback still applies.
 //
 // Do not commit node_modules. Operators may also ship filesystem assets under
 // /usr/share/jenkins-mcp/admin-ui (packaging) without re-embedding.

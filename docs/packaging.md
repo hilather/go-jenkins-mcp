@@ -77,7 +77,7 @@ make admin-ui && make package
 | Missing `web/admin/dist` | Package **succeeds**; `BUILD_INFO` records `admin_ui=missing` (residual) |
 | Present | Copies production Vite tree (never `node_modules`) to `/usr/share/jenkins-mcp/admin-ui` |
 | Runtime | `jenkins-mcp admin serve` resolves assets: `--assets-dir` → packaged path → `web/admin/dist` (dev) → `go:embed` placeholder/full |
-| Bake into binary | `make admin-ui-embed` then `make build` (optional; binary still builds without Node using committed placeholder) |
+| Bake into binary | The binary builds without Node using the committed embedded SPA; `make admin-ui-embed` then `make build` refreshes it |
 | Default-off | Admin HTTP stays off until explicit `admin serve` (see [`admin/README.md`](admin/README.md)) |
 
 Version metadata comes from git when available:
