@@ -67,7 +67,7 @@ Priority when `--assets-dir` is empty:
 
 1. **Packaged** `/usr/share/jenkins-mcp/admin-ui` (if `index.html` exists) — fresh install without npm  
 2. **Dev residual** `web/admin/dist` (cwd-relative, after `make admin-ui`)  
-3. **Embedded** `internal/admin/uiembed` (committed placeholder, or full SPA after `make admin-ui-embed` + rebuild)  
+3. **Embedded** `internal/admin/uiembed` (committed production SPA from `make admin-ui-embed`; rebuild the binary after regenerating)
 
 `GET /admin/v1/health` and `GET /admin/v1/version` expose secret-free `uiBuild` when a stamp is available (`UI_BUILD` file or embed id).
 
