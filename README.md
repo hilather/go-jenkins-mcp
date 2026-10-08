@@ -12,7 +12,7 @@
   <a href="https://github.com/hilather/go-jenkins-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/hilather/go-jenkins-mcp?style=for-the-badge&color=8fa3b8&labelColor=09090b" alt="Latest release" /></a>
   <a href="https://github.com/hilather/go-jenkins-mcp/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/hilather/go-jenkins-mcp/ci.yml?branch=master&style=for-the-badge&label=CI&labelColor=09090b" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-6f9e86?style=for-the-badge&labelColor=09090b" alt="MIT License" /></a>
-  <a href="go.mod"><img src="https://img.shields.io/badge/go-1.25-00ADD8?style=for-the-badge&labelColor=09090b&logo=go&logoColor=white" alt="Go version" /></a>
+  <a href="go.mod"><img src="https://img.shields.io/badge/go-1.26-00ADD8?style=for-the-badge&labelColor=09090b&logo=go&logoColor=white" alt="Go version" /></a>
 </p>
 
 **go-jenkins-mcp** is a Go [Model Context Protocol](https://modelcontextprotocol.io/)
