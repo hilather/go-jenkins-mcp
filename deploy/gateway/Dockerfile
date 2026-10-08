@@ -16,8 +16,8 @@
 #   docker build -f deploy/gateway/Dockerfile -t jenkins-mcp-gateway:dev .
 
 # syntax=docker/dockerfile:1
-# Match go.mod toolchain (operators may pin a different patch).
-FROM golang:1.25-bookworm AS build
+# Match the go.mod go line (1.26.8); operators may pin a later patch.
+FROM golang:1.26.8-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

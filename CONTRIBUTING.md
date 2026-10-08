@@ -27,7 +27,7 @@ make ci                  # lint + test + build (fast local gate)
 make docs-check          # Markdown links, policy, integration coverage
 ```
 
-Go version: see `go.mod` (**1.25.x**). Tier-1 hosts: Rocky Linux and Ubuntu only.
+Go version: see `go.mod` (**1.26.8+**). Tier-1 hosts: Rocky Linux and Ubuntu only.
 
 ## Pull requests
 
@@ -48,7 +48,7 @@ checklists, not implementation-completion trackers.
 
 ### Reproduce required CI locally (canonical)
 
-Use Go **1.25.x** (see `go.mod`). Put the official toolchain on `PATH` if needed
+Use Go **1.26.8+** (see `go.mod`). Put the official toolchain on `PATH` if needed
 (`export PATH="$HOME/.local/go/bin:$PATH"`). Required merge-gate jobs map to:
 
 ```bash

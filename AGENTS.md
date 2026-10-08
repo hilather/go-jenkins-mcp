@@ -160,7 +160,7 @@ For full-stack / multi-protocol Docker testing (DNS, LDAP, TACACS+/RADIUS, mail,
 NFS, LabMITM, labinfo, MCPJungle), clone
 [hilather/mcp-integration-lab](https://github.com/hilather/mcp-integration-lab)
 as a **separate tree**. Read **that** repo’s `AGENTS.md` and `README.md` first
-(toolchain, all-interfaces bind, profile ports — this repo’s Go 1.25 toolchain
+(toolchain, all-interfaces bind, profile ports — this repo’s Go 1.26 toolchain
 is not sufficient). Then run `make up` / `make smoke` **in that repository**.
 Those targets do not exist in this repo. Do not assume sibling defaults coexist
 with in-repo labs: LabDNS REST/UI is **18080** (same as `testdata/jenkins-compose`

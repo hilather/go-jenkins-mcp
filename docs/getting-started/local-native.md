@@ -17,7 +17,7 @@ flowchart LR
 | Requirement | Notes |
 |-------------|--------|
 | OS | Rocky Linux or Ubuntu (Tier 1) |
-| Binary | Package install **or** Go 1.25.x + `make build` |
+| Binary | Package install **or** Go 1.26.8+ + `make build` |
 | Jenkins | Reachable HTTPS URL; personal user + API token with Job/Read (and whatever your triage needs) |
 | Keyring | Secret Service (`libsecret` / gnome-keyring / KeePassXC) unlocked for interactive login |
 | TLS / proxy | Corporate CA or proxy if your network requires them |

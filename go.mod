@@ -1,6 +1,6 @@
 module github.com/hilather/go-jenkins-mcp
 
-go 1.25.13
+go 1.26.8
 
 // FND-006 / ADR 0006: pin official MCP Go SDK (protocol versions documented in docs/adr/0006-mcp-go-sdk.md).
 require (
