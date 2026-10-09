@@ -61,7 +61,7 @@ RUN set -e; \
     fi
 
 # --- Go stage: CGO-free static binary ---
-FROM golang:1.26.8-bookworm AS build
+FROM golang:1.26.9-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
