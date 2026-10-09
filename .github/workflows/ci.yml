@@ -63,7 +63,7 @@ jobs:
           # rockylinux packages may lag; install official toolchain to $HOME
           GOVER=$(grep '^go ' go.mod | awk '{print $2}')
           curl -fsSL "https://go.dev/dl/go${GOVER}.linux-amd64.tar.gz" -o /tmp/go.tgz || \
-            curl -fsSL "https://go.dev/dl/go1.26.8.linux-amd64.tar.gz" -o /tmp/go.tgz
+            curl -fsSL "https://go.dev/dl/go1.26.9.linux-amd64.tar.gz" -o /tmp/go.tgz
           rm -rf "$HOME/.local/go"
           mkdir -p "$HOME/.local"
           tar -C "$HOME/.local" -xzf /tmp/go.tgz
