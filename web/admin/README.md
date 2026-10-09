@@ -48,11 +48,11 @@ the console or MCP ops surface silently stale. Full rules: root `AGENTS.md` →
 | **005** | Done | Doctor residual hierarchy (`check-pill`, residual badge) |
 | **006** | Done | Focus rings; chart aria; reduced-motion |
 | **007** | Done | Forced dark-lab chrome (`#0b0c0e` / `#6ea8fe` / IBM Plex). Light theme unused. |
-| **008** | Done\* residual | Tree-shaken ECharts (`lib/echartsSetup.ts`). **Current prod assets:** JS ~**887 kB** min / ~**287 kB** gzip; CSS ~14 kB. Further dynamic `import()` split is optional residual — not a merge blocker. |
+| **008** | Done\* residual | Tree-shaken ECharts (`lib/echartsSetup.ts`). **Current prod assets:** JS ~**917 kB** min / ~**297 kB** gzip; CSS ~16.5 kB. Further dynamic `import()` split is optional residual — not a merge blocker. |
 
 ## Prerequisites
 
-- **Node.js ≥ 18** and npm (Tier-1: Rocky Linux / Ubuntu)
+- **Node.js ≥ 20** and npm (Tier-1: Rocky Linux / Ubuntu)
 - Optional: local admin BFF (`jenkins-mcp admin serve`, UI-002) on `127.0.0.1:8787`
 
 Windows is out of scope (platform matrix).
