@@ -279,7 +279,7 @@ fleet-cache-lab-down:
 	docker compose -f $(COMPOSE_FLEET_CACHE) down -v --remove-orphans
 	@echo "fleet-cache lab stopped; volumes removed (independent plane A caches destroyed)"
 
-# UI-001: reactive admin SPA (ADR 0014). Requires Node ≥ 18 / npm.
+# UI-001: reactive admin SPA (ADR 0014). Requires Node ≥ 20 / npm.
 # Production assets land in web/admin/dist for packaging and --assets-dir (UI-008).
 .PHONY: admin-ui
 admin-ui:

@@ -52,7 +52,7 @@ the console or MCP ops surface silently stale. Full rules: root `AGENTS.md` →
 
 ## Prerequisites
 
-- **Node.js ≥ 18** and npm (Tier-1: Rocky Linux / Ubuntu)
+- **Node.js ≥ 20** and npm (Tier-1: Rocky Linux / Ubuntu)
 - Optional: local admin BFF (`jenkins-mcp admin serve`, UI-002) on `127.0.0.1:8787`
 
 Windows is out of scope (platform matrix).
