@@ -48,7 +48,7 @@ the console or MCP ops surface silently stale. Full rules: root `AGENTS.md` →
 | **005** | Done | Doctor residual hierarchy (`check-pill`, residual badge) |
 | **006** | Done | Focus rings; chart aria; reduced-motion |
 | **007** | Done | Forced dark-lab chrome (`#0b0c0e` / `#6ea8fe` / IBM Plex). Light theme unused. |
-| **008** | Done\* residual | Tree-shaken ECharts (`lib/echartsSetup.ts`). **Current prod assets:** JS ~**887 kB** min / ~**287 kB** gzip; CSS ~14 kB. Further dynamic `import()` split is optional residual — not a merge blocker. |
+| **008** | Done\* residual | Tree-shaken ECharts (`lib/echartsSetup.ts`). **Current prod assets:** JS ~**917 kB** min / ~**297 kB** gzip; CSS ~16.5 kB. Further dynamic `import()` split is optional residual — not a merge blocker. |
 
 ## Prerequisites
 
