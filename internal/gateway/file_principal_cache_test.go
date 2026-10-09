@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -242,24 +243,24 @@ func TestFilePrincipalCache_CorruptFailClosed(t *testing.T) {
 func TestFilePrincipalCache_TTLAndMaxEntries(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "hygiene.json")
-	now := time.Now()
 	c, err := gateway.NewFilePrincipalCacheWithLimits(path, 2, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Inject clock via package — FilePrincipalCache.now is unexported.
-	// Exercise TTL via short-lived expires by writing entry then advancing with re-open + manual file edit.
-	// MaxEntries: fill 2, Set third evicts LRU.
+	// MaxEntries: fill 2, Set third evicts LRU. Clock advances keep last_access distinct.
+	base := time.Unix(1_700_000_000, 0).UTC()
+	var clock atomic.Value
+	clock.Store(base)
+	c.SetNow(func() time.Time { return clock.Load().(time.Time) })
 	c.Set(gateway.SubjectKeyParts("t", "a", "p"), "a-j")
-	// Distinct last_access under -race / loaded CI: short sleeps can coalesce.
-	time.Sleep(25 * time.Millisecond)
+	clock.Store(base.Add(time.Second))
 	c.Set(gateway.SubjectKeyParts("t", "b", "p"), "b-j")
-	time.Sleep(25 * time.Millisecond)
+	clock.Store(base.Add(2 * time.Second))
 	// Touch a so b is older — Get updates lastAccess — then insert c.
 	if _, ok := c.Get(gateway.SubjectKeyParts("t", "a", "p")); !ok {
 		t.Fatal("a miss")
 	}
-	time.Sleep(25 * time.Millisecond)
+	clock.Store(base.Add(3 * time.Second))
 	c.Set(gateway.SubjectKeyParts("t", "c", "p"), "c-j")
 	if c.Len() > 2 {
 		t.Fatalf("max entries: %d", c.Len())
@@ -275,22 +276,29 @@ func TestFilePrincipalCache_TTLAndMaxEntries(t *testing.T) {
 		t.Fatal("c should remain")
 	}
 
-	// TTL: short limit then wait past expiry (margin for slow CI).
+	// TTL: hit at Set instant, hit just before expiry, miss at expiry (!now.Before(exp)).
 	path2 := filepath.Join(t.TempDir(), "ttl.json")
-	cTTL, err := gateway.NewFilePrincipalCacheWithLimits(path2, 0, 30*time.Millisecond)
+	const ttl = 30 * time.Second
+	cTTL, err := gateway.NewFilePrincipalCacheWithLimits(path2, 0, ttl)
 	if err != nil {
 		t.Fatal(err)
 	}
+	var clockTTL atomic.Value
+	clockTTL.Store(base)
+	cTTL.SetNow(func() time.Time { return clockTTL.Load().(time.Time) })
 	sk := gateway.SubjectKeyParts("t", "ttl", "p")
 	cTTL.Set(sk, "ttl-j")
 	if _, ok := cTTL.Get(sk); !ok {
 		t.Fatal("ttl immediate hit")
 	}
-	time.Sleep(80 * time.Millisecond)
+	clockTTL.Store(base.Add(ttl - time.Nanosecond))
+	if _, ok := cTTL.Get(sk); !ok {
+		t.Fatal("ttl before expiry must hit")
+	}
+	clockTTL.Store(base.Add(ttl))
 	if _, ok := cTTL.Get(sk); ok {
 		t.Fatal("ttl expired must miss")
 	}
-	_ = now
 }
 
 func TestFilePrincipalCache_ClearAndConcurrent(t *testing.T) {
