@@ -149,6 +149,16 @@ func (c *FilePrincipalCache) clock() time.Time {
 	return time.Now()
 }
 
+// SetNow injects a clock for tests. Nil now is ignored.
+func (c *FilePrincipalCache) SetNow(now func() time.Time) {
+	if c == nil || now == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = now
+}
+
 // Configure updates MaxEntries + TTL (serve reconfigure). Negative → 0.
 func (c *FilePrincipalCache) Configure(maxEntries int, ttl time.Duration) {
 	if c == nil {
