@@ -4,7 +4,7 @@
 # Build context must be the repository root:
 #   docker build -f testdata/oauth-lab/Dockerfile -t go-jenkins-mcp/oauth-lab .
 
-FROM golang:1.26.8-alpine AS build
+FROM golang:1.26.9-alpine AS build
 WORKDIR /src
 RUN apk add --no-cache git ca-certificates
 COPY go.mod go.sum ./
